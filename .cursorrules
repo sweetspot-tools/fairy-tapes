@@ -1,0 +1,118 @@
+# Audio Plugins Suite – Cursor Rules
+
+You are an expert programming assistant specialized in **VST3 audio plugins**, **Neural Amp Modeler (NAM)**, and **GPU-accelerated audio processing**. Use this document to assist the user in building an innovative suite of plugins. The project will grow with multiple top-level folders, each containing one specific plugin.
+
+**Suite identity**: The plugins in this suite use NAM (Neural Amp Modeler): they deliver **real**, **analog-style tone**, not digital or fake. The sound is genuinely analog in character. When naming the suite, plugins, or writing any copy (descriptions, UI), reflect this: quality = authentic, warm, real; the opposite of “digital and plastic”.
+
+**UI / visual identity**: Start from a channel-strip layout inspired by PreBrowser (NiceStomps!) — EQ, dynamics, drive/NAM, gate, clear sections. Then push the graphics toward **more realistic, personal, and analog-inspired**: not generic skeuomorphic grey, but references to **real analog hardware** (vintage console modules, tape machine panels, amp front panels, real materials and typography). The look should feel “real” and distinctive, in line with the “our plugins sound real” mood. Fairy Tapes has its own visual identity, not a copy of PreBrowser or anyone else.
+
+**Per-instance texture variation**: Plan for **loading a slightly different texture at random per plugin instance**: e.g. one instance a bit newer, one more worn, one with silkscreen/labels lightly faded from use. This kind of detail is engaging and fun for users; keep it in mind when designing assets and the GUI loader (e.g. a small set of texture variants chosen once per instance at open).
+
+---
+
+## 1. Project Structure
+
+- **One plugin per folder**: Plugins live under `src/` (e.g. `src/the-stripper/`, `src/doggystyle/`). Each is a standalone plugin folder.
+- **No cross-plugin coupling**: Plugins do not depend on each other; shared code (e.g. NAM runtime, GPU helpers) lives in a dedicated shared module or is duplicated only when necessary for clarity.
+- **Conventional layout per plugin**: Prefer a clear structure (e.g. `src/`, `include/`, `build/`, `resources/`, `tests/`) inside each plugin folder.
+
+---
+
+## 2. VST3 Development
+
+- **SDK**: Use the official Steinberg VST3 SDK. Know the difference between **Single Precision Effect** and **Double Precision**, and when to use **process32** vs **process64**.
+- **Lifecycle**: Correctly implement `initialize`, `terminate`, `setActive`, and process flow. Respect `numSamples`, `numChannels`, and bus configuration (main input/output, sidechain, aux).
+- **Parameters**: Use `Vst::ParameterInfo`, proper normalization (0–1), step count, units, and short/long titles. Support **parameter change from host** and **automation**.
+- **Latency**: Report latency via `getLatencySamples()` when the algorithm introduces delay (e.g. NAM, convolution, lookahead).
+- **Presets/States**: Implement `getState` / `setState` (e.g. BStream) for presets and project recall. Include versioning if the state format can change.
+- **SSL 360 Link**: The Stripper must be fully compatible with SSL 360 Link (mapping of external plugins to SSL mixers). Follow any SSL documentation or requirements for mappable plugins; strict VST3 parameter layout and stable IDs help. See `src/the-stripper/docs/FEATURES.md` §4.
+- **Thread safety**: Do not assume process and parameter/edit calls are on the same thread. Protect shared state (parameters, model pointers, buffers) appropriately.
+- **Real-time safety**: Avoid allocations, locks, or heavy work in the process callback. Pre-allocate buffers and do loading/parsing on a background thread or in `setActive(false)` / `restartComponent`.
+
+---
+
+## 3. Neural Amp Modeler (NAM)
+
+- **What it is**: NAM is an open-source project for capturing amp/effect tones with small neural networks (often based on WaveNet-style or LSTM architectures). Models are typically exported as `.nam` or `.nam.json` (with weights) and can be loaded at runtime.
+- **Resources**:
+  - Official guide: https://www.tone3000.com/guides/neural-amp-modeler
+  - Model repository: https://www.tone3000.com/ (many community models to load in NAM-compatible hosts/plugins).
+- **Integration in a plugin**:
+  - Parse NAM model format (architecture + weights). Architecture defines receptive field, blocks, etc.; weights are applied in the right order.
+  - Run inference in the audio thread (or via a lock-free queue from a worker) with **real-time safe** code: no malloc/free in process, fixed or pre-allocated buffers.
+  - Handle **sample rate** and **block size**: NAM models are often trained at a fixed sample rate (e.g. 48 kHz); resample or document supported rates.
+  - **Latency**: NAM models have an intrinsic delay (receptive field / lookahead); report it via `getLatencySamples()` so the host can compensate.
+- **Variants**: Be aware of different NAM model versions or forks (e.g. different activations, conditioning). Prefer a single well-defined format per plugin and document it.
+
+---
+
+## 4. GPU Audio SDK (gpuaudio-sdk)
+
+- **Repository**: https://github.com/gpuaudio/gpuaudio-sdk (main branch).
+- **Purpose**: Offload audio processing (e.g. NAM inference, convolutions, big filters) to the GPU to free CPU and allow larger/more complex models.
+- **Integration**:
+  - Follow the SDK’s build and link instructions (CMake, submodule, or package). Use the provided APIs for **buffer management** (host ↔ device) and **kernel/plugin execution**.
+  - **Latency and sync**: GPU processing adds latency (transfer + execution). Buffer sizes and scheduling must be chosen so that the plugin still meets real-time constraints; document any added latency.
+  - **Fallback**: Prefer a design that can fall back to CPU (e.g. if GPU is unavailable or unsupported), so the plugin remains usable everywhere.
+- **Best practices**: Minimize host–device transfers; batch process when possible; avoid per-sample transfers. Keep the audio thread only submitting work and receiving results, not doing heavy GPU driver calls.
+
+---
+
+## 5. Secrets and environment (do not access)
+
+- **Secretated files**: Never read, suggest reading, or embed contents of the following file:
+  - **`.env`** (project root) — contains API keys and other secrets.
+- **Tone3000 API key**:
+  - **Development**: The project uses **TONE3000_API_KEY** in `.env` only temporarily for development (e.g. testing download-from-Tone3000 in the plugin).
+  - **Release**: In the shipped plugin, the user enters the API key (and other API/settings) in the **plugin’s own settings UI**; the code must read from that configuration, not from the environment. Design settings storage (e.g. host-friendly path or plugin-provided prefs) so the key is entered once and persisted by the plugin.
+- **Implementation**: During dev, the key can be loaded from the environment (`getenv("TONE3000_API_KEY")`); in release, load from plugin settings. Never hardcode the key. Only the variable name **TONE3000_API_KEY** is known in rules/code.
+
+---
+
+## 6. Inspirations and naming
+
+- **Conceptual inspiration (Chiarello)**: The suite’s *idea* (e.g. channel-strip style, downloading Tone3000 models from inside the plugin) is inspired by Gianni Chiarello’s work (e.g. PreBrowser). There are few public, linkable sources (mainly videos); this note is for context only. No need to search for further references unless the user asks.
+- **Algorithm inspiration (Airwindows)**: For plugins that **do not use NAM** (EQ, compression, saturation, etc.), use as reference the **Airwindows** source code: https://github.com/airwindows/airwindows/tree/master/plugins — MIT license, suitable for inspiration and study of algorithms. Do not copy names or branding; only algorithms and techniques.
+- **Suite name**: **Fairy Tapes**. Wordplay on “fairy tales”; “tapes” = analog, real sound. All plugins in this project belong to the Fairy Tapes suite.
+- **First plugin**: **The Stripper** — channel strip. Name follows the suite’s slightly ironic tone (“strip” = channel strip) but the plugin is highly professional and quality-focused underneath.
+- **Naming policy**:
+  - **Plugin names** must be **original**: do not derive them from Chiarello, Airwindows, or other inspirations. Each plugin is part of the Fairy Tapes brand.
+  - Do **not** use the author’s personal name or nickname in plugin or suite names. The author’s nickname is “Swolley” for context only; product names stay independent.
+
+---
+
+## 7. Code and Workflow (align with user preferences)
+
+- **Language**: Prefer C++ for the plugin core. Follow the user’s preference: **snake_case** for local and private variables, **camelCase** for everything else (public APIs, types, parameters). Comments and documentation in **English**.
+- **Responses**: Answer the user in **Italian**; keep code, comments, and commit messages in **English** (commits in **Conventional Commits**).
+- **Simplicity**: Prefer clear, readable code; avoid over-engineering. Use early returns and “revert if condition” instead of deep `else` blocks.
+- **Testing**: Where applicable, add unit or integration tests (e.g. for NAM loading, parameter mapping, state save/load). Prefer a single, clear test layout per plugin.
+- **Commits**: Use Conventional Commits (e.g. `feat(nam-loader): add .nam model parser`, `fix(gpu-amp): correct latency reporting`).
+
+---
+
+## 8. When Assisting the User
+
+- **New plugin folder**: If the user says they are creating a new plugin (e.g. “create plugin X”), propose a minimal VST3 skeleton (CMake + one processor class + parameter list) and, if needed, a placeholder for NAM or GPU.
+- **NAM in a plugin**: When integrating NAM, clarify: model format version, sample rate handling, and latency. Suggest a small set of test models from tone3000.com for validation.
+- **GPU path**: When using gpuaudio-sdk, help with: project setup, buffer lifecycle, and how the current plugin design maps to the SDK’s execution model (e.g. one GPU “plugin” per NAM model).
+- **Innovation**: Encourage clear, modular design (e.g. “model loader” vs “inference engine” vs “VST3 wrapper”) so that new ideas (different NAM backends, different GPU strategies) can be tried without rewriting the whole plugin.
+
+---
+
+## 9. Quick Reference
+
+| Topic            | Key points                                                                 |
+|------------------|----------------------------------------------------------------------------|
+| VST3             | Correct process signature, parameters, latency, state, thread/real-time safety. |
+| NAM              | tone3000.com models, .nam format, receptive field/latency, sample rate.   |
+| GPU Audio SDK    | gpuaudio-sdk repo, host/device buffers, batching, optional CPU fallback.   |
+| Project layout   | One folder per plugin; no cross-deps; conventional `src`/`include`/etc.  |
+| Code style       | snake_case (local/private), camelCase (rest); English comments & commits.  |
+| Secrets          | `.env` secretated; dev = env; release = plugin settings UI. Never hardcode key.  |
+| Naming           | **Suite: Fairy Tapes.** First plugin: **The Stripper** (channel strip). Ironic name, pro quality.  |
+| Suite identity   | NAM = real, analog sound; not digital/fake. Names and copy should reflect authenticity.  |
+| SSL 360 Link     | Full compatibility required for The Stripper; see `src/the-stripper/docs/FEATURES.md`.  |
+| Airwindows (The Stripper) | Per-stage algorithm choice documented in `src/the-stripper/docs/FEATURES.md` §3; pick one plugin per stage (EQ, comp, drive, limiter, gate).  |
+
+Use this file as the default context when working in the `fairy-tapes` workspace so that suggestions stay consistent with VST3, NAM, and GPU Audio SDK best practices.

@@ -1,0 +1,148 @@
+# Fairy Tapes
+
+Suite of VST3 audio plugins: real, analog-style tone via NAM (Neural Amp Modeler) and GPU where applicable.
+
+**License:** This project is licensed under the **GNU General Public License v3.0 (GPL-3.0)**. Full text: [LICENSE](LICENSE). Components: **4K-EQ** and **Multi-Comp** (Dusk Audio, GPL-3.0), **Airwindows** (MIT), VST3 SDK (Steinberg). See [src/the-stripper/docs/FEATURES.md](src/the-stripper/docs/FEATURES.md) §3.3.1 and §3.4.
+
+- **Suite**: Fairy Tapes  
+- **First plugin**: [The Stripper](src/the-stripper/) — **bus-oriented** channel strip (LP/HP, EQ, compression, Gain/Drive with NAM or TapeHack2, limiter, gate/expander). See [src/the-stripper/docs/OVERVIEW.md](src/the-stripper/docs/OVERVIEW.md) and [FEATURES.md](src/the-stripper/docs/FEATURES.md) for design and stage choices.
+- **Second plugin (concept)**: [Doggystyle](src/doggystyle/) — dual parallel compression for drums / heavy rock–metal (documentation only for now).
+
+## Structure
+
+- **`vendors/`** — Sources of third-party repos (VST3 SDK, Airwindows, Dusk Audio, EQP-WDF-1A, etc.). Submodules.
+- **`src/`** — Source code of Fairy Tapes plugins (e.g. `src/the-stripper/`, `src/doggystyle/`).
+- **`build/`** — CMake output (cache, object files, test binaries). **Not in the repo** (gitignored). Regenerated when you run `./build.sh` or `cmake --build build`.
+- **`dist/`** — **Only** the built plugin bundles (e.g. `The Stripper.vst3`). CMake is configured so that each plugin target writes its `.vst3` directly here when you build; no copy step. **Not in the repo** (gitignored). Use this folder to upload to your store or pay-what-you-want page.
+
+Shared conventions and build setup; no cross-plugin code coupling. **Default branch:** `master` (CI and merges target this branch).
+
+### Download pre-built binaries
+
+Pre-built binaries are **not** included in this repository. You can download them (**pay what you want**, including €0) from:
+
+**→ [Download Fairy Tapes plugins](https://example.com/fairy-tapes-download)** *(replace with your Ko-fi / itch.io / Gumroad / personal page)*
+
+Source code here is free and open source (GPL-3.0); the optional payment is for the convenience of ready-to-use builds and to support development.
+
+**Why GPL-3.0:** The Stripper uses **4K-EQ** and **Multi-Comp** (Dusk Audio, GPL-3.0). The combined work is distributed under GPL-3.0. Full obligations: see [LICENSE](LICENSE).
+
+## Repository setup
+
+1. **Create the repo (if starting from scratch)**  
+   From the `fairy-tapes` folder:
+
+   ```bash
+   cd /path/to/fairy-tapes
+   git init
+   git remote add origin <your-repo-url>
+   ```
+
+2. **VST3 SDK as submodule (recommended)**  
+   The SDK lives **outside** the project tree as a git submodule; the repo stays small and you pin a specific SDK version:
+
+   ```bash
+   cd /path/to/fairy-tapes
+   mkdir -p vendors
+   # If you already have vendors/vst3sdk as a plain clone, remove it first:
+   # rm -rf vendors/vst3sdk
+   git submodule add https://github.com/steinbergmedia/vst3sdk vendors/vst3sdk
+   git add .gitmodules vendors/vst3sdk
+   git commit -m "chore: add VST3 SDK as submodule"
+   ```
+
+   New clones must fetch the submodules:
+
+   ```bash
+   git clone --recurse-submodules <repo-url> fairy-tapes
+   # or, if already cloned without submodules:
+   git submodule update --init --recursive
+   ```
+
+   **Submodules:** `vendors/vst3sdk` (VST3 SDK), `vendors/airwindows` (Airwindows), `vendors/dusk-audio-plugins` (4K-EQ, Multi-Comp, Dusk Audio), `vendors/eqp-wdf-1a` (Pultec EQP-WDF-1A). After clone run `git submodule update --init --recursive`.
+
+   **Note:** The submodule is the current approach; the plan is to switch later to CMake-based dependency management (e.g. `FetchContent`) so the SDK is declared and fetched like other dependencies, without submodules.
+
+## Build (The Stripper)
+
+1. **SDK**  
+   Ensure `vendors/vst3sdk` is present (submodule: `git submodule update --init --recursive` after clone, or add it as in Repository setup).
+
+2. **Configure and build**  
+   Dalla root **fairy-tapes**:
+
+   **Linux / macOS:**
+   ```bash
+   ./build.sh              # build di tutti i plugin
+   ./build.sh the-stripper # build solo The Stripper
+   ./build.sh --configure  # solo configurazione CMake, senza build
+   ```
+
+   **Windows:**  
+   Si usano ancora i file **.bat** (batch) per automatizzare build da CMD. Dalla root del repo:
+
+   ```cmd
+   build.bat              REM build di tutti i plugin (test poi build)
+   build.bat the-stripper REM build solo The Stripper
+   build.bat --configure  REM solo cmake configure, senza build
+   ```
+
+   Richiede CMake in PATH; su Windows è consigliato aprire il **“x64 Native Tools Command Prompt for VS”** (se usi Visual Studio) e lanciare da lì `build.bat the-stripper`.
+
+   Oppure a mano:
+
+   ```bash
+   cd /path/to/fairy-tapes
+   mkdir build && cd build
+   cmake ..
+   cmake --build .
+   ```
+
+   Non serve passare `VST3_SDK_PATH` se l’SDK è in `vendors/vst3sdk`. Per compilare solo The Stripper dalla sua cartella:
+
+   ```bash
+   cd src/the-stripper
+   mkdir build && cd build
+   cmake .. -DVST3_SDK_PATH=/path/to/fairy-tapes/vendors/vst3sdk
+   cmake --build .
+   ```
+
+3. **Tests**  
+   `./build.sh` runs the test suite **before** building the plugin(s); if tests fail, the build stops. Tests are in `src/the-stripper/tests/` (parameter helpers). From `build/` you can run only tests with `ctest --output-on-failure`.
+
+4. **Install (local use)**  
+   The built bundle is written directly to **`dist/The Stripper.vst3`**. Copy it into your host’s VST3 folder (see your DAW/host documentation).
+
+## CI (GitHub Actions)
+
+Push (or PR) to **master** triggers a build on **Linux**, **Windows**, and **macOS**. The workflow:
+
+- Checks out the repo **with submodules** (so `vendors/vst3sdk` is available).
+- Builds The Stripper and uploads the `.vst3` bundle as an **artifact** per platform.
+
+**Rough duration (per run):**  
+With submodules, the SDK is fetched at checkout. Build is typically **2–6 min per OS**; total for all three platforms is usually **under 15 minutes**.
+
+**GitHub free tier:** 2000 minutes/month. Linux counts 1×, Windows 2×, macOS 10× per minute. A full three-OS run is well within the free tier.
+
+**Using the builds:** In the Actions run, open the **Summary** → **Artifacts** and download e.g. `the-stripper-windows` for your Windows DAW, or `the-stripper-linux` / `the-stripper-macos` for the other systems. Unzip if needed and place the `The Stripper.vst3` folder in your host’s VST3 path.
+
+## Branch strategy
+
+- **master** is the main branch: only merge when a plugin (or feature) is ready for release.
+- **One branch per plugin** while developing, e.g. `dev/the-stripper`, `dev/next-plugin`. Work and commit there; in the meantime you can run as many local builds as you like to test compilation and behaviour.
+- Merge into `master` (e.g. via PR) when the plugin is stable. CI runs on every push/PR to `master`.
+
+## Tests
+
+For a VST3 plugin (C++ / DSP), **automated tests are not mandatory** to ship: many commercial plugins have no test suite. They are still **recommended** for:
+
+- **Parameter and state logic**: conversion helpers (`normalizedToDb`, `dbToNormalized`), getState/setState roundtrip, so regressions are caught without loading the plugin in a host.
+- **CI**: you can add a small test target (e.g. CTest or a minimal host) that loads the plugin and checks parameters; that’s optional and can be added later.
+
+So: **no obligation** to add tests now; consider them when you want to lock down param/state behaviour or add a “test” step in CI.
+
+## Development
+
+- API keys (e.g. Tone3000): in development use `.env`; in the released plugin the user enters them in the plugin settings.
+- See [.cursorrules](.cursorrules) for project conventions, naming, and UI direction.

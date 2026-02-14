@@ -1,0 +1,12 @@
+# Environment and secrets (never commit)
+.env
+.env.*
+!.env.example
+
+# Build and IDE
+build/
+dist/
+TEMP/
+.vscode/
+.idea/
+*.user

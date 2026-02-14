@@ -1,0 +1,71 @@
+# Fairy Tapes — Build VST3 plugins on Linux, Windows, macOS.
+# Runs on push/PR to master. VST3 SDK is a git submodule (vendors/vst3sdk).
+# Free tier: 2000 min/month (Linux 1x, Windows 2x, macOS 10x per minute).
+
+name: Build
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            runner: ubuntu-24.04
+          - os: windows-latest
+            runner: windows-latest
+          - os: macos-latest
+            runner: macos-latest
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Configure and build (Linux)
+        if: matrix.os == 'ubuntu-24.04'
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release
+
+      - name: Configure and build (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          cmake -B build -G "Visual Studio 17 2022" -A x64
+          cmake --build build --config Release
+
+      - name: Configure and build (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release
+
+      - name: Upload artifacts (Linux)
+        if: matrix.os == 'ubuntu-24.04' && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: the-stripper-linux
+          path: dist/The Stripper.vst3
+
+      - name: Upload artifacts (Windows)
+        if: matrix.os == 'windows-latest' && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: the-stripper-windows
+          path: dist/The Stripper.vst3
+
+      - name: Upload artifacts (macOS)
+        if: matrix.os == 'macos-latest' && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: the-stripper-macos
+          path: dist/The Stripper.vst3
