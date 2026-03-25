@@ -7,6 +7,6 @@
 [submodule "vendors/dusk-audio-plugins"]
 	path = vendors/dusk-audio-plugins
 	url = https://github.com/dusk-audio/dusk-audio-plugins.git
-[submodule "vendors/eqp-wdf-1a"]
-	path = vendors/eqp-wdf-1a
-	url = https://github.com/ABSounds/EQP-WDF-1A.git
+[submodule "vendors/NeuralAmpModelerCore"]
+	path = vendors/NeuralAmpModelerCore
+	url = https://github.com/sdatkinson/NeuralAmpModelerCore.git
