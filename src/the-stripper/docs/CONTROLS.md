@@ -2,7 +2,7 @@
 
 Elenco di **tutti i parametri** esposti al host (lista standard, nessuna UI custom). L’host (es. Reaper) li mostra nella sua finestra parametri. Ordine **per ID** (come appare nel host).
 
-**Totale: 33 parametri** (ID 0…32). **Compressor Mode** (ID 14, solo Channel: Voice / Drums / Classic) è esposto; DSP Multi-Comp ancora stub, vedi [COMPRESSION_MODES.md](COMPRESSION_MODES.md).
+**Totale: 33 parametri** (ID 0…32). **Compressor Mode** (ID 14, solo Channel: Voice / Drums / Classic) è esposto; DSP Multi-Comp integrato (port C++ da Dusk Audio), vedi [COMPRESSION_MODES.md](COMPRESSION_MODES.md).
 
 ---
 

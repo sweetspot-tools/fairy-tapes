@@ -23,7 +23,7 @@ enum ParamID : Steinberg::Vst::ParamID {
   kBypassLimiter,
   kBypassGate,
   kGainStagingTrim,  // Channel only; gain staging not implemented; 0..1 -> linear or dB (kept for future)
-  kCompressAmount,   // Multi-Comp (Channel / Mix bus) amount; stub until Multi-Comp integrated
+  kCompressAmount,   // Multi-Comp (Channel / Mix bus) amount
   kCompressMix,      // dry/wet
   kCompressorMode,   // Channel only: 0=Voice, 1=Drums, 2=Classic (step 0,1,2). Mix bus ignores; engine = Bus.
   // 4K-EQ (Channel mode): HPF/LPF + 4 bands + type + saturation
@@ -38,8 +38,10 @@ enum ParamID : Steinberg::Vst::ParamID {
   kEqHMGain, kEqHMFreq, kEqHMQ,   // HM: 600..7000 Hz, Q 0.4..4
   kEqHFGain, kEqHFFreq,           // HF: 1500..16000 Hz
   kEqHFBell,      // 0 = shelf, 1 = bell (Black only)
-  kEqType,        // 0 = Brown (E), 1 = Black (G)
+  // EQ Type (Brown/Black) removed: derived from Strip Mode (Channel=Black, Mix bus=Brown)
   kEqSaturation,  // 0..1 (0..100%)
+  // Drive (NAM): single knob. Output auto-compensated. Always 100% wet (bypass = off).
+  kDriveAmount,   // 0 = unity (model coloration only), 1 = max (+20 dB into model)
   kNumParams
 };
 
@@ -76,8 +78,10 @@ constexpr Steinberg::Vst::ParamValue kDefaultEqHMQ = (0.7f - 0.4f) / (4.0f - 0.4
 constexpr Steinberg::Vst::ParamValue kDefaultEqHFGain = 0.5;
 constexpr Steinberg::Vst::ParamValue kDefaultEqHFFreq = (8000.0f - 1500.0f) / (16000.0f - 1500.0f);
 constexpr Steinberg::Vst::ParamValue kDefaultEqHFBell = 0.0;
-constexpr Steinberg::Vst::ParamValue kDefaultEqType = 0.0;      // Brown
 constexpr Steinberg::Vst::ParamValue kDefaultEqSaturation = 0.0;
+
+// Drive defaults
+constexpr Steinberg::Vst::ParamValue kDefaultDriveAmount = 0.0;   // unity (coloration only)
 
 // Gain range in dB for display; normalized 0 = -20 dB, 1 = +20 dB
 constexpr double kGainMinDb = -20.0;
@@ -111,6 +115,13 @@ inline bool isBypassStage(Steinberg::Vst::ParamValue value) {
 
 inline bool isChannelMode(Steinberg::Vst::ParamValue stripMode) {
   return stripMode < 0.5;
+}
+
+// Drive: normalized -> linear gain
+// Drive amount: 0..1 -> 1x..10x (0..+20 dB) — exponential taper
+inline double driveAmountToLinear(Steinberg::Vst::ParamValue norm) {
+  if (norm <= 0.) return 1.0;
+  return std::pow(10.0, norm);  // 0->1x, 0.5->~3.16x, 1->10x
 }
 
 // 4K-EQ: normalized 0..1 <-> frequency / gain / Q

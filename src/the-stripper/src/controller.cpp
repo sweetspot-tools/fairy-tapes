@@ -14,9 +14,15 @@
 namespace FairyTapes::TheStripper {
 
 namespace {
-constexpr int kStateVersion = 4;
+constexpr int kStateVersion = 7;
+constexpr int kNumParamsV5 = 32;   // param count before Drive params
+constexpr int kNumParamsV6 = 35;   // v6 had kDriveAmount, kDriveOutput, kDriveMix
+constexpr int kOldDriveOutputSlotV6 = 33;
+constexpr int kOldDriveMixSlotV6 = 34;
 constexpr int kNumParamsV2 = 18;
 constexpr int kNumParamsV3 = 32;  // before Compressor Mode
+constexpr int kNumParamsV4 = 33;  // before kEqType removal
+constexpr int kOldEqTypeSlotV4 = 31;
 
 void asciiToStr128(const char* src, Steinberg::Vst::String128 dst) {
   for (int i = 0; i < 127 && src[i]; ++i)
@@ -58,8 +64,8 @@ Controller::Controller() {
   param_value_[kEqHFGain] = kDefaultEqHFGain;
   param_value_[kEqHFFreq] = kDefaultEqHFFreq;
   param_value_[kEqHFBell] = kDefaultEqHFBell;
-  param_value_[kEqType] = kDefaultEqType;
   param_value_[kEqSaturation] = kDefaultEqSaturation;
+  param_value_[kDriveAmount] = kDefaultDriveAmount;
 }
 
 IMPLEMENT_REFCOUNT(Controller)
@@ -83,59 +89,91 @@ Steinberg::tresult PLUGIN_API Controller::setState(Steinberg::IBStream* state) {
   Steinberg::int32 version = 0;
   if (s.readInt32(version) == false)
     return Steinberg::kResultFalse;
-  const int n = (version == 1) ? 3 : (version == 2) ? kNumParamsV2 : (version == 3) ? kNumParamsV3 : kNumParams;
-  for (int i = 0; i < n; ++i) {
-    double v = 0.;
-    if (s.readDouble(v) == false)
-      return Steinberg::kResultFalse;
-    if (i < kNumParams)
+  if (version == 4) {
+    double buf[kNumParamsV4];
+    for (int i = 0; i < kNumParamsV4; ++i) {
+      if (s.readDouble(buf[i]) == false)
+        return Steinberg::kResultFalse;
+    }
+    int dst = 0;
+    for (int i = 0; i < kNumParamsV4 && dst < kNumParams; ++i) {
+      if (i == kOldEqTypeSlotV4)
+        continue;
+      param_value_[dst++] = static_cast<Steinberg::Vst::ParamValue>(buf[i]);
+    }
+  } else if (version == 5) {
+    for (int i = 0; i < kNumParamsV5; ++i) {
+      double v = 0.;
+      if (s.readDouble(v) == false)
+        return Steinberg::kResultFalse;
       param_value_[i] = static_cast<Steinberg::Vst::ParamValue>(v);
-  }
-  if (version == 1) {
-    for (int i = 3; i < kNumParams; ++i)
-      param_value_[i] = 0.5;
-    param_value_[kBypass] = 0.0;
-    param_value_[kEqHPFOn] = kDefaultEqHPFOn;
-    param_value_[kEqLPFOn] = kDefaultEqLPFOn;
-    param_value_[kEqLFBell] = kDefaultEqLFBell;
-    param_value_[kEqHFBell] = kDefaultEqHFBell;
-    param_value_[kEqType] = kDefaultEqType;
-    param_value_[kEqSaturation] = kDefaultEqSaturation;
-    param_value_[kStripMode] = kDefaultStripMode;
-    param_value_[kInputGain] = kDefaultInputGain;
-    param_value_[kOutputGain] = kDefaultOutputGain;
-    param_value_[kBypassGainStaging] = kDefaultBypassStage;
-    param_value_[kBypassLPHP] = kDefaultBypassStage;
-    param_value_[kBypassEQ] = kDefaultBypassStage;
-    param_value_[kBypassCompression] = kDefaultBypassStage;
-    param_value_[kBypassDrive] = kDefaultBypassStage;
-    param_value_[kBypassLimiter] = kDefaultBypassStage;
-    param_value_[kBypassGate] = kDefaultBypassStage;
-    param_value_[kGainStagingTrim] = kDefaultGainStagingTrim;
-    param_value_[kCompressAmount] = kDefaultCompressAmount;
-    param_value_[kCompressMix] = kDefaultCompressMix;
-    param_value_[kCompressorMode] = kDefaultCompressorMode;
-  }
-  if (version == 3) {
-    for (int i = kNumParams - 1; i >= static_cast<int>(kCompressorMode) + 1; --i)
-      param_value_[i] = param_value_[i - 1];
-    param_value_[kCompressorMode] = kDefaultCompressorMode;
-  }
-  if (version == 2) {
-    param_value_[kEqHPFFreq] = param_value_[14];
-    param_value_[kEqHPFOn] = param_value_[15];
-    param_value_[kEqLPFFreq] = param_value_[16];
-    param_value_[kEqLPFOn] = param_value_[17];
-    param_value_[kCompressorMode] = kDefaultCompressorMode;
-  }
-  if (version <= 2) {
+    }
+    param_value_[kDriveAmount] = kDefaultDriveAmount;
+  } else if (version == 6) {
+    double buf[kNumParamsV6];
+    for (int i = 0; i < kNumParamsV6; ++i) {
+      if (s.readDouble(buf[i]) == false)
+        return Steinberg::kResultFalse;
+    }
+    int dst = 0;
+    for (int i = 0; i < kNumParamsV6 && dst < kNumParams; ++i) {
+      if (i == kOldDriveOutputSlotV6 || i == kOldDriveMixSlotV6)
+        continue;
+      param_value_[dst++] = static_cast<Steinberg::Vst::ParamValue>(buf[i]);
+    }
+  } else if (version >= 7) {
+    for (int i = 0; i < kNumParams; ++i) {
+      double v = 0.;
+      if (s.readDouble(v) == false)
+        return Steinberg::kResultFalse;
+      param_value_[i] = static_cast<Steinberg::Vst::ParamValue>(v);
+    }
+  } else {
+    const int n = (version == 1) ? 3 : (version == 2) ? kNumParamsV2 : kNumParamsV3;
+    for (int i = 0; i < n; ++i) {
+      double v = 0.;
+      if (s.readDouble(v) == false)
+        return Steinberg::kResultFalse;
+      if (i < kNumParams)
+        param_value_[i] = static_cast<Steinberg::Vst::ParamValue>(v);
+    }
+    if (version == 1) {
+      for (int i = 3; i < kNumParams; ++i)
+        param_value_[i] = 0.5;
+      param_value_[kBypass] = 0.0;
+      param_value_[kStripMode] = kDefaultStripMode;
+      param_value_[kInputGain] = kDefaultInputGain;
+      param_value_[kOutputGain] = kDefaultOutputGain;
+      param_value_[kBypassGainStaging] = kDefaultBypassStage;
+      param_value_[kBypassLPHP] = kDefaultBypassStage;
+      param_value_[kBypassEQ] = kDefaultBypassStage;
+      param_value_[kBypassCompression] = kDefaultBypassStage;
+      param_value_[kBypassDrive] = kDefaultBypassStage;
+      param_value_[kBypassLimiter] = kDefaultBypassStage;
+      param_value_[kBypassGate] = kDefaultBypassStage;
+      param_value_[kGainStagingTrim] = kDefaultGainStagingTrim;
+      param_value_[kCompressAmount] = kDefaultCompressAmount;
+      param_value_[kCompressMix] = kDefaultCompressMix;
+      param_value_[kCompressorMode] = kDefaultCompressorMode;
+    }
+    if (version == 3) {
+      for (int i = kNumParams - 1; i >= static_cast<int>(kCompressorMode) + 1; --i)
+        param_value_[i] = param_value_[i - 1];
+      param_value_[kCompressorMode] = kDefaultCompressorMode;
+    }
+    if (version == 2) {
+      param_value_[kEqHPFFreq] = param_value_[14];
+      param_value_[kEqHPFOn] = param_value_[15];
+      param_value_[kEqLPFFreq] = param_value_[16];
+      param_value_[kEqLPFOn] = param_value_[17];
+      param_value_[kCompressorMode] = kDefaultCompressorMode;
+    }
     for (int i = kNumParamsV2; i < kNumParams; ++i)
       param_value_[i] = 0.5;
     param_value_[kEqHPFOn] = kDefaultEqHPFOn;
     param_value_[kEqLPFOn] = kDefaultEqLPFOn;
     param_value_[kEqLFBell] = kDefaultEqLFBell;
     param_value_[kEqHFBell] = kDefaultEqHFBell;
-    param_value_[kEqType] = kDefaultEqType;
     param_value_[kEqSaturation] = kDefaultEqSaturation;
     param_value_[kEqHPFFreq] = kDefaultEqHPFFreq;
     param_value_[kEqLPFFreq] = kDefaultEqLPFFreq;
@@ -380,18 +418,17 @@ Steinberg::tresult PLUGIN_API Controller::getParameterInfo(Steinberg::int32 inde
     asciiToStr128("HF Bell", info.shortTitle);
     asciiToStr128("", info.units);
     break;
-  case kEqType:
-    info.stepCount = 1;
-    info.defaultNormalizedValue = kDefaultEqType;
-    asciiToStr128("EQ Type", info.title);
-    asciiToStr128("Type", info.shortTitle);
-    asciiToStr128("", info.units);
-    break;
   case kEqSaturation:
     info.defaultNormalizedValue = kDefaultEqSaturation;
     asciiToStr128("EQ Saturation", info.title);
     asciiToStr128("Sat", info.shortTitle);
     asciiToStr128("%", info.units);
+    break;
+  case kDriveAmount:
+    info.defaultNormalizedValue = kDefaultDriveAmount;
+    asciiToStr128("Drive", info.title);
+    asciiToStr128("Drive", info.shortTitle);
+    asciiToStr128("", info.units);
     break;
   default:
     return Steinberg::kResultFalse;
@@ -490,10 +527,11 @@ Steinberg::tresult PLUGIN_API Controller::getParamStringByValue(Steinberg::Vst::
     snprintf(buf, sizeof(buf), "%.2f", eqNormToQ(valueNormalized));
     asciiToStr128(buf, string);
     return Steinberg::kResultOk;
-  case kEqType:
-    asciiToStr128(valueNormalized >= 0.5 ? "Black" : "Brown", string);
-    return Steinberg::kResultOk;
   case kEqSaturation:
+    snprintf(buf, sizeof(buf), "%.0f%%", valueNormalized * 100.0);
+    asciiToStr128(buf, string);
+    return Steinberg::kResultOk;
+  case kDriveAmount:
     snprintf(buf, sizeof(buf), "%.0f%%", valueNormalized * 100.0);
     asciiToStr128(buf, string);
     return Steinberg::kResultOk;

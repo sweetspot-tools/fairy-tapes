@@ -5,6 +5,7 @@
 
 # Build and IDE
 build/
+build_cov/
 dist/
 TEMP/
 .vscode/

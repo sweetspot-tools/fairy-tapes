@@ -4,7 +4,7 @@ Design of the channel strip, NAM integration, algorithm sources, and external co
 
 **Quick summary:** See [OVERVIEW.md](OVERVIEW.md) for a one-page recap of all stage choices and where each is documented.
 
-**Orientation:** The Stripper is a **bus-oriented** channel strip (e.g. mix bus, subgroup, master), not aimed at a single track only. Stage choices (e.g. **Multi-Comp** (Channel: usage modes; Mix bus: Bus only), **4K-EQ** (Channel) / **Pultec** (Mix bus, not implemented); **Gain/Drive** = **NAM with GPU extension**) reflect this bus use case.
+**Orientation:** The Stripper is a **bus-oriented** channel strip (e.g. mix bus, subgroup, master), not aimed at a single track only. Stage choices (e.g. **Multi-Comp** (Channel: usage modes; Mix bus: Bus only), **4K-EQ** in both modes (Channel = Black/G-series auto, Mix bus = Brown/E-series auto); **Gain/Drive** = **NAM with GPU extension**) reflect this bus use case.
 
 ---
 
@@ -14,9 +14,9 @@ The plugin is a **channel strip** with multiple stages in series. Each stage is 
 
 | Stage            | Role                         | Bypassable |
 |------------------|------------------------------|------------|
-| **LP/HP**        | **Active in both modes when feasible** (e.g. from 4K-EQ HPF/LPF). Part of EQ stage. | Yes (both modes, if feasible) |
-| **EQ**           | 4K-EQ (Channel) / Pultec (Mix bus, **not implemented** — stub) — §1.2c.1 | Yes        |
-| **Compression**  | Multi-Comp (Channel: Voice, Drums, Classic; Mix bus: Bus only) | Yes        |
+| **LP/HP**        | **Active in both modes** (from 4K-EQ HPF/LPF). Part of EQ stage. | Yes (both modes) |
+| **EQ**           | **4K-EQ** in both modes — Channel = Black (G-series, auto), Mix bus = Brown (E-series, auto). §1.2c.1 | Yes        |
+| **Compression**  | Multi-Comp (Channel: Voice, Drums, Classic; Mix bus: Bus only); **sidechain** (2nd input bus) for detection | Yes        |
 | **Gain / Drive** | **Core stage:** NAM with GPU extension (Tone3000 / local); TapeHack2 when NAM off | Yes        |
 | **Limiter**      | BlockParty (Airwindows)       | Yes        |
 | **Gate / Expander** | Denoise (Airwindows)       | Yes        |
@@ -26,16 +26,16 @@ User can run only EQ, only NAM, EQ + NAM, or any combination. No stage is mandat
 
 **Order of the chain (signal flow):**  
 1. **Gain staging** (optional; **Channel mode only** — see §1.2; placement at start or end)  
-2. **EQ** (Channel: 4K-EQ controls active, Pultec disabled; Mix bus: Pultec controls active, 4K-EQ disabled; LP/HP active in both modes when feasible — §1.2c.1)  
+2. **EQ** (4K-EQ in both modes; Channel = Black/G-series auto, Mix bus = Brown/E-series auto; LP/HP active in both modes — §1.2c.1)  
 3. **Compression** (Multi-Comp in Channel with usage modes, Multi-Comp Bus only in Mix bus — §1.2c.1)  
 4. **Gain / Drive** (NAM with GPU extension; TapeHack2 when NAM not used)  
 5. **Limiter** (BlockParty)  
 6. **Gate / Expander** (Denoise)  
 7. **Gain staging** (if placed at end; **Channel mode only** — in Mix bus mode this stage is not present)
 
-So the core flow is: **EQ → Compression → Drive → Limiter → Gate**. Gain staging is **Channel mode only**. **EQ stage:** in **Channel** mode the **4K-EQ** controls are active and **Pultec** controls are disabled; in **Mix bus** mode the **Pultec** controls are active and **4K-EQ** controls are disabled. **LP/HP** remain active in both modes when feasible (e.g. from 4K-EQ HPF/LPF).
+So the core flow is: **EQ → Compression → Drive → Limiter → Gate**. Gain staging is **Channel mode only**. **EQ stage:** **4K-EQ** is used in **both** modes; EQ type (Brown/Black) is **automatic** — **Channel** = Black (G-series, tighter Q), **Mix bus** = Brown (E-series, wider curves). **LP/HP** (from 4K-EQ HPF/LPF) remain active in both modes.
 
-**EQ stage: which controls are active per mode.** In **Channel mode**, **4K-EQ** controls are **active** (bands + HPF/LPF) and **Pultec** controls are **disabled**. In **Mix bus mode**, **Pultec** controls are **active** and **4K-EQ** (band) controls are **disabled**. **LP/HP** remain **active in both modes when feasible** (e.g. LP/HP from 4K-EQ HPF/LPF in both modes, or a separate stage if that is feasible). Implementation: Channel = 4K-EQ (bands + HPF/LPF), Pultec params hidden; Mix bus = Pultec (EQP-WDF-1A) **not implemented** (stub), 4K-EQ band params hidden; LP/HP active in both if feasible.
+**EQ stage: which controls are active per mode.** **4K-EQ** controls (bands + HPF/LPF) are **active in both modes**. The EQ **type** (Brown = E-series / Black = G-series) is **derived automatically** from Strip Mode — no user-facing selector (kEqType parameter removed). **Channel** = Black (G-series, tighter Q, more precise for channel work). **Mix bus** = Brown (E-series, wider curves, musical, better for bus glue). LP/HP active in both modes.
 
 ### 1.2a Taking “pieces” and simplifying (rock n roll, easy to use)
 
@@ -59,7 +59,7 @@ So: we **can** take pieces, simplify, and make the channel strip more user-frien
 So **stepped** is very “banco analogico” and user-friendly: the fonico picks a step, no hunting for the exact Hz.
 
 **Decision:** We use **stepped frequencies** for:
-- **LP/HP:** HP cutoff and LP cutoff are **stepped** values (e.g. from 4K-EQ: HP 30–200 Hz, LP 4k–20k Hz). **LP/HP remain active in both strip modes when feasible** (Channel: from 4K-EQ; Mix bus: same 4K-EQ HPF/LPF or separate stage if feasible).
+- **LP/HP:** HP cutoff and LP cutoff are **stepped** values (e.g. from 4K-EQ: HP 30–200 Hz, LP 4k–20k Hz). **LP/HP active in both strip modes** (from 4K-EQ HPF/LPF).
 - **EQ bands:** Same idea — **stepped** centre frequency per band (and optionally stepped gain steps if we want). No per-band Solo/Mute (UI simplified).
 
 So: **sì, frequenze a scatti sia per passa alto/basso che per le altre bande.**
@@ -68,7 +68,7 @@ So: **sì, frequenze a scatti sia per passa alto/basso che per le altre bande.**
 
 Channel9 in the source has **Console Type** (Neve / API / SSL / Teac / Mackie) + Drive + Output — it’s a “tone colour” box, not a multi-band EQ. To keep the strip **simple and one-voice** (like the compressor) and to deliver an **analog, harmonic EQ that sounds real**:
 
-- **One EQ + one compressor per strip mode:** **Channel** = **4K-EQ controls active** (4 parametric + HPF/LPF), **Pultec controls disabled** + **Multi-Comp** (usage modes: Voice, Drums, Classic). **Mix bus** = **Pultec controls active**, **4K-EQ controls disabled** + **Multi-Comp Bus** (SSL G-Series only). **LP/HP** stay active in both modes when feasible. The **Channel / Mix bus** button switches which EQ engine’s controls are active (and which are disabled). **Gain staging** is **Channel mode only** and **not implemented**. See §1.2c.1, §3.3.1, [COMPRESSION_MODES.md](COMPRESSION_MODES.md).
+- **One EQ + one compressor per strip mode:** **Channel** = **4K-EQ** in both modes (4 parametric + HPF/LPF); EQ type **automatic**: Channel = **Black** (G-series, tighter Q) + **Multi-Comp** (usage modes: Voice, Drums, Classic). **Mix bus** = **Brown** (E-series, wider curves) + **Multi-Comp Bus** (SSL G-Series only). No user-facing EQ type selector (kEqType parameter removed). The **Channel / Mix bus** button switches EQ type and compression personality together. **Gain staging** is **Channel mode only** and **not implemented**. See §1.2c.1, §3.3.1, [COMPRESSION_MODES.md](COMPRESSION_MODES.md).
 
 **Target: analog-style, “real” character — not necessarily Neve.**
 
@@ -94,7 +94,7 @@ We need **2 shelves + 2 bells** (or similar) with **one consistent analog charac
 **Candidates (to find and evaluate)**
 
 - **1073-pre-eq-plugin** (JackieAlacrity2373): Neve 1073–style, MIT, JUCE, VST3. Low shelf + mid peak + high shelf. **No known reviews/videos/docs** — evaluate by listening. Repository: https://github.com/JackieAlacrity2373/1073-pre-eq-plugin  
-- **Other flavours:** Search for open-source **API 550**, **SSL**, **Pultec**, **Quad Eight**, or other console/vintage-style EQ (MIT/AGPL, portable to our VST3). Prefer projects with some documentation or reputation; otherwise evaluate by listening before committing.  
+- **Other flavours:** Search for open-source **API 550**, **SSL**, **Pultec**, **Quad Eight**, or other console/vintage-style EQ (MIT/GPL-3.0, portable to our VST3). Prefer projects with some documentation or reputation; otherwise evaluate by listening before committing.  
 - **Next step:** Broaden search to "open source [API 550 / SSL EQ / Pultec / console EQ] VST3" (or JUCE); shortlist candidates; **evaluate quality by listening** before choosing the algorithm source. If no suitable open-source EQ is found, revisit (e.g. in-house RBJ + colour stage).
 
 **EQ candidates — search checklist and shortlist**
@@ -116,8 +116,8 @@ Suggested search queries (GitHub, search engines) to find alternative open-sourc
 |---------|---------|---------|-----|--------------------|-------|--------|
 | Neve 1073 | 1073-pre-eq-plugin (JackieAlacrity2373) | MIT | https://github.com/JackieAlacrity2373/1073-pre-eq-plugin | Low shelf, 1 mid peak, High shelf | No viable open-source Neve EQ found for strip use. | **Not adopted** |
 | API 550   | *(to search)* | — | — | — | Search: API 550A/550B style, stepped or fixed freqs. | **To search** |
-| SSL       | **4K-EQ** (Dusk Audio, formerly Luna Co. Software) | GPL-3.0 | https://github.com/dusk-audio/dusk-audio-plugins | 4 parametric + HPF/LPF | SSL 4000 style. Brown (wide/glue) / Black (tighter). Saturation (transformers, NE5534). Mix bus / drum bus. **Full channel EQ**, not colour-only. Repo moved from luna-co-software/plugins. | **Primary candidate (analog)** |
-| Pultec    | **EQP-WDF-1A** (ABSounds) | check repo | https://github.com/ABSounds/EQP-WDF-1A | Pultec EQP-1A (boost/cut) | WDF, "Pultec trick". **Mix bus** = Pultec (decision made). | **Adopted — Mix bus** |
+| SSL       | **4K-EQ** (Dusk Audio, formerly Luna Co. Software) | GPL-3.0 | https://github.com/dusk-audio/dusk-audio-plugins | 4 parametric + HPF/LPF | SSL 4000 style. Brown (E-series, wide/glue) / Black (G-series, tighter). Saturation (transformers, NE5534). **Used in both Channel and Mix bus modes** (type auto-derived from strip mode). Repo moved from luna-co-software/plugins. | **Adopted — both modes** |
+| Pultec    | **EQP-WDF-1A** (ABSounds) | check repo | https://github.com/ABSounds/EQP-WDF-1A | Pultec EQP-1A (boost/cut) | WDF, "Pultec trick". Previously considered for Mix bus; **removed from project** — 4K-EQ used in both modes instead. | **Removed** |
 | Other     | **Luftikus** (apresta) | check repo | https://github.com/apresta/luftikus | Fixed bands + shelves | Analog-flavor, simple. Good for air/sparkle. | **Candidate — optional** |
 | Other     | **ZL Equalizer** (ZL-Audio) | check repo | https://github.com/ZL-Audio/ZLEqualizer | 16 bands, various | Linear-phase option, surgical/transparent. Less "character", more precision. | **Alternative (transparent)** |
 
@@ -126,42 +126,42 @@ When a new candidate is found: add a row with URL, license, band topology, and s
 **EQ algorithm decision (narrowing):**
 
 - **Neve:** No open-source plugin that credibly imitates a Neve EQ was found; 1073-pre-eq-plugin remains unvalidated and is not chosen as primary.
-- **Pultec (EQP-WDF-1A):** Ruled out for the strip: it is a **colour / presence** box (Pultec trick, bass/drums/master), not a **full channel EQ** — "un po' tanto da mix bus" and not suited to "dare una vera EQ al canale".
+- **Pultec (EQP-WDF-1A):** **Removed from project.** Previously considered for Mix bus only; ruled out as it is a colour/presence box (Pultec trick), not a full channel EQ. 4K-EQ is now used in both modes (Brown/E-series for Mix bus, Black/G-series for Channel).
 - **Target:** We want **one analog EQ** for the channel strip: proper bands (shelves + mids), analog character, usable as the main EQ on the bus/channel.
-- **Primary candidate:** **4K-EQ** (SSL 4000 style) — analog character, saturation, 4 parametric + HPF/LPF, fits mix bus and channel use. **ZL Equalizer** remains the alternative if we need a more transparent / surgical option (less "character").
+- **Primary candidate:** **4K-EQ** (SSL 4000 style) — analog character, saturation, 4 parametric + HPF/LPF, used in **both** Channel and Mix bus modes. EQ type (Brown/Black) auto-derived from strip mode. **ZL Equalizer** remains the alternative if we need a more transparent / surgical option (less "character").
 
 **Quick reference for evaluation (mix bus / strip use):**
 
 | Candidate    | Best for (strip context) | Character | Decision |
 |--------------|---------------------------|-----------|----------|
-| **4K-EQ**    | Channel mode (bande + HP/LP) | SSL 4000, 4 parametric + HPF/LPF | **Adopted — Channel mode** |
+| **4K-EQ**    | Both modes (Channel = Black/G-series; Mix bus = Brown/E-series) | SSL 4000, 4 parametric + HPF/LPF; type auto from strip mode | **Adopted — both modes** |
 | **ZL Equalizer** | Precise corrections, mastering | Transparent, linear-phase; less "character" | **Alternative (transparent)** |
-| **EQP-WDF-1A** | Mix bus | Pultec EQP-1A, vintage, "Pultec trick" | **Adopted — Mix bus** |
+| **EQP-WDF-1A** | *(removed)* | Pultec EQP-1A, vintage, "Pultec trick" | **Removed** |
 | **Luftikus** | Quick tonal shaping, air  | Simple, analog-flavor | Optional |
 | **1073-pre-eq-plugin** | Neve-style colour         | 1073, 3 bands | Not adopted (no viable Neve open-source) |
 
-**Decision:** **Channel mode** = **4K-EQ** controls active (4 parametric + HPF/LPF), **Pultec** controls disabled. **Mix bus mode** = **Pultec (EQP-WDF-1A)** controls active, **4K-EQ** controls disabled. **LP/HP** remain active in both modes when feasible (e.g. from 4K-EQ). ZL Equalizer remains optional for transparent/surgical use if needed.
+**Decision:** **4K-EQ** is used in **both** modes (4 parametric + HPF/LPF). EQ type is **automatic** (derived from strip mode): **Channel** = **Black** (G-series, tighter Q), **Mix bus** = **Brown** (E-series, wider curves). No user-facing EQ type selector (kEqType parameter removed). LP/HP active in both modes. ZL Equalizer remains optional for transparent/surgical use if needed.
 
 ### 1.2c.1 Strip modes: Channel vs Mix bus (two buttons)
 
-**Idea:** Two buttons in the UI let the user load one of two **strip personalities**. Each mode selects **which EQ engine** the EQ stage uses; compression is reasoned separately (see §3.3.1).
+**Idea:** Two buttons in the UI let the user load one of two **strip personalities**. Each mode selects the **EQ type** (Brown/Black, automatic) and compression personality; see §3.3.1.
 
 **EQ section (this section):**
 
 - **4K-EQ has high-pass and low-pass (HPF/LPF):** Yes — 4K-EQ is 4 parametric + HPF/LPF (SSL 4000 style).
-- **Channel mode:** **4K-EQ** controls are **active** (bands + HPF/LPF). **Pultec** controls are **disabled**.
-- **Mix bus mode:** **Pultec (EQP-WDF-1A)** controls are **active**. **4K-EQ** (band) controls are **disabled**. The EQ stage exposes only the active engine’s controls per mode; LP/HP remain active in both when feasible.
+- **Channel mode:** **4K-EQ Black** (G-series, tighter Q, more precise for channel work). All 4K-EQ controls active (bands + HPF/LPF).
+- **Mix bus mode:** **4K-EQ Brown** (E-series, wider curves, musical, better for bus glue). Same 4K-EQ controls active. EQ type is automatic — no user-facing selector (kEqType parameter removed).
 
 | Mode        | Role                    | EQ engine (this stage)              | Compression (§3.3.1) | Gain staging (§1.2) |
 |-------------|-------------------------|-------------------------------------|----------------------|---------------------|
-| **Channel** | Single track / channel  | **4K-EQ** (4 parametric + HPF/LPF; LP/HP mapped on 4K-EQ) | **Multi-Comp** (usage modes: Voice, Drums, Classic) | **Yes** (not implemented)  |
-| **Mix bus** | Bus / subgroup / master | **Pultec (EQP-WDF-1A)** (not implemented; stub) | **Multi-Comp Bus** (SSL G-Series only) | **No** (not present) |
+| **Channel** | Single track / channel  | **4K-EQ Black** (G-series, auto; tighter Q, 4 parametric + HPF/LPF) | **Multi-Comp** (usage modes: Voice, Drums, Classic) | **Yes** (not implemented)  |
+| **Mix bus** | Bus / subgroup / master | **4K-EQ Brown** (E-series, auto; wider curves, bus glue) | **Multi-Comp Bus** (SSL G-Series only) | **No** (not present) |
 
-- **LP/HP:** Remain **active in both modes when feasible** (e.g. from 4K-EQ HPF/LPF in both Channel and Mix bus). In Channel, 4K-EQ controls (including LP/HP) active; in Mix bus, Pultec controls active but LP/HP can stay active if we keep the 4K-EQ HPF/LPF block or a separate LP/HP stage.
-- **One click** loads the mode: EQ and compression switch together (Channel = 4K-EQ + Multi-Comp with usage-based mode selector; Mix bus = Pultec + Multi-Comp Bus only, no gain staging). Gain staging and Pultec are not implemented. User can still tweak parameters after loading.
+- **LP/HP:** Active in **both modes** (from 4K-EQ HPF/LPF). Same controls in Channel and Mix bus.
+- **One click** loads the mode: EQ type and compression switch together (Channel = 4K-EQ Black + Multi-Comp with usage-based mode selector; Mix bus = 4K-EQ Brown + Multi-Comp Bus only, no gain staging). Gain staging is not implemented. User can still tweak parameters after loading.
 - **State:** The current mode (Channel / Mix bus) is part of plugin state (getState/setState) so sessions recall the right personality.
 
-**Summary:** Two buttons → two strip modes. **Channel** = 4K-EQ (bande + HP/LP) + **Multi-Comp** (three usage buttons: Voice, Drums, Classic) + **gain staging** (not impl.). **Mix bus** = Pultec (not impl.) + **Multi-Comp Bus** (SSL only); **no gain staging**. See [COMPRESSION_MODES.md](COMPRESSION_MODES.md).
+**Summary:** Two buttons → two strip modes. **Channel** = 4K-EQ Black/G-series (bande + HP/LP) + **Multi-Comp** (three usage buttons: Voice, Drums, Classic) + **gain staging** (not impl.). **Mix bus** = 4K-EQ Brown/E-series + **Multi-Comp Bus** (SSL only); **no gain staging**. EQ type is automatic (derived from strip mode). See [COMPRESSION_MODES.md](COMPRESSION_MODES.md).
 
 ---
 
@@ -178,13 +178,13 @@ Reference for “marchi importanti open-source e quali modelli ispirati offrono�
 | **LSP (Linux Studio Plugins)** | GPL-3.0 | Molti filtri ed EQ; alcuni “vintage” o “analog-style”. Non un 1073 dedicato; licenza GPL. |
 | **1073-pre-eq-plugin** (JackieAlacrity2373) | MIT | **Neve 1073** preamp/EQ (low shelf, mid peak, high shelf, saturation). VST3 (JUCE). Candidato da valutare in ascolto. |
 | **4K-EQ** (Dusk Audio, formerly Luna Co. Software) | GPL-3.0 | **SSL 4000**–style: 4 parametric + HPF/LPF, Brown/Black, saturation. Repo: https://github.com/dusk-audio/dusk-audio-plugins. Vedi shortlist §1.2c. |
-| **EQP-WDF-1A** (ABSounds) | check repo | **Pultec EQP-1A** (WDF). Vintage, "Pultec trick". Vedi shortlist §1.2c. |
+| **EQP-WDF-1A** (ABSounds) | check repo | **Pultec EQP-1A** (WDF). Vintage, "Pultec trick". **Removed from project** — 4K-EQ used in both modes. |
 | **Luftikus** (apresta) | check repo | Analog-flavor, bande fisse + shelf. Semplice, air/sparkle. Vedi shortlist §1.2c. |
 | **ZL Equalizer** (ZL-Audio) | check repo | 16 bande, linear-phase. Più trasparente/chirurgico. Vedi shortlist §1.2c. |
 
-**Takeaway:** **Channel** = 4K-EQ (bande + HP/LP) + Multi-Comp (usage modes) + gain staging (not implemented). **Mix bus** = Pultec (not implemented) + Multi-Comp Bus only; no gain staging. LP/HP e EQ insieme in Channel. §3.3.1.
+**Takeaway:** **Channel** = 4K-EQ Black/G-series (bande + HP/LP) + Multi-Comp (usage modes) + gain staging (not implemented). **Mix bus** = 4K-EQ Brown/E-series + Multi-Comp Bus only; no gain staging. EQ type automatic (derived from strip mode). §3.3.1.
 
-**Summary:** **Channel** = 4K-EQ + Multi-Comp (usage modes) + gain staging (not implemented). **Mix bus** = Pultec (not implemented) + Multi-Comp Bus; gain staging not present.
+**Summary:** **Channel** = 4K-EQ Black/G-series + Multi-Comp (usage modes) + gain staging (not implemented). **Mix bus** = 4K-EQ Brown/E-series + Multi-Comp Bus; gain staging not present. EQ type automatic.
 
 ### 1.2 Gain staging stage (Channel only; not implemented)
 
@@ -203,27 +203,26 @@ We **do not** implement per-band **Solo** or **Mute** on the EQ. The strip stays
 
 ## 2. Gain / Drive stage (core of the system): NAM with GPU extension
 
-The **Gain / Drive** stage is the **core** of The Stripper. The primary design is **NAM (Neural Amp Modeler) with an extension to run on GPU**. When NAM is not used, the stage falls back to classic saturation (TapeHack2).
+The **Gain / Drive** stage is the **core** of The Stripper. It uses **NAM (Neural Amp Modeler)** exclusively, with GPU acceleration planned via **gpuaudio-sdk**. There is no classic fallback (TapeHack2 removed from design). See [DRIVE_STAGE_PARAMS.md](DRIVE_STAGE_PARAMS.md) for full parameter and signal-flow documentation.
 
-### 2.1 Mode 1: NAM (primary — with GPU extension)
+### 2.1 Single-knob design
 
-- **Source of models:** The user can load NAM models either:
-  - **From Tone3000** — models linked/connected via the Tone3000 integration (when available in the UI), or
-  - **From local file** — user loads a `.nam` (or NAM-compatible) file from disk.
-- **Compatibility:** All models must be **compatible with NAM (Neural Amp Modeler)**. The plugin runs them through the NAM engine; no other model format is accepted for this mode.
+- **One parameter:** `kDriveAmount` (0..1) — how hard the signal is pushed into the NAM model.
+- **Always-on coloration:** When the stage is active and a model is loaded, the NAM model is always in the signal path. At Drive = 0, the model provides natural "analog" coloration at unity gain. Increasing Drive adds saturation and harmonics.
+- **Auto-compensation:** Output level is automatically matched to input level via smoothed RMS tracking. No manual output trim needed.
+- **100% wet:** No dry/wet mix control. The stage is either on (model active, coloring the signal) or bypassed (`kBypassDrive`).
+
+### 2.2 NAM integration
+
+- **Target:** NAM A2 — model format and inference API follow NAM A2 when available.
+- **Source of models:** The user can load models from **Tone3000** (when available in the UI) or from **local file** (`.nam` or NAM A2–compatible).
 - **Single NAM stage:** The Gain / Drive stage is the **only** stage that can run a NAM model. Other stages use classic algorithms only.
-- **Execution: GPU (with CPU fallback).** NAM in the Drive stage **must run on GPU** via a NAM extension integrated with **gpuaudio-sdk** (see §6). This frees CPU and allows larger or more complex models. If the GPU is unavailable or unsupported, the plugin **falls back to CPU** so it remains usable everywhere.
-
-### 2.2 Mode 2: Classic (when NAM is not used)
-
-- **Algorithm:** When the user does **not** enable NAM, the Gain / Drive stage uses **Airwindows TapeHack2** for saturation/drive.
-- **Source:** `vendors/airwindows/plugins/` (or equivalent). MIT license; no NAM dependency.
+- **Execution: GPU (with CPU fallback).** NAM in the Drive stage is planned to run on **GPU** via integration with **gpuaudio-sdk** (see §6). Currently runs on CPU via `NeuralAmpModelerCore`. If the GPU is unavailable or unsupported, the plugin **falls back to CPU** so it remains usable everywhere.
 
 ### 2.3 Summary
 
-- **NAM option:** Enable NAM → use models from **Tone3000** or **local file**; models must be **NAM-compatible**.
-- **Classic option:** Do not enable NAM → use **TapeHack2** (Airwindows).
-- **Plugin must work without NAM:** If the user never enables NAM or loads a model, the plugin is fully usable with **TapeHack2** only. NAM is optional.
+- **Drive stage = NAM only.** No classic/TapeHack2 fallback. If no model is loaded, the stage is a passthrough.
+- **Single knob (Drive Amount) + bypass toggle.** Auto-compensated output. Rock & roll, easy to use.
 
 ---
 
@@ -232,7 +231,7 @@ The **Gain / Drive** stage is the **core** of The Stripper. The primary design i
 For **non-NAM** stages (EQ, compression, gain when “classic”, limiter, gate), we use algorithms from **Airwindows** (MIT) or other open sources. **Compression** uses **Multi-Comp** (Dusk Audio, GPL-3.0) — Channel: usage modes; Mix bus: Bus only. See §3.3.1, §3.4. Other stages: algorithms and techniques only; no copying of names or branding.
 
 - **Repository:** https://github.com/airwindows/airwindows/tree/master/plugins  
-- **Mix and match:** We can take **pieces** from different sources per stage: EQ from **4K-EQ** (Channel) and **Pultec EQP-WDF-1A** (Mix bus, not implemented), **compression from Multi-Comp (Channel: usage modes; Mix bus: Bus only)**, **Gain/Drive (classic) from TapeHack2** (Airwindows), limiter **BlockParty** (Airwindows), gate/expander from **Denoise** (Airwindows). When NAM is enabled, Gain/Drive uses **NAM with GPU extension** (Tone3000 or local file, NAM-compatible). **Note:** Multi-Comp and 4K-EQ are GPL-3.0 (Dusk Audio); project is GPL-3.0 (§3.4).  
+- **Mix and match:** We can take **pieces** from different sources per stage: EQ from **4K-EQ** (both modes; Channel = Black/G-series, Mix bus = Brown/E-series, auto), **compression from Multi-Comp (Channel: usage modes; Mix bus: Bus only)**, **Gain/Drive (classic) from TapeHack2** (Airwindows), limiter **BlockParty** (Airwindows), gate/expander from **Denoise** (Airwindows). When NAM is enabled, Gain/Drive uses **NAM with GPU extension** (Tone3000 or local file, NAM-compatible). **Note:** Multi-Comp and 4K-EQ are GPL-3.0 (Dusk Audio); project is GPL-3.0 (§3.4).  
 
 ### 3.0 Criteria for algorithm choice and sources (summary)
 
@@ -249,12 +248,12 @@ We do **not** use only Airwindows. Criteria and sources:
 
 | Source | License | Used for |
 |--------|---------|----------|
-| **Airwindows** | MIT | EQ per mode via 4K-EQ/Pultec (LP/HP from 4K-EQ in Channel), Gain/Drive classic (TapeHack2), Gate (Denoise), **Limiter (BlockParty)** ✓. |
+| **Airwindows** | MIT | 4K-EQ (both modes, LP/HP from 4K-EQ), Gain/Drive classic (TapeHack2), Gate (Denoise), **Limiter (BlockParty)** ✓. |
 | **Multi-Comp** (Dusk Audio) | GPL-3.0 | Compression **Channel** (usage modes: Voice, Drums, Classic) + **Mix bus** (Bus only). ✓ chosen. |
 | **NAM** | — | Gain/Drive when enabled: **NAM with GPU extension** (Tone3000 or local file, NAM-compatible). |
 | **In-house** (or open-source) | — | Gain staging (Channel only, optional): RMS + trim. **Not implemented.** ReaPlugs (Cockos) **excluded** — proprietary license. |
 
-So: **4K-EQ** (Channel) + **Pultec** (Mix bus, not implemented), **Multi-Comp** (Channel + Mix bus), **NAM with GPU extension** (Drive) + TapeHack2 (classic), BlockParty, Denoise; **gain staging** (Channel only) planned but **not implemented**. 4K-EQ and Pultec from external open-source repos.
+So: **4K-EQ** (both modes; Channel = Black/G-series, Mix bus = Brown/E-series, auto), **Multi-Comp** (Channel + Mix bus), **NAM with GPU extension** (Drive) + TapeHack2 (classic), BlockParty, Denoise; **gain staging** (Channel only) planned but **not implemented**. 4K-EQ from Dusk Audio (GPL-3.0).
 
 ### 3.1 Approach: channel strip first, then per-stage
 
@@ -284,8 +283,8 @@ If there is **no** single Airwindows channel strip suitable for integration, cho
 
 | Stage            | Airwindows candidate (to choose)     | Notes |
 |------------------|--------------------------------------|-------|
-| **LP/HP**        | Active in **both modes when feasible** (e.g. 4K-EQ HPF/LPF) | LP/HP stay on in Channel and Mix bus if feasible; in Channel from 4K-EQ; in Mix bus same or separate stage. |
-| **EQ**           | **4K-EQ** (Channel) + **Pultec EQP-WDF-1A** (Mix bus) ✓ | **Channel:** 4K-EQ controls active, Pultec disabled. **Mix bus:** Pultec controls active, 4K-EQ disabled. Mix bus = **Pultec not implemented** (stub). No per-band Solo/Mute. **Implementation:** 4K-EQ DSP from Dusk Audio (formerly Luna Co. Software), GPL-3.0; see `src/dsp/fourk_eq.*`, `ssl_saturation.h`. Upstream: https://github.com/dusk-audio/dusk-audio-plugins. |
+| **LP/HP**        | Active in **both modes** (4K-EQ HPF/LPF) | LP/HP from 4K-EQ, active in both Channel and Mix bus. |
+| **EQ**           | **4K-EQ** (both modes) ✓ | **Channel:** 4K-EQ Black (G-series, tighter Q, auto). **Mix bus:** 4K-EQ Brown (E-series, wider curves, auto). EQ type derived from strip mode; no user-facing selector (kEqType removed). No per-band Solo/Mute. **Implementation:** 4K-EQ DSP from Dusk Audio (formerly Luna Co. Software), GPL-3.0; see `src/dsp/fourk_eq.*`, `ssl_saturation.h`. Upstream: https://github.com/dusk-audio/dusk-audio-plugins. |
 | **Compression**  | **Multi-Comp** (Dusk Audio, GPL-3.0) ✓ chosen | Channel = usage modes (Voice, Drums, Classic). Mix bus = Bus only. Source: `vendors/dusk-audio-plugins` (Multi-Comp). |
 | **Gain / Drive** | **NAM with GPU extension** (primary) **or** TapeHack2 (classic) | **Core stage.** NAM: runs on GPU via gpuaudio-sdk extension; models from Tone3000 or local file; NAM-compatible. Classic: Airwindows TapeHack2. Source (TapeHack2): `vendors/airwindows/plugins/`. |
 | **Limiter**      | **BlockParty** ✓ chosen              | Airwindows BlockParty — “moderately saturated analog limiter”; fits the suite’s analog, “real” character. Source: `vendors/airwindows/plugins/`. |
@@ -317,14 +316,15 @@ Review of `Airwindopedia.txt` and `what.txt` in the cloned repo:
 
 **Result:**  
 - *Best channel strip plugin (if any):* None. Use per-stage selection.  
-- *Concrete candidates:* EQ → **4K-EQ** (Channel) + **Pultec EQP-WDF-1A** (Mix bus, not implemented) ✓; **Compression** → **Multi-Comp** (Channel: usage modes; Mix bus: Bus only) ✓; **Gain/Drive** → **NAM with GPU extension** (primary) + **TapeHack2** (classic); **Gate / Expander** → **Denoise** ✓ chosen; **Limiter** → **BlockParty** ✓ chosen.
+- *Concrete candidates:* EQ → **4K-EQ** (both modes; Channel = Black/G-series, Mix bus = Brown/E-series, auto) ✓; **Compression** → **Multi-Comp** (Channel: usage modes; Mix bus: Bus only) ✓; **Gain/Drive** → **NAM with GPU extension** (primary) + **TapeHack2** (classic); **Gate / Expander** → **Denoise** ✓ chosen; **Limiter** → **BlockParty** ✓ chosen.
 
-### 3.3.1 Compression: Multi-Comp (Dusk Audio) — one engine, usage-based UI
+### 3.3.1 Compression: Multi-Comp (Dusk Audio) — one engine, usage-based UI, sidechain
 
 **Decision:** The compression stage uses **one** compressor engine: **Multi-Comp** (Dusk Audio, GPL-3.0), from `vendors/dusk-audio-plugins`. What the user sees depends on strip mode:
 
 - **Channel mode:** Three **usage-based** mode buttons — **Voice**, **Drums**, **Classic** — mapping to Multi-Comp’s Opto (LA-2A), FET (1176), and Classic VCA (dbx 160). We show these labels instead of technical names (FET, VCA, Opto). See [COMPRESSION_MODES.md](COMPRESSION_MODES.md).
 - **Mix bus mode:** **No** mode selector. The compressor uses **only** the **SSL G-Series Bus** algorithm from Multi-Comp (bus glue).
+- **Sidechain:** A second **stereo input bus** (Sidechain) is available. When the host routes a signal to it, all four compressor modes use that signal for **envelope detection** only; gain reduction is applied to the main input (classic key/ducking). See [COMPRESSION_MODES.md](COMPRESSION_MODES.md).
 
 Same Amount and Mix parameters in both modes; in Channel the user also picks the style (Voice / Drums / Classic). One codebase (Multi-Comp DSP), two presentations: channel = choice of character; mix bus = Bus only.
 
@@ -374,21 +374,21 @@ Until we have official or reliable sources, assume: **strict VST3 compliance** (
 ## 5. Reference
 
 - **Conceptual / UI inspiration:** Channel-strip style and “load NAM from inside plugin” idea (e.g. Chiarello/PreBrowser). No code or brand copy.
-- **Algorithm inspiration:** 4K-EQ + Pultec (EQ per mode; Pultec not implemented), Multi-Comp (Channel + Mix bus), Airwindows (TapeHack2, BlockParty, Denoise). NAM with GPU extension for Gain/Drive when enabled (Tone3000 or local, NAM-compatible). See `.cursorrules` and this doc for stage-by-stage choices.
+- **Algorithm inspiration:** 4K-EQ (EQ, both modes; type auto from strip mode), Multi-Comp (Channel + Mix bus), Airwindows (TapeHack2, BlockParty, Denoise). NAM with GPU extension for Gain/Drive when enabled (Tone3000 or local, NAM-compatible). See `.cursorrules` and this doc for stage-by-stage choices.
 
 ---
 
 ## 6. GPU execution and mixed CPU/GPU pipeline
 
-### 6.1 Drive (NAM) on GPU
+### 6.1 Drive (NAM A2) on GPU
 
-The **Gain / Drive** stage when using NAM runs on **GPU** (modified NAM path with **gpuaudio-sdk**). Benefits: lower CPU load, room for larger or more complex models. **Fallback to CPU** when GPU is unavailable or unsupported. Total latency (NAM receptive field + GPU transfer/execution) must be reported via `getLatencySamples()`.
+The **Gain / Drive** stage when using NAM A2 runs on **GPU** (integration with **gpuaudio-sdk**). Benefits: lower CPU load, room for larger or more complex models. **Fallback to CPU** when GPU is unavailable or unsupported. Total latency (NAM receptive field + GPU transfer/execution) must be reported via `getLatencySamples()`.
 
 ### 6.2 Which other stages can run on GPU?
 
 | Stage | On GPU? | Reason |
 |-------|---------|--------|
-| **LP/HP (in 4K-EQ)** | Not planned | LP/HP are part of 4K-EQ in Channel; very light. Keep on CPU. |
+| **LP/HP (in 4K-EQ)** | Not planned | LP/HP are part of 4K-EQ (both modes); very light. Keep on CPU. |
 | **EQ (Channel9-inspired)** | Not planned | Typically biquad/IIR-based; same as above. Convolution-based EQs could benefit from GPU, but our choice is classic EQ on CPU. |
 | **Compression (Multi-Comp)** | Theoretically possible | Compression has lookahead and envelope logic; often sequential. GPU helps when work is highly parallel (e.g. NAM); porting a compressor to GPU is possible but not standard. **Keep on CPU** for simplicity and predictability. |
 | **Limiter (BlockParty)** | Not planned | Analog-style limiter; keep on CPU for simplicity and low latency. |

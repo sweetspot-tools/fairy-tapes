@@ -1,10 +1,12 @@
 /**
  * Fairy Tapes · The Stripper — Compression stage.
- * Simple compressor with Voice (Opto-like), Drums (FET-like), Classic (VCA dbx160-like), Bus.
- * Amount and Mix only; no JUCE. See COMPRESSION_MODES.md.
+ * Multi-Comp DSP (port from Dusk Audio Multi-Comp, GPL-3.0): Voice (Opto), Drums (FET), Classic (VCA), Bus.
+ * Same API as before; implementation uses multicomp_engines. See COMPRESSION_MODES.md.
  */
 
 #pragma once
+
+#include "multicomp_engines.h"
 
 namespace FairyTapes::TheStripper::DSP {
 
@@ -19,8 +21,9 @@ public:
   void setMode(int mode);
   /** amount 0..1 (more = more compression), mix 0=dry 1=wet. */
   void setParams(float amount, float mix);
-  /** Process stereo in place. */
-  void process(float* left, float* right, int numSamples);
+  /** Process stereo in place. Optional sidechain: when non-null, used for envelope detection only. */
+  void process(float* left, float* right, int numSamples,
+               const float* sidechainL = nullptr, const float* sidechainR = nullptr);
 
 private:
   double sampleRate_{44100.0};
@@ -28,14 +31,10 @@ private:
   float amount_{0.f};
   float mix_{1.f};
 
-  float envelopeL_{1e-6f};
-  float envelopeR_{1e-6f};
-  float attackCoeff_{0.f};
-  float releaseCoeff_{0.f};
-  float thresholdDb_{-24.f};
-  float ratio_{2.f};
-
-  void updateCoeffs();
+  MultiCompOpto opto_;
+  MultiCompFET fet_;
+  MultiCompVCA vca_;
+  MultiCompBus bus_;
 };
 
 }  // namespace FairyTapes::TheStripper::DSP

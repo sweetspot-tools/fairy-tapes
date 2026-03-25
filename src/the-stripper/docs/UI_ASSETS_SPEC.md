@@ -35,7 +35,27 @@ Bozze grafiche per l’editor del plugin. Rispetta queste specifiche per integra
 | **Knob** | Manopola rotante (gain, freq, threshold, ratio, ecc.). Più stati (frame) per l’animazione (es. 64–128 frame per un giro completo) oppure singola immagine ruotata in codice. | Es. **80×80** px (1x) o **160×160** (2x). Una versione “grande” e una “piccola” se servono due scale. |
 | **Fader** | Fader verticale (opzionale, se usi fader invece di knob per alcuni parametri). Track + cap. | Es. track **24×120** px, cap **32×24** (1x). |
 | **Button (bypass)** | Pulsante bypass on/off (due stati o una sola immagine con zona “pressed”). | Es. **40×24** o **48×28** (1x). |
-| **Button (section)** | Eventuali pulsanti per bypass sezione o altre azioni. | Coerenti con il bypass (es. **32×32**). |
+| **Button (section)** | Eventuali pulsanti per bypass sezione o altre azioni. | Coerenti con il bypass (es. **32×32**). Vedi sotto per dimensioni 2x e testo. |
+
+---
+
+### 2.2.1 Tutto in 2x (stai disegnando a 2x e poi riduci)
+
+Se lavori su canvas **960×1440 px** (2x) per non sgranare quando l’host ridimensiona, usa queste misure **tutte in pixel 2x**:
+
+| Elemento | Dimensioni a 2x (px) | Note |
+|----------|----------------------|------|
+| **Pot / rotary (diametro)** | **160 px** | Rotario principale (gain, freq, Q, threshold, ecc.). Opzionale versione piccola: **96 px** di diametro. |
+| **Switch on/off (lato o diametro)** | **96 px** | Minimo per click e leggibilità. Se vuoi più presenza: **128 px**. Forma: quadrato 96×96 o 128×128, oppure pill (es. 128×64). |
+| **Spaziatura centro–centro tra rotari** | **208–240 px** | Con valore (dB, Hz, Q) sotto ogni knob; così i testi non si toccano. |
+| **Font (punti a 2x)** | Valore: **18–22 pt** · Label: **16–18 pt** · Titolo sezione: **20–24 pt** | A 2x raddoppia i pt rispetto al 1x: così quando riduci la UI la leggibilità resta corretta (equivalente 9–11 pt valore, 8–9 pt label, 10–12 pt titolo a 1x). |
+
+**Riassunto numeri 2x:**
+- **Rotary:** diametro **160 px** (2x); piccolo **96 px** (2x).
+- **Switch on/off:** **96×96 px** o **128×128 px** (2x).
+- **Font:** valore **18–22 pt**, label parametro **16–18 pt**, titolo sezione **20–24 pt** (tutto a 2x).
+
+---
 
 ### 2.3 Letture e testo
 
@@ -55,10 +75,11 @@ Bozze grafiche per l’editor del plugin. Rispetta queste specifiche per integra
 
 - [ ] **Background** pannello 480×720 (o 960×1440), 2–3 varianti texture.
 - [ ] **Dividers** sezioni (o integrati nello sfondo).
-- [ ] **Knob** 80×80 (e opzionale versione piccola ~48×48).
+- [ ] **Knob** a 2x: diametro **160 px** (piccolo **96 px**).
 - [ ] **Fader** (opzionale) track + cap.
-- [ ] **Button** bypass (on/off).
+- [ ] **Switch on/off** a 2x: **96×96 px** o **128×128 px**.
 - [ ] **VU/level meter** (strip o barra).
+- [ ] **Rotari:** centro–centro **208–240 px** (2x). Font a 2x: valore **18–22 pt**, label **16–18 pt**, titolo sezione **20–24 pt**.
 - [ ] **Labels** (immagini o specifica font/colore).
 
 ---

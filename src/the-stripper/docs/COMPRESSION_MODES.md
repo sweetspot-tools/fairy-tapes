@@ -37,8 +37,18 @@ So we always use the same Multi-Comp DSP; we only expose the modes that fit the 
 
 ---
 
+## Sidechain (external)
+
+The plugin exposes a **stereo sidechain input** (second audio bus). When the host routes a signal to this bus (e.g. kick to duck the bass), the compressor uses that signal **only for envelope detection**; gain reduction is still applied to the main input. So you get classic sidechain ducking or “key” compression.
+
+- **Bus layout:** Main Input (stereo) + optional **Sidechain** (stereo). If the host uses only one input bus, detection is internal (main signal). If two input busses are active, the second is the sidechain.
+- **All four engines** (Opto, FET, VCA, Bus) support external sidechain: when sidechain is present, detection is driven by the sidechain; when not connected, detection uses the main input.
+- **Bus engine:** External sidechain is high-pass filtered at 60 Hz (same as internal detection) for consistent behaviour.
+
+No extra parameter is required: use the host’s routing to connect or disconnect the sidechain.
+
+---
+
 ## Implementation note
 
-**Current:** A simple in-house compressor in `dsp/compression_stub.cpp` provides the four characters (Voice, Drums, Classic, Bus) with mode-specific attack/release and ratio. No JUCE; real-time safe. Amount maps to threshold; Mix is dry/wet.
-
-**Future:** The design target is **Dusk Audio Multi-Comp** (`vendors/dusk-audio-plugins`). A full port would map our enum Voice=0, Drums=1, Classic=2 to Multi-Comp’s Opto, FET, VCA; Bus only in Mix bus mode. The current simple compressor can be replaced by that port when needed.
+**Current:** The compression stage uses a **C++ port of Dusk Audio Multi-Comp** DSP including **hardware emulation** (`dsp/multicomp_engines.cpp`, `dsp/hardware_emulation/`, `dsp/compression_stub.cpp`). Algorithms: **Opto** (T4B + input/output transformer + 12BH7 tube), **FET** (1176-style + input/output transformer), **VCA** (dbx 160, clean, no transformer), **Bus** (SSL-style + input/output transformer). Transformer saturation, harmonics, HF rolloff and DC blocking; tube stage (Opto only). **External sidechain** is supported for all modes (envelope detection from second input bus when present). No JUCE; real-time safe. Source: `vendors/dusk-audio-plugins/plugins/multi-comp/` (GPL-3.0).
