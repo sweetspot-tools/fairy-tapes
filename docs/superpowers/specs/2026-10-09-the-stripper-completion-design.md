@@ -11,7 +11,7 @@ Portare The Stripper da "DSP completo con lista parametri dell'host" a plugin ut
 Fuori scopo (decisione del 2026-10-09):
 - **Gain staging** (parametri `kBypassGainStaging` e `kGainStagingTrim` restano, inerti, come oggi).
 - **Tone3000**: richiede rete e account.
-- Asset grafici definitivi: la GUI parte con controlli vettoriali di riserva (§4).
+- Asset grafici disegnati a mano: la GUI è disegnata dal codice (§4); i PNG manuali sono solo un'opzione futura.
 
 ## 2. Componente condiviso: `shared/nam_drive`
 
@@ -34,10 +34,10 @@ Oggi `NamDrive::loadModel(path)` è sincrono e non c'è alcuna interfaccia per s
 
 Editor VSTGUI4 (`vendors/vst3sdk/vstgui4`), costruito in codice, senza file `.uidesc`.
 
-- **Dimensioni:** 480 × 720 (1x), proporzioni 2:3 come da `docs/UI_ASSETS_SPEC.md`. Gli asset a 2x (960 × 1440) si caricano quando disponibili; la finestra è scalata dall'host.
+- **Dimensioni:** 480 × 720 (1x), proporzioni 2:3 come da `docs/UI_ASSETS_SPEC.md`. Il disegno è vettoriale e la finestra è scalata dall'host, quindi non servono asset separati a 2x.
 - **Sezioni, dall'alto:** Globale (Bypass, Strip Mode, Input/Output Gain) · LP/HP · EQ (4 bande + Saturation) · Compression (Amount, Mix, Voice/Drums/Classic visibili solo in Channel) · Drive (Amount, Bypass, pulsante **Load .nam**, nome del modello) · Limiter (Pound) · Gate (Threshold).
-- **Controlli:** manopole, pulsanti on/off e pulsanti a scelta. Ogni controllo ha un **disegno vettoriale di riserva**; se nella cartella degli asset esiste il PNG corrispondente (nomi da `UI_ASSETS_SPEC.md`), lo usa al posto del disegno.
-- **Sfondo:** 2-3 varianti di texture. La variante è scelta una volta per istanza (casuale alla creazione) e salvata nello stato (§6); senza asset, tre toni di tinta unita.
+- **Controlli:** manopole, pulsanti on/off e pulsanti a scelta. Ogni controllo è **disegnato dal codice** (VSTGUI `CDrawContext`): gradienti, ombre, tacche e indicatore in stile console analogica, definitivi e non una riserva. Se nella cartella degli asset esiste il PNG corrispondente (nomi da `UI_ASSETS_SPEC.md`), lo usa al posto del disegno; non serve per rilasciare.
+- **Sfondo:** 2-3 varianti di texture. Le texture sono PNG **generati da uno script** (`src/the-stripper/tools/gen_textures.py`, rumore procedurale: metallo spazzolato, vernice consumata, serigrafia sbiadita) con parametri e seme regolabili, committati in `src/the-stripper/assets/`. La variante è scelta una volta per istanza (casuale alla creazione) e salvata nello stato (§6); se un PNG manca, ripiega su una tinta unita.
 - **Binding:** ogni controllo è legato a un `ParamID` e supporta automazione, annullamento e testo del valore fornito dal `Controller`.
 - **Mix bus:** i controlli non pertinenti (Voice/Drums/Classic) si nascondono; non si ricostruisce l'editor.
 
