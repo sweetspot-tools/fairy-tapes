@@ -11,6 +11,7 @@
 #include "dsp/ducker.h"
 #include "dsp/tape_echo.h"
 #include "params.h"
+#include <algorithm>
 #include <vector>
 
 namespace FairyTapes::PillowTalk {
@@ -70,6 +71,25 @@ public:
 
 private:
   long long interval_ = 768, since_ = 768;
+};
+
+// Holds the extremes seen between two display writes: max of voice/echo peaks, MIN of the
+// send gain (so a ducking dip is never missed). take() returns them and resets.
+class DisplayAccumulator {
+public:
+  void add(const DisplayValues& d) {
+    acc_.voiceDb = std::max(acc_.voiceDb, d.voiceDb);
+    acc_.echoDb = std::max(acc_.echoDb, d.echoDb);
+    acc_.sendGain = std::min(acc_.sendGain, d.sendGain);
+  }
+  DisplayValues take() {
+    const DisplayValues r = acc_;
+    acc_ = DisplayValues{};
+    return r;
+  }
+
+private:
+  DisplayValues acc_;
 };
 
 class Engine {

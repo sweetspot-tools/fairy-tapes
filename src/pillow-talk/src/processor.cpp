@@ -84,9 +84,10 @@ void Processor::updateParamsFromChanges(Steinberg::Vst::IParameterChanges* chang
 }
 
 void Processor::publishDisplay(Steinberg::Vst::ProcessData& data) {
+  display_acc_.add(engine_.lastDisplay());
   if (!display_limiter_.advance(data.numSamples) || !data.outputParameterChanges)
     return;
-  const DisplayValues d = engine_.lastDisplay();
+  const DisplayValues d = display_acc_.take();
   const double values[3] = {Ui::meterNormFromDb(d.voiceDb, -60.0, 0.0),
                             std::clamp((double)d.sendGain, 0.0, 1.0),
                             Ui::meterNormFromDb(d.echoDb, -60.0, 0.0)};

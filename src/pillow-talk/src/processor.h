@@ -36,6 +36,7 @@ private:
   double param_value_[kNumParams];
   Engine engine_;
   DisplayRateLimiter display_limiter_;
+  DisplayAccumulator display_acc_;
 };
 
 } // namespace FairyTapes::PillowTalk

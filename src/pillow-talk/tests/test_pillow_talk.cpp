@@ -828,6 +828,57 @@ void test_display_write_rate_limit() {
   ASSERT_TRUE(!l3.advance(64));
 }
 
+void test_display_echo_is_measured_after_ducking() {
+  Engine e;
+  e.prepare(kSr, 256);
+  Settings st = echoSettings();
+  st.feedback = 0.95f;
+  e.setSettings(st);
+  const size_t phrase = (size_t)(kSr * 1.0), n = phrase + (size_t)(kSr * 2.0);
+  Buf in(n, 0.f);
+  const Buf s = sine(phrase, 440.0, 0.3f);
+  std::copy(s.begin(), s.end(), in.begin());
+  Buf out(256);
+  float during = -120.f, after = -120.f;
+  for (size_t i = 0; i + 256 <= n; i += 256) {
+    e.process(in.data() + i, in.data() + i, nullptr, nullptr, out.data(), out.data(), 256);
+    const float v = e.lastDisplay().echoDb;
+    if (i >= (size_t)(kSr * 0.3) && i + 256 <= phrase) during = std::max(during, v);
+    if (i >= phrase + (size_t)(kSr * 0.6)) after = std::max(after, v);
+  }
+  ASSERT_TRUE(after > -50.f);
+  ASSERT_TRUE(during <= after - 15.f);
+}
+
+void test_display_accumulator_holds_extremes_between_writes() {
+  DisplayAccumulator acc;
+  DisplayRateLimiter lim;
+  lim.prepare(48000.0);
+  int writes = 0;
+  float published = -999.f, publishedSend = 2.f;
+  // 12 blocks of 64 between writes; a burst + gain dip only in the 2nd block after a write.
+  ASSERT_TRUE(lim.advance(64));  // first write, nothing accumulated yet
+  acc.take();
+  for (int b = 1; b <= 12; ++b) {
+    DisplayValues d;
+    d.voiceDb = d.echoDb = (b == 2) ? -6.f : -90.f;
+    d.sendGain = (b == 2) ? 0.05f : 1.f;
+    acc.add(d);
+    if (lim.advance(64)) {
+      const DisplayValues p = acc.take();
+      published = p.voiceDb;
+      publishedSend = p.sendGain;
+      ++writes;
+      ASSERT_TRUE(b == 12);
+    }
+  }
+  ASSERT_TRUE(writes == 1);
+  ASSERT_APPROX(published, -6.0);
+  ASSERT_APPROX(publishedSend, 0.05);
+  const DisplayValues r = acc.take();  // reset after publishing
+  ASSERT_TRUE(r.voiceDb <= -120.f && r.echoDb <= -120.f && r.sendGain == 1.f);
+}
+
 } // namespace
 
 int main() {
@@ -882,6 +933,8 @@ int main() {
   RUN_TEST(test_display_ids_do_not_collide);
   RUN_TEST(test_display_not_in_state);
   RUN_TEST(test_display_write_rate_limit);
+  RUN_TEST(test_display_echo_is_measured_after_ducking);
+  RUN_TEST(test_display_accumulator_holds_extremes_between_writes);
 
   std::fprintf(stdout, "\n%d passed, %d failed.\n", g_passed, g_failed);
   if (g_failed > 0) {
