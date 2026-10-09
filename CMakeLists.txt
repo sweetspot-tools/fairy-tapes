@@ -16,3 +16,4 @@ add_subdirectory(${VST3_SDK_PATH} vst3sdk EXCLUDE_FROM_ALL)
 
 enable_testing()
 add_subdirectory(src/the-stripper)
+add_subdirectory(src/pillow-talk)
