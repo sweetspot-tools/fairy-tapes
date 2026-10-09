@@ -1,7 +1,7 @@
 # Fairy Tapes · The Stripper — VST3 Channel Strip
 # Requires VST3 SDK at ${VST3_SDK_PATH} (default: ../../../vendors/vst3sdk from repo root)
 
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.25)
 project(TheStripper VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -50,7 +50,17 @@ set(GPU_NAM_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../shared/gpu_nam")
 add_subdirectory(${GPU_NAM_DIR} ${CMAKE_CURRENT_BINARY_DIR}/gpu_nam)
 
 
+# Platform module entry point from the VST3 SDK (ModuleEntry / bundleEntry / InitDll).
+if(WIN32)
+  set(PLUGIN_MAIN_SOURCE ${VST3_SDK_PATH}/public.sdk/source/main/dllmain.cpp)
+elseif(APPLE)
+  set(PLUGIN_MAIN_SOURCE ${VST3_SDK_PATH}/public.sdk/source/main/macmain.cpp)
+else()
+  set(PLUGIN_MAIN_SOURCE ${VST3_SDK_PATH}/public.sdk/source/main/linuxmain.cpp)
+endif()
+
 add_library(the_stripper SHARED
+  ${PLUGIN_MAIN_SOURCE}
   src/plug.cpp
   src/processor.cpp
   src/controller.cpp
@@ -115,7 +125,12 @@ endif()
 
 # Link gpu_nam (GPU NAM inference with automatic CPU-stub fallback).
 # cudart is propagated as a PUBLIC dependency of gpu_nam.
-target_link_libraries(the_stripper PRIVATE gpu_nam)
+target_link_libraries(the_stripper PRIVATE gpu_nam sdk)
+if(APPLE)
+  target_link_libraries(the_stripper PRIVATE "-framework CoreFoundation")
+  target_link_options(the_stripper PRIVATE
+    "-exported_symbols_list" "${VST3_SDK_PATH}/public.sdk/source/main/macexport.exp")
+endif()
 
 # Link platform libs
 if(UNIX AND NOT APPLE)

@@ -88,11 +88,9 @@ Steinberg::tresult PLUGIN_API Factory::queryInterface(const Steinberg::TUID _iid
 } // namespace FairyTapes::TheStripper
 
 // Module entry (required by VST3 host)
-extern "C" bool InitModule();
-extern "C" bool TermModule();
-
+// Called by the SDK platform entry point (ModuleEntry / bundleEntry / InitDll).
 bool InitModule() { return true; }
-bool TermModule() { return true; }
+bool DeinitModule() { return true; }
 
 extern "C" Steinberg::IPluginFactory* PLUGIN_API GetPluginFactory() {
   static FairyTapes::TheStripper::Factory factory;
