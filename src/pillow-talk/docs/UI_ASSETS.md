@@ -30,12 +30,12 @@ Senza il file l'elemento torna al disegno da codice, con i colori del mockup app
 - ambra (arco, pulsante attivo) `#d9a441`, testo sul pulsante attivo `#2a1d05`;
 - display `#0f0e0d`.
 
-I file mancanti vengono cercati una sola volta per sessione (la ricerca, anche negativa, è in cache): per vedere un asset aggiunto bisogna chiudere e riaprire il plugin (in pratica ricaricare il progetto).
+La cache (anche dei file mancanti) vive quanto l'oggetto `Editor` (`Skin skin_` è un suo membro) e `Editor::close()` non la svuota. Chiudere e riaprire l'editor basta se l'host distrugge la vista alla chiusura (lo fanno la maggior parte degli host); se l'host riusa lo stesso oggetto, bisogna ricaricare il plugin o il progetto.
 
 ## Sostituire un elemento alla volta
 
 1. Copiare un solo file (per esempio `panel.png`) in `Contents/Resources`.
-2. Riaprire l'editor: quell'elemento usa l'immagine, gli altri restano vettoriali.
+2. Chiudere e riaprire l'editor (o ricaricare il plugin/progetto, vedi sopra): quell'elemento usa l'immagine, gli altri restano vettoriali.
 3. Per tornare al disegno da codice si rimuove il file.
 
 ## Formati non ancora definiti
