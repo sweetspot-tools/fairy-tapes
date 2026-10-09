@@ -196,20 +196,21 @@ git commit -m "feat(the-stripper): add procedural panel texture generator"
 ### Task 7: Integrazione VSTGUI4 e controlli disegnati dal codice
 
 **Files:**
-- Modify: `src/the-stripper/CMakeLists.txt`, `.github/workflows/build.yml` (pacchetti di sistema per VSTGUI su Linux)
-- Create: `src/the-stripper/src/ui/knob_math.h`, `src/the-stripper/src/ui/controls.{h,cpp}`
-- Test: `src/the-stripper/tests/test_params.cpp`
+- Modify: `src/the-stripper/CMakeLists.txt` (link a `fairy_ui` e `fairy_ui_widgets`), `.github/workflows/build.yml` solo se mancano pacchetti di sistema per VSTGUI su Linux (già verificati per Pillow Talk)
+- Riuso: la libreria condivisa `shared/ui` (`fairy_ui`, `fairy_ui_widgets`) già costruita per Pillow Talk: `knob_math.h`, helper `sanitize`/snap, `AnalogKnob`, `ToggleButton`, `ChoiceButtons`, `Skin`. Non creare `src/the-stripper/src/ui/` con copie dei controlli; il plugin linka `fairy_ui` e `fairy_ui_widgets`.
+- Create: `shared/ui/include/fairy_ui/meters.h`, `shared/ui/src/meters.cpp` (nuovi `MeterBar` e `ClipLed`, aggiunti a `fairy_ui_widgets`)
+- Test: `shared/ui/tests/` (per la logica dei meter) e `src/the-stripper/tests/test_params.cpp`
 
 **Interfaces:**
 - Produces:
-  - `ui/knob_math.h` (senza dipendenze da VSTGUI): `double knobAngleFromNorm(double n)` (da 225° a -45°, rotazione oraria), `double normFromDrag(double startNorm, double dyPixels, bool fine)` (200 px = pieno range, 1/10 in modalità fine), `int choiceIndexFromNorm(double n, int count)`, `double normFromChoiceIndex(int i, int count)`, `double meterNormFromDb(double db, double minDb, double maxDb)` (lineare in dB, clamp a 0..1).
-  - `ui/controls.h`: `class AnalogKnob : public VSTGUI::CControl`, `class ToggleButton : public VSTGUI::CControl`, `class ChoiceButtons : public VSTGUI::CControl`, `class MeterBar : public VSTGUI::CControl` (barra a LED orizzontale, picco mantenuto, ingresso in dB) e `class ClipLed : public VSTGUI::CControl` (LED che al clic invia l'azzeramento), tutti disegnati con `CDrawContext` (gradienti, ombra, tacche, indicatore) e con il PNG opzionale dalla cartella degli asset se presente.
+  - `shared/ui/include/fairy_ui/knob_math.h` (già esistente, senza dipendenze da VSTGUI): `double knobAngleFromNorm(double n)` (da 225° a -45°, rotazione oraria), `double normFromDrag(double startNorm, double dyPixels, bool fine)` (200 px = pieno range, 1/10 in modalità fine), `int choiceIndexFromNorm(double n, int count)`, `double normFromChoiceIndex(int i, int count)`, `double meterNormFromDb(double db, double minDb, double maxDb)` (lineare in dB, clamp a 0..1).
+  - `fairy_ui/controls.h` (già esistente): `AnalogKnob`, `ToggleButton`, `ChoiceButtons`, più il `Skin` opzionale. Nuovi in `shared/ui`: `class MeterBar : public VSTGUI::CControl` (barra a LED orizzontale, picco mantenuto, ingresso in dB) e `class ClipLed : public VSTGUI::CControl` (LED che al clic invia l'azzeramento), tutti disegnati con `CDrawContext` (gradienti, ombra, tacche, indicatore) e con il PNG opzionale dalla cartella degli asset se presente.
 
-- [ ] **Step 1: Scrivere i test** per `knob_math.h`: `test_knobAngle_endpoints` (0 → 225°, 1 → -45°, 0.5 → 90°), `test_normFromDrag_clamps_and_fine_mode`, `test_choice_index_roundtrip` (per count 2, 3, 4), `test_meterNormFromDb` (-60 → 0, +6 → 1, -27 → 0.5 entro 1e-6, fuori range clampato).
+- [ ] **Step 1: Test.** `knob_math.h` (compreso `meterNormFromDb`) è già coperto da `fairy_ui_tests`; aggiungere test solo per la logica nuova dei meter (picco mantenuto, azzeramento).
 - [ ] **Step 2: Eseguire, verificare il fallimento.**
-- [ ] **Step 3: Implementare `knob_math.h`.**
-- [ ] **Step 4: Aggiungere VSTGUI al CMake** del plugin (sorgenti e include da `vendors/vst3sdk/vstgui4`, librerie di sistema per Linux: X11, xcb, cairo, freetype, fontconfig; framework nativi su macOS e Windows) e i pacchetti `apt` al job Linux del workflow.
-- [ ] **Step 5: Implementare le classi di controllo.** Disegno vettoriale; trascinamento verticale con `normFromDrag`; doppio clic riporta al default; la modalità fine con il tasto Maiuscolo.
+- [ ] **Step 3: Implementare la logica dei meter** (picco mantenuto) in `shared/ui`, dopo il test fallito.
+- [ ] **Step 4: Collegare il plugin a `fairy_ui` e `fairy_ui_widgets`** nel CMake (VSTGUI è già abilitato nel CMake radice; dipendenze di sistema come per Pillow Talk).
+- [ ] **Step 5: Implementare `MeterBar` e `ClipLed`** in `shared/ui` (disegno vettoriale; `ClipLed` invia l'azzeramento al clic). Le manopole e i pulsanti esistono già.
 - [ ] **Step 6: Eseguire test e build del plugin.**
   Run: `cmake --build build --target the_stripper the_stripper_tests && ctest --test-dir build -R the_stripper --output-on-failure`
   Expected: build senza errori, test PASS.
@@ -232,6 +233,7 @@ git commit -m "feat(the-stripper): add VSTGUI4 integration and code-drawn contro
 - Consumes: `AnalogKnob`, `ToggleButton`, `ChoiceButtons` (Task 7); `Controller::requestModelLoad/modelName/modelError` (Task 5); texture di `assets/` e `PluginState::textureVariant` (Tasks 3 e 6); `MeterBar`, `ClipLed` (Task 7) e i valori di meter (Task 4).
 - Produces: `class Editor : public Steinberg::Vst::VSTGUIEditor, public VSTGUI::IControlListener`, 480 × 780; sezioni nell'ordine dello spec §4 (Globale, LP/HP, EQ, Compression, Drive, Limiter, Gate); `Editor::onModeChanged()` mostra/nasconde Voice/Drums/Classic senza ricostruire la finestra.
 
+- [ ] **Step 0 (nota):** `plug.cpp` dello Stripper deve eliminare le proprie `InitModule/DeinitModule` vuote: devono girare quelle di `moduleinit.cpp` dell'SDK, che chiamano `VSTGUI::init` (come già fatto per Pillow Talk). VSTGUI è ora abilitato nel CMake radice.
 - [ ] **Step 1: Implementare `Editor::open`/`close`** costruendo le view in codice e registrandosi come listener dei parametri; `close` deve rimuovere tutti i listener e rilasciare le view.
 - [ ] **Step 2: Layout.** Una tabella `struct ControlSpec { ParamID id; ControlKind kind; Rect rect; const char* label; }` per sezione, senza calcolare coordinate sparse nel codice. Sfondo: PNG `panel_<variante>.png`, con tinta unita se manca.
 - [ ] **Step 2b: Fascia dei meter** sotto l'intestazione: due `MeterBar` stereo (Input, Output), due `MeterBar` per le gain reduction (Comp, Limiter, disegnate dall'alto verso il basso) e sei `ClipLed` (Input, EQ, Comp, Drive, Limiter, Output). I valori arrivano dai parametri `kMeter*` con un timer da 30 ms; il clic su un `ClipLed` scrive `kClearClips`.

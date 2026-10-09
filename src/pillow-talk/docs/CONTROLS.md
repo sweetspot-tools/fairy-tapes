@@ -1,6 +1,6 @@
 # Pillow Talk — Controlli (parametri)
 
-Elenco di **tutti i parametri** esposti all'host (lista standard, nessuna UI custom, come The Stripper). Ordine **per ID**. Lo stato (versione + 16 valori normalizzati) si salva e si ricarica con il progetto.
+Elenco di **tutti i parametri** esposti all'host. Il plugin ha un editor proprio (480 x 560, vedi sotto); i parametri restano comunque visibili e automatizzabili dalla lista standard dell'host. Ordine **per ID**. Lo stato (versione + 16 valori normalizzati) si salva e si ricarica con il progetto.
 
 **Totale: 16 parametri** (ID 0…15).
 
@@ -22,6 +22,35 @@ Elenco di **tutti i parametri** esposti all'host (lista standard, nessuna UI cus
 | 13 | `kHoldNote` | Hold Note | 1/16, 1/8, 1/4, 1/2 | 1/8 | Usato con Hold Sync On. |
 | 14 | `kRelease` | Release | 50 … 2000 ms (log) | 316 ms | Risalita esponenziale del wet dopo l'hold. |
 | 15 | `kSidechain` | Sidechain | Off / On | Off | On: il rilevatore ascolta il bus sidechain, se attivo e collegato; altrimenti l'ingresso principale. |
+
+## Parametri di display (nascosti)
+
+Tre parametri di sola lettura e nascosti (`kIsReadOnly | kIsHidden`), fuori dalla tabella persistente e non salvati nello stato. Il processore li scrive circa ogni 16 ms, l'editor li legge ogni 30 ms.
+
+| ID | Simbolo | Valore normalizzato | Default |
+|----|---------|---------------------|---------|
+| 1000 | `kDispVoice` | picco della voce, −60 … 0 dB | 0 |
+| 1001 | `kDispSend` | gain di ducking applicato al wet, lineare 0 … 1 | 1 |
+| 1002 | `kDispEcho` | picco del ritorno wet, −60 … 0 dB | 0 |
+
+## Editor
+
+- Layout: intestazione (titolo, Sidechain, Bypass), display del ducking (voce grigia, eco ambra, linea verde della mandata, linea tratteggiata della soglia), sezione Delay (6 manopole + Sync e note del Time), sezione Auto Duck (4 manopole + Sync e note dell'Hold).
+- Gesti: trascinamento verticale, **Maiusc** = fine, **doppio clic** = default.
+- Sync On attenua la manopola ms; Sync Off attenua i pulsanti nota. I controlli attenuati **rispondono comunque**.
+- Se l'host non inoltra i parametri di display al controller, il display resta fermo; il plugin funziona normalmente.
+- Linux: solo embedding X11 (Wayland nativo rifiutato; Reaper usa X11/XWayland).
+- Grafiche: [UI_ASSETS.md](UI_ASSETS.md).
+
+## Verifica manuale
+
+- [ ] Aprire e chiudere l'editor 50 volte.
+- [ ] Muovere ogni controllo: automazione e undo corretti.
+- [ ] Sync On/Off durante l'automazione di Time e Hold.
+- [ ] Display con voce reale e con sidechain.
+- [ ] Finestra HiDPI.
+- [ ] Pulsanti nota attenuati cliccabili (voluto).
+- [ ] Linux: X11/XWayland in Reaper.
 
 ## Comportamento
 
