@@ -102,12 +102,14 @@ NormalizedControl::NormalizedControl(const CRect& size, IControlListener* listen
 }
 
 void NormalizedControl::setValue(float val) {
-  CControl::setValue(static_cast<float>(sanitizeNorm(val, getDefaultValue())));
+  CControl::setValue(static_cast<float>(quantize(val, getDefaultValue())));
 }
 
 void NormalizedControl::setDefaultValue(float val) {
-  CControl::setDefaultValue(static_cast<float>(sanitizeNorm(val)));
+  CControl::setDefaultValue(static_cast<float>(quantize(val, 0.0)));
 }
+
+double NormalizedControl::quantize(double v, double fallback) const { return sanitizeNorm(v, fallback); }
 
 void NormalizedControl::editTo(float newValue) {
   beginEdit();
@@ -248,6 +250,14 @@ CMouseEventResult AnalogKnob::onMouseUp(CPoint&, const CButtonState&) {
   return kMouseEventHandled;
 }
 
+bool AnalogKnob::removed(CView* parent) {
+  if (dragging_) {
+    dragging_ = false;
+    endEdit();
+  }
+  return NormalizedControl::removed(parent);
+}
+
 CMouseEventResult AnalogKnob::onMouseCancel() {
   if (!dragging_) return kMouseEventNotHandled;
   dragging_ = false;
@@ -265,7 +275,13 @@ CMouseEventResult AnalogKnob::onMouseCancel() {
 
 ToggleButton::ToggleButton(const CRect& size, IControlListener* listener, int32_t tag, std::string label,
                            const Skin* skin)
-    : NormalizedControl(size, listener, tag, skin), label_(std::move(label)) {}
+    : NormalizedControl(size, listener, tag, skin), label_(std::move(label)) {
+  // CControl's default is 0.5, which VSTGUI's built-in Ctrl/Cmd-click reset would send.
+  setDefaultValue(0.f);
+  setValue(0.f);
+}
+
+double ToggleButton::quantize(double v, double fallback) const { return snapToggle(v, fallback); }
 
 void ToggleButton::draw(CDrawContext* ctx) {
   beginDrawing(ctx);
@@ -285,7 +301,12 @@ CMouseEventResult ToggleButton::onMouseDown(CPoint&, const CButtonState& buttons
 
 ChoiceButtons::ChoiceButtons(const CRect& size, IControlListener* listener, int32_t tag,
                              std::vector<std::string> labels, const Skin* skin)
-    : NormalizedControl(size, listener, tag, skin), labels_(std::move(labels)) {}
+    : NormalizedControl(size, listener, tag, skin), labels_(std::move(labels)) {
+  setDefaultValue(0.f);  // see ToggleButton
+  setValue(0.f);
+}
+
+double ChoiceButtons::quantize(double v, double fallback) const { return snapChoice(v, count(), fallback); }
 
 int ChoiceButtons::selectedIndex() const {
   return choiceIndexFromNorm(sanitizeNorm(getValue(), getDefaultValue()), count());

@@ -25,6 +25,8 @@ public:
   void setDefaultValue(float val) override;
 
 protected:
+  // Maps any incoming value to a valid one (default: sanitizeNorm). Must be NaN-safe.
+  virtual double quantize(double v, double fallback) const;
   // beginEdit, set value, valueChanged, endEdit, invalid.
   void editTo(float newValue);
 
@@ -54,6 +56,8 @@ public:
   VSTGUI::CMouseEventResult onMouseMoved(VSTGUI::CPoint& where, const VSTGUI::CButtonState& buttons) override;
   VSTGUI::CMouseEventResult onMouseUp(VSTGUI::CPoint& where, const VSTGUI::CButtonState& buttons) override;
   VSTGUI::CMouseEventResult onMouseCancel() override;
+  // Closes a drag gesture left open when the view goes away (CFrame sends no mouse cancel).
+  bool removed(VSTGUI::CView* parent) override;
 
   CLASS_METHODS_NOCOPY(AnalogKnob, NormalizedControl)
 
@@ -84,6 +88,9 @@ public:
 
   CLASS_METHODS_NOCOPY(ToggleButton, NormalizedControl)
 
+protected:
+  double quantize(double v, double fallback) const override;  // 0 or 1
+
 private:
   std::string label_;
 };
@@ -101,6 +108,9 @@ public:
   VSTGUI::CMouseEventResult onMouseDown(VSTGUI::CPoint& where, const VSTGUI::CButtonState& buttons) override;
 
   CLASS_METHODS_NOCOPY(ChoiceButtons, NormalizedControl)
+
+protected:
+  double quantize(double v, double fallback) const override;  // nearest choice grid value
 
 private:
   VSTGUI::CRect buttonRect(int index) const;
