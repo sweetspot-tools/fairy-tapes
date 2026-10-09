@@ -17,7 +17,7 @@
 - Il thread audio non alloca e non attende mai; il modello sostituito si rilascia fuori dal thread audio.
 - I nuovi `ParamID` (`kLimiterPound`, `kGateThreshold`) si aggiungono **in coda**, prima di `kNumParams`: gli ID esistenti non cambiano.
 - `kStateVersion` passa da 7 a 8 (aggiunge percorso del modello e variante di texture); lo stato v7 resta caricabile.
-- GUI: 480 × 720, vettoriale, nessun asset 2x; ogni controllo ha un `ParamID`; gli asset PNG manuali sono opzionali.
+- GUI: 480 × 780, vettoriale, nessun asset 2x; ogni controllo ha un `ParamID`; gli asset PNG manuali sono opzionali.
 - Texture: 3 PNG generati da `src/the-stripper/tools/gen_textures.py`, in `src/the-stripper/assets/`.
 - Licenza GPL-3.0; nessun nome o branding delle fonti nella UI.
 
@@ -117,7 +117,35 @@ git commit -m "feat(the-stripper): add limiter/gate params, state v8 and frozen 
 
 ---
 
-### Task 4: Messaggi di caricamento del modello
+### Task 4: Metering (picchi, clip per stadio, gain reduction)
+
+**Files:**
+- Create: `src/the-stripper/src/dsp/meter.h`
+- Modify: `src/the-stripper/src/params.h` (intervallo `kMeterBase`), `src/the-stripper/src/processor.{h,cpp}`, `src/the-stripper/src/controller.{h,cpp}`, `src/the-stripper/src/dsp/multicomp_engines.{h,cpp}`, `src/the-stripper/src/dsp/blockparty.{h,cpp}`, `src/the-stripper/tests/test_params.cpp`
+
+**Interfaces:**
+- Produces:
+  - In `params.h`: `constexpr Steinberg::Vst::ParamID kMeterBase = 1000;` e `enum MeterID : Steinberg::Vst::ParamID { kMeterInL = kMeterBase, kMeterInR, kMeterOutL, kMeterOutR, kMeterGrComp, kMeterGrLimiter, kClipInput, kClipEq, kClipComp, kClipDrive, kClipLimiter, kClipOutput, kClearClips, kNumMeterIDs };` (valori normalizzati 0..1; tutti in sola lettura tranne `kClearClips`, scrivibile e nascosto: un clic su un LED lo imposta a 1 e il processor azzera i `ClipDetector` e lo riporta a 0; picchi: -60..+6 dBFS, GR comp: 0..-20 dB, GR limiter: 0..-12 dB, clip: 0/1)
+  - In `dsp/meter.h`: `class PeakMeter { void prepare(double sampleRate); float process(const float* x, int numSamples); /* picco del blocco in lineare */ float levelDb() const; /* con rilascio 20 dB/s */ float holdDb() const; /* picco mantenuto 1.5 s */ void reset(); };` e `class ClipDetector { void prepare(double sampleRate); void process(const float* x, int numSamples); bool lit() const; /* acceso fino a 2 s dopo |x| >= 1.0 */ void clear(); };`
+  - `float currentGainReductionDb() const` (>= 0) su `MultiCompOpto/FET/VCA/Bus` e `BlockParty` (da `envelope`/coefficienti del motore; per `BlockParty`, se non esposto, dal rapporto tra picchi di uscita e ingresso dell'ultimo blocco).
+
+- [ ] **Step 1: Scrivere i test:** `test_peakmeter_instant_attack_and_release` (impulso a 0.5 → `levelDb ≈ -6` subito; dopo 1 s di silenzio sceso di 20 ± 1 dB); `test_peakmeter_hold_1_5s` (`holdDb` resta al picco per 1.4 s e cade dopo 1.6 s); `test_clip_detects_at_exactly_one` (0.9999 → spento; 1.0 → acceso); `test_clip_hold_2s_and_clear` (acceso a 1.9 s, spento a 2.1 s; `clear()` lo spegne subito); `test_gr_zero_when_not_compressing` e `test_gr_positive_when_compressing` per ciascun motore (rumore a -30 dBFS e a -6 dBFS con Amount 0.8); `test_meter_ids_do_not_collide_with_params` (`kMeterBase >= kNumParams`, intervalli disgiunti); `test_meters_not_in_state` (`writeState` non cambia di dimensione aggiungendo i meter); `test_meter_update_rate_limit` (con blocchi da 64 campioni a 48 kHz, al massimo una scrittura ogni 16 ms).
+- [ ] **Step 2: Eseguire, verificare il fallimento.**
+- [ ] **Step 3: Implementare `PeakMeter`, `ClipDetector` e `currentGainReductionDb()`** sui motori.
+- [ ] **Step 4: Integrare nel `Processor`:** un `ClipDetector` per stadio (misurato all'uscita di Input gain, EQ, Compression, Drive, Limiter e Output gain) e due `PeakMeter` stereo (ingresso prima di tutto, uscita dopo l'Output gain); a fine blocco, se sono passati almeno 16 ms, scrivere i valori normalizzati in `outputParameterChanges` come parametri di sola lettura. Gli stadi in bypass non accendono il loro LED. Il `Controller` registra i parametri con `kIsReadOnly | kIsHidden`.
+- [ ] **Step 5: Eseguire i test.**
+  Run: `cmake --build build --target the_stripper_tests && ctest --test-dir build -R the_stripper --output-on-failure`
+  Expected: PASS.
+- [ ] **Step 6: Commit**
+
+```bash
+git add src/the-stripper
+git commit -m "feat(the-stripper): add peak/clip/gain-reduction metering as read-only parameters"
+```
+
+---
+
+### Task 5: Messaggi di caricamento del modello
 
 **Files:**
 - Modify: `src/the-stripper/src/processor.{h,cpp}`, `src/the-stripper/src/controller.{h,cpp}`, `src/the-stripper/src/cids.h` (identificatori dei messaggi), `src/the-stripper/tests/test_params.cpp`
@@ -139,16 +167,16 @@ git commit -m "feat(the-stripper): load NAM model via controller/processor messa
 
 ---
 
-### Task 5: Generatore di texture
+### Task 6: Generatore di texture
 
 **Files:**
 - Create: `src/the-stripper/tools/gen_textures.py`, `src/the-stripper/tools/test_gen_textures.py`
 - Create: `src/the-stripper/assets/panel_0.png`, `panel_1.png`, `panel_2.png` (generati e committati)
 
 **Interfaces:**
-- Produces: `gen_textures.py [--out DIR] [--seed N]` che scrive `panel_0.png` (metallo spazzolato), `panel_1.png` (vernice consumata), `panel_2.png` (serigrafia sbiadita), tutti 480 × 720, RGB, deterministici per un dato seed.
+- Produces: `gen_textures.py [--out DIR] [--seed N]` che scrive `panel_0.png` (metallo spazzolato), `panel_1.png` (vernice consumata), `panel_2.png` (serigrafia sbiadita), tutti 480 × 780, RGB, deterministici per un dato seed.
 
-- [ ] **Step 1: Scrivere il test** (`pytest`): stesse dimensioni 480 × 720 per i tre file; stesso seed → file identici (hash); seed diversi → file diversi; le tre varianti differiscono tra loro; luminanza media tra 0.15 e 0.6 (sfondo scuro che non rovina la leggibilità).
+- [ ] **Step 1: Scrivere il test** (`pytest`): stesse dimensioni 480 × 780 per i tre file; stesso seed → file identici (hash); seed diversi → file diversi; le tre varianti differiscono tra loro; luminanza media tra 0.15 e 0.6 (sfondo scuro che non rovina la leggibilità).
 - [ ] **Step 2: Eseguire, verificare il fallimento.**
   Run: `python3 -m pytest src/the-stripper/tools -q`
   Expected: FAIL (script mancante).
@@ -165,7 +193,7 @@ git commit -m "feat(the-stripper): add procedural panel texture generator"
 
 ---
 
-### Task 6: Integrazione VSTGUI4 e controlli disegnati dal codice
+### Task 7: Integrazione VSTGUI4 e controlli disegnati dal codice
 
 **Files:**
 - Modify: `src/the-stripper/CMakeLists.txt`, `.github/workflows/build.yml` (pacchetti di sistema per VSTGUI su Linux)
@@ -174,14 +202,14 @@ git commit -m "feat(the-stripper): add procedural panel texture generator"
 
 **Interfaces:**
 - Produces:
-  - `ui/knob_math.h` (senza dipendenze da VSTGUI): `double knobAngleFromNorm(double n)` (da 225° a -45°, rotazione oraria), `double normFromDrag(double startNorm, double dyPixels, bool fine)` (200 px = pieno range, 1/10 in modalità fine), `int choiceIndexFromNorm(double n, int count)`, `double normFromChoiceIndex(int i, int count)`.
-  - `ui/controls.h`: `class AnalogKnob : public VSTGUI::CControl`, `class ToggleButton : public VSTGUI::CControl`, `class ChoiceButtons : public VSTGUI::CControl`, tutti disegnati con `CDrawContext` (gradienti, ombra, tacche, indicatore) e con il PNG opzionale dalla cartella degli asset se presente.
+  - `ui/knob_math.h` (senza dipendenze da VSTGUI): `double knobAngleFromNorm(double n)` (da 225° a -45°, rotazione oraria), `double normFromDrag(double startNorm, double dyPixels, bool fine)` (200 px = pieno range, 1/10 in modalità fine), `int choiceIndexFromNorm(double n, int count)`, `double normFromChoiceIndex(int i, int count)`, `double meterNormFromDb(double db, double minDb, double maxDb)` (lineare in dB, clamp a 0..1).
+  - `ui/controls.h`: `class AnalogKnob : public VSTGUI::CControl`, `class ToggleButton : public VSTGUI::CControl`, `class ChoiceButtons : public VSTGUI::CControl`, `class MeterBar : public VSTGUI::CControl` (barra a LED orizzontale, picco mantenuto, ingresso in dB) e `class ClipLed : public VSTGUI::CControl` (LED che al clic invia l'azzeramento), tutti disegnati con `CDrawContext` (gradienti, ombra, tacche, indicatore) e con il PNG opzionale dalla cartella degli asset se presente.
 
-- [ ] **Step 1: Scrivere i test** per `knob_math.h`: `test_knobAngle_endpoints` (0 → 225°, 1 → -45°, 0.5 → 90°), `test_normFromDrag_clamps_and_fine_mode`, `test_choice_index_roundtrip` (per count 2, 3, 4).
+- [ ] **Step 1: Scrivere i test** per `knob_math.h`: `test_knobAngle_endpoints` (0 → 225°, 1 → -45°, 0.5 → 90°), `test_normFromDrag_clamps_and_fine_mode`, `test_choice_index_roundtrip` (per count 2, 3, 4), `test_meterNormFromDb` (-60 → 0, +6 → 1, -27 → 0.5 entro 1e-6, fuori range clampato).
 - [ ] **Step 2: Eseguire, verificare il fallimento.**
 - [ ] **Step 3: Implementare `knob_math.h`.**
 - [ ] **Step 4: Aggiungere VSTGUI al CMake** del plugin (sorgenti e include da `vendors/vst3sdk/vstgui4`, librerie di sistema per Linux: X11, xcb, cairo, freetype, fontconfig; framework nativi su macOS e Windows) e i pacchetti `apt` al job Linux del workflow.
-- [ ] **Step 5: Implementare le tre classi di controllo.** Disegno vettoriale; trascinamento verticale con `normFromDrag`; doppio clic riporta al default; la modalità fine con il tasto Maiuscolo.
+- [ ] **Step 5: Implementare le classi di controllo.** Disegno vettoriale; trascinamento verticale con `normFromDrag`; doppio clic riporta al default; la modalità fine con il tasto Maiuscolo.
 - [ ] **Step 6: Eseguire test e build del plugin.**
   Run: `cmake --build build --target the_stripper the_stripper_tests && ctest --test-dir build -R the_stripper --output-on-failure`
   Expected: build senza errori, test PASS.
@@ -194,18 +222,19 @@ git commit -m "feat(the-stripper): add VSTGUI4 integration and code-drawn contro
 
 ---
 
-### Task 7: Editor, layout e pulsante Load .nam
+### Task 8: Editor, layout e pulsante Load .nam
 
 **Files:**
 - Create: `src/the-stripper/src/ui/editor.{h,cpp}`
 - Modify: `src/the-stripper/src/controller.{h,cpp}` (`createView` ritorna l'editor), `src/the-stripper/src/plug.cpp` se serve per i metadati dell'editor
 
 **Interfaces:**
-- Consumes: `AnalogKnob`, `ToggleButton`, `ChoiceButtons` (Task 6); `Controller::requestModelLoad/modelName/modelError` (Task 4); texture di `assets/` e `PluginState::textureVariant` (Tasks 3 e 5).
-- Produces: `class Editor : public Steinberg::Vst::VSTGUIEditor, public VSTGUI::IControlListener`, 480 × 720; sezioni nell'ordine dello spec §4 (Globale, LP/HP, EQ, Compression, Drive, Limiter, Gate); `Editor::onModeChanged()` mostra/nasconde Voice/Drums/Classic senza ricostruire la finestra.
+- Consumes: `AnalogKnob`, `ToggleButton`, `ChoiceButtons` (Task 7); `Controller::requestModelLoad/modelName/modelError` (Task 5); texture di `assets/` e `PluginState::textureVariant` (Tasks 3 e 6); `MeterBar`, `ClipLed` (Task 7) e i valori di meter (Task 4).
+- Produces: `class Editor : public Steinberg::Vst::VSTGUIEditor, public VSTGUI::IControlListener`, 480 × 780; sezioni nell'ordine dello spec §4 (Globale, LP/HP, EQ, Compression, Drive, Limiter, Gate); `Editor::onModeChanged()` mostra/nasconde Voice/Drums/Classic senza ricostruire la finestra.
 
 - [ ] **Step 1: Implementare `Editor::open`/`close`** costruendo le view in codice e registrandosi come listener dei parametri; `close` deve rimuovere tutti i listener e rilasciare le view.
 - [ ] **Step 2: Layout.** Una tabella `struct ControlSpec { ParamID id; ControlKind kind; Rect rect; const char* label; }` per sezione, senza calcolare coordinate sparse nel codice. Sfondo: PNG `panel_<variante>.png`, con tinta unita se manca.
+- [ ] **Step 2b: Fascia dei meter** sotto l'intestazione: due `MeterBar` stereo (Input, Output), due `MeterBar` per le gain reduction (Comp, Limiter, disegnate dall'alto verso il basso) e sei `ClipLed` (Input, EQ, Comp, Drive, Limiter, Output). I valori arrivano dai parametri `kMeter*` con un timer da 30 ms; il clic su un `ClipLed` scrive `kClearClips`.
 - [ ] **Step 3: Pulsante Load .nam** con `CNewFileSelector` (filtro `*.nam`) che chiama `Controller::requestModelLoad`; etichetta accanto con `modelName()` oppure con `modelError()` in rosso.
 - [ ] **Step 4: Variante di texture.** Se lo stato non ne contiene una, il controller ne sceglie una casuale alla prima creazione e la salva.
 - [ ] **Step 5: Verifica build e test.**
@@ -221,7 +250,7 @@ git commit -m "feat(the-stripper): add VSTGUI editor with NAM model picker"
 
 ---
 
-### Task 8: Ricerca SSL 360 Link e docs
+### Task 9: Ricerca SSL 360 Link e docs
 
 **Files:**
 - Modify: `src/the-stripper/docs/FEATURES.md` (§4), `docs/PARAMS_STATUS.md`, `docs/CONTROLS.md`, `docs/BUILD_AND_USE.md`, `docs/UI_ASSETS_SPEC.md` (note: la GUI è disegnata dal codice), `src/the-stripper/README.md`, `README.md` radice
