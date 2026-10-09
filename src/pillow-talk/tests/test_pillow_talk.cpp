@@ -6,12 +6,27 @@
 #include "params.h"
 #include "dsp/ducker.h"
 #include "dsp/tape_echo.h"
+#include "engine.h"
+#include "state.h"
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdio>
 #include <cstdint>
 #include <cstdlib>
+#include <new>
 #include <vector>
+
+// Counts heap allocations while g_countAllocs is set (no-allocation-in-process checks).
+static std::atomic<bool> g_countAllocs{false};
+static std::atomic<int> g_allocs{0};
+void* operator new(std::size_t n) {
+  if (g_countAllocs) ++g_allocs;
+  if (void* p = std::malloc(n ? n : 1)) return p;
+  throw std::bad_alloc();
+}
+void operator delete(void* p) noexcept { std::free(p); }
+void operator delete(void* p, std::size_t) noexcept { std::free(p); }
 
 namespace {
 
@@ -359,6 +374,262 @@ void test_echo_reprepare_at_new_rate() {
   ASSERT_TRUE(std::labs(k - 9600) <= 4);
 }
 
+
+// ---- State -----------------------------------------------------------------
+void test_state_roundtrip() {
+  double a[kNumParams], b[kNumParams];
+  for (int i = 0; i < (int)kNumParams; ++i) { a[i] = (i + 1) / 17.0; b[i] = -1.0; }
+  std::vector<uint8_t> bytes;
+  serializeState(a, bytes);
+  ASSERT_TRUE(bytes.size() == kStateSize);
+  ASSERT_TRUE(deserializeState(bytes.data(), bytes.size(), b));
+  for (int i = 0; i < (int)kNumParams; ++i) ASSERT_TRUE(a[i] == b[i]);
+}
+
+void test_state_rejects_unknown_version_and_truncation() {
+  double a[kNumParams], b[kNumParams];
+  for (int i = 0; i < (int)kNumParams; ++i) { a[i] = 0.25; b[i] = 0.75; }
+  std::vector<uint8_t> bytes;
+  serializeState(a, bytes);
+  std::vector<uint8_t> future(bytes);
+  future[0] = (uint8_t)(kStateVersion + 1);
+  ASSERT_TRUE(!deserializeState(future.data(), future.size(), b));
+  ASSERT_TRUE(!deserializeState(bytes.data(), bytes.size() - 1, b));
+  for (int i = 0; i < (int)kNumParams; ++i) ASSERT_TRUE(b[i] == 0.75);
+}
+
+// ---- Parameter mapping ------------------------------------------------------
+void test_note_index_matches_string_list() {
+  for (int k = 0; k <= 3; ++k) ASSERT_TRUE(noteIndexFromNorm(k / 3.0) == k);
+  ASSERT_TRUE(noteIndexFromNorm(1.0) == 3);
+}
+
+void test_map_params_free_and_sync() {
+  double p[kNumParams];
+  loadDefaults(p);
+  p[kTimeMs] = 0.0;
+  p[kHoldMs] = 1.0;
+  Settings s = mapParams(p, 90.0);
+  ASSERT_APPROX(s.timeMs, 20.0);
+  ASSERT_APPROX(s.holdMs, 1000.0);
+  p[kTimeSync] = 1.0; p[kTimeNote] = 2.0 / 3.0;   // 1/4
+  p[kHoldSync] = 1.0; p[kHoldNote] = 1.0 / 3.0;   // 1/8
+  s = mapParams(p, 60.0);
+  ASSERT_APPROX(s.timeMs, 1000.0);
+  ASSERT_APPROX(s.holdMs, 500.0);
+  s = mapParams(p, 0.0);  // no host tempo -> 120 BPM
+  ASSERT_APPROX(s.timeMs, 500.0);
+  ASSERT_TRUE(!s.bypass);
+  p[kBypass] = 1.0;
+  ASSERT_TRUE(mapParams(p, 120.0).bypass);
+}
+
+// ---- Sidechain routing -------------------------------------------------------
+void test_detector_falls_back_to_main_input() {
+  float a[4] = {}, b[4] = {};
+  float* both[2] = {a, b};
+  float* nulls[2] = {nullptr, nullptr};
+  SidechainInput sc = pickSidechain(false, true, 2, both);
+  ASSERT_TRUE(sc.L == nullptr && sc.R == nullptr);       // switch off
+  sc = pickSidechain(true, false, 2, both);
+  ASSERT_TRUE(sc.L == nullptr && sc.R == nullptr);       // bus inactive
+  sc = pickSidechain(true, true, 0, both);
+  ASSERT_TRUE(sc.L == nullptr && sc.R == nullptr);       // zero channels
+  sc = pickSidechain(true, true, 2, nullptr);
+  ASSERT_TRUE(sc.L == nullptr && sc.R == nullptr);       // no buffer array
+  sc = pickSidechain(true, true, 2, nulls);
+  ASSERT_TRUE(sc.L == nullptr && sc.R == nullptr);       // null channel buffers
+  sc = pickSidechain(true, true, 1, both);
+  ASSERT_TRUE(sc.L == a && sc.R == a);                   // mono sidechain
+  sc = pickSidechain(true, true, 2, both);
+  ASSERT_TRUE(sc.L == a && sc.R == b);
+}
+
+// ---- Engine (the Processor's signal chain) ----------------------------------
+Settings echoSettings(float mix = 1.f) {
+  Settings s;
+  s.timeMs = 100.f; s.feedback = 0.f; s.toneHz = 12000.f; s.saturation = 0.f; s.wowFlutter = 0.f;
+  s.mix = mix; s.thresholdDb = -40.f; s.depthDb = 30.f; s.holdMs = 200.f; s.releaseMs = 300.f;
+  s.bypass = false;
+  return s;
+}
+
+Buf sine(size_t n, double freq, float amp) {
+  Buf b(n);
+  for (size_t i = 0; i < n; ++i) b[i] = amp * (float)std::sin(2.0 * kPi * freq * i / kSr);
+  return b;
+}
+
+double energy(const Buf& b, size_t from, size_t to) {
+  double e = 0.0;
+  for (size_t i = from; i < to; ++i) e += (double)b[i] * b[i];
+  return e;
+}
+
+// Runs the engine in blocks on separate in/out buffers; returns {L, R}.
+std::pair<Buf, Buf> runEngine(Engine& e, const Buf& inL, const Buf& inR, const Buf* sc, int block = 512) {
+  Buf outL(inL.size()), outR(inR.size());
+  for (size_t i = 0; i < inL.size(); i += block) {
+    const int n = (int)std::min<size_t>(block, inL.size() - i);
+    const float* s = sc ? sc->data() + i : nullptr;
+    e.process(inL.data() + i, inR.data() + i, s, s, outL.data() + i, outR.data() + i, n);
+  }
+  return {outL, outR};
+}
+
+void test_chain_sidechain_ducks_echo() {
+  const size_t n = (size_t)kSr / 2;
+  const Buf voice = sine(n, 1000.0, 0.5f);
+  const Buf quiet(n, 0.f);
+  Engine ducked, open;
+  ducked.prepare(kSr, 512);
+  open.prepare(kSr, 512);
+  ducked.setSettings(echoSettings());
+  open.setSettings(echoSettings());
+  const Buf wetDucked = runEngine(ducked, voice, voice, &voice).first;
+  const Buf wetOpen = runEngine(open, voice, voice, &quiet).first;
+  const double ed = energy(wetDucked, 4800, n), eo = energy(wetOpen, 4800, n);
+  ASSERT_TRUE(eo > 0.0);
+  ASSERT_TRUE(ed < eo * 0.01);  // 30 dB of ducking on the send
+}
+
+void test_engine_mix_formula() {
+  const size_t n = 9600;
+  const Buf in = whiteNoise(n);
+  Engine wet, half;
+  wet.prepare(kSr, 512);
+  half.prepare(kSr, 512);
+  wet.setSettings(echoSettings(1.f));
+  half.setSettings(echoSettings(0.5f));
+  const Buf w = runEngine(wet, in, in, nullptr).first;
+  const Buf h = runEngine(half, in, in, nullptr).first;
+  for (size_t i = 0; i < n; ++i) ASSERT_TRUE(std::fabs(h[i] - (0.5f * in[i] + 0.5f * w[i])) < 1e-6f);
+}
+
+void test_engine_bypass_passes_dry() {
+  const size_t n = 9600;
+  const Buf in = whiteNoise(n);
+  Engine e;
+  e.prepare(kSr, 512);
+  Settings s = echoSettings(0.7f);
+  s.bypass = true;
+  e.setSettings(s);
+  const auto out = runEngine(e, in, in, nullptr);
+  for (size_t i = 0; i < n; ++i) ASSERT_TRUE(out.first[i] == in[i] && out.second[i] == in[i]);
+}
+
+void test_engine_in_place_mono_gives_identical_channels() {
+  const size_t n = 4800 * 4;  // long enough for a second-generation echo
+  const Buf in = whiteNoise(n);
+  Settings fb = echoSettings(0.5f);
+  fb.feedback = 0.5f;
+  // Independent reference: Ducker on the main input, TapeEcho on separate L/R buffers.
+  DSP::Ducker d;
+  d.prepare(kSr);
+  d.setParams(fb.thresholdDb, fb.depthDb, fb.holdMs, fb.releaseMs);
+  auto t = makeEcho(fb.timeMs, fb.feedback);
+  Buf g(n), wl(in), wr(in), expected(n);
+  for (size_t i = 0; i < n; ++i) g[i] = d.processSample(in[i], in[i]);
+  for (size_t i = 0; i < n; i += 512) {
+    const int k = (int)std::min<size_t>(512, n - i);
+    t.process(wl.data() + i, wr.data() + i, g.data() + i, k);
+  }
+  for (size_t i = 0; i < n; ++i) expected[i] = 0.5f * in[i] + 0.5f * wl[i];
+  Engine e;
+  e.prepare(kSr, 512);
+  e.setSettings(fb);
+  // Host processes in place: input and output buffers alias, both channels carry the same content.
+  Buf L(in), R(in);
+  for (size_t i = 0; i < n; i += 512) {
+    const int k = (int)std::min<size_t>(512, n - i);
+    e.process(L.data() + i, R.data() + i, nullptr, nullptr, L.data() + i, R.data() + i, k);
+  }
+  for (size_t i = 0; i < n; ++i) ASSERT_TRUE(L[i] == R[i] && std::fabs(L[i] - expected[i]) < 1e-6f);
+  // Same input pointer for both channels (mono host), separate outputs.
+  Engine m;
+  m.prepare(kSr, 512);
+  m.setSettings(fb);
+  Buf oL(n), oR(n);
+  for (size_t i = 0; i < n; i += 512) {
+    const int k = (int)std::min<size_t>(512, n - i);
+    m.process(in.data() + i, in.data() + i, nullptr, nullptr, oL.data() + i, oR.data() + i, k);
+  }
+  for (size_t i = 0; i < n; ++i) ASSERT_TRUE(oL[i] == oR[i] && std::fabs(oL[i] - expected[i]) < 1e-6f);
+  // One buffer is both inputs and the left output; right output separate.
+  Engine s;
+  s.prepare(kSr, 512);
+  s.setSettings(fb);
+  Buf io(in), sR(n);
+  for (size_t i = 0; i < n; i += 512) {
+    const int k = (int)std::min<size_t>(512, n - i);
+    s.process(io.data() + i, io.data() + i, nullptr, nullptr, io.data() + i, sR.data() + i, k);
+  }
+  for (size_t i = 0; i < n; ++i) ASSERT_TRUE(io[i] == sR[i] && std::fabs(io[i] - expected[i]) < 1e-6f);
+}
+
+void test_engine_zero_one_and_oversized_blocks() {
+  Engine e;
+  e.prepare(kSr, 64);
+  e.setSettings(echoSettings(0.5f));
+  float l = 0.25f, r = -0.5f;
+  e.process(&l, &r, nullptr, nullptr, &l, &r, 0);
+  ASSERT_TRUE(l == 0.25f && r == -0.5f);
+
+  const size_t n = 9600;
+  const Buf in = whiteNoise(n);
+  Engine big, one, over;
+  big.prepare(kSr, 512);
+  one.prepare(kSr, 512);
+  over.prepare(kSr, 64);  // host sends blocks larger than announced
+  for (Engine* x : {&big, &one, &over}) x->setSettings(echoSettings(0.5f));
+  const Buf a = runEngine(big, in, in, nullptr, 512).first;
+  const Buf b = runEngine(one, in, in, nullptr, 1).first;
+  const Buf c = runEngine(over, in, in, nullptr, 512).first;
+  for (size_t i = 0; i < n; ++i) ASSERT_TRUE(a[i] == b[i] && a[i] == c[i]);
+}
+
+void test_engine_silence_stays_silent() {
+  Engine e;
+  e.prepare(kSr, 512);
+  Settings s = echoSettings(0.5f);
+  s.feedback = 0.9f; s.saturation = 0.5f; s.wowFlutter = 1.f;
+  e.setSettings(s);
+  const size_t n = (size_t)kSr * 5;
+  const Buf z(n, 0.f);
+  const auto out = runEngine(e, z, z, &z);
+  for (size_t i = 0; i < n; ++i) ASSERT_TRUE(out.first[i] == 0.f && out.second[i] == 0.f);
+}
+
+void test_engine_reprepare_at_new_rate() {
+  Engine e;
+  e.prepare(kSr, 512);
+  e.setSettings(echoSettings(1.f));
+  runEngine(e, whiteNoise(9600), whiteNoise(9600), nullptr);
+  e.prepare(96000.0, 512);
+  e.setSettings(echoSettings(1.f));
+  const Buf out = runEngine(e, impulse(12000), impulse(12000), nullptr).first;
+  ASSERT_TRUE(std::labs((long)argmaxAbs(out, 0, out.size()) - 9600) <= 4);
+}
+
+void test_engine_process_does_not_allocate() {
+  Engine e;
+  e.prepare(kSr, 512);
+  Settings s = echoSettings(0.5f);
+  e.setSettings(s);
+  const Buf in = whiteNoise(4096);
+  Buf outL(4096), outR(4096);
+  g_allocs = 0;
+  g_countAllocs = true;
+  for (int i = 0; i < 4096; i += 512) {
+    s.timeMs = 100.f + (float)i;  // parameter changes between blocks
+    e.setSettings(s);
+    e.process(in.data() + i, in.data() + i, in.data() + i, in.data() + i, outL.data() + i, outR.data() + i, 512);
+  }
+  e.process(in.data(), in.data(), nullptr, nullptr, outL.data(), outR.data(), 4096);  // oversized block
+  g_countAllocs = false;
+  ASSERT_TRUE(g_allocs == 0);
+}
+
 } // namespace
 
 int main() {
@@ -388,6 +659,19 @@ int main() {
   RUN_TEST(test_echo_zero_and_one_sample_blocks);
   RUN_TEST(test_echo_time_change_has_no_click);
   RUN_TEST(test_echo_reprepare_at_new_rate);
+  RUN_TEST(test_state_roundtrip);
+  RUN_TEST(test_state_rejects_unknown_version_and_truncation);
+  RUN_TEST(test_note_index_matches_string_list);
+  RUN_TEST(test_map_params_free_and_sync);
+  RUN_TEST(test_detector_falls_back_to_main_input);
+  RUN_TEST(test_chain_sidechain_ducks_echo);
+  RUN_TEST(test_engine_mix_formula);
+  RUN_TEST(test_engine_bypass_passes_dry);
+  RUN_TEST(test_engine_in_place_mono_gives_identical_channels);
+  RUN_TEST(test_engine_zero_one_and_oversized_blocks);
+  RUN_TEST(test_engine_silence_stays_silent);
+  RUN_TEST(test_engine_reprepare_at_new_rate);
+  RUN_TEST(test_engine_process_does_not_allocate);
 
   std::fprintf(stdout, "\n%d passed, %d failed.\n", g_passed, g_failed);
   if (g_failed > 0) {
