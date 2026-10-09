@@ -27,7 +27,9 @@ endif()
 # ---------------------------------------------------------------------------
 # Plugin
 # ---------------------------------------------------------------------------
-add_library(pillow_talk SHARED
+# MODULE (not SHARED), as the SDK's smtg_add_vst3plugin does: CMake only honours BUNDLE
+# for MODULE libraries on macOS, and on Windows a MODULE .dll is a LIBRARY output.
+add_library(pillow_talk MODULE
   ${PLUGIN_MAIN_SOURCE}
   src/plug.cpp
   src/processor.cpp
@@ -49,26 +51,32 @@ if(WIN32)
   target_compile_definitions(pillow_talk PRIVATE _CRT_SECURE_NO_WARNINGS)
 endif()
 
-# Output as VST3 bundle directly into dist/ (suite root).
+# Bundle layout mirrors vendors/vst3sdk/cmake/modules/SMTG_AddSMTGLibrary.cmake
+# (smtg_target_make_plugin_package), written straight into dist/ (suite root).
+# Output directories use a generator expression so multi-config generators
+# (Visual Studio, Xcode, Ninja Multi-Config) do not append a /<Config> subfolder.
+set(PILLOW_TALK_BUNDLE "${SUITE_DIST_DIR}/Pillow Talk.vst3")
+set_target_properties(pillow_talk PROPERTIES OUTPUT_NAME "Pillow Talk" PREFIX "")
 if(APPLE)
+  # CMake creates "<OUTPUT_NAME>.<BUNDLE_EXTENSION>" INSIDE LIBRARY_OUTPUT_DIRECTORY:
+  # dist/Pillow Talk.vst3/Contents/{MacOS/Pillow Talk, Info.plist}.
   set_target_properties(pillow_talk PROPERTIES
     BUNDLE TRUE
     BUNDLE_EXTENSION "vst3"
-    OUTPUT_NAME "Pillow Talk"
     MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/src/Info.plist"
-    LIBRARY_OUTPUT_DIRECTORY "${SUITE_DIST_DIR}/Pillow Talk.vst3/Contents/MacOS"
+    LIBRARY_OUTPUT_DIRECTORY "$<1:${SUITE_DIST_DIR}>"
   )
 elseif(WIN32)
+  # dist/Pillow Talk.vst3/Contents/x86_64-win/Pillow Talk.vst3 (the DLL renamed .vst3).
   set_target_properties(pillow_talk PROPERTIES
-    PREFIX ""
-    OUTPUT_NAME "Pillow Talk"
-    RUNTIME_OUTPUT_DIRECTORY "${SUITE_DIST_DIR}/Pillow Talk.vst3/Contents/x86_64-win"
+    SUFFIX ".vst3"
+    LIBRARY_OUTPUT_DIRECTORY "$<1:${PILLOW_TALK_BUNDLE}/Contents/x86_64-win>"
+    PDB_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/WIN_PDB64"
   )
 else()
+  # dist/Pillow Talk.vst3/Contents/x86_64-linux/Pillow Talk.so
   set_target_properties(pillow_talk PROPERTIES
-    PREFIX ""
-    OUTPUT_NAME "Pillow Talk"
-    LIBRARY_OUTPUT_DIRECTORY "${SUITE_DIST_DIR}/Pillow Talk.vst3/Contents/x86_64-linux"
+    LIBRARY_OUTPUT_DIRECTORY "$<1:${PILLOW_TALK_BUNDLE}/Contents/x86_64-linux>"
   )
 endif()
 
@@ -98,3 +106,20 @@ target_include_directories(pillow_talk_tests PRIVATE
   ${VST3_SDK_PATH}/pluginterfaces/vst
 )
 add_test(NAME pillow_talk_tests COMMAND pillow_talk_tests)
+
+# Module/factory lifecycle smoke test: dlopens the built bundle from dist/ (exit 77 = skipped
+# when the plugin has not been built). Links only the pluginterfaces IIDs, not the plugin.
+if(NOT WIN32)
+  if(APPLE)
+    set(PILLOW_TALK_MODULE_PATH "${SUITE_DIST_DIR}/Pillow Talk.vst3/Contents/MacOS/Pillow Talk")
+  else()
+    set(PILLOW_TALK_MODULE_PATH "${SUITE_DIST_DIR}/Pillow Talk.vst3/Contents/x86_64-linux/Pillow Talk.so")
+  endif()
+  add_executable(pillow_talk_factory_test tests/test_factory.cpp)
+  target_include_directories(pillow_talk_factory_test PRIVATE ${VST3_SDK_PATH})
+  target_compile_definitions(pillow_talk_factory_test PRIVATE
+    PILLOW_TALK_MODULE="${PILLOW_TALK_MODULE_PATH}")
+  target_link_libraries(pillow_talk_factory_test PRIVATE pluginterfaces ${CMAKE_DL_LIBS})
+  add_test(NAME pillow_talk_factory_test COMMAND pillow_talk_factory_test)
+  set_tests_properties(pillow_talk_factory_test PROPERTIES SKIP_RETURN_CODE 77)
+endif()
