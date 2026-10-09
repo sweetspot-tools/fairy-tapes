@@ -1,4 +1,5 @@
-# Fairy Tapes shared UI: header-only control math (no VSTGUI dependency).
+# Fairy Tapes shared UI: header-only control math (no VSTGUI dependency) and
+# the code-drawn VSTGUI controls (fairy_ui_widgets).
 cmake_minimum_required(VERSION 3.25)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -11,3 +12,14 @@ target_compile_features(fairy_ui INTERFACE cxx_std_20)
 add_executable(fairy_ui_tests tests/test_knob_math.cpp)
 target_link_libraries(fairy_ui_tests PRIVATE fairy_ui)
 add_test(NAME fairy_ui_tests COMMAND fairy_ui_tests)
+
+add_executable(fairy_ui_sanitize_tests tests/test_sanitize.cpp)
+target_link_libraries(fairy_ui_sanitize_tests PRIVATE fairy_ui)
+add_test(NAME fairy_ui_sanitize_tests COMMAND fairy_ui_sanitize_tests)
+
+# Code-drawn VSTGUI controls and optional bitmap skin.
+add_library(fairy_ui_widgets STATIC src/controls.cpp src/skin.cpp)
+target_include_directories(fairy_ui_widgets PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(fairy_ui_widgets PUBLIC fairy_ui vstgui_support)
+# VSTGUI headers use multi-character constants; the SDK silences this only in its own directories.
+target_compile_options(fairy_ui_widgets PUBLIC $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Wno-multichar>)

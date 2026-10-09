@@ -31,6 +31,19 @@ jobs:
         with:
           submodules: recursive
 
+      # VSTGUI4 (plugin editors) needs X11/XCB, Wayland, Cairo/Pango and, for the
+      # standalone library the SDK always configures, gtkmm and sqlite.
+      - name: Install VSTGUI dependencies (Linux)
+        if: matrix.os == 'ubuntu-24.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libcairo2-dev libfreetype-dev libfontconfig1-dev libpango1.0-dev \
+            libxcb1-dev libxcb-util-dev libxcb-cursor-dev libxcb-keysyms1-dev libxcb-xkb-dev \
+            libxkbcommon-dev libxkbcommon-x11-dev \
+            libx11-dev libx11-xcb-dev libwayland-dev wayland-protocols \
+            libglib2.0-dev libgtkmm-3.0-dev libsqlite3-dev libexpat1-dev
+
       - name: Configure and build (Linux)
         if: matrix.os == 'ubuntu-24.04'
         run: |
