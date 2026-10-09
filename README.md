@@ -6,12 +6,13 @@ Suite of VST3 audio plugins: real, analog-style tone via NAM (Neural Amp Modeler
 
 - **Suite**: Fairy Tapes  
 - **First plugin**: [The Stripper](src/the-stripper/) — **bus-oriented** channel strip (LP/HP, EQ, compression, Gain/Drive with NAM or TapeHack2, limiter, gate/expander). See [src/the-stripper/docs/OVERVIEW.md](src/the-stripper/docs/OVERVIEW.md) and [FEATURES.md](src/the-stripper/docs/FEATURES.md) for design and stage choices.
-- **Second plugin (concept)**: [Doggystyle](src/doggystyle/) — dual parallel compression for drums / heavy rock–metal (documentation only for now).
+- **Second plugin (designed)**: [Doggystyle](src/doggystyle/) — aggressive parallel compression for drums / heavy rock–metal: a fast FET-style "Slap" branch and a heavy VCA "Thump" branch, blend, dry mix and an optional NAM stage. See the [design](docs/superpowers/specs/2026-10-09-doggystyle-design.md) and [plan](docs/superpowers/plans/2026-10-09-doggystyle.md) (not implemented yet).
+- **Third plugin (designed)**: Pillow Talk — tape echo that ducks its own send while the voice sings and opens in the pauses, so the tails land after each phrase without automation. Works as an insert or on a return bus with sidechain. See the [design](docs/superpowers/specs/2026-10-08-pillow-talk-design.md) and [plan](docs/superpowers/plans/2026-10-09-pillow-talk.md) (not implemented yet).
 
 ## Structure
 
 - **`vendors/`** — Sources of third-party repos (VST3 SDK, Airwindows, Dusk Audio, EQP-WDF-1A, etc.). Submodules.
-- **`src/`** — Source code of Fairy Tapes plugins (e.g. `src/the-stripper/`, `src/doggystyle/`).
+- **`src/`** — Source code of Fairy Tapes plugins (e.g. `src/the-stripper/`; `src/doggystyle/` and `src/pillow-talk/` are still to be implemented).
 - **`build/`** — CMake output (cache, object files, test binaries). **Not in the repo** (gitignored). Regenerated when you run `./build.sh` or `cmake --build build`.
 - **`dist/`** — **Only** the built plugin bundles (e.g. `The Stripper.vst3`). CMake is configured so that each plugin target writes its `.vst3` directly here when you build; no copy step. **Not in the repo** (gitignored). Use this folder to upload to your store or pay-what-you-want page.
 
