@@ -34,12 +34,25 @@ Oggi `NamDrive::loadModel(path)` è sincrono e non c'è alcuna interfaccia per s
 
 Editor VSTGUI4 (`vendors/vst3sdk/vstgui4`), costruito in codice, senza file `.uidesc`.
 
-- **Dimensioni:** 480 × 720 (1x), proporzioni 2:3 come da `docs/UI_ASSETS_SPEC.md`. Il disegno è vettoriale e la finestra è scalata dall'host, quindi non servono asset separati a 2x.
-- **Sezioni, dall'alto:** Globale (Bypass, Strip Mode, Input/Output Gain) · LP/HP · EQ (4 bande + Saturation) · Compression (Amount, Mix, Voice/Drums/Classic visibili solo in Channel) · Drive (Amount, Bypass, pulsante **Load .nam**, nome del modello) · Limiter (Pound) · Gate (Threshold).
+- **Dimensioni:** 480 × 780, per fare spazio alla fascia dei meter (§4.1). `docs/UI_ASSETS_SPEC.md` (480 × 720) è superato da questa scelta. Il disegno è vettoriale e la finestra è scalata dall'host, quindi non servono asset separati a 2x.
+- **Sezioni, dall'alto:** fascia dei meter (§4.1) · Globale (Bypass, Strip Mode, Input/Output Gain) · LP/HP · EQ (4 bande + Saturation) · Compression (Amount, Mix, Voice/Drums/Classic visibili solo in Channel) · Drive (Amount, Bypass, pulsante **Load .nam**, nome del modello) · Limiter (Pound) · Gate (Threshold).
 - **Controlli:** manopole, pulsanti on/off e pulsanti a scelta. Ogni controllo è **disegnato dal codice** (VSTGUI `CDrawContext`): gradienti, ombre, tacche e indicatore in stile console analogica, definitivi e non una riserva. Se nella cartella degli asset esiste il PNG corrispondente (nomi da `UI_ASSETS_SPEC.md`), lo usa al posto del disegno; non serve per rilasciare.
-- **Sfondo:** 2-3 varianti di texture. Le texture sono PNG **generati da uno script** (`src/the-stripper/tools/gen_textures.py`, rumore procedurale: metallo spazzolato, vernice consumata, serigrafia sbiadita) con parametri e seme regolabili, committati in `src/the-stripper/assets/`. La variante è scelta una volta per istanza (casuale alla creazione) e salvata nello stato (§6); se un PNG manca, ripiega su una tinta unita.
+- **Direzione visiva (2026-10-09):** pannello scuro e sobrio. Manopole nere con anello del valore color ambra, pulsanti piatti, testi chiari in sans-serif, sezioni separate da linee sottili. Il tentativo di stile console SSL usurata è stato provato e scartato. Il fondo può essere reso più personale (texture di console), ma senza tornare a quello stile.
+- **Sfondo:** 2-3 varianti di texture da console (vernice satinata del pannello con usura diversa, serigrafia più o meno sbiadita, lievi segni d'uso). Le texture sono PNG **generati da uno script** (`src/the-stripper/tools/gen_textures.py`, rumore procedurale con parametri e seme regolabili), committati in `src/the-stripper/assets/`. La variante è scelta una volta per istanza (casuale alla creazione) e salvata nello stato (§6); se un PNG manca, ripiega su una tinta unita.
 - **Binding:** ogni controllo è legato a un `ParamID` e supporta automazione, annullamento e testo del valore fornito dal `Controller`.
 - **Mix bus:** i controlli non pertinenti (Voice/Drums/Classic) si nascondono; non si ricostruisce l'editor.
+
+### 4.1 Meter e indicatori di clipping
+
+Servono per vedere a colpo d'occhio dove il segnale si sporca e quanto lavorano le dinamiche.
+
+- **Meter di picco stereo** in ingresso (prima di tutto) e in uscita (dopo l'Output gain): scala da -60 a +6 dBFS, attacco istantaneo, rilascio di 20 dB/s, indicatore di picco mantenuto per 1,5 s.
+- **Gain reduction** per compressore (scala 0..-20 dB) e limiter (0..-12 dB), disegnate dall'alto verso il basso.
+- **LED di clipping per stadio:** Input, EQ, Compression, Drive, Limiter, Output. Un LED si accende quando il picco all'**uscita di quello stadio** raggiunge o supera 0 dBFS (valore assoluto ≥ 1.0) e resta acceso 2 s; un clic su qualunque LED li azzera tutti (parametro nascosto e scrivibile `kClearClips`, unica eccezione alla sola lettura). Questo mostra quale stadio introduce il clip. Gli stadi in bypass non accendono il loro LED.
+- **Trasporto dei dati:** parametri **in sola lettura** (`kIsReadOnly`, nascosti all'host) in un intervallo di ID separato, da `kMeterBase = 1000` in su. Il processor li scrive in `outputParameterChanges` al massimo ogni 16 ms (circa 60 Hz). Non fanno parte di `kNumParams`, non si salvano nello stato e la tabella dei parametri bloccata (§5) non li include.
+- **Editor:** legge i valori da un timer a 30 ms (`CVSTGUITimer`) e non tocca mai il thread audio.
+- **Gain reduction dai motori:** i motori Multi-Comp e il limiter espongono `currentGainReductionDb()` (valore ≥ 0, in dB). Se `BlockParty` non lo permette, si ricava dal rapporto tra i picchi di uscita e ingresso del blocco.
+- **Costo:** il calcolo dei picchi è `O(n)` per blocco, senza allocazioni.
 
 ## 5. Rifinitura e conformità
 
@@ -56,7 +69,8 @@ Editor VSTGUI4 (`vendors/vst3sdk/vstgui4`), costruito in codice, senza file `.ui
 
 - Percorso asincrono di `NamDrive` con un modello `.nam` minimo di fixture: `requestLoad` + attesa → `isModelLoaded()`; file inesistente → passthrough senza crash; due `requestLoad` ravvicinati → vince l'ultimo.
 - Round-trip dello stato v8 e caricamento di uno stato v7 di fixture.
-- Tabella dei parametri bloccata (§5).
+- Tabella dei parametri bloccata (§5) e tabella separata dei parametri di meter (ID da `kMeterBase`, nessuna collisione con quelli persistenti).
+- Meter: `PeakMeter` (picco, rilascio a 20 dB/s, hold di 1,5 s), rilevamento del clip (|x| ≥ 1.0, hold di 2 s, azzeramento), gain reduction dei motori pari a 0 quando non comprimono e positiva quando comprimono, nessuna scrittura dei meter nello stato.
 - Mapping dei due nuovi parametri.
 - La GUI si verifica a mano in Reaper e Cubase (aprire/chiudere l'editor più volte, automazione, cambio di Strip Mode).
 
@@ -65,6 +79,8 @@ Editor VSTGUI4 (`vendors/vst3sdk/vstgui4`), costruito in codice, senza file `.ui
 - `NamDrive` alloca durante `loadModel`: il percorso asincrono deve garantire che nulla di tutto ciò avvenga sul thread audio. Verificato in revisione e con un test che chiama `process` mentre il caricamento è in corso.
 - Il porting di `NamDrive` in `shared/` tocca la build di CUDA/`gpu_nam`: va controllata la build con e senza CUDA.
 - VSTGUI4 aggiunge dipendenze di build (finestra, bitmap, file selector) per piattaforma; Linux/Windows/macOS verificati dalla CI esistente (`.github/workflows/build.yml`).
+
+- I parametri di meter non devono saturare il canale host↔plugin: limite di una scrittura ogni 16 ms, verificato in test.
 
 ## 9. Dipendenze con altri piani
 
