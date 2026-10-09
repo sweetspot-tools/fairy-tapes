@@ -33,5 +33,5 @@ Output: `dist/Pillow Talk.vst3`. Copy it into your host's VST3 folder.
 
 - [x] Parameters, versioned state (v1)
 - [x] Vocal-aware ducker, tape echo, sidechain bus
-- [x] No custom UI: hosts show the standard parameter list
+- [x] VSTGUI editor (480 x 560) with the ducking display
 - [ ] Manual check in Reaper and Cubase

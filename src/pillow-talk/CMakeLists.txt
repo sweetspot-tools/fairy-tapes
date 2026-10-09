@@ -38,6 +38,8 @@ add_library(pillow_talk MODULE
   src/dsp/ducker.cpp
   src/dsp/tape_echo.cpp
   src/ui/duck_scope.cpp
+  src/ui/editor.cpp
+  src/ui/panel_view.cpp
 )
 
 target_include_directories(pillow_talk PRIVATE

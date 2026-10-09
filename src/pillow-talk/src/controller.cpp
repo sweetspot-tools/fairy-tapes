@@ -1,15 +1,17 @@
 /**
  * Fairy Tapes · Pillow Talk — VST3 Edit Controller implementation.
- * No custom UI: hosts show the standard parameter list.
+ * The editor (ui/editor.h) is created on demand by createView.
  */
 
 #include "controller.h"
 #include "engine.h"
 #include "state.h"
+#include "ui/editor.h"
 #include "pluginterfaces/base/ibstream.h"
 #include "public.sdk/source/vst/vstparameters.h"
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 
 namespace FairyTapes::PillowTalk {
 
@@ -130,6 +132,12 @@ Steinberg::tresult PLUGIN_API Controller::getParamStringByValue(Steinberg::Vst::
   }
   asciiToStr128(buf, string);
   return Steinberg::kResultOk;
+}
+
+Steinberg::IPlugView* PLUGIN_API Controller::createView(Steinberg::FIDString name) {
+  if (name && std::strcmp(name, Steinberg::Vst::ViewType::kEditor) == 0)
+    return new Ui::Editor(this);
+  return nullptr;
 }
 
 } // namespace FairyTapes::PillowTalk

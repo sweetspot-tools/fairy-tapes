@@ -36,6 +36,5 @@ BEGIN_FACTORY_DEF("Fairy Tapes", "https://github.com/fairy-tapes", "")
 
 END_FACTORY
 
-// Called by the SDK platform entry point (ModuleEntry / bundleEntry / InitDll).
-bool InitModule() { return true; }
-bool DeinitModule() { return true; }
+// InitModule / DeinitModule come from the SDK's public.sdk/source/main/moduleinit.cpp (sdk library):
+// they run the registered ModuleInitializers, among them VSTGUI::init from vstguieditor.cpp.
