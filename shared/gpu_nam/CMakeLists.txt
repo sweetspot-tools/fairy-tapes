@@ -10,8 +10,12 @@
 
 cmake_minimum_required(VERSION 3.18)
 
+option(GPU_NAM_DISABLE_CUDA "Build the CPU-only stub even if CUDA is installed" OFF)
+
 include(CheckLanguage)
-check_language(CUDA)
+if(NOT GPU_NAM_DISABLE_CUDA)
+  check_language(CUDA)
+endif()
 
 if(CMAKE_CUDA_COMPILER)
   project(gpu_nam VERSION 1.0.0 LANGUAGES CXX CUDA)
@@ -114,7 +118,7 @@ if(GPU_NAM_HAS_CUDA)
 
 else()
   # CPU-only stub: the public headers compile but all functions return "not available"
-  set(GPU_NAM_SOURCES src/gpu_nam_manager.cpp)
+  set(GPU_NAM_SOURCES src/gpu_nam_manager.cpp src/gpu_nam_stub.cpp)
 
   add_library(gpu_nam STATIC ${GPU_NAM_SOURCES} ${GPU_NAM_HEADERS})
 
@@ -123,6 +127,9 @@ else()
     ${CMAKE_CURRENT_SOURCE_DIR}/include
   )
 endif()
+
+# gpu_nam is linked into shared libraries (VST3 modules) in both branches.
+set_target_properties(gpu_nam PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 if(UNIX AND NOT APPLE)
   target_link_libraries(gpu_nam PRIVATE pthread stdc++fs)
