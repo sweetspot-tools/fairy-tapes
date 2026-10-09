@@ -9,6 +9,7 @@
 #include "engine.h"
 #include "state.h"
 #include "fairy_ui/knob_math.h"
+#include "ui/history.h"
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -879,6 +880,77 @@ void test_display_accumulator_holds_extremes_between_writes() {
   ASSERT_TRUE(r.voiceDb <= -120.f && r.echoDb <= -120.f && r.sendGain == 1.f);
 }
 
+void test_history_order_before_full() {
+  FairyTapes::PillowTalk::Ui::History h(5);
+  ASSERT_TRUE(h.size() == 0);
+  for (int i = 0; i < 3; ++i) h.push(0.1f * (i + 1), 0.2f * (i + 1), 0.05f * (i + 1));
+  ASSERT_TRUE(h.size() == 3);
+  for (int i = 0; i < 3; ++i) {
+    ASSERT_APPROX(h.voice(i), 0.1 * (i + 1));
+    ASSERT_APPROX(h.send(i), 0.2 * (i + 1));
+    ASSERT_APPROX(h.echo(i), 0.05 * (i + 1));
+  }
+}
+
+void test_history_wraps_oldest_first() {
+  const int cap = 7, k = 4;
+  FairyTapes::PillowTalk::Ui::History h(cap);
+  for (int i = 0; i < cap + k; ++i) h.push(i / 100.f, 0.5f, (i + 1) / 100.f);
+  ASSERT_TRUE(h.size() == cap);
+  ASSERT_APPROX(h.voice(0), k / 100.0);
+  ASSERT_APPROX(h.echo(0), (k + 1) / 100.0);
+  ASSERT_APPROX(h.voice(cap - 1), (cap + k - 1) / 100.0);
+  for (int i = 1; i < cap; ++i) ASSERT_TRUE(h.voice(i) > h.voice(i - 1));
+}
+
+void test_history_zero_capacity_is_safe() {
+  for (int cap : {0, -3}) {
+    FairyTapes::PillowTalk::Ui::History h(cap);
+    h.push(0.5f, 0.5f, 0.5f);
+    ASSERT_TRUE(h.size() == 0);
+    ASSERT_APPROX(h.voice(0), 0.0);
+    ASSERT_APPROX(h.send(0), 1.0);
+    ASSERT_APPROX(h.echo(0), 0.0);
+  }
+}
+
+void test_history_out_of_range_accessors_are_neutral() {
+  FairyTapes::PillowTalk::Ui::History h(4);
+  h.push(0.7f, 0.3f, 0.6f);
+  for (int i : {-1, 1, 4, 1000, -100000}) {
+    ASSERT_APPROX(h.voice(i), 0.0);
+    ASSERT_APPROX(h.send(i), 1.0);
+    ASSERT_APPROX(h.echo(i), 0.0);
+  }
+  ASSERT_APPROX(h.voice(0), 0.7);
+}
+
+void test_history_no_allocation_after_construction() {
+  FairyTapes::PillowTalk::Ui::History h(200);
+  g_allocs = 0;
+  g_countAllocs = true;
+  for (int i = 0; i < 1000; ++i) h.push(0.5f, 0.5f, 0.5f);
+  float acc = 0;
+  for (int i = 0; i < h.size(); ++i) acc += h.voice(i) + h.send(i) + h.echo(i);
+  g_countAllocs = false;
+  ASSERT_TRUE(acc > 0.f);
+  ASSERT_TRUE(g_allocs == 0);
+}
+
+void test_history_sanitizes_non_finite_and_clamps() {
+  const float nan = std::nanf(""), inf = INFINITY;
+  FairyTapes::PillowTalk::Ui::History h(8);
+  h.push(nan, nan, nan);
+  h.push(inf, inf, -inf);
+  h.push(-2.f, -2.f, -2.f);
+  h.push(3.f, 3.f, 3.f);
+  ASSERT_TRUE(h.size() == 4);
+  ASSERT_APPROX(h.voice(0), 0.0); ASSERT_APPROX(h.send(0), 1.0); ASSERT_APPROX(h.echo(0), 0.0);
+  ASSERT_APPROX(h.voice(1), 0.0); ASSERT_APPROX(h.send(1), 1.0); ASSERT_APPROX(h.echo(1), 0.0);
+  ASSERT_APPROX(h.voice(2), 0.0); ASSERT_APPROX(h.send(2), 0.0); ASSERT_APPROX(h.echo(2), 0.0);
+  ASSERT_APPROX(h.voice(3), 1.0); ASSERT_APPROX(h.send(3), 1.0); ASSERT_APPROX(h.echo(3), 1.0);
+}
+
 } // namespace
 
 int main() {
@@ -935,6 +1007,12 @@ int main() {
   RUN_TEST(test_display_write_rate_limit);
   RUN_TEST(test_display_echo_is_measured_after_ducking);
   RUN_TEST(test_display_accumulator_holds_extremes_between_writes);
+  RUN_TEST(test_history_order_before_full);
+  RUN_TEST(test_history_wraps_oldest_first);
+  RUN_TEST(test_history_zero_capacity_is_safe);
+  RUN_TEST(test_history_out_of_range_accessors_are_neutral);
+  RUN_TEST(test_history_no_allocation_after_construction);
+  RUN_TEST(test_history_sanitizes_non_finite_and_clamps);
 
   std::fprintf(stdout, "\n%d passed, %d failed.\n", g_passed, g_failed);
   if (g_failed > 0) {

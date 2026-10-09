@@ -37,6 +37,7 @@ add_library(pillow_talk MODULE
   src/engine.cpp
   src/dsp/ducker.cpp
   src/dsp/tape_echo.cpp
+  src/ui/duck_scope.cpp
 )
 
 target_include_directories(pillow_talk PRIVATE
@@ -80,7 +81,7 @@ else()
   )
 endif()
 
-target_link_libraries(pillow_talk PRIVATE sdk fairy_ui)
+target_link_libraries(pillow_talk PRIVATE sdk fairy_ui fairy_ui_widgets)
 if(APPLE)
   target_link_libraries(pillow_talk PRIVATE "-framework CoreFoundation")
   target_link_options(pillow_talk PRIVATE
