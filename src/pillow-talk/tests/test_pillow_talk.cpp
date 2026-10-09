@@ -5,10 +5,13 @@
 
 #include "params.h"
 #include "dsp/ducker.h"
+#include "dsp/tape_echo.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdint>
 #include <cstdlib>
+#include <vector>
 
 namespace {
 
@@ -176,6 +179,181 @@ void test_ducker_ignores_sub_80hz_rumble() {
   ASSERT_TRUE(mn > std::pow(10.0, -3.0 / 20.0));
 }
 
+// ---- TapeEcho --------------------------------------------------------------
+using Buf = std::vector<float>;
+
+DSP::TapeEcho makeEcho(float timeMs = 100.f, float feedback = 0.f, float toneHz = 12000.f,
+                       float saturation = 0.f) {
+  DSP::TapeEcho e;
+  e.prepare(kSr, 512);
+  e.setParams(timeMs, feedback, toneHz, saturation, 0.f);
+  return e;
+}
+
+// Processes a mono input (copied to both channels) in blocks; returns left output.
+Buf runEcho(DSP::TapeEcho& e, const Buf& in, const Buf& gain, int block = 512) {
+  Buf l(in), r(in);
+  for (size_t i = 0; i < in.size(); i += block) {
+    const int n = (int)std::min<size_t>(block, in.size() - i);
+    e.process(l.data() + i, r.data() + i, gain.data() + i, n);
+  }
+  return l;
+}
+
+Buf impulse(size_t n) { Buf b(n, 0.f); b[0] = 1.f; return b; }
+
+Buf whiteNoise(size_t n, uint32_t seed = 1u) {
+  Buf b(n);
+  for (auto& v : b) {
+    seed ^= seed << 13; seed ^= seed >> 17; seed ^= seed << 5;
+    v = (float)((seed >> 8) * (1.0 / 16777216.0) * 2.0 - 1.0) * 0.5f;
+  }
+  return b;
+}
+
+size_t argmaxAbs(const Buf& b, size_t from, size_t to) {
+  size_t k = from;
+  for (size_t i = from; i < to; ++i) if (std::fabs(b[i]) > std::fabs(b[k])) k = i;
+  return k;
+}
+
+void test_echo_first_repeat_at_time() {
+  auto e = makeEcho(100.f);
+  const Buf out = runEcho(e, impulse(9000), Buf(9000, 1.f));
+  const long k = (long)argmaxAbs(out, 0, out.size());
+  ASSERT_TRUE(std::labs(k - 4800) <= 2);
+}
+
+void test_echo_feedback_decays() {
+  auto e = makeEcho(100.f, 0.5f);
+  const Buf out = runEcho(e, impulse(4800 * 6), Buf(4800 * 6, 1.f));
+  float prev = 0.f;
+  for (int rep = 1; rep <= 5; ++rep) {
+    const size_t c = 4800 * rep;
+    const float p = std::fabs(out[argmaxAbs(out, c - 200, c + 200)]);
+    ASSERT_TRUE(p > 1e-4f);
+    if (rep > 1) {
+      const float ratio = p / prev;
+      ASSERT_TRUE(ratio > 0.3f && ratio < 0.6f);
+    }
+    prev = p;
+  }
+}
+
+void test_echo_zero_send_gain_is_silent() {
+  auto e = makeEcho(100.f, 0.5f);
+  const Buf out = runEcho(e, whiteNoise(48000), Buf(48000, 0.f));
+  for (float v : out) ASSERT_TRUE(std::fabs(v) < 1e-6f);
+}
+
+void test_echo_send_gain_not_applied_to_tail() {
+  const size_t n = 4800 * 3;
+  auto ref = makeEcho(100.f, 0.5f);
+  const Buf expected = runEcho(ref, impulse(n), Buf(n, 1.f));
+
+  // Same impulse at gain 1, then loud noise at gain 0: tail must be untouched.
+  Buf in = whiteNoise(n);
+  in[0] = 1.f;
+  Buf gain(n, 0.f);
+  gain[0] = 1.f;
+  auto e = makeEcho(100.f, 0.5f);
+  const Buf out = runEcho(e, in, gain);
+  ASSERT_TRUE(std::fabs(out[argmaxAbs(out, 4600, 5000)]) > 0.3f);
+  for (size_t i = 0; i < n; ++i) ASSERT_TRUE(std::fabs(out[i] - expected[i]) < 1e-6f);
+}
+
+double energyAbove6k(const Buf& b, size_t from) {
+  // 8th-order-ish high-pass at 6 kHz: four cascaded 2nd-order Butterworth sections.
+  double e = 0.0;
+  const double w = 2.0 * kPi * 6000.0 / kSr, c = std::cos(w), al = std::sin(w) / (2.0 * 0.7071);
+  const double a0 = 1.0 + al;
+  const double b0 = (1.0 + c) / 2.0 / a0, b1 = -(1.0 + c) / a0, a1 = -2.0 * c / a0, a2 = (1.0 - al) / a0;
+  double z[4][2] = {};
+  for (size_t i = 0; i < b.size(); ++i) {
+    double x = b[i];
+    for (auto& s : z) {
+      const double y = b0 * x + s[0];
+      s[0] = b1 * x - a1 * y + s[1];
+      s[1] = b0 * x - a2 * y;
+      x = y;
+    }
+    if (i >= from) e += x * x;
+  }
+  return e;
+}
+
+void test_echo_tone_darkens() {
+  const Buf noise = whiteNoise(48000);
+  auto bright = makeEcho(100.f, 0.3f, 12000.f);
+  auto dark = makeEcho(100.f, 0.3f, 800.f);
+  const double eb = energyAbove6k(runEcho(bright, noise, Buf(48000, 1.f)), 4800);
+  const double ed = energyAbove6k(runEcho(dark, noise, Buf(48000, 1.f)), 4800);
+  ASSERT_TRUE(eb > 0.0);
+  ASSERT_TRUE(ed < eb * 0.1);
+}
+
+void test_echo_max_feedback_is_bounded() {
+  auto e = makeEcho(100.f, 0.95f, 12000.f, 1.0f);
+  const size_t n = (size_t)kSr * 10;
+  Buf in(n);
+  for (size_t i = 0; i < n; ++i) in[i] = (float)std::sin(2.0 * kPi * 220.0 * i / kSr);
+  const Buf out = runEcho(e, in, Buf(n, 1.f));
+  for (float v : out) {
+    ASSERT_TRUE(!std::isnan(v));
+    ASSERT_TRUE(std::fabs(v) < 4.0f);
+  }
+}
+
+void test_echo_silence_stays_silent() {
+  // An impulse with heavy feedback, then 60 s of zeros: the tail must decay to
+  // exact zeros without ever producing subnormal values.
+  auto e = makeEcho(100.f, 0.9f, 12000.f, 0.5f);
+  const size_t n = (size_t)kSr * 60;
+  const Buf out = runEcho(e, impulse(n), Buf(n, 1.f));
+  for (float v : out) ASSERT_TRUE(std::fpclassify(v) != FP_SUBNORMAL);
+  for (size_t i = n - (size_t)kSr * 5; i < n; ++i) ASSERT_TRUE(out[i] == 0.f);
+}
+
+void test_echo_zero_and_one_sample_blocks() {
+  auto e = makeEcho(100.f, 0.5f);
+  float l = 0.25f, r = -0.5f, g = 1.f;
+  e.process(&l, &r, &g, 0);
+  ASSERT_TRUE(l == 0.25f && r == -0.5f);
+
+  const size_t n = 4800 * 3;
+  const Buf in = whiteNoise(n);
+  auto big = makeEcho(100.f, 0.5f);
+  auto one = makeEcho(100.f, 0.5f);
+  const Buf a = runEcho(big, in, Buf(n, 1.f), 512);
+  const Buf b = runEcho(one, in, Buf(n, 1.f), 1);
+  for (size_t i = 0; i < n; ++i) ASSERT_TRUE(a[i] == b[i]);
+}
+
+void test_echo_time_change_has_no_click() {
+  auto e = makeEcho(100.f, 0.3f);
+  const size_t n = (size_t)kSr * 2, half = n / 2;
+  Buf l(n), r(n);
+  const Buf g(n, 1.f);
+  for (size_t i = 0; i < n; ++i) l[i] = r[i] = (float)(0.5 * std::sin(2.0 * kPi * 440.0 * i / kSr));
+  for (size_t i = 0; i < n; i += 256) {
+    if (i == half) e.setParams(400.f, 0.3f, 12000.f, 0.f, 0.f);
+    e.process(l.data() + i, r.data() + i, g.data() + i, 256);
+  }
+  float maxDiff = 0.f;
+  for (size_t i = 1; i < n; ++i) maxDiff = std::max(maxDiff, std::fabs(l[i] - l[i - 1]));
+  ASSERT_TRUE(maxDiff < 0.5f);
+}
+
+void test_echo_reprepare_at_new_rate() {
+  auto e = makeEcho(100.f, 0.5f);
+  runEcho(e, whiteNoise(9600), Buf(9600, 1.f));
+  e.prepare(96000.0, 512);
+  e.setParams(100.f, 0.f, 12000.f, 0.f, 0.f);
+  const Buf out = runEcho(e, impulse(12000), Buf(12000, 1.f));
+  const long k = (long)argmaxAbs(out, 0, out.size());
+  ASSERT_TRUE(std::labs(k - 9600) <= 4);
+}
+
 } // namespace
 
 int main() {
@@ -195,6 +373,16 @@ int main() {
   RUN_TEST(test_ducker_full_depth_is_mute);
   RUN_TEST(test_ducker_below_threshold_ignored);
   RUN_TEST(test_ducker_ignores_sub_80hz_rumble);
+  RUN_TEST(test_echo_first_repeat_at_time);
+  RUN_TEST(test_echo_feedback_decays);
+  RUN_TEST(test_echo_zero_send_gain_is_silent);
+  RUN_TEST(test_echo_send_gain_not_applied_to_tail);
+  RUN_TEST(test_echo_tone_darkens);
+  RUN_TEST(test_echo_max_feedback_is_bounded);
+  RUN_TEST(test_echo_silence_stays_silent);
+  RUN_TEST(test_echo_zero_and_one_sample_blocks);
+  RUN_TEST(test_echo_time_change_has_no_click);
+  RUN_TEST(test_echo_reprepare_at_new_rate);
 
   std::fprintf(stdout, "\n%d passed, %d failed.\n", g_passed, g_failed);
   if (g_failed > 0) {

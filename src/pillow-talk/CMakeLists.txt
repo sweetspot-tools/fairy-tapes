@@ -18,6 +18,7 @@ endif()
 add_executable(pillow_talk_tests
   tests/test_pillow_talk.cpp
   src/dsp/ducker.cpp
+  src/dsp/tape_echo.cpp
 )
 target_include_directories(pillow_talk_tests PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src
