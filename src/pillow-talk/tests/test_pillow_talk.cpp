@@ -131,8 +131,21 @@ void test_ducker_reopens_after_hold_and_release() {
   auto d = makeDucker();
   double ph = 0;
   runSine(d, 1000.0, 0.5f, 300.0, ph);
-  const float g = runSine(d, 1000.0, 0.f, 200.0 + 4 * 300.0, ph);
+  const float g = runSine(d, 1000.0, 0.f, 200.0 + 3 * 300.0, ph);
   ASSERT_TRUE(g > 0.95f);
+}
+
+void test_ducker_hold_timing_is_level_independent() {
+  for (float amp : {0.05f, 1.0f}) {
+    auto d = makeDucker();
+    double ph = 0;
+    runSine(d, 1000.0, amp, 300.0, ph);
+    const float duck = (float)std::pow(10.0, -30.0 / 20.0);
+    const float early = runSine(d, 1000.0, 0.f, 180.0, ph);  // H - 20 ms
+    ASSERT_TRUE(early < duck * 1.05f);
+    const float late = runSine(d, 1000.0, 0.f, 60.0, ph);    // H + 40 ms
+    ASSERT_TRUE(late > duck * 1.3f);
+  }
 }
 
 void test_ducker_full_depth_is_mute() {
@@ -178,6 +191,7 @@ int main() {
   RUN_TEST(test_ducker_burst_ducks_to_depth);
   RUN_TEST(test_ducker_holds_after_burst);
   RUN_TEST(test_ducker_reopens_after_hold_and_release);
+  RUN_TEST(test_ducker_hold_timing_is_level_independent);
   RUN_TEST(test_ducker_full_depth_is_mute);
   RUN_TEST(test_ducker_below_threshold_ignored);
   RUN_TEST(test_ducker_ignores_sub_80hz_rumble);

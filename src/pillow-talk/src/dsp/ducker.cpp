@@ -8,7 +8,8 @@ namespace FairyTapes::PillowTalk::DSP {
 namespace {
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kHpHz = 120.0, kLpHz = 5000.0;
-constexpr double kEnvAttackMs = 2.0, kEnvReleaseMs = 40.0, kSmoothMs = 3.0;
+constexpr double kEnvAttackMs = 2.0, kEnvReleaseMs = 3.0, kSmoothMs = 3.0;
+constexpr float kHoldCompMs = 8.f;
 
 float msToCoef(double ms, double sr) {
   return (float)std::exp(-1.0 / (0.001 * ms * sr));
@@ -58,7 +59,8 @@ void Ducker::setParams(float thresholdDb, float depthDb, float holdMs, float rel
 }
 
 void Ducker::updateDerived() {
-  holdSamples_ = (long)(holdMs_ * 0.001 * sr_);
+  // Envelope tail + gain smoother add ~8 ms of delay on average; compensate.
+  holdSamples_ = (long)(std::max(0.f, holdMs_ - kHoldCompMs) * 0.001 * sr_);
   relCoef_ = msToCoef(releaseMs_, sr_);
 }
 
