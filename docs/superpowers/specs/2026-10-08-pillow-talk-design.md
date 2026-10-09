@@ -32,17 +32,18 @@ Riferimento DSP: `vendors/dusk-audio-plugins/plugins/tape-echo` (GPL-3, `TapeEch
 1. **Ingresso principale** stereo.
 2. **Sidechain opzionale** stereo (secondo bus di ingresso VST3). Se non è collegato, il rilevatore usa l'ingresso principale.
 3. **Rilevatore:** filtro passa-banda sulla gamma vocale, envelope follower, soglia, hold, release.
-4. **Gain di mandata:** applicato **all'ingresso del delay**, non all'uscita. Le code già emesse decadono in modo naturale, senza tagli.
+4. **Gain di ducking:** applicato **all'uscita wet** del delay, prima del mix; l'ingresso del delay resta sempre aperto. La frase viene registrata sul nastro mentre la voce canta; la coda già nella linea continua a decadere e si sente quando il gate si riapre (dopo hold e release).
 5. **Tape echo.**
 6. **Mix wet/dry** in parallelo.
 
 ## 4. Rilevatore e ducking
 
-- Dopo l'ultimo istante sopra soglia, il rilevatore mantiene il gain di mandata ridotto per il tempo di **Hold**.
+- Il gain di ducking agisce sull'uscita wet: durante la voce il ritorno del delay è ridotto di Depth, ma la linea continua a registrare e a decadere.
+- Dopo l'ultimo istante sopra soglia, il rilevatore mantiene il gain ridotto per il tempo di **Hold**.
 - Hold è espresso in **ms** o in **note** (1/16 – 1/2) calcolate dal BPM dell'host. Senza BPM dall'host si usa 120.
 - Terminato l'hold, il gain risale con una **curva esponenziale** governata da Release.
 - **Ducking depth** definisce la riduzione durante la voce: da pochi dB fino a muto totale. A depth minima il plugin si comporta come un delay normale.
-- Il gain di mandata è smussato per evitare click e pompaggi.
+- Il gain di ducking è smussato per evitare click e pompaggi.
 
 ## 5. Tape echo
 
@@ -71,7 +72,7 @@ Seguendo `src/the-stripper/tests/test_params.cpp`:
 
 - Parametri: valori, range, mapping.
 - Rilevatore: soglia e hold su segnali sintetici (impulso, burst, silenzio).
-- Gain di mandata: scende durante il burst, sale dopo hold e release.
+- Gain di ducking: scende durante il burst, sale dopo hold e release; nella pausa si sentono le ripetizioni della frase.
 - Delay: la prima ripetizione cade al tempo giusto, il feedback decade.
 - Sidechain: con ingresso esterno collegato, il rilevatore usa quello.
 
