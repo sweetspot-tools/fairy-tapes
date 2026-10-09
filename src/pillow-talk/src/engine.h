@@ -1,7 +1,9 @@
 /**
  * Fairy Tapes · Pillow Talk — Signal chain used by the VST3 Processor (pure, no SDK libs).
- * Per sample: gain = ducker(detector); wet = tape echo fed with input * gain;
- * out = dry * (1 - mix) + wet * mix. Bypass ramps mix to 0, leaving the dry signal.
+ * Per sample: gain = ducker(detector); wet = tape echo fed with the full input;
+ * out = dry * (1 - mix) + wet * gain * mix. The gain ducks the wet OUTPUT, so the
+ * phrase stays on tape and its repeats surface once the gate reopens.
+ * Bypass ramps mix to 0, leaving the dry signal.
  */
 
 #pragma once
@@ -29,7 +31,8 @@ struct Settings {
   bool bypass;
 };
 
-// bpm <= 0 means "host gave no tempo" and falls back to 120.
+// bpm <= 0 or non-finite means "host gave no tempo" and falls back to 120. Normalized
+// values are clamped to [0,1]; non-finite ones fall back to defaults. Always finite.
 Settings mapParams(const double* values, double bpm);
 
 struct SidechainInput {
@@ -46,6 +49,7 @@ class Engine {
 public:
   // Allocates all buffers; never allocates afterwards.
   void prepare(double sampleRate, int maxBlockSize);
+  // Settings with any non-finite field are ignored (the previous ones stay).
   void setSettings(const Settings& s);
   // Inputs may alias outputs and inL may equal inR. scL/scR null: detect on the main
   // input. outR may be null (mono output). Blocks longer than maxBlockSize are split.

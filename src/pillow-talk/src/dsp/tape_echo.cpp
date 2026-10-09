@@ -141,11 +141,12 @@ void TapeEcho::process(float* L, float* R, const float* sendGain, int numSamples
     if (flutterPhase_ >= 1.0) flutterPhase_ -= 1.0;
     const float delay = std::clamp(delaySmoothed_ + mod, kMinDelay, maxDelay);
 
+    const float send = sendGain ? sendGain[i] : 1.f;
     float* io[2] = {L + i, R + i};
     for (int k = 0; k < 2; ++k) {
       Channel& c = ch_[k];
       const float wet = readTape(c, delay);
-      c.tape[(size_t)writePos_] = recordPath(c, *io[k] * sendGain[i] + feedback_ * wet);
+      c.tape[(size_t)writePos_] = recordPath(c, *io[k] * send + feedback_ * wet);
       *io[k] = wet;
     }
     writePos_ = (writePos_ + 1) & mask_;

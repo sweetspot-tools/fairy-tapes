@@ -6,6 +6,8 @@
 #pragma once
 
 #include "params.h"
+#include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -38,14 +40,18 @@ inline void serializeState(const double* values, std::vector<uint8_t>& out) {
   }
 }
 
-// Returns false (and leaves `values` untouched) on unknown version or short data.
+// Returns false (and leaves `values` untouched) on unknown version, short data or any
+// non-finite value. Restored values are clamped to [0,1].
 inline bool deserializeState(const uint8_t* data, size_t size, double* values) {
   if (!data || size < kStateSize) return false;
   if ((int32_t)(uint32_t)detail::getLE(data, 4) != kStateVersion) return false;
+  double tmp[kNumParams];
   for (int i = 0; i < (int)kNumParams; ++i) {
     const uint64_t bits = detail::getLE(data + 4 + 8 * i, 8);
-    std::memcpy(&values[i], &bits, sizeof bits);
+    std::memcpy(&tmp[i], &bits, sizeof bits);
+    if (!std::isfinite(tmp[i])) return false;
   }
+  for (int i = 0; i < (int)kNumParams; ++i) values[i] = std::clamp(tmp[i], 0.0, 1.0);
   return true;
 }
 

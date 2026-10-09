@@ -16,6 +16,7 @@ class TapeEcho {
 public:
   void prepare(double sampleRate, int maxBlockSize);
   void setParams(float timeMs, float feedback, float toneHz, float saturation, float wowFlutter);
+  // sendGain scales the record input per sample; nullptr means unity (input fully open).
   void process(float* L, float* R, const float* sendGain, int numSamples);
   void reset();
 

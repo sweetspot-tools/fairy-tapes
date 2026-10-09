@@ -29,12 +29,29 @@ void loadDefaults(double* v) {
   v[kSidechain] = kDefaultSidechain;
 }
 
+namespace {
+// Normalized value clamped to [0,1]; non-finite falls back to the parameter default.
+double norm(const double* v, int id, const double* defaults) {
+  return std::isfinite(v[id]) ? std::clamp(v[id], 0.0, 1.0) : defaults[id];
+}
+
+bool finite(const Settings& s) {
+  for (float x : {s.timeMs, s.feedback, s.toneHz, s.saturation, s.wowFlutter, s.mix,
+                  s.thresholdDb, s.depthDb, s.holdMs, s.releaseMs})
+    if (!std::isfinite(x)) return false;
+  return true;
+}
+} // namespace
+
 int noteIndexFromNorm(double n) {
   return std::clamp((int)(n * 4.0), 0, 3);
 }
 
-Settings mapParams(const double* v, double bpm) {
-  if (bpm <= 0.0) bpm = kFallbackBpm;
+Settings mapParams(const double* raw, double bpm) {
+  if (!std::isfinite(bpm) || bpm <= 0.0) bpm = kFallbackBpm;
+  double defaults[kNumParams], v[kNumParams];
+  loadDefaults(defaults);
+  for (int i = 0; i < (int)kNumParams; ++i) v[i] = norm(raw, i, defaults);
   Settings s;
   s.timeMs = (float)(v[kTimeSync] >= 0.5 ? noteToMs(noteIndexFromNorm(v[kTimeNote]), bpm)
                                          : timeMsFromNorm(v[kTimeMs]));
@@ -71,6 +88,7 @@ void Engine::prepare(double sampleRate, int maxBlockSize) {
 }
 
 void Engine::setSettings(const Settings& s) {
+  if (!finite(s)) return;  // keep the last valid settings; never feed NaN/inf to the DSP
   ducker_.setParams(s.thresholdDb, s.depthDb, s.holdMs, s.releaseMs);
   echo_.setParams(s.timeMs, s.feedback, s.toneHz, s.saturation, s.wowFlutter);
   mixTarget_ = s.bypass ? 0.f : std::clamp(s.mix, 0.f, 1.f);
@@ -110,17 +128,18 @@ void Engine::processChunk(const float* inL, const float* inR, const float* scL, 
   const float* detR = scL ? (scR ? scR : scL) : dR;
   for (int i = 0; i < n; ++i) g[i] = ducker_.processSample(detL[i], detR[i]);
 
-  // Separate scratch per channel: TapeEcho must never see L == R.
+  // Separate scratch per channel: TapeEcho must never see L == R. The tape input stays
+  // fully open (the phrase is recorded); the ducker gain scales the wet output below.
   std::memcpy(wL, dL, sizeof(float) * (size_t)n);
   std::memcpy(wR, dR, sizeof(float) * (size_t)n);
-  echo_.process(wL, wR, g, n);
+  echo_.process(wL, wR, nullptr, n);
 
   for (int i = 0; i < n; ++i) {
     mix_ = mixTarget_ + mixCoef_ * (mix_ - mixTarget_);
     if (std::fabs(mix_ - mixTarget_) < kMixSnap) mix_ = mixTarget_;
     const float m = mix_;
-    outL[i] = dL[i] * (1.f - m) + wL[i] * m;
-    if (outR) outR[i] = dR[i] * (1.f - m) + wR[i] * m;
+    outL[i] = dL[i] * (1.f - m) + (wL[i] * g[i]) * m;
+    if (outR) outR[i] = dR[i] * (1.f - m) + (wR[i] * g[i]) * m;
   }
 }
 

@@ -398,6 +398,32 @@ void test_state_rejects_unknown_version_and_truncation() {
   for (int i = 0; i < (int)kNumParams; ++i) ASSERT_TRUE(b[i] == 0.75);
 }
 
+void test_state_rejects_non_finite_values() {
+  const double bad[] = {std::nan(""), INFINITY, -INFINITY};
+  for (double v : bad) {
+    double a[kNumParams], b[kNumParams];
+    for (int i = 0; i < (int)kNumParams; ++i) { a[i] = 0.25; b[i] = 0.75; }
+    a[kTone] = v;
+    std::vector<uint8_t> bytes;
+    serializeState(a, bytes);
+    ASSERT_TRUE(!deserializeState(bytes.data(), bytes.size(), b));
+    for (int i = 0; i < (int)kNumParams; ++i) ASSERT_TRUE(b[i] == 0.75);
+  }
+}
+
+void test_state_clamps_out_of_range_values() {
+  double a[kNumParams], b[kNumParams];
+  for (int i = 0; i < (int)kNumParams; ++i) a[i] = 0.5;
+  a[kMix] = 5.0;
+  a[kFeedback] = -1.0;
+  std::vector<uint8_t> bytes;
+  serializeState(a, bytes);
+  ASSERT_TRUE(deserializeState(bytes.data(), bytes.size(), b));
+  ASSERT_TRUE(b[kMix] == 1.0);
+  ASSERT_TRUE(b[kFeedback] == 0.0);
+  ASSERT_TRUE(b[kTone] == 0.5);
+}
+
 // ---- Parameter mapping ------------------------------------------------------
 void test_note_index_matches_string_list() {
   for (int k = 0; k <= 3; ++k) ASSERT_TRUE(noteIndexFromNorm(k / 3.0) == k);
@@ -425,6 +451,22 @@ void test_map_params_free_and_sync() {
 }
 
 // ---- Sidechain routing -------------------------------------------------------
+bool settingsFinite(const Settings& s) {
+  for (float x : {s.timeMs, s.feedback, s.toneHz, s.saturation, s.wowFlutter, s.mix,
+                  s.thresholdDb, s.depthDb, s.holdMs, s.releaseMs})
+    if (!std::isfinite(x)) return false;
+  return true;
+}
+
+void test_map_params_never_returns_non_finite() {
+  double p[kNumParams];
+  for (double v : {std::nan(""), (double)INFINITY, -(double)INFINITY, 5.0, -1.0}) {
+    for (int i = 0; i < (int)kNumParams; ++i) p[i] = v;
+    for (double bpm : {120.0, std::nan(""), (double)INFINITY, 0.0})
+      ASSERT_TRUE(settingsFinite(mapParams(p, bpm)));
+  }
+}
+
 void test_detector_falls_back_to_main_input() {
   float a[4] = {}, b[4] = {};
   float* both[2] = {a, b};
@@ -493,6 +535,46 @@ void test_chain_sidechain_ducks_echo() {
   ASSERT_TRUE(ed < eo * 0.01);  // 30 dB of ducking on the send
 }
 
+// R7: the ducker gain scales the wet OUTPUT; the phrase is still recorded on tape,
+// so its repeats surface in the pause once hold and release have elapsed.
+void test_chain_phrase_tail_heard_in_pause() {
+  const size_t phrase = (size_t)(kSr * 1.35), n = phrase + (size_t)kSr * 2;
+  Buf in(n, 0.f);
+  for (size_t i = 0; i < phrase; ++i)
+    in[i] = (float)(0.3 * std::sin(2.0 * kPi * 440.0 * i / kSr) *
+                    (0.75 + 0.25 * std::sin(2.0 * kPi * 3.0 * i / kSr)));
+  double p[kNumParams];
+  loadDefaults(p);
+  p[kMix] = 1.0;
+  p[kWowFlutter] = 0.0;  // identical delay modulation is not needed but keeps runs comparable
+  Engine ducked, open;
+  ducked.prepare(kSr, 512);
+  open.prepare(kSr, 512);
+  ducked.setSettings(mapParams(p, 120.0));
+  p[kDuckDepth] = 0.0;
+  open.setSettings(mapParams(p, 120.0));
+  const Buf wd = runEngine(ducked, in, in, nullptr).first;
+  const Buf wo = runEngine(open, in, in, nullptr).first;
+  const auto db = [](double a, double b) { return 10.0 * std::log10(a / b); };
+  // During the phrase (after the first repeat): reduced by about Depth (36 dB).
+  const size_t from = (size_t)(kSr * 0.3);
+  const double during = db(energy(wd, from, phrase), energy(wo, from, phrase));
+  std::fprintf(stdout, "  phrase: wet during %.1f dB", during);
+  ASSERT_TRUE(during < -30.0 && during > -42.0);
+  // Pause, once Hold (224 ms) and one Release time constant (316 ms) have elapsed:
+  // the repeats still on tape are within ~6 dB of the no-ducking baseline.
+  const size_t reopen = phrase + (size_t)(kSr * (0.224 + 0.316)), end = phrase + (size_t)kSr;
+  const double pause = db(energy(wd, reopen, end), energy(wo, reopen, end));
+  const double whole = db(energy(wd, phrase, n), energy(wo, phrase, n));
+  const double absPause = db(energy(wd, reopen, end) / (double)(end - reopen),
+                             energy(in, 0, phrase) / (double)phrase);
+  std::fprintf(stdout, ", pause after reopen %.1f dB (abs %.1f dB re phrase), whole pause %.1f dB\n",
+               pause, absPause, whole);
+  ASSERT_TRUE(energy(wo, reopen, end) > 0.0);
+  ASSERT_TRUE(pause > -6.0);
+  ASSERT_TRUE(absPause > -40.0);
+}
+
 void test_engine_mix_formula() {
   const size_t n = 9600;
   const Buf in = whiteNoise(n);
@@ -516,6 +598,12 @@ void test_engine_bypass_passes_dry() {
   e.setSettings(s);
   const auto out = runEngine(e, in, in, nullptr);
   for (size_t i = 0; i < n; ++i) ASSERT_TRUE(out.first[i] == in[i] && out.second[i] == in[i]);
+
+  Engine dry;  // Mix 0 is the dry signal too
+  dry.prepare(kSr, 512);
+  dry.setSettings(echoSettings(0.f));
+  const auto out0 = runEngine(dry, in, in, nullptr);
+  for (size_t i = 0; i < n; ++i) ASSERT_TRUE(out0.first[i] == in[i] && out0.second[i] == in[i]);
 }
 
 void test_engine_in_place_mono_gives_identical_channels() {
@@ -532,9 +620,9 @@ void test_engine_in_place_mono_gives_identical_channels() {
   for (size_t i = 0; i < n; ++i) g[i] = d.processSample(in[i], in[i]);
   for (size_t i = 0; i < n; i += 512) {
     const int k = (int)std::min<size_t>(512, n - i);
-    t.process(wl.data() + i, wr.data() + i, g.data() + i, k);
+    t.process(wl.data() + i, wr.data() + i, nullptr, k);  // tape input fully open
   }
-  for (size_t i = 0; i < n; ++i) expected[i] = 0.5f * in[i] + 0.5f * wl[i];
+  for (size_t i = 0; i < n; ++i) expected[i] = 0.5f * in[i] + 0.5f * (wl[i] * g[i]);
   Engine e;
   e.prepare(kSr, 512);
   e.setSettings(fb);
@@ -611,6 +699,23 @@ void test_engine_reprepare_at_new_rate() {
   ASSERT_TRUE(std::labs((long)argmaxAbs(out, 0, out.size()) - 9600) <= 4);
 }
 
+void test_engine_ignores_non_finite_settings() {
+  const size_t n = 9600;
+  const Buf in = whiteNoise(n);
+  Engine ref, e;
+  ref.prepare(kSr, 512);
+  e.prepare(kSr, 512);
+  ref.setSettings(echoSettings(0.5f));
+  e.setSettings(echoSettings(0.5f));
+  Settings bad = echoSettings(0.5f);
+  bad.timeMs = std::nanf("");
+  bad.feedback = INFINITY;
+  e.setSettings(bad);
+  const Buf a = runEngine(ref, in, in, nullptr).first;
+  const Buf b = runEngine(e, in, in, nullptr).first;
+  for (size_t i = 0; i < n; ++i) ASSERT_TRUE(std::isfinite(b[i]) && a[i] == b[i]);
+}
+
 void test_engine_process_does_not_allocate() {
   Engine e;
   e.prepare(kSr, 512);
@@ -661,10 +766,15 @@ int main() {
   RUN_TEST(test_echo_reprepare_at_new_rate);
   RUN_TEST(test_state_roundtrip);
   RUN_TEST(test_state_rejects_unknown_version_and_truncation);
+  RUN_TEST(test_state_rejects_non_finite_values);
+  RUN_TEST(test_state_clamps_out_of_range_values);
+  RUN_TEST(test_map_params_never_returns_non_finite);
+  RUN_TEST(test_engine_ignores_non_finite_settings);
   RUN_TEST(test_note_index_matches_string_list);
   RUN_TEST(test_map_params_free_and_sync);
   RUN_TEST(test_detector_falls_back_to_main_input);
   RUN_TEST(test_chain_sidechain_ducks_echo);
+  RUN_TEST(test_chain_phrase_tail_heard_in_pause);
   RUN_TEST(test_engine_mix_formula);
   RUN_TEST(test_engine_bypass_passes_dry);
   RUN_TEST(test_engine_in_place_mono_gives_identical_channels);
