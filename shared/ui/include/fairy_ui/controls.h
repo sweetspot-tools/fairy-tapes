@@ -24,6 +24,10 @@ public:
   void setValue(float val) override;
   void setDefaultValue(float val) override;
 
+  // Draws attenuated; the control stays fully operable.
+  void setDimmed(bool dimmed);
+  bool isDimmed() const { return dimmed_; }
+
 protected:
   // Maps any incoming value to a valid one (default: sanitizeNorm). Must be NaN-safe.
   virtual double quantize(double v, double fallback) const;
@@ -31,12 +35,14 @@ protected:
   void editTo(float newValue);
 
   const Skin* skin_ = nullptr;
+  bool dimmed_ = false;
 };
 
 class AnalogKnob : public NormalizedControl {
 public:
   static constexpr VSTGUI::CCoord kPreferredWidth = 64;
   static constexpr VSTGUI::CCoord kPreferredHeight = 88;
+  static constexpr VSTGUI::CCoord kCenterOffsetY = 30;  // knob centre below the top of the view
 
   using ValueFormatter = std::function<std::string(float normalized)>;
 
@@ -46,9 +52,6 @@ public:
   void setLabel(std::string label);
   // Value text under the label; formatted only when the value changes.
   void setValueFormatter(ValueFormatter formatter);
-  // Draws attenuated; the knob stays fully operable.
-  void setDimmed(bool dimmed);
-  bool isDimmed() const { return dimmed_; }
 
   void draw(VSTGUI::CDrawContext* context) override;
 
@@ -69,7 +72,6 @@ private:
   ValueFormatter formatter_;
   std::string valueText_;
   float valueTextFor_ = -1.f;  // value valueText_ was formatted for (-1 = stale)
-  bool dimmed_ = false;
 
   bool dragging_ = false;
   bool dragFine_ = false;

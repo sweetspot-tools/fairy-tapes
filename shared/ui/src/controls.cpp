@@ -31,7 +31,6 @@ constexpr CColor kOnText(0x2a, 0x1d, 0x05);
 constexpr float kDimmedAlpha = 0.4f;
 
 // Knob geometry (px, relative to the knob center), from the mockup.
-constexpr CCoord kKnobCenterY = 30;
 constexpr CCoord kArcRadius = 24;
 constexpr CCoord kArcWidth = 3;
 constexpr CCoord kBodyRadius = 17;
@@ -84,9 +83,11 @@ void drawButton(CDrawContext* ctx, const CRect& r, const std::string& label, boo
   ctx->drawString(label.c_str(), r, kCenterText);
 }
 
-void beginDrawing(CDrawContext* ctx) {
+// Saves the state (restore with restoreGlobalState) and attenuates a dimmed control.
+void beginDrawing(CDrawContext* ctx, bool dimmed) {
   ctx->saveGlobalState();
   ctx->setDrawMode(kAntiAliasing | kNonIntegralMode);
+  if (dimmed) ctx->setGlobalAlpha(ctx->getGlobalAlpha() * kDimmedAlpha);
 }
 
 } // namespace
@@ -107,6 +108,12 @@ void NormalizedControl::setValue(float val) {
 
 void NormalizedControl::setDefaultValue(float val) {
   CControl::setDefaultValue(static_cast<float>(quantize(val, 0.0)));
+}
+
+void NormalizedControl::setDimmed(bool dimmed) {
+  if (dimmed_ == dimmed) return;
+  dimmed_ = dimmed;
+  invalid();
 }
 
 double NormalizedControl::quantize(double v, double fallback) const { return sanitizeNorm(v, fallback); }
@@ -139,15 +146,9 @@ void AnalogKnob::setValueFormatter(ValueFormatter formatter) {
   invalid();
 }
 
-void AnalogKnob::setDimmed(bool dimmed) {
-  if (dimmed_ == dimmed) return;
-  dimmed_ = dimmed;
-  invalid();
-}
-
 CPoint AnalogKnob::center() const {
   const CRect& r = getViewSize();
-  return CPoint(r.left + r.getWidth() / 2, r.top + kKnobCenterY);
+  return CPoint(r.left + r.getWidth() / 2, r.top + AnalogKnob::kCenterOffsetY);
 }
 
 const std::string& AnalogKnob::valueText() {
@@ -160,8 +161,7 @@ const std::string& AnalogKnob::valueText() {
 }
 
 void AnalogKnob::draw(CDrawContext* ctx) {
-  beginDrawing(ctx);
-  if (dimmed_) ctx->setGlobalAlpha(ctx->getGlobalAlpha() * kDimmedAlpha);
+  beginDrawing(ctx, dimmed_);
 
   const double v = sanitizeNorm(getValue(), getDefaultValue());
   const CPoint c = center();
@@ -284,7 +284,7 @@ ToggleButton::ToggleButton(const CRect& size, IControlListener* listener, int32_
 double ToggleButton::quantize(double v, double fallback) const { return snapToggle(v, fallback); }
 
 void ToggleButton::draw(CDrawContext* ctx) {
-  beginDrawing(ctx);
+  beginDrawing(ctx, dimmed_);
   drawButton(ctx, getViewSize(), label_, getValue() >= 0.5f, skin_);
   ctx->restoreGlobalState();
   setDirty(false);
@@ -321,7 +321,7 @@ CRect ChoiceButtons::buttonRect(int index) const {
 }
 
 void ChoiceButtons::draw(CDrawContext* ctx) {
-  beginDrawing(ctx);
+  beginDrawing(ctx, dimmed_);
   const int selected = selectedIndex();
   for (int i = 0; i < count(); ++i)
     drawButton(ctx, buttonRect(i), labels_[static_cast<size_t>(i)], i == selected, skin_);

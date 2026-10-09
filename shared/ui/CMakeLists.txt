@@ -21,5 +21,7 @@ add_test(NAME fairy_ui_sanitize_tests COMMAND fairy_ui_sanitize_tests)
 add_library(fairy_ui_widgets STATIC src/controls.cpp src/skin.cpp)
 target_include_directories(fairy_ui_widgets PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(fairy_ui_widgets PUBLIC fairy_ui vstgui_support)
+# Linked into plugin modules (shared objects).
+set_target_properties(fairy_ui_widgets PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # VSTGUI headers use multi-character constants; the SDK silences this only in its own directories.
 target_compile_options(fairy_ui_widgets PUBLIC $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Wno-multichar>)
