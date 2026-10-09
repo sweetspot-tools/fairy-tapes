@@ -6,7 +6,6 @@
 namespace FairyTapes::PillowTalk::DSP {
 
 namespace {
-constexpr double kPi = 3.14159265358979323846;
 constexpr double kHpHz = 120.0, kLpHz = 5000.0;
 constexpr double kEnvAttackMs = 2.0, kEnvReleaseMs = 3.0, kSmoothMs = 3.0;
 constexpr float kHoldCompMs = 8.f;
@@ -15,26 +14,6 @@ float msToCoef(double ms, double sr) {
   return (float)std::exp(-1.0 / (0.001 * ms * sr));
 }
 } // namespace
-
-void Ducker::designHighpass(Biquad& b, double fs, double fc, double q) {
-  const double w = 2.0 * kPi * fc / fs, c = std::cos(w), al = std::sin(w) / (2.0 * q);
-  const double a0 = 1.0 + al;
-  b.b0 = (float)(((1.0 + c) / 2.0) / a0);
-  b.b1 = (float)(-(1.0 + c) / a0);
-  b.b2 = b.b0;
-  b.a1 = (float)(-2.0 * c / a0);
-  b.a2 = (float)((1.0 - al) / a0);
-}
-
-void Ducker::designLowpass(Biquad& b, double fs, double fc, double q) {
-  const double w = 2.0 * kPi * fc / fs, c = std::cos(w), al = std::sin(w) / (2.0 * q);
-  const double a0 = 1.0 + al;
-  b.b0 = (float)(((1.0 - c) / 2.0) / a0);
-  b.b1 = (float)((1.0 - c) / a0);
-  b.b2 = b.b0;
-  b.a1 = (float)(-2.0 * c / a0);
-  b.a2 = (float)((1.0 - al) / a0);
-}
 
 void Ducker::prepare(double sampleRate) {
   sr_ = sampleRate > 0.0 ? sampleRate : 48000.0;

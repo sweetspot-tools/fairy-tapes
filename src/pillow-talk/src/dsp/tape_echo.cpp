@@ -8,6 +8,7 @@ constexpr double kPi = 3.14159265358979323846;
 constexpr double kMaxSeconds = 2.0;
 constexpr double kGlideMs = 120.0;
 constexpr double kHpHz = 100.0;
+constexpr double kButterworthQ = 0.7071068;
 constexpr double kWowHz = 0.6, kFlutterHz = 7.0, kNoiseLpHz = 30.0;
 // Peak delay modulation (ms) at wowFlutter = 1.
 constexpr float kWowMs = 2.0f, kFlutterMs = 0.15f, kNoiseMs = 0.1f;
@@ -17,26 +18,6 @@ constexpr float kMaxFeedback = 0.95f;
 constexpr float kOsLatency = 2.5f;
 constexpr float kMinDelay = 2.f;
 constexpr float kDenormal = 1e-20f;
-
-void designLowpass(float& b0, float& b1, float& b2, float& a1, float& a2, double fs, double fc) {
-  const double w = 2.0 * kPi * fc / fs, c = std::cos(w), al = std::sin(w) / (2.0 * 0.7071068);
-  const double a0 = 1.0 + al;
-  b0 = (float)(((1.0 - c) / 2.0) / a0);
-  b1 = (float)((1.0 - c) / a0);
-  b2 = b0;
-  a1 = (float)(-2.0 * c / a0);
-  a2 = (float)((1.0 - al) / a0);
-}
-
-void designHighpass(float& b0, float& b1, float& b2, float& a1, float& a2, double fs, double fc) {
-  const double w = 2.0 * kPi * fc / fs, c = std::cos(w), al = std::sin(w) / (2.0 * 0.7071068);
-  const double a0 = 1.0 + al;
-  b0 = (float)(((1.0 + c) / 2.0) / a0);
-  b1 = (float)(-(1.0 + c) / a0);
-  b2 = b0;
-  a1 = (float)(-2.0 * c / a0);
-  a2 = (float)((1.0 - al) / a0);
-}
 
 float flushDenormal(float x) { return std::fabs(x) < kDenormal ? 0.f : x; }
 } // namespace
@@ -56,7 +37,7 @@ void TapeEcho::prepare(double sampleRate, int /*maxBlockSize*/) {
   mask_ = len - 1;
   for (auto& c : ch_) {
     c.tape.assign((size_t)len, 0.f);
-    designHighpass(c.hp.b0, c.hp.b1, c.hp.b2, c.hp.a1, c.hp.a2, sr_, kHpHz);
+    designHighpass(c.hp, sr_, kHpHz, kButterworthQ);
   }
   glideCoef_ = (float)std::exp(-1.0 / (0.001 * kGlideMs * sr_));
   wowInc_ = kWowHz / sr_;
@@ -79,7 +60,7 @@ void TapeEcho::setParams(float timeMs, float feedback, float toneHz, float satur
 
 void TapeEcho::designTone() {
   const double fc = std::clamp((double)toneHz_, 20.0, 0.45 * sr_);
-  for (auto& c : ch_) designLowpass(c.lp.b0, c.lp.b1, c.lp.b2, c.lp.a1, c.lp.a2, sr_, fc);
+  for (auto& c : ch_) designLowpass(c.lp, sr_, fc, kButterworthQ);
 }
 
 void TapeEcho::reset() {

@@ -335,10 +335,15 @@ void test_echo_time_change_has_no_click() {
   Buf l(n), r(n);
   const Buf g(n, 1.f);
   for (size_t i = 0; i < n; ++i) l[i] = r[i] = (float)(0.5 * std::sin(2.0 * kPi * 440.0 * i / kSr));
+  bool changed = false;
   for (size_t i = 0; i < n; i += 256) {
-    if (i == half) e.setParams(400.f, 0.3f, 12000.f, 0.f, 0.f);
+    if (i <= half && half < i + 256) {
+      e.setParams(400.f, 0.3f, 12000.f, 0.f, 0.f);
+      changed = true;
+    }
     e.process(l.data() + i, r.data() + i, g.data() + i, 256);
   }
+  ASSERT_TRUE(changed);
   float maxDiff = 0.f;
   for (size_t i = 1; i < n; ++i) maxDiff = std::max(maxDiff, std::fabs(l[i] - l[i - 1]));
   ASSERT_TRUE(maxDiff < 0.5f);

@@ -1,5 +1,5 @@
 #pragma once
-#include <cmath>
+#include "dsp/biquad.h"
 #include <cstdint>
 #include <vector>
 
@@ -20,20 +20,6 @@ public:
   void reset();
 
 private:
-  struct Biquad {
-    float b0 = 1.f, b1 = 0.f, b2 = 0.f, a1 = 0.f, a2 = 0.f;
-    float z1 = 0.f, z2 = 0.f;
-    float process(float x) {
-      const float y = b0 * x + z1;
-      z1 = b1 * x - a1 * y + z2;
-      z2 = b2 * x - a2 * y;
-      if (std::fabs(z1) < 1e-20f) z1 = 0.f;
-      if (std::fabs(z2) < 1e-20f) z2 = 0.f;
-      return y;
-    }
-    void clear() { z1 = z2 = 0.f; }
-  };
-
   struct Channel {
     std::vector<float> tape;
     Biquad lp, hp;
