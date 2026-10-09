@@ -8,6 +8,7 @@
 #include "dsp/tape_echo.h"
 #include "engine.h"
 #include "state.h"
+#include "fairy_ui/knob_math.h"
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -735,6 +736,98 @@ void test_engine_process_does_not_allocate() {
   ASSERT_TRUE(g_allocs == 0);
 }
 
+// ---- Task 2: display values --------------------------------------------------------
+void test_display_silence_is_floor_and_unity_send() {
+  Engine e;
+  e.prepare(kSr, 512);
+  e.setSettings(echoSettings());
+  const Buf z(4800, 0.f);
+  runEngine(e, z, z, nullptr);
+  const auto d = e.lastDisplay();
+  ASSERT_TRUE(d.voiceDb <= -60.f);
+  ASSERT_APPROX(d.sendGain, 1.0);
+  ASSERT_TRUE(d.echoDb <= -60.f);
+}
+
+void test_display_voice_follows_signal() {
+  Engine e;
+  e.prepare(kSr, 512);
+  e.setSettings(echoSettings());
+  const float amp = (float)std::pow(10.0, -12.0 / 20.0);
+  const Buf s = sine(9600, 1000.0, amp);
+  runEngine(e, s, s, nullptr);
+  ASSERT_TRUE(std::fabs(e.lastDisplay().voiceDb - (-12.f)) <= 1.5f);
+}
+
+void test_display_send_drops_above_threshold() {
+  Engine e;
+  e.prepare(kSr, 512);
+  e.setSettings(echoSettings());
+  const Buf s = sine((size_t)kSr / 4, 1000.0, 0.5f);
+  runEngine(e, s, s, nullptr);
+  ASSERT_TRUE(e.lastDisplay().sendGain < 0.1f);
+}
+
+void test_display_echo_appears_after_phrase() {
+  Engine e;
+  e.prepare(kSr, 256);
+  Settings st = echoSettings();
+  st.feedback = 0.7f;
+  e.setSettings(st);
+  const size_t phrase = (size_t)(kSr * 0.5), n = phrase + (size_t)(kSr * 2.0);
+  Buf in(n, 0.f);
+  const Buf s = sine(phrase, 440.0, 0.3f);
+  std::copy(s.begin(), s.end(), in.begin());
+  Buf out(256);
+  float best = -120.f;
+  for (size_t i = 0; i + 256 <= n; i += 256) {
+    e.process(in.data() + i, in.data() + i, nullptr, nullptr, out.data(), out.data(), 256);
+    // after Hold (200 ms) + Release (300 ms) the gate has reopened onto the repeats
+    if (i >= phrase + (size_t)(kSr * 0.6)) best = std::max(best, e.lastDisplay().echoDb);
+  }
+  ASSERT_TRUE(best > -50.f);
+}
+
+void test_display_ids_do_not_collide() {
+  ASSERT_TRUE(kMeterBase >= (Steinberg::Vst::ParamID)kNumParams);
+  ASSERT_TRUE(kDispVoice == kMeterBase);
+  ASSERT_TRUE(kDispSend == kMeterBase + 1 && kDispEcho == kMeterBase + 2);
+  ASSERT_TRUE(kNumDisplayIDs == kMeterBase + 3);
+}
+
+void test_display_not_in_state() {
+  ASSERT_TRUE((int)kNumParams == 16);
+  ASSERT_TRUE(kStateSize == sizeof(int32_t) + sizeof(double) * 16);
+  double v[kNumParams];
+  loadDefaults(v);
+  std::vector<uint8_t> bytes;
+  serializeState(v, bytes);
+  ASSERT_TRUE(bytes.size() == kStateSize);
+}
+
+void test_display_write_rate_limit() {
+  DisplayRateLimiter lim;
+  lim.prepare(48000.0);
+  int writes = 0;
+  long lastAt = -1000000, at = 0;
+  long minGap = 1000000;
+  for (int b = 0; b < 2000; ++b) {
+    if (lim.advance(64)) {
+      if (writes > 0) minGap = std::min(minGap, at - lastAt);
+      lastAt = at;
+      ++writes;
+    }
+    at += 64;
+  }
+  ASSERT_TRUE(writes >= 1);
+  ASSERT_TRUE(minGap >= (long)(0.016 * 48000.0));
+  // first block writes; zero-sample blocks never do harm
+  DisplayRateLimiter l3;
+  l3.prepare(44100.0);
+  ASSERT_TRUE(l3.advance(64));
+  ASSERT_TRUE(!l3.advance(64));
+}
+
 } // namespace
 
 int main() {
@@ -782,6 +875,13 @@ int main() {
   RUN_TEST(test_engine_silence_stays_silent);
   RUN_TEST(test_engine_reprepare_at_new_rate);
   RUN_TEST(test_engine_process_does_not_allocate);
+  RUN_TEST(test_display_silence_is_floor_and_unity_send);
+  RUN_TEST(test_display_voice_follows_signal);
+  RUN_TEST(test_display_send_drops_above_threshold);
+  RUN_TEST(test_display_echo_appears_after_phrase);
+  RUN_TEST(test_display_ids_do_not_collide);
+  RUN_TEST(test_display_not_in_state);
+  RUN_TEST(test_display_write_rate_limit);
 
   std::fprintf(stdout, "\n%d passed, %d failed.\n", g_passed, g_failed);
   if (g_failed > 0) {

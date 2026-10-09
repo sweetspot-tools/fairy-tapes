@@ -29,6 +29,16 @@ enum ParamID : Steinberg::Vst::ParamID {
   kNumParams
 };
 
+// Read-only hidden display parameters (processor -> editor), outside the persistent table.
+// Normalized: voice and echo = meter norm of the peak in dB over -60..0, send = linear gain 0..1.
+constexpr Steinberg::Vst::ParamID kMeterBase = 1000;
+enum DisplayID : Steinberg::Vst::ParamID {
+  kDispVoice = kMeterBase,
+  kDispSend,
+  kDispEcho,
+  kNumDisplayIDs
+};
+
 // Defaults (normalized)
 constexpr double kDefaultTimeSync = 0.0;
 constexpr double kDefaultTime = 0.5;

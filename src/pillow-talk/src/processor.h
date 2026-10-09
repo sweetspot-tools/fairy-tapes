@@ -30,10 +30,12 @@ public:
   Steinberg::tresult PLUGIN_API getState(Steinberg::IBStream* state) override;
 
 private:
+  void publishDisplay(Steinberg::Vst::ProcessData& data);
   void updateParamsFromChanges(Steinberg::Vst::IParameterChanges* changes);
 
   double param_value_[kNumParams];
   Engine engine_;
+  DisplayRateLimiter display_limiter_;
 };
 
 } // namespace FairyTapes::PillowTalk

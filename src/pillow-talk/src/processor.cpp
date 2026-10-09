@@ -4,8 +4,10 @@
 
 #include "processor.h"
 #include "pluginterfaces/base/ibstream.h"
+#include "fairy_ui/knob_math.h"
 #include "pluginterfaces/vst/ivstparameterchanges.h"
 #include "pluginterfaces/vst/ivstprocesscontext.h"
+#include <algorithm>
 #include <cstdint>
 #include <vector>
 
@@ -37,8 +39,10 @@ Steinberg::tresult PLUGIN_API Processor::initialize(Steinberg::FUnknown* context
 
 Steinberg::tresult PLUGIN_API Processor::setActive(Steinberg::TBool state) {
   // Every (re)activation follows setupProcessing: rebuild all DSP for the current rate/block.
-  if (state)
+  if (state) {
     engine_.prepare(processSetup.sampleRate, processSetup.maxSamplesPerBlock);
+    display_limiter_.prepare(processSetup.sampleRate);
+  }
   return AudioEffect::setActive(state);
 }
 
@@ -79,6 +83,21 @@ void Processor::updateParamsFromChanges(Steinberg::Vst::IParameterChanges* chang
   }
 }
 
+void Processor::publishDisplay(Steinberg::Vst::ProcessData& data) {
+  if (!display_limiter_.advance(data.numSamples) || !data.outputParameterChanges)
+    return;
+  const DisplayValues d = engine_.lastDisplay();
+  const double values[3] = {Ui::meterNormFromDb(d.voiceDb, -60.0, 0.0),
+                            std::clamp((double)d.sendGain, 0.0, 1.0),
+                            Ui::meterNormFromDb(d.echoDb, -60.0, 0.0)};
+  for (int i = 0; i < 3; ++i) {
+    Steinberg::int32 index = 0;
+    auto* queue = data.outputParameterChanges->addParameterData(kDispVoice + i, index);
+    if (queue)
+      queue->addPoint(0, values[i], index);
+  }
+}
+
 Steinberg::tresult PLUGIN_API Processor::process(Steinberg::Vst::ProcessData& data) {
   updateParamsFromChanges(data.inputParameterChanges);
 
@@ -110,6 +129,7 @@ Steinberg::tresult PLUGIN_API Processor::process(Steinberg::Vst::ProcessData& da
   }
 
   engine_.process(inL, inR, sc.L, sc.R, outL, outR, data.numSamples);
+  publishDisplay(data);
   out.silenceFlags = 0;
   return Steinberg::kResultOk;
 }

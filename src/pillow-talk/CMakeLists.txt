@@ -80,7 +80,7 @@ else()
   )
 endif()
 
-target_link_libraries(pillow_talk PRIVATE sdk)
+target_link_libraries(pillow_talk PRIVATE sdk fairy_ui)
 if(APPLE)
   target_link_libraries(pillow_talk PRIVATE "-framework CoreFoundation")
   target_link_options(pillow_talk PRIVATE
@@ -105,6 +105,7 @@ target_include_directories(pillow_talk_tests PRIVATE
   ${VST3_SDK_PATH}/pluginterfaces/base
   ${VST3_SDK_PATH}/pluginterfaces/vst
 )
+target_link_libraries(pillow_talk_tests PRIVATE fairy_ui)
 add_test(NAME pillow_talk_tests COMMAND pillow_talk_tests)
 
 # Module/factory lifecycle smoke test: dlopens the built bundle from dist/ (exit 77 = skipped

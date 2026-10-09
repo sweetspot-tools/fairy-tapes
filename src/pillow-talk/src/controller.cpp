@@ -63,6 +63,11 @@ Steinberg::tresult PLUGIN_API Controller::initialize(Steinberg::FUnknown* contex
   parameters.addParameter(STR16("Release"), STR16("ms"), 0, d[kRelease], automate, kRelease);
   parameters.addParameter(STR16("Sidechain"), nullptr, 1, d[kSidechain], automate, kSidechain);
 
+  const auto display = ParameterInfo::kIsReadOnly | ParameterInfo::kIsHidden;
+  parameters.addParameter(STR16("Display Voice"), nullptr, 0, 0.0, display, kDispVoice);
+  parameters.addParameter(STR16("Display Send"), nullptr, 0, 1.0, display, kDispSend);
+  parameters.addParameter(STR16("Display Echo"), nullptr, 0, 0.0, display, kDispEcho);
+
   return Steinberg::kResultOk;
 }
 

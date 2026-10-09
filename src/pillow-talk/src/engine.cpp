@@ -107,11 +107,15 @@ void Engine::process(const float* inL, const float* inR, const float* scL, const
     if (outR) std::memmove(outR, inR, sizeof(float) * (size_t)numSamples);
     return;
   }
+  voicePeak_ = echoPeak_ = 0.f;
   for (int off = 0; off < numSamples; off += maxBlock_) {
     const int n = std::min(maxBlock_, numSamples - off);
     processChunk(inL + off, inR + off, scL ? scL + off : nullptr, scR ? scR + off : nullptr,
                  outL + off, outR ? outR + off : nullptr, n);
   }
+  const auto toDb = [](float peak) { return 20.f * std::log10(std::max(peak, 1e-6f)); };
+  display_.voiceDb = toDb(voicePeak_);
+  display_.echoDb = toDb(echoPeak_);
 }
 
 void Engine::processChunk(const float* inL, const float* inR, const float* scL, const float* scR,
@@ -126,7 +130,11 @@ void Engine::processChunk(const float* inL, const float* inR, const float* scL, 
   std::memcpy(dR, inR, sizeof(float) * (size_t)n);
   const float* detL = scL ? scL : dL;
   const float* detR = scL ? (scR ? scR : scL) : dR;
-  for (int i = 0; i < n; ++i) g[i] = ducker_.processSample(detL[i], detR[i]);
+  for (int i = 0; i < n; ++i) {
+    g[i] = ducker_.processSample(detL[i], detR[i]);
+    voicePeak_ = std::max({voicePeak_, std::fabs(detL[i]), std::fabs(detR[i])});
+  }
+  display_.sendGain = g[n - 1];
 
   // Separate scratch per channel: TapeEcho must never see L == R. The tape input stays
   // fully open (the phrase is recorded); the ducker gain scales the wet output below.
@@ -138,6 +146,7 @@ void Engine::processChunk(const float* inL, const float* inR, const float* scL, 
     mix_ = mixTarget_ + mixCoef_ * (mix_ - mixTarget_);
     if (std::fabs(mix_ - mixTarget_) < kMixSnap) mix_ = mixTarget_;
     const float m = mix_;
+    echoPeak_ = std::max({echoPeak_, std::fabs(wL[i] * g[i]), std::fabs(wR[i] * g[i])});
     outL[i] = dL[i] * (1.f - m) + (wL[i] * g[i]) * m;
     if (outR) outR[i] = dR[i] * (1.f - m) + (wR[i] * g[i]) * m;
   }
