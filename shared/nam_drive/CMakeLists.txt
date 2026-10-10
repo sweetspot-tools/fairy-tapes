@@ -16,11 +16,13 @@ set(NAM_SOURCES
   ${NAM_ROOT}/NAM/convnet.cpp
   ${NAM_ROOT}/NAM/dsp.cpp
   ${NAM_ROOT}/NAM/get_dsp.cpp
+  ${NAM_ROOT}/NAM/linear.cpp
   ${NAM_ROOT}/NAM/lstm.cpp
+  ${NAM_ROOT}/NAM/nam_file.cpp
   ${NAM_ROOT}/NAM/ring_buffer.cpp
-  ${NAM_ROOT}/NAM/slimmable_wavenet.cpp
+  ${NAM_ROOT}/NAM/sequential.cpp
   ${NAM_ROOT}/NAM/util.cpp
-  ${NAM_ROOT}/NAM/wavenet.cpp
+  ${NAM_ROOT}/NAM/wav.cpp
 )
 
 add_library(nam_drive STATIC src/nam_drive.cpp ${NAM_SOURCES})
