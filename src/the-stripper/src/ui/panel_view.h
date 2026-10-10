@@ -17,7 +17,7 @@ public:
 
 private:
   const FairyTapes::Ui::Skin* skin_;
-  VSTGUI::SharedPointer<VSTGUI::CFontDesc> titleFont_, boxFont_, smallFont_, taglineFont_, bandFont_, scaleFont_;
+  VSTGUI::SharedPointer<VSTGUI::CFontDesc> titleFont_, smallFont_, taglineFont_, bandFont_, scaleFont_;
 };
 
 } // namespace FairyTapes::TheStripper::Ui

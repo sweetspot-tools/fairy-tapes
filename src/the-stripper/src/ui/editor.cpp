@@ -2,6 +2,9 @@
 #include "ui/editor.h"
 
 #include "controller.h"
+#include "ui/model_browser.h"
+#include "ui/model_source.h"
+#include "ui/model_strip.h"
 #include "ui/panel_view.h"
 
 #include "fairy_ui/controls.h"
@@ -151,6 +154,10 @@ void PLUGIN_API Editor::close() {
     frame = nullptr;
   }
   controls_.fill(nullptr);
+  strip_ = nullptr;
+  browser_ = nullptr;
+  browserClosing_ = false;
+  modelState_ = -1;
   bars_.fill(nullptr);
   clips_.fill(nullptr);
   seen_.fill(std::nan(""));
@@ -188,6 +195,10 @@ void Editor::createViews(CViewContainer* parent) {
     controls_[spec.id] = control;
   }
 
+  strip_ = new ModelStrip(toCRect(kModelStrip));
+  strip_->onClick = [this] { openBrowser(); };
+  parent->addView(strip_);
+
   for (std::size_t i = 0; i < bars_.size(); ++i) {
     const MeterRow& row = kMeterRows[i];
     bars_[i] = new MeterBar(toCRect(meterBarRect(row)), row.gainReduction ? MeterKind::GainReduction : MeterKind::Level,
@@ -206,8 +217,40 @@ void Editor::createViews(CViewContainer* parent) {
 }
 
 void Editor::onTimer() {
+  if (browserClosing_) {   // the popup asked to close from inside its own mouse handler: remove it now
+    browserClosing_ = false;
+    if (browser_ && frame) frame->removeView(browser_, true);
+    browser_ = nullptr;
+  }
   syncFromController(false);
   updateMeters();
+  updateModel();
+  if (browser_) browser_->poll();
+}
+
+void Editor::updateModel() {
+  const int state = ctl_->modelState();
+  const std::string name = ctl_->modelName(), error = ctl_->modelError();
+  if (state == modelState_ && name == modelName_ && error == modelError_) return;
+  modelState_ = state;
+  modelName_ = name;
+  modelError_ = error;
+  if (strip_) {
+    using Kind = ModelStrip::Kind;
+    if (state == 1) strip_->setModel(Kind::Loading, {});
+    else if (state == 2 && !name.empty()) strip_->setModel(Kind::Loaded, displayName(name));
+    else if (state == 3) strip_->setModel(Kind::Error, error.empty() ? "Could not load model" : error);
+    else strip_->setModel(Kind::NoModel, {});
+  }
+  refreshModules();
+}
+
+void Editor::openBrowser() {
+  if (!frame || browser_) return;
+  browser_ = new ModelBrowser(CRect(0, 0, kWidth, kHeight), ctl_->modelPath());
+  browser_->onLoad = [this](const std::string& path) { ctl_->requestModelLoad(path); };
+  browser_->onClose = [this] { browserClosing_ = true; };
+  frame->addView(browser_);
 }
 
 // Meter values come from the read-only parameters the processor writes (controller.meterValue()).
@@ -243,6 +286,7 @@ void Editor::syncFromController(bool force) {
   if (changed) refreshModules();
 }
 
+
 // Dimming (module IN off or global bypass) and the Channel-only controls.
 void Editor::refreshModules() {
   ModuleState state;
@@ -259,6 +303,7 @@ void Editor::refreshModules() {
     if (!control) continue;
     bool dim = false;
     if (spec.module != Module::None) dim = spec.isIn ? state.globalBypass : moduleDimmed(spec.module, state);
+    if (spec.id == kDriveAmount && modelState_ != 2) dim = true;   // no model: Drive passes the signal through
     control->setDimmed(dim);
     const bool visible = visibleInMode(spec.id, channelMode_);
     if (control->isVisible() != visible) {

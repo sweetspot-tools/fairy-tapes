@@ -2,6 +2,7 @@
 // (src/the-stripper/docs/mockups/stripper_rack.html).
 #include "ui/panel_view.h"
 
+#include "ui/draw_util.h"
 #include "ui/layout.h"
 
 #include "fairy_ui/skin.h"
@@ -23,55 +24,15 @@ namespace {
 
 constexpr CColor kTint(0x16, 0x16, 0x17);
 constexpr CColor kEdge(0x2c, 0x2c, 0x2f);
-constexpr CColor kWhite(0xf4, 0xf4, 0xf0);
-constexpr CColor kDimWhite(0xc9, 0xc9, 0xc2);
-constexpr CColor kAmber(0xf0, 0xb4, 0x29);
 constexpr char kGrainTile[] = "panel_grain.png";   // optional 256 x 256 tile (tools/gen_panel_grain.py)
 
 constexpr CCoord kPanelRadius = 14;
-constexpr CCoord kBoxRadius = 11;
-constexpr CCoord kTitleGap = 13;   // blank run on each side of a box title
-constexpr CCoord kBezier = 0.5523;
-
-// Rounded box border, open at the title: starts at the right end of the gap and goes round to the left end.
-SharedPointer<CGraphicsPath> boxPath(CDrawContext* ctx, const CRect& r, bool titleOnTop, CCoord gapLeft,
-                                     CCoord gapRight) {
-  auto path = owned(ctx->createGraphicsPath());
-  if (!path) return nullptr;
-  const CCoord x0 = r.left, x1 = r.right, y0 = r.top, y1 = r.bottom, c = kBoxRadius, k = c * (1 - kBezier);
-  // Points of the outline walked clockwise from the top-left corner; the gap is cut out on the title edge.
-  if (titleOnTop) {
-    path->beginSubpath(CPoint(gapRight, y0));
-    path->addLine(CPoint(x1 - c, y0));
-    path->addBezierCurve(CPoint(x1 - k, y0), CPoint(x1, y0 + k), CPoint(x1, y0 + c));
-    path->addLine(CPoint(x1, y1 - c));
-    path->addBezierCurve(CPoint(x1, y1 - k), CPoint(x1 - k, y1), CPoint(x1 - c, y1));
-    path->addLine(CPoint(x0 + c, y1));
-    path->addBezierCurve(CPoint(x0 + k, y1), CPoint(x0, y1 - k), CPoint(x0, y1 - c));
-    path->addLine(CPoint(x0, y0 + c));
-    path->addBezierCurve(CPoint(x0, y0 + k), CPoint(x0 + k, y0), CPoint(x0 + c, y0));
-    path->addLine(CPoint(gapLeft, y0));
-  } else {
-    path->beginSubpath(CPoint(gapLeft, y1));
-    path->addLine(CPoint(x0 + c, y1));
-    path->addBezierCurve(CPoint(x0 + k, y1), CPoint(x0, y1 - k), CPoint(x0, y1 - c));
-    path->addLine(CPoint(x0, y0 + c));
-    path->addBezierCurve(CPoint(x0, y0 + k), CPoint(x0 + k, y0), CPoint(x0 + c, y0));
-    path->addLine(CPoint(x1 - c, y0));
-    path->addBezierCurve(CPoint(x1 - k, y0), CPoint(x1, y0 + k), CPoint(x1, y0 + c));
-    path->addLine(CPoint(x1, y1 - c));
-    path->addBezierCurve(CPoint(x1, y1 - k), CPoint(x1 - k, y1), CPoint(x1 - c, y1));
-    path->addLine(CPoint(gapRight, y1));
-  }
-  return path;
-}
 
 } // namespace
 
 PanelView::PanelView(const CRect& size, const FairyTapes::Ui::Skin* skin)
 : CView(size), skin_(skin) {
   titleFont_ = makeOwned<CFontDesc>("Arial", 38, kBoldFace | kItalicFace);
-  boxFont_ = makeOwned<CFontDesc>("Arial", 14, kBoldFace);
   smallFont_ = makeOwned<CFontDesc>("Arial", 11, kBoldFace);
   taglineFont_ = makeOwned<CFontDesc>("Arial", 13, kBoldFace);
   bandFont_ = makeOwned<CFontDesc>("Arial", 10, kBoldFace);
@@ -119,19 +80,9 @@ void PanelView::draw(CDrawContext* ctx) {
   ctx->drawString(tagline, o + CPoint(966 - ctx->getStringWidth(tagline), 46));
 
   // Section boxes: white border with a gap for the title.
-  ctx->setFrameColor(kWhite);
-  ctx->setLineWidth(2);
-  ctx->setLineStyle(CLineStyle(CLineStyle::kLineCapRound, CLineStyle::kLineJoinRound));
-  ctx->setFont(boxFont_);
-  ctx->setFontColor(kWhite);
   for (const auto& b : kBoxes) {
-    const CRect br(b.rect.x, b.rect.y, b.rect.x + b.rect.w, b.rect.y + b.rect.h);
-    const CRect box(br.left + o.x, br.top + o.y, br.right + o.x, br.bottom + o.y);
-    const CCoord cx = box.getCenter().x, tw = ctx->getStringWidth(b.title), half = tw / 2 + kTitleGap;
-    if (auto path = boxPath(ctx, box, b.titleOnTop, cx - half, cx + half))
-      ctx->drawGraphicsPath(path, CDrawContext::kPathStroked);
-    const CCoord edgeY = b.titleOnTop ? box.top : box.bottom;
-    ctx->drawString(b.title, CPoint(cx - tw / 2, edgeY + 5));
+    const CRect box(o.x + b.rect.x, o.y + b.rect.y, o.x + b.rect.x + b.rect.w, o.y + b.rect.y + b.rect.h);
+    drawTitledBox(ctx, box, b.title, b.titleOnTop);
   }
 
   // EQ band headers

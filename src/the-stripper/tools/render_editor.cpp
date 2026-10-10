@@ -1,8 +1,9 @@
 // Developer tool: draws the editor offscreen into a PNG, no host or window needed.
-//   the_stripper_render out.png [bypass] [bus] [eq-off] [meters]
+//   the_stripper_render out.png [bypass] [bus] [eq-off] [meters] [model=<file>] [model-error=<text>] [browser]
 // Used to check the look of the code-drawn GUI on a machine without a plugin host.
 #include "controller.h"
 #include "ui/editor.h"
+#include "ui/model_browser.h"
 
 #include "pluginterfaces/base/ipluginbase.h"
 #include "vstgui/lib/cbitmap.h"
@@ -11,10 +12,12 @@
 #include "vstgui/lib/platform/platformfactory.h"
 #include "vstgui/lib/vstguiinit.h"
 
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <thread>
 
 // The SDK's VSTGUI init hook asks the module for its factory; there is none in this tool.
 extern "C" Steinberg::IPluginFactory* GetPluginFactory() { return nullptr; }
@@ -23,12 +26,27 @@ void* moduleHandle = nullptr;   // normally set by the platform module entry poi
 namespace FairyTapes::TheStripper::Ui {
 
 struct EditorPreview {
-  static bool render(Controller& ctl, const char* path) {
+  static void setModel(Controller& ctl, int state, const char* name, const char* error) {
+    ctl.modelStatus_.state = state;
+    ctl.modelStatus_.name = name;
+    ctl.modelStatus_.error = error;
+  }
+
+  static bool render(Controller& ctl, const char* path, bool browser) {
     Editor ed(&ctl);
     auto root = VSTGUI::makeOwned<VSTGUI::CViewContainer>(VSTGUI::CRect(0, 0, Editor::kWidth, Editor::kHeight));
     ed.createViews(root);
     ed.syncFromController(true);
     ed.updateMeters();
+    ed.updateModel();
+    if (browser) {
+      auto* popup = new ModelBrowser(VSTGUI::CRect(0, 0, Editor::kWidth, Editor::kHeight), ctl.modelPath());
+      root->addView(popup);
+      for (int i = 0; i < 400; ++i) {   // wait for the folder scan
+        popup->poll();
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+      }
+    }
     auto ctx = VSTGUI::COffscreenContext::create(VSTGUI::CPoint(Editor::kWidth, Editor::kHeight), 1.0);
     if (!ctx) return false;
     ctx->beginDraw();
@@ -51,16 +69,20 @@ int main(int argc, char** argv) {
   }
   VSTGUI::init(nullptr);
   Controller ctl;
+  bool browser = false;
   ctl.initialize(nullptr);
   for (int i = 2; i < argc; ++i) {
     if (!std::strcmp(argv[i], "bypass")) ctl.setParamNormalized(kBypass, 1.0);
     else if (!std::strcmp(argv[i], "bus")) ctl.setParamNormalized(kStripMode, 1.0);
     else if (!std::strcmp(argv[i], "eq-off")) ctl.setParamNormalized(kBypassEQ, 1.0);
+    else if (!std::strcmp(argv[i], "browser")) browser = true;
+    else if (!std::strncmp(argv[i], "model=", 6)) Ui::EditorPreview::setModel(ctl, 2, argv[i] + 6, "");
+    else if (!std::strncmp(argv[i], "model-error=", 12)) Ui::EditorPreview::setModel(ctl, 3, "", argv[i] + 12);
     else if (!std::strcmp(argv[i], "meters")) {
       const double v[][2] = {{kMeterInL, .8}, {kMeterInR, .62}, {kMeterOutL, .7}, {kMeterOutR, .55}, {kMeterGrComp, .4},
                              {kMeterGrLimiter, .2}, {kClipEq, 1.0}, {kClipOutput, 1.0}};
       for (const auto& e : v) ctl.setParamNormalized(static_cast<Steinberg::Vst::ParamID>(e[0]), e[1]);
     }
   }
-  return Ui::EditorPreview::render(ctl, argv[1]) ? 0 : 1;
+  return Ui::EditorPreview::render(ctl, argv[1], browser) ? 0 : 1;
 }

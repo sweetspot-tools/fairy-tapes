@@ -154,6 +154,9 @@ constexpr int kMeterScaleDb[] = {-60, -48, -36, -24, -18, -12, -6, 0};   // one 
 
 inline bool meterDimmed(bool alwaysLit, bool globalBypass) { return globalBypass && !alwaysLit; }
 
+// Paper tape with the model name, bottom right of the Drive box (a click opens the model picker).
+constexpr Rect kModelStrip = {508, 546, 174, 28};
+
 inline const ControlSpec* inButtonOf(Module m) {
   for (const auto& c : kControls)
     if (c.isIn && c.module == m) return &c;

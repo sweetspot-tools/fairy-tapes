@@ -16,6 +16,7 @@
 
 #include <array>
 #include <chrono>
+#include <string>
 
 namespace FairyTapes::Ui {
 class NormalizedControl;
@@ -28,6 +29,9 @@ class Controller;
 }
 
 namespace FairyTapes::TheStripper::Ui {
+
+class ModelBrowser;
+class ModelStrip;
 
 class Editor : public Steinberg::Vst::VSTGUIEditor,
                public Steinberg::IPlugViewContentScaleSupport,
@@ -71,6 +75,8 @@ private:
   // Copies controller values into the controls (all of them when `force`), then refreshes dimming and mode.
   void syncFromController(bool force);
   void updateMeters();
+  void updateModel();      // model strip and Drive dimming from the controller's model status
+  void openBrowser();
   void refreshModules();
   const ControlSpec* specOf(VSTGUI::CControl* control) const;
 
@@ -83,6 +89,11 @@ private:
   std::array<FairyTapes::Ui::MeterBar*, 6> bars_{};   // owned by the frame, in kMeterRows order
   std::array<FairyTapes::Ui::ClipLed*, kClipCount> clips_{};
   std::chrono::steady_clock::time_point lastTick_{};
+  ModelStrip* strip_ = nullptr;            // owned by the frame
+  ModelBrowser* browser_ = nullptr;        // owned by the frame while the popup is open
+  bool browserClosing_ = false;            // set by the popup, handled on the UI timer
+  int modelState_ = -1;                    // last controller status shown (0 idle, 1 loading, 2 loaded, 3 failed)
+  std::string modelName_, modelError_;
   bool globalBypass_ = false;
   bool channelMode_ = true;
   VSTGUI::SharedPointer<VSTGUI::CVSTGUITimer> timer_;
