@@ -43,7 +43,8 @@ Pannello rack orizzontale 1000 × 428 nel linguaggio comune. Materiale e texture
 - **Riga 1:** DEVICE (sei pulsanti su due righe, un LED indica il dispositivo attivo; nessun nastro), LEVEL (meter IN e OUT stereo e LED di clip IN, DRV, OUT), OUTPUT (Gain, Bypass in alto a destra, Mono).
 - **Riga 2:** MORPH (manopola grande) e un solo blocco CHARACTER con Drive, Tone, Noise, Room e Mix.
 - **IN:** un solo pulsante IN per CHARACTER, che attenua tutti e cinque i controlli (Mix compreso). Il Bypass globale attenua tutto e fa passare il segnale identico, bit per bit.
-- Usura, viti, retro con SETTINGS e CREDITS come da design system. La preview ha ancora il retro di The Stripper, non adattato.
+- Usura, viti, retro come da design system. La preview ha ancora il retro di The Stripper, non adattato.
+- **Retro, scheda DEVICES (deciso):** oltre a SETTINGS e CREDITS, il retro ha una scheda **DEVICES** che spiega cosa fa ciascun pulsante di Device e **quali valori impone** (frequenze di HPF e LPF, drive, risonanza del cono, crush, compander, rumore, room e relative note). La scheda è generata dalla stessa tabella dei dispositivi usata dal motore: i valori mostrati non possono divergere da quelli applicati.
 
 ## 5. Stato e preferenze
 
@@ -66,6 +67,7 @@ Pannello rack orizzontale 1000 × 428 nel linguaggio comune. Materiale e texture
 - Parametri a fondo scala e input estremi: niente NaN, segnale limitato.
 - Latenza zero: un impulso nel primo campione esce nel primo campione.
 - Salvataggio e ripristino dello stato: stessi parametri.
+- La scheda DEVICES elenca tutti i dispositivi della tabella con i valori effettivi (nessun dispositivo mancante, nessun valore scritto a mano).
 - Rumore identico a parità di seme.
 
 ## 8. Decisioni aperte
