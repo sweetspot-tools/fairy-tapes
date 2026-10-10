@@ -21,7 +21,7 @@ body{margin:0;padding:16px;background:#e9e8e4;font-family:system-ui,sans-serif;c
 </style></head><body>
 <div class="bar">
   <label><input type="checkbox" id="anim" checked> Animate meters</label>
-  <label>Texture <select id="tex"><option value="fine">Fine grain (The Stripper)</option><option value="wrinkle" selected>Wrinkle</option><option value="none">None</option></select></label>
+  <label>Texture <select id="tex"><option value="fine" selected>Fine grain (all plugins)</option><option value="wrinkle">Wrinkle (reference only)</option><option value="none">None</option></select></label>
   <label><input type="checkbox" id="lit" checked> Light</label>
   <label>Wear <select id="wear"><option value="off">Off</option><option value="light">Light</option><option value="heavy">Heavy</option></select></label>
   <label>Zoom <select id="zoom"><option value="1">100%</option><option value="1.5">150%</option><option value="2">200%</option><option value="2.5">250%</option></select></label>
@@ -218,7 +218,7 @@ litNoise('pitL',0.35,2,2.2,50,1.2,false,11);litNoise('pitD',0.35,2,2.2,50,1.3,tr
 /* texture and wear on the controls sit lightly over the base colour: every texture layer is semi-transparent (TV) */
 var TV=.25;
 function AC(){return A;}
-var ALU={base:'#221d17',hi:'#4a4030',bare:'#98895f',inlay:'#d9d2b8'};   /* aged plastic */
+var ALU={base:'#232427',hi:'#3c3d41',bare:'#c9cbd0',inlay:'#d4d1c5'};
 function speck(g,x,y,rad,R){var kind=R(),col=kind<.5?['#6a5a38','#54472d','#3a2f1d','#7a6a46','#4a3d27'][R()*5|0]:['#8d8d90','#a2a2a6','#6f6f73','#b4b4b8'][R()*4|0];el('circle',{cx:x,cy:y,r:rad,fill:col},g);}
 function sblobG(R,cx,cy,rx,ry,k){var P=[],i;for(i=0;i<k;i++){var an=i/k*Math.PI*2,m=rnd(R,.62,1.18);P.push([cx+Math.cos(an)*rx*m,cy+Math.sin(an)*ry*m]);}
   var d='M'+P[0][0].toFixed(1)+' '+P[0][1].toFixed(1);for(i=0;i<k;i++){var p0=P[(i+k-1)%k],p1=P[i],p2=P[(i+1)%k],p3=P[(i+2)%k];d+=' C'+(p1[0]+(p2[0]-p0[0])/6).toFixed(1)+' '+(p1[1]+(p2[1]-p0[1])/6).toFixed(1)+' '+(p2[0]-(p3[0]-p1[0])/6).toFixed(1)+' '+(p2[1]-(p3[1]-p1[1])/6).toFixed(1)+' '+p2[0].toFixed(1)+' '+p2[1].toFixed(1);}return d+'Z';}
@@ -236,9 +236,8 @@ function aluKnob(g,cx,cy,R,idx){
   var cp=el('clipPath',{id:'ka'+idx},defs);el('circle',{cx:cx,cy:cy,r:R},cp);
   var body=el('g',{'clip-path':'url(#ka'+idx+')',opacity:TV},g);
   dynGroup(body,function(q){if(!A)return;[['grL','#fff',.09*AC()],['grD','#000',.22],['pitL','#fff',.07*AC()],['pitD','#000',.2]].forEach(function(f){el('rect',{x:cx-R,y:cy-R,width:2*R,height:2*R,fill:f[1],filter:'url(#'+f[0]+')',opacity:f[2]},q);});});
-  dynGroup(body,function(q){if(!A)return;var r=mulberry32(seed^0x77);for(var c=0;c<Math.round(7*AC());c++){var ca=rnd(r,0,6.28),cr=rnd(r,.3,.95)*R,x0=cx+Math.cos(ca)*cr,y0=cy+Math.sin(ca)*cr,pts=[x0,y0];for(var j=0;j<4;j++){pts.push(pts[pts.length-2]+rnd(r,-R*.14,R*.14),pts[pts.length-1]+rnd(r,-R*.14,R*.14));}var pl=[];for(var u=0;u<pts.length;u+=2)pl.push(pts[u].toFixed(1)+','+pts[u+1].toFixed(1));el('polyline',{points:pl.join(' '),fill:'none',stroke:'#000',opacity:.55,'stroke-width':Z(.55)},q);}});
-  el('circle',{cx:cx,cy:cy,r:R*.94,fill:'none',stroke:m.bare,'stroke-width':R*.12,opacity:.3,filter:'url(#bs)'},body);   /* yellowing toward the rim */
-  /* (no chamfer: moulded plastic) */
+  var nr=Math.round(36*Math.max(.5,s));for(var q=1;q<=nr;q++){el('circle',{cx:cx,cy:cy,r:R*q/nr*.97,fill:'none',stroke:(q%2?'#fff':'#000'),'stroke-width':Z(.5),opacity:q%2?.06:.12},body);}   /* turning marks */
+  el('circle',{cx:cx,cy:cy,r:R*.93,fill:'none',stroke:'#8f9196','stroke-width':Z(2.2),opacity:.45,transform:'translate(-.5 -.6)'},body);   /* chamfer */
   el('circle',{cx:cx,cy:cy,r:R,fill:'url(#sheen)',opacity:.7},g);
   /* worn edge: chipped bands (crisp outer edge, ragged inner boundary) on the finger side, bare metal showing; tiny dents */
   dynGroup(g,function(q){if(!A)return;var r=mulberry32(seed^0x33),bias=.78+rnd(r,-.25,.25),wg=el('g',{filter:'url(#rgh)'},q),i,k;
@@ -269,7 +268,7 @@ function aluBtnOverlay(face,x,y,w,h,idx){
   dynGroup(body,function(q){if(!A)return;[['grL','#fff',.45*Math.min(1,AC())],['grD','#000',.45],['pitD','#000',.3]].forEach(function(f){el('rect',{x:x,y:y,width:w,height:h,fill:f[1],filter:'url(#'+f[0]+')',opacity:f[2]},q);});});
   el('rect',{x:x+.6,y:y+.6,width:w-1.2,height:h-1.2,rx:1.8,fill:'none',stroke:'#fff','stroke-width':1,opacity:.28,transform:'translate(-.3 -.4)'},face);
   el('rect',{x:x+.5,y:y+.5,width:w-1,height:h-1,rx:1.8,fill:'none',stroke:'#000','stroke-width':1.2,opacity:.4,transform:'translate(.7 .9)'},face);
-  dynGroup(face,function(q){if(!A)return;var r=mulberry32(ctrlSeed(idx)^0x66),wg=el('g',{filter:'url(#rgh)'},q),bare='#d8cfb0',i;
+  dynGroup(face,function(q){if(!A)return;var r=mulberry32(ctrlSeed(idx)^0x66),wg=el('g',{filter:'url(#rgh)'},q),bare='#e0e2e6',i;
     [[x,y],[x+w,y],[x,y+h],[x+w,y+h]].forEach(function(cn,ci){if(r()>(ci===3?.95:ci===2?.65:.45)*Math.min(1,AC()+.2))return;var sx=cn[0]===x?1:-1,sy=cn[1]===y?1:-1,L=rnd(r,w*.1,w*.3);el('path',{d:'M'+(cn[0]+sx*L).toFixed(1)+' '+cn[1].toFixed(1)+' Q'+cn[0].toFixed(1)+' '+cn[1].toFixed(1)+' '+cn[0].toFixed(1)+' '+(cn[1]+sy*L*.8).toFixed(1),fill:'none',stroke:bare,'stroke-width':rnd(r,.9,1.8),'stroke-linecap':'butt'},wg);});
     for(i=0;i<Math.round(4*AC());i++){var ex=x+rnd(r,w*.05,w*.95),L2=rnd(r,w*.06,w*.22);el('line',{x1:ex,y1:y+h-.5,x2:ex+L2,y2:y+h-.5,stroke:bare,'stroke-width':rnd(r,.6,1.1),opacity:.9},wg);}
     for(i=0;i<Math.round(3*AC());i++){var sx0=x+rnd(r,0,w),sy0=y+rnd(r,0,h);el('line',{x1:sx0,y1:sy0,x2:sx0+rnd(r,-w*.4,w*.4),y2:sy0+rnd(r,-h*.3,h*.3),stroke:'#fff',opacity:rnd(r,.12,.3),'stroke-width':.3},q);}

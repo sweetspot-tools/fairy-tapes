@@ -1,6 +1,6 @@
 # Fairy Tapes — Linguaggio grafico comune
 
-Regole visive condivise da tutti i plugin della suite. Ogni plugin sceglie **materiale dei controlli** e **texture del pannello** (sezione "Per plugin"); tutto il resto è comune. Riferimento vivo: `src/the-stripper/docs/mockups/stripper_rack.html` (preview), con `stripper_controls_lab.html` (materiali) e `stripper_model_browser.html` (popup di scelta). Il dettaglio di The Stripper è nella sua spec (§4).
+Regole visive condivise da tutti i plugin della suite. Materiale dei controlli e texture del pannello sono **uguali per tutti i plugin** (sezione "Materiale e texture"); anche tutto il resto è comune. Riferimento vivo: `src/the-stripper/docs/mockups/stripper_rack.html` (preview), con `stripper_controls_lab.html` (materiali) e `stripper_model_browser.html` (popup di scelta). Il dettaglio di The Stripper è nella sua spec (§4).
 
 ## Pannello
 
@@ -37,9 +37,13 @@ Disegnati dal codice. Usura guidata dalla forma: bordo consumato sul lato del di
 
 Una sola voce **BACK →** davanti; il retro (flip 3D) ha le schede **SETTINGS** e **CREDITS** e **← BACK**. Preferenze di aspetto per l'utente (file globale), impostazioni di comportamento nel progetto. Credits con le licenze di tutti i componenti di terze parti e gli avvisi di legge.
 
-## Per plugin
+I pulsanti che **impongono una configurazione o cambiano un modello** (modalità, dispositivi, preset) sono spiegati sul retro, in una scheda dedicata: cosa fanno e **quali valori impongono**. La scheda è generata dalla stessa tabella usata dal codice, così non diverge. Primo caso: la scheda DEVICES di Hotline; The Stripper (VOICE, DRUMS, CLASSIC) va allineato.
 
-- **The Stripper:** controlli in alluminio tornito nero anodizzato; sfondo `#161617` con grana finissima (tessera 256 × 256 da script); materiale e texture fissi (non casuali).
-- **Pillow Talk (delay):** controlli in **plastica invecchiata** (ingiallita verso il bordo, micro-crepe); pannello con la finitura rugosa **"wrinkle"** (scelta dall'utente il 2026-10-10). Nella preview di The Stripper il wrinkle è il filtro `twrink` (opzione "Wrinkle (other plugins)" del menu Texture), con intensità ridotta allo stesso rapporto di visibilità della grana fine (alfa 0,047 contro 0,07 della grana fine); va regolato a occhio sul plugin vero.
-- **Doggystyle:** da decidere.
+## Materiale e texture (uguali per tutti i plugin)
+
+Deciso dall'utente il 2026-10-10, per semplificare: tutti i plugin della suite usano lo stesso materiale e la stessa texture di The Stripper. Sostituisce le scelte per plugin precedenti (wrinkle e plastica invecchiata di Pillow Talk).
+
+- **Controlli (manopole e pulsanti):** alluminio tornito con finitura nera anodizzata, come in The Stripper.
+- **Pannello:** sfondo `#161617` con grana finissima (tessera 256 × 256 da script, `src/the-stripper/tools/gen_panel_grain.py`); materiale e texture fissi (non casuali).
+- Ciò che distingue un plugin dall'altro è il layout, il titolo e i moduli, non il materiale.
 - Il "kit" di interfaccia comune (usura, nastro, viti, retro, controlli) potrà vivere in `shared/` quando si inizia il secondo plugin con editor; fino ad allora ogni modifica comune si riporta nella preview e in questo documento.
