@@ -125,8 +125,8 @@ std::vector<std::string> choiceLabels(Steinberg::Vst::EditController* ctl, Param
 
 Editor::Editor(Steinberg::Vst::EditController* controller)
 : VSTGUIEditor(controller) {
-  Steinberg::ViewRect size(0, 0, kWidth, kHeight);
-  setRect(size);
+  const PixelSize px = scaledEditorSize(scale_);
+  setRect(Steinberg::ViewRect(0, 0, px.width, px.height));
   // Parameter dependents need the global update handler (VST3Editor creates it the same way).
   Steinberg::UpdateHandler::instance();
 }
@@ -146,9 +146,29 @@ Steinberg::tresult PLUGIN_API Editor::isPlatformTypeSupported(Steinberg::FIDStri
 
 Steinberg::tresult PLUGIN_API Editor::checkSizeConstraint(Steinberg::ViewRect* rect) {
   if (!rect) return Steinberg::kInvalidArgument;
-  rect->right = rect->left + kWidth;
-  rect->bottom = rect->top + kHeight;
+  const PixelSize px = scaledEditorSize(scale_);
+  rect->right = rect->left + px.width;
+  rect->bottom = rect->top + px.height;
   return Steinberg::kResultTrue;
+}
+
+Steinberg::tresult PLUGIN_API Editor::setContentScaleFactor(ScaleFactor factor) {
+#if SMTG_OS_MACOS
+  (void)factor;  // Cocoa backing scale handles Retina; VST3Editor keeps 1 there as well
+  return Steinberg::kResultFalse;
+#else
+  const double s = sanitizeContentScale(factor);
+  if (s == scale_) return Steinberg::kResultTrue;
+  scale_ = s;
+  const PixelSize px = scaledEditorSize(s);
+  Steinberg::ViewRect r(rect.left, rect.top, rect.left + px.width, rect.top + px.height);
+  setRect(r);  // getSize reports the scaled size even before the view is attached
+  if (frame) {
+    frame->setZoom(s);  // views keep their logical coordinates
+    if (plugFrame) plugFrame->resizeView(this, &r);  // the host answers with onSize
+  }
+  return Steinberg::kResultTrue;
+#endif
 }
 
 bool PLUGIN_API Editor::open(void* parent, const PlatformType& platformType) {
@@ -169,6 +189,7 @@ bool PLUGIN_API Editor::open(void* parent, const PlatformType& platformType) {
   frame = new CFrame(CRect(0, 0, kWidth, kHeight), this);
   frame->setBackgroundColor(kFrameBackground);
   createViews();
+  if (scale_ != 1.0) frame->setZoom(scale_);  // VSTGUIEditor::attached then reports the scaled size
   if (!frame->open(parent, platformType, config)) {
     close();
     return false;

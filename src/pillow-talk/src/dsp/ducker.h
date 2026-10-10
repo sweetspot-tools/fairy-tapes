@@ -12,6 +12,8 @@ public:
   void prepare(double sampleRate);
   void setParams(float thresholdDb, float depthDb, float holdMs, float releaseMs);
   float processSample(float scL, float scR);
+  // The envelope compared with the threshold (linear), as of the last processSample.
+  float detectorLevel() const { return env_; }
   void reset();
 
 private:

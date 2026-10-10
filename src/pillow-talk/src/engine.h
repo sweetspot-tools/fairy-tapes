@@ -47,9 +47,10 @@ SidechainInput pickSidechain(bool sidechainOn, bool busActive, int numChannels,
                              float* const* buffers);
 
 struct DisplayValues {
-  float voiceDb = -120.f;  // peak of the detector input, dB (floor -120)
+  float voiceDb = -120.f;  // max of the ducker's detector envelope (the level compared with
+                           // the threshold: mono, band-passed, rectified), dB (floor -120)
   float sendGain = 1.f;    // last ducker gain, linear 0..1
-  float echoDb = -120.f;   // peak of the wet signal after ducking, before the mix, dB
+  float echoDb = -120.f;   // peak of the echo at the output (after ducking and Mix), dB
 };
 
 // Allows one display write per kDisplayIntervalMs of audio time; the first block writes.

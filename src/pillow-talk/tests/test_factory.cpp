@@ -9,6 +9,7 @@
 
 #include "pluginterfaces/base/ipluginbase.h"
 #include "pluginterfaces/gui/iplugview.h"
+#include "pluginterfaces/gui/iplugviewcontentscalesupport.h"
 #include "pluginterfaces/vst/ivsteditcontroller.h"
 #include <cstdio>
 #include <cstring>
@@ -22,6 +23,9 @@
 // The pluginterfaces library does not define the VST interface IIDs (vstinitiids.cpp lives in sdk).
 namespace Steinberg::Vst {
 DEF_CLASS_IID(IEditController)
+}
+namespace Steinberg {
+DEF_CLASS_IID(IPlugViewContentScaleSupport)
 }
 
 namespace {
@@ -55,6 +59,23 @@ void exerciseEditorView(Steinberg::FUnknown* obj) {
     CHECK(asked.getWidth() == 480 && asked.getHeight() == 560);
     CHECK(view->canResize() == Steinberg::kResultFalse);
     CHECK(view->isPlatformTypeSupported(Steinberg::kPlatformTypeX11EmbedWindowID) == Steinberg::kResultTrue);
+    if (i == 0) {  // content scale before attach: getSize and the size constraint follow it
+      Steinberg::IPlugViewContentScaleSupport* scale = nullptr;
+      CHECK(view->queryInterface(Steinberg::IPlugViewContentScaleSupport::iid, (void**)&scale) == Steinberg::kResultOk);
+      if (scale) {
+        CHECK(scale->setContentScaleFactor(2.0f) == Steinberg::kResultTrue);
+        Steinberg::ViewRect s{};
+        CHECK(view->getSize(&s) == Steinberg::kResultOk);
+        CHECK(s.getWidth() == 960 && s.getHeight() == 1120);
+        Steinberg::ViewRect c(0, 0, 100, 100);
+        CHECK(view->checkSizeConstraint(&c) == Steinberg::kResultTrue);
+        CHECK(c.getWidth() == 960 && c.getHeight() == 1120);
+        CHECK(scale->setContentScaleFactor(-1.0f) == Steinberg::kResultTrue);  // sanitized to 1
+        CHECK(view->getSize(&s) == Steinberg::kResultOk);
+        CHECK(s.getWidth() == 480 && s.getHeight() == 560);
+        scale->release();
+      }
+    }
     view->release();  // the host owns the returned reference
   }
   CHECK(ctl->terminate() == Steinberg::kResultOk);

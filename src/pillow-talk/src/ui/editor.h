@@ -5,11 +5,13 @@
 #pragma once
 
 #include "params.h"
+#include "ui/editor_size.h"
 
 #include "fairy_ui/skin.h"
 
 #include "public.sdk/source/vst/vstguieditor.h"
 #include "public.sdk/source/vst/vstparameters.h"
+#include "pluginterfaces/gui/iplugviewcontentscalesupport.h"
 #include "vstgui/lib/controls/icontrollistener.h"
 #include "vstgui/lib/cvstguitimer.h"
 
@@ -25,10 +27,13 @@ namespace FairyTapes::PillowTalk::Ui {
 
 class DuckScope;
 
-class Editor : public Steinberg::Vst::VSTGUIEditor, public VSTGUI::IControlListener {
+class Editor : public Steinberg::Vst::VSTGUIEditor,
+               public Steinberg::IPlugViewContentScaleSupport,
+               public VSTGUI::IControlListener {
 public:
-  static constexpr int kWidth = 480;
-  static constexpr int kHeight = 560;
+  // Logical size; the window is this times the host's content scale factor.
+  static constexpr int kWidth = kEditorWidth;
+  static constexpr int kHeight = kEditorHeight;
 
   explicit Editor(Steinberg::Vst::EditController* controller);
   ~Editor() override;
@@ -40,9 +45,18 @@ public:
   void beginEdit(int32_t) override {}
   void endEdit(int32_t) override {}
 
-  // IPlugView: fixed size.
+  // IPlugView: fixed logical size, scaled by the content scale factor.
   Steinberg::tresult PLUGIN_API isPlatformTypeSupported(Steinberg::FIDString type) override;
   Steinberg::tresult PLUGIN_API checkSizeConstraint(Steinberg::ViewRect* rect) override;
+
+  // IPlugViewContentScaleSupport (Windows/Linux hosts; macOS scales natively, factor stays 1).
+  Steinberg::tresult PLUGIN_API setContentScaleFactor(ScaleFactor factor) override;
+
+  OBJ_METHODS(Editor, VSTGUIEditor)
+  DEFINE_INTERFACES
+    DEF_INTERFACE(Steinberg::IPlugViewContentScaleSupport)
+  END_DEFINE_INTERFACES(VSTGUIEditor)
+  REFCOUNT_METHODS(VSTGUIEditor)
 
   // IControlListener
   void valueChanged(VSTGUI::CControl* control) override;
@@ -61,6 +75,7 @@ private:
   void syncFromController(Steinberg::Vst::ParamID id);
   void applySideEffects(Steinberg::Vst::ParamID id, double norm);
 
+  double scale_ = 1.0;  // sanitized content scale factor
   FairyTapes::Ui::Skin skin_;
   std::array<FairyTapes::Ui::NormalizedControl*, kNumParams> controls_{};  // owned by the frame
   DuckScope* scope_ = nullptr;                                              // owned by the frame

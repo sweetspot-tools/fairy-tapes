@@ -44,7 +44,7 @@ I formati delle **filmstrip delle manopole** (numero di fotogrammi, dimensione, 
 
 ## Vincoli visivi
 
-- Dimensione fissa 480 x 560: l'editor non è ridimensionabile (`checkSizeConstraint` forza sempre queste misure).
-- Lo scaling su schermi HiDPI lo fa l'host/VSTGUI; un PNG a 1x può risultare sfocato. Il supporto a file `@2x` non è definito.
+- Dimensione logica fissa 480 x 560: l'utente non può ridimensionare l'editor (`checkSizeConstraint` forza 480 x 560 per il fattore di scala).
+- HiDPI: su Windows e Linux l'host passa il fattore di scala (`setContentScaleFactor`) e l'editor fa lo zoom del frame VSTGUI (finestra 480 x 560 per il fattore); su macOS la scala Retina è del sistema. Il disegno da codice resta nitido, un PNG a 1x viene ingrandito e può risultare sfocato. Il supporto a file `@2x` non è definito.
 - I controlli attenuati (Sync che spegne il ramo non in uso) sono disegnati con il 40 % di opacità sopra l'immagine; restano operativi.
 - Testi e posizioni dei controlli sono fissi nel codice (`src/pillow-talk/src/ui/editor.cpp`, `panel_view.cpp`): un pannello nuovo deve lasciare libere le stesse zone.

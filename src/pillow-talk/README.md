@@ -31,10 +31,10 @@ Output: `dist/Pillow Talk.vst3`. Copy it into your host's VST3 folder.
 
 ## Editor
 
-Finestra fissa 480 x 560 disegnata da codice (VSTGUI4, libreria condivisa `shared/ui`). Dall'alto in basso:
+Finestra fissa 480 x 560 (dimensione logica) disegnata da codice (VSTGUI4, libreria condivisa `shared/ui`). Su Windows e Linux l'host comunica il fattore di scala dello schermo (`IPlugViewContentScaleSupport`) e l'editor ingrandisce il frame: a 200 % la finestra è 960 x 1120. Su macOS la scala Retina è gestita dal sistema. Dall'alto in basso:
 
 - intestazione con titolo e pulsanti **Sidechain** e **Bypass**;
-- **display del ducking** (circa 6 s di storia): area grigia = voce, area ambra = eco, linea verde = livello di mandata (gain applicato al wet), linea tratteggiata = Threshold;
+- **display del ducking** (circa 6 s di storia): area grigia = voce (livello del segnale filtrato che pilota il rilevatore, lo stesso confrontato con Threshold), area ambra = eco in uscita (dopo ducking e Mix), linea verde = livello di mandata (gain applicato al wet), linea tratteggiata = Threshold;
 - sezione **Delay**: Time, Feedback, Tone, Saturation, Wow/Flutter, Mix; sotto, Sync e le note 1/16, 1/8, 1/4, 1/2 per il Time;
 - sezione **Auto Duck**: Threshold, Depth, Hold, Release; sotto, Sync e le note per l'Hold.
 
@@ -54,7 +54,7 @@ Grafiche opzionali: [docs/UI_ASSETS.md](docs/UI_ASSETS.md).
 - [ ] Muovere ogni controllo e controllare che l'automazione lo registri e che l'undo lo annulli.
 - [ ] Sync On/Off mentre si automatizzano Time e Hold: la manopola ms e le note si attenuano di conseguenza.
 - [ ] Display con voce reale e con sidechain: voce, eco e mandata si muovono, la linea tratteggiata segue Threshold.
-- [ ] Finestra su schermo HiDPI: nitida, controlli allineati.
+- [ ] Finestra su schermo HiDPI (Windows/Linux a 150-200 %): dimensione = 480 x 560 per il fattore di scala, nitida, controlli allineati; spostandola su uno schermo con scala diversa si ridimensiona.
 - [ ] I pulsanti nota attenuati si possono cliccare (è voluto).
 - [ ] Linux: embedding solo X11; con Wayland nativo l'editor viene rifiutato e Reaper deve usare X11/XWayland.
 

@@ -132,7 +132,8 @@ void Engine::processChunk(const float* inL, const float* inR, const float* scL, 
   const float* detR = scL ? (scR ? scR : scL) : dR;
   for (int i = 0; i < n; ++i) {
     g[i] = ducker_.processSample(detL[i], detR[i]);
-    voicePeak_ = std::max({voicePeak_, std::fabs(detL[i]), std::fabs(detR[i])});
+    // Display the level the ducker compares with the threshold (filtered mono envelope).
+    voicePeak_ = std::max(voicePeak_, ducker_.detectorLevel());
   }
   display_.sendGain = g[n - 1];
 
@@ -146,7 +147,8 @@ void Engine::processChunk(const float* inL, const float* inR, const float* scL, 
     mix_ = mixTarget_ + mixCoef_ * (mix_ - mixTarget_);
     if (std::fabs(mix_ - mixTarget_) < kMixSnap) mix_ = mixTarget_;
     const float m = mix_;
-    echoPeak_ = std::max({echoPeak_, std::fabs(wL[i] * g[i]), std::fabs(wR[i] * g[i])});
+    // Echo as it reaches the output: after ducking and the (smoothed) mix, so Bypass and Mix 0 read silent.
+    echoPeak_ = std::max({echoPeak_, std::fabs(wL[i] * g[i] * m), std::fabs(wR[i] * g[i] * m)});
     outL[i] = dL[i] * (1.f - m) + (wL[i] * g[i]) * m;
     if (outR) outR[i] = dR[i] * (1.f - m) + (wR[i] * g[i]) * m;
   }

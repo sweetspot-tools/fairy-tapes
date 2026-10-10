@@ -29,9 +29,9 @@ Tre parametri di sola lettura e nascosti (`kIsReadOnly | kIsHidden`), fuori dall
 
 | ID | Simbolo | Valore normalizzato | Default |
 |----|---------|---------------------|---------|
-| 1000 | `kDispVoice` | picco della voce, −60 … 0 dB | 0 |
+| 1000 | `kDispVoice` | livello del rilevatore (inviluppo del segnale filtrato che il ducker confronta con Threshold: mono, passa-banda 120 Hz–5 kHz, raddrizzato), −60 … 0 dB | 0 |
 | 1001 | `kDispSend` | gain di ducking applicato al wet, lineare 0 … 1 | 1 |
-| 1002 | `kDispEcho` | picco del ritorno wet, −60 … 0 dB | 0 |
+| 1002 | `kDispEcho` | picco dell'eco in uscita (dopo ducking e Mix; con Bypass o Mix 0 è al minimo), −60 … 0 dB | 0 |
 
 ## Editor
 
@@ -48,7 +48,7 @@ Tre parametri di sola lettura e nascosti (`kIsReadOnly | kIsHidden`), fuori dall
 - [ ] Muovere ogni controllo: automazione e undo corretti.
 - [ ] Sync On/Off durante l'automazione di Time e Hold.
 - [ ] Display con voce reale e con sidechain.
-- [ ] Finestra HiDPI.
+- [ ] Finestra HiDPI (Windows/Linux a 150-200 %): l'host passa il fattore di scala, la finestra diventa 480 x 560 per il fattore e i controlli restano allineati.
 - [ ] Pulsanti nota attenuati cliccabili (voluto).
 - [ ] Linux: X11/XWayland in Reaper.
 

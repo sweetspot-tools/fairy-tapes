@@ -9,10 +9,12 @@
 #include "engine.h"
 #include "state.h"
 #include "fairy_ui/knob_math.h"
+#include "ui/editor_size.h"
 #include "ui/history.h"
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <limits>
 #include <cstdio>
 #include <cstdint>
 #include <cstdlib>
@@ -757,7 +759,54 @@ void test_display_voice_follows_signal() {
   const float amp = (float)std::pow(10.0, -12.0 / 20.0);
   const Buf s = sine(9600, 1000.0, amp);
   runEngine(e, s, s, nullptr);
-  ASSERT_TRUE(std::fabs(e.lastDisplay().voiceDb - (-12.f)) <= 1.5f);
+  // Voice shows the detector envelope (rectified, smoothed): a sine reads its mean
+  // rectified level, 20*log10(2/pi) = -3.9 dB below its peak.
+  const float expected = -12.f + 20.f * std::log10(2.f / (float)kPi);
+  ASSERT_TRUE(std::fabs(e.lastDisplay().voiceDb - expected) <= 1.5f);
+}
+
+void test_display_voice_ignores_out_of_phase() {
+  Engine e;
+  e.prepare(kSr, 512);
+  e.setSettings(echoSettings());
+  const float amp = (float)std::pow(10.0, -12.0 / 20.0);
+  const Buf l = sine(9600, 1000.0, amp);
+  Buf r(l.size());
+  for (size_t i = 0; i < l.size(); ++i) r[i] = -l[i];
+  runEngine(e, l, r, nullptr);
+  ASSERT_TRUE(e.lastDisplay().voiceDb <= -100.f);  // the mono detector sum cancels
+}
+
+void test_display_voice_bass_reads_lower() {
+  const float amp = (float)std::pow(10.0, -12.0 / 20.0);
+  auto voiceOf = [&](double freq) {
+    Engine e;
+    e.prepare(kSr, 512);
+    e.setSettings(echoSettings());
+    const Buf s = sine(9600, freq, amp);
+    runEngine(e, s, s, nullptr);
+    return e.lastDisplay().voiceDb;
+  };
+  ASSERT_TRUE(voiceOf(40.0) <= voiceOf(1000.0) - 20.f);  // 120 Hz high-pass in the detector
+}
+
+void test_display_voice_consistent_with_threshold() {
+  auto run = [](double peakDb) {
+    Engine e;
+    e.prepare(kSr, 512);
+    Settings st = echoSettings();
+    st.thresholdDb = -35.f;
+    e.setSettings(st);
+    const Buf s = sine(9600, 1000.0, (float)std::pow(10.0, peakDb / 20.0));
+    runEngine(e, s, s, nullptr);
+    return e.lastDisplay();
+  };
+  const auto above = run(-29.0);  // displays about -33 dB
+  ASSERT_TRUE(above.voiceDb > -35.f);
+  ASSERT_TRUE(above.sendGain < 0.5f);
+  const auto below = run(-34.0);  // displays about -38 dB: louder peak than the threshold, yet no ducking
+  ASSERT_TRUE(below.voiceDb < -35.f);
+  ASSERT_TRUE(below.sendGain > 0.99f);
 }
 
 void test_display_send_drops_above_threshold() {
@@ -787,6 +836,68 @@ void test_display_echo_appears_after_phrase() {
     if (i >= phrase + (size_t)(kSr * 0.6)) best = std::max(best, e.lastDisplay().echoDb);
   }
   ASSERT_TRUE(best > -50.f);
+}
+
+// Max echoDb over a phrase and its repeats (gate reopened), for the given settings.
+float echoAfterPhrase(Settings st) {
+  Engine e;
+  e.prepare(kSr, 256);
+  st.feedback = 0.7f;
+  e.setSettings(st);
+  const size_t phrase = (size_t)(kSr * 0.5), n = phrase + (size_t)(kSr * 2.0);
+  Buf in(n, 0.f);
+  const Buf s = sine(phrase, 440.0, 0.5f);
+  std::copy(s.begin(), s.end(), in.begin());
+  Buf out(256);
+  float best = -120.f;
+  for (size_t i = 0; i + 256 <= n; i += 256) {
+    e.process(in.data() + i, in.data() + i, nullptr, nullptr, out.data(), out.data(), 256);
+    if (i >= phrase + (size_t)(kSr * 0.6)) best = std::max(best, e.lastDisplay().echoDb);
+  }
+  return best;
+}
+
+void test_display_echo_silent_with_mix_zero() {
+  ASSERT_TRUE(echoAfterPhrase(echoSettings(0.f)) <= -100.f);
+}
+
+void test_display_echo_silent_with_bypass() {
+  Settings st = echoSettings(1.f);
+  st.bypass = true;
+  ASSERT_TRUE(echoAfterPhrase(st) <= -100.f);
+}
+
+void test_display_echo_follows_mix() {
+  const float full = echoAfterPhrase(echoSettings(1.f));
+  const float half = echoAfterPhrase(echoSettings(0.5f));
+  ASSERT_TRUE(full > -50.f);
+  ASSERT_TRUE(std::fabs((full - half) - 6.02f) <= 0.5f);
+}
+
+// ---- Editor size (content scale) ------------------------------------------------------
+void test_editor_size_scales_and_rounds() {
+  using namespace FairyTapes::PillowTalk::Ui;
+  auto is = [](PixelSize p, int w, int h) { return p.width == w && p.height == h; };
+  ASSERT_TRUE(is(scaledEditorSize(1.0), 480, 560));
+  ASSERT_TRUE(is(scaledEditorSize(2.0), 960, 1120));
+  ASSERT_TRUE(is(scaledEditorSize(1.5), 720, 840));
+  ASSERT_TRUE(is(scaledEditorSize(1.25), 600, 700));
+  ASSERT_TRUE(is(scaledEditorSize(1.75), 840, 980));
+  ASSERT_TRUE(is(scaledEditorSize(1.1), 528, 616));
+  ASSERT_TRUE(is(scaledEditorSize(1.0 / 3.0), 160, 187));  // 186.67 rounds up
+}
+
+void test_editor_size_sanitizes_factor() {
+  using namespace FairyTapes::PillowTalk::Ui;
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+  const double inf = std::numeric_limits<double>::infinity();
+  ASSERT_APPROX(sanitizeContentScale(0.0), 1.0);
+  ASSERT_APPROX(sanitizeContentScale(-2.0), 1.0);
+  ASSERT_APPROX(sanitizeContentScale(nan), 1.0);
+  ASSERT_APPROX(sanitizeContentScale(inf), 1.0);
+  ASSERT_APPROX(sanitizeContentScale(1e9), kMaxContentScale);
+  ASSERT_APPROX(sanitizeContentScale(2.0), 2.0);
+  ASSERT_TRUE(scaledEditorSize(nan).width == 480 && scaledEditorSize(-1.0).height == 560);
 }
 
 void test_display_ids_do_not_collide() {
@@ -1000,6 +1111,14 @@ int main() {
   RUN_TEST(test_engine_process_does_not_allocate);
   RUN_TEST(test_display_silence_is_floor_and_unity_send);
   RUN_TEST(test_display_voice_follows_signal);
+  RUN_TEST(test_display_voice_ignores_out_of_phase);
+  RUN_TEST(test_display_voice_bass_reads_lower);
+  RUN_TEST(test_display_voice_consistent_with_threshold);
+  RUN_TEST(test_display_echo_silent_with_mix_zero);
+  RUN_TEST(test_display_echo_silent_with_bypass);
+  RUN_TEST(test_display_echo_follows_mix);
+  RUN_TEST(test_editor_size_scales_and_rounds);
+  RUN_TEST(test_editor_size_sanitizes_factor);
   RUN_TEST(test_display_send_drops_above_threshold);
   RUN_TEST(test_display_echo_appears_after_phrase);
   RUN_TEST(test_display_ids_do_not_collide);
