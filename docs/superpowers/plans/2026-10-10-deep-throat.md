@@ -1,18 +1,18 @@
-# Vocal Chain Implementation Plan
+# Deep Throat Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Costruire Vocal Chain, un plugin VST3 channel strip per voci (Rider → Breath control → EQ correttivo → De-esser → Compressore stile Distressor → Tone) con tre modalità: Speak, Sing, Puke.
+**Goal:** Costruire Deep Throat, un plugin VST3 channel strip per voci (Rider → Breath control → EQ correttivo → De-esser → Compressore stile Distressor → Tone) con tre modalità: Speak, Sing, Puke.
 
-**Architecture:** Motore puro senza SDK in `src/vocal-chain/src/` (`engine.{h,cpp}` più blocchi in `dsp/`), come Pillow Talk. Un solo ritardo di look-ahead (80 ms) condiviso da Rider e Breath control, latenza riportata all'host. Il rilevatore di respiri sta dietro l'interfaccia `BreathDetector`: due implementazioni (spettrale per Speak/Sing, a livello per Puke), sostituibili in futuro da una rete RTNeural.
+**Architecture:** Motore puro senza SDK in `src/deep-throat/src/` (`engine.{h,cpp}` più blocchi in `dsp/`), come Pillow Talk. Un solo ritardo di look-ahead (80 ms) condiviso da Rider e Breath control, latenza riportata all'host. Il rilevatore di respiri sta dietro l'interfaccia `BreathDetector`: due implementazioni (spettrale per Speak/Sing, a livello per Puke), sostituibili in futuro da una rete RTNeural.
 
 **Tech Stack:** C++20, VST3 SDK, CMake/CTest, FFT radix-2 nostra (nessuna nuova dipendenza). Nessuna GUI custom in questo piano (lista parametri dell'host).
 
-**Spec:** `docs/superpowers/specs/2026-10-10-vocal-chain-design.md`
+**Spec:** `docs/superpowers/specs/2026-10-10-deep-throat-design.md`
 
 ## Global Constraints
 
-- Namespace `FairyTapes::VocalChain` (DSP in `...::DSP`). Bundle `Vocal Chain.vst3` in `dist/`; ingresso e uscita stereo.
+- Namespace `FairyTapes::DeepThroat` (DSP in `...::DSP`). Bundle `Deep Throat.vst3` in `dist/`; ingresso e uscita stereo.
 - Catena fissa: Rider → Breath control → EQ correttivo → De-esser → Compressore → Tone, poi Output.
 - Modalità `Speak / Sing / Puke` (parametro `Mode`, 3 scelte).
 - Il Breath control non chiude mai del tutto: riduzione massima 12 dB.
@@ -23,7 +23,7 @@
 - Test: harness `RUN_TEST`/`ASSERT_TRUE` come `src/pillow-talk/tests/test_pillow_talk.cpp`; ogni comportamento nasce con un test che prima fallisce.
 - `kStateVersion = 1`: versione `int32` little endian poi `kNumParams` `double` normalizzati.
 - Testo visibile in inglese; identificatori e commenti in inglese; licenza e CIDs unici (non riusare quelli degli altri plugin).
-- Build fuori dal repo, es. `/tmp/vc-build`: `cmake -S . -B /tmp/vc-build -DCMAKE_BUILD_TYPE=Release -DGPU_NAM_DISABLE_CUDA=ON`, poi `cmake --build /tmp/vc-build --target vocal_chain_tests -j2`; test con `ctest --test-dir /tmp/vc-build -R vocal_chain --output-on-failure`.
+- Build fuori dal repo, es. `/tmp/vc-build`: `cmake -S . -B /tmp/vc-build -DCMAKE_BUILD_TYPE=Release -DGPU_NAM_DISABLE_CUDA=ON`, poi `cmake --build /tmp/vc-build --target deep_throat_tests -j2`; test con `ctest --test-dir /tmp/vc-build -R deep_throat --output-on-failure`.
 
 ## Review Focus
 
@@ -38,25 +38,25 @@
 ### Task 1: Scaffold del plugin, parametri e stato
 
 **Files:**
-- Create: `src/vocal-chain/CMakeLists.txt`, `src/vocal-chain/src/{cids.h,params.h,state.h,plug.cpp,processor.{h,cpp},controller.{h,cpp},Info.plist}`, `src/vocal-chain/tests/{test_vocal_chain.cpp,test_factory.cpp}`
-- Modify: `CMakeLists.txt` (radice): `add_subdirectory(src/vocal-chain)` dopo Pillow Talk.
+- Create: `src/deep-throat/CMakeLists.txt`, `src/deep-throat/src/{cids.h,params.h,state.h,plug.cpp,processor.{h,cpp},controller.{h,cpp},Info.plist}`, `src/deep-throat/tests/{test_deep_throat.cpp,test_factory.cpp}`
+- Modify: `CMakeLists.txt` (radice): `add_subdirectory(src/deep-throat)` dopo Pillow Talk.
 
 **Interfaces:**
 - Produces: `enum ParamID { kBypass=0, kMode, kInput, kRiderTarget, kRiderRange, kBreathAmount, kDeEssAmount, kDeEssListen, kCompAmount, kTone, kOutput, kNumParams }`; `enum class Mode { Speak, Sing, Puke }`; `Mode modeFromNorm(double n)` (3 gradini come una `StringListParameter`); `double inputDbFromNorm(double)` e `outputDbFromNorm(double)` (-12..+12 dB); `double riderTargetDbFromNorm(double)` (-30..-10 dBFS); default normalizzati `kDefault*` (Mode = Speak, Rider Target = 0.5, Rider Range = 0.5, Breath Amount = 0.5, DeEss Amount = 0.5, Comp Amount = 0.5, Tone = 0.5, Input/Output = 0.5, Listen = 0); `serializeState(const double*, std::vector<uint8_t>&)`, `bool deserializeState(const uint8_t*, size_t, double*)` (false su versione ignota, dati corti o valori non finiti; valori ripristinati clampati a [0,1]).
 
-- [ ] **Step 1: Scrivere i test** in `test_vocal_chain.cpp` (harness copiato da Pillow Talk): `test_param_enum_count` (`kNumParams == 11`), `test_mode_from_norm_steps` (0.0→Speak, 0.5→Sing, 1.0→Puke), `test_io_gain_ranges` (norma 0→-12 dB, 1→+12 dB), `test_state_roundtrip`, `test_state_rejects_bad_version_and_nan`.
-- [ ] **Step 2: Eseguire e vedere fallire** (la build non esiste ancora): `cmake --build /tmp/vc-build --target vocal_chain_tests -j2` → errore di target.
-- [ ] **Step 3: Implementare** `params.h` e `state.h` sul modello di `src/pillow-talk/src/{params,state}.h`. CMake sul modello di `src/pillow-talk/CMakeLists.txt` (target `vocal_chain`, `vocal_chain_tests`, `vocal_chain_factory_test`; senza `fairy_ui`). `plug.cpp`, `processor`, `controller` sul modello di Pillow Talk: processor stereo che copia ingresso su uscita applicando Input/Output, controller che registra i parametri senza `createView`, due FUID nuovi in `cids.h` generati a caso.
-- [ ] **Step 4: Eseguire i test** → PASS; poi `cmake --build /tmp/vc-build --target vocal_chain -j2` e `ctest -R vocal_chain_factory_test` (PASS, o SKIP 77 se il bundle manca).
-- [ ] **Step 5: Commit** (solo i file del plugin, per nome): `feat(vocal-chain): plugin scaffold, parameters and state`.
+- [ ] **Step 1: Scrivere i test** in `test_deep_throat.cpp` (harness copiato da Pillow Talk): `test_param_enum_count` (`kNumParams == 11`), `test_mode_from_norm_steps` (0.0→Speak, 0.5→Sing, 1.0→Puke), `test_io_gain_ranges` (norma 0→-12 dB, 1→+12 dB), `test_state_roundtrip`, `test_state_rejects_bad_version_and_nan`.
+- [ ] **Step 2: Eseguire e vedere fallire** (la build non esiste ancora): `cmake --build /tmp/vc-build --target deep_throat_tests -j2` → errore di target.
+- [ ] **Step 3: Implementare** `params.h` e `state.h` sul modello di `src/pillow-talk/src/{params,state}.h`. CMake sul modello di `src/pillow-talk/CMakeLists.txt` (target `deep_throat`, `deep_throat_tests`, `deep_throat_factory_test`; senza `fairy_ui`). `plug.cpp`, `processor`, `controller` sul modello di Pillow Talk: processor stereo che copia ingresso su uscita applicando Input/Output, controller che registra i parametri senza `createView`, due FUID nuovi in `cids.h` generati a caso.
+- [ ] **Step 4: Eseguire i test** → PASS; poi `cmake --build /tmp/vc-build --target deep_throat -j2` e `ctest -R deep_throat_factory_test` (PASS, o SKIP 77 se il bundle manca).
+- [ ] **Step 5: Commit** (solo i file del plugin, per nome): `feat(deep-throat): plugin scaffold, parameters and state`.
 
 ---
 
 ### Task 2: Rider
 
 **Files:**
-- Create: `src/vocal-chain/src/dsp/rider.{h,cpp}`
-- Modify: `tests/test_vocal_chain.cpp`, `CMakeLists.txt` (aggiungere il sorgente a plugin e test)
+- Create: `src/deep-throat/src/dsp/rider.{h,cpp}`
+- Modify: `tests/test_deep_throat.cpp`, `CMakeLists.txt` (aggiungere il sorgente a plugin e test)
 
 **Interfaces:**
 - Produces: `class DSP::Rider { void prepare(double sampleRate); void reset(); void setTargetDb(float); void setMaxRangeDb(float); void setSlewDbPerSec(float); float processFrame(float levelDb, bool freeze); }` — `levelDb` è il livello RMS (finestra 200 ms) calcolato dal chiamante; il ritorno è il guadagno lineare da applicare. `processFrame` è chiamato a ogni campione.
@@ -66,15 +66,15 @@
 - [ ] **Step 2: Eseguire e vedere fallire** (simboli non definiti).
 - [ ] **Step 3: Implementare** `Rider` e `LevelMeter`: errore dB = target − livello, clampato a ±range, inseguito con limite di pendenza in dB/s; con livello sotto -60 dB l'errore è ignorato (come freeze).
 - [ ] **Step 4: Eseguire i test** → PASS.
-- [ ] **Step 5: Commit:** `feat(vocal-chain): level rider`.
+- [ ] **Step 5: Commit:** `feat(deep-throat): level rider`.
 
 ---
 
 ### Task 3: BreathDetector spettrale (Speak/Sing)
 
 **Files:**
-- Create: `src/vocal-chain/src/dsp/fft.h`, `src/vocal-chain/src/dsp/breath_detector.h`, `src/vocal-chain/src/dsp/spectral_breath_detector.{h,cpp}`
-- Modify: `tests/test_vocal_chain.cpp`, `CMakeLists.txt`
+- Create: `src/deep-throat/src/dsp/fft.h`, `src/deep-throat/src/dsp/breath_detector.h`, `src/deep-throat/src/dsp/spectral_breath_detector.{h,cpp}`
+- Modify: `tests/test_deep_throat.cpp`, `CMakeLists.txt`
 
 **Interfaces:**
 - Produces: `class DSP::BreathDetector { virtual ~BreathDetector(); virtual void prepare(double sampleRate) = 0; virtual void reset() = 0; virtual float process(float monoSample) = 0; /* probabilità di respiro in [0,1], aggiornata a ogni campione */ virtual int latencySamples() const = 0; }`.
@@ -85,15 +85,15 @@
 - [ ] **Step 2: Eseguire e vedere fallire.**
 - [ ] **Step 3: Implementare** FFT radix-2 in-place con finestra di Hann e `SpectralBreathDetector` come descritto; `latencySamples()` = un frame.
 - [ ] **Step 4: Eseguire i test** → PASS.
-- [ ] **Step 5: Commit:** `feat(vocal-chain): spectral breath detector`.
+- [ ] **Step 5: Commit:** `feat(deep-throat): spectral breath detector`.
 
 ---
 
 ### Task 4: BreathDetector a livello (Puke)
 
 **Files:**
-- Create: `src/vocal-chain/src/dsp/level_breath_detector.{h,cpp}`
-- Modify: `tests/test_vocal_chain.cpp`, `CMakeLists.txt`
+- Create: `src/deep-throat/src/dsp/level_breath_detector.{h,cpp}`
+- Modify: `tests/test_deep_throat.cpp`, `CMakeLists.txt`
 
 **Interfaces:**
 - Consumes: `DSP::BreathDetector` (Task 3), `DSP::LevelMeter` (Task 2).
@@ -103,15 +103,15 @@
 - [ ] **Step 2: Eseguire e vedere fallire.**
 - [ ] **Step 3: Implementare** `LevelBreathDetector`.
 - [ ] **Step 4: Eseguire i test** → PASS.
-- [ ] **Step 5: Commit:** `feat(vocal-chain): level-based breath detector for extreme vocals`.
+- [ ] **Step 5: Commit:** `feat(deep-throat): level-based breath detector for extreme vocals`.
 
 ---
 
 ### Task 5: BreathReducer
 
 **Files:**
-- Create: `src/vocal-chain/src/dsp/breath_reducer.{h,cpp}`
-- Modify: `tests/test_vocal_chain.cpp`, `CMakeLists.txt`
+- Create: `src/deep-throat/src/dsp/breath_reducer.{h,cpp}`
+- Modify: `tests/test_deep_throat.cpp`, `CMakeLists.txt`
 
 **Interfaces:**
 - Produces: `class DSP::BreathReducer { void prepare(double sampleRate); void reset(); void setAmount(float amount01); /* 0..1 → 0..12 dB di riduzione massima */ float process(float breathProb); /* guadagno lineare, attacco 5 ms, rilascio 30 ms */ }`.
@@ -120,15 +120,15 @@
 - [ ] **Step 2: Eseguire e vedere fallire.**
 - [ ] **Step 3: Implementare** `BreathReducer`: guadagno target in dB = `-prob · amount · 12`, inseguito con smoothing a due costanti.
 - [ ] **Step 4: Eseguire i test** → PASS.
-- [ ] **Step 5: Commit:** `feat(vocal-chain): breath reducer`.
+- [ ] **Step 5: Commit:** `feat(deep-throat): breath reducer`.
 
 ---
 
 ### Task 6: EQ correttivo
 
 **Files:**
-- Create: `src/vocal-chain/src/dsp/biquad.h`, `src/vocal-chain/src/dsp/corrective_eq.{h,cpp}`
-- Modify: `tests/test_vocal_chain.cpp`, `CMakeLists.txt`
+- Create: `src/deep-throat/src/dsp/biquad.h`, `src/deep-throat/src/dsp/corrective_eq.{h,cpp}`
+- Modify: `tests/test_deep_throat.cpp`, `CMakeLists.txt`
 
 **Interfaces:**
 - Produces: `struct DSP::Biquad` con `setHighPass(double sr, double hz, double q)`, `setPeaking(double sr, double hz, double q, double gainDb)`, `setHighShelf(double sr, double hz, double gainDb)`, `float process(float)`, `reset()`.
@@ -138,15 +138,15 @@
 - [ ] **Step 2: Eseguire e vedere fallire.**
 - [ ] **Step 3: Implementare** `Biquad` (RBJ cookbook) e `CorrectiveEq`.
 - [ ] **Step 4: Eseguire i test** → PASS.
-- [ ] **Step 5: Commit:** `feat(vocal-chain): corrective eq with dynamic resonance notch`.
+- [ ] **Step 5: Commit:** `feat(deep-throat): corrective eq with dynamic resonance notch`.
 
 ---
 
 ### Task 7: De-esser
 
 **Files:**
-- Create: `src/vocal-chain/src/dsp/deesser.{h,cpp}`
-- Modify: `tests/test_vocal_chain.cpp`, `CMakeLists.txt`
+- Create: `src/deep-throat/src/dsp/deesser.{h,cpp}`
+- Modify: `tests/test_deep_throat.cpp`, `CMakeLists.txt`
 
 **Interfaces:**
 - Consumes: `DSP::Biquad` (Task 6).
@@ -156,15 +156,15 @@
 - [ ] **Step 2: Eseguire e vedere fallire.**
 - [ ] **Step 3: Implementare** `DeEsser`.
 - [ ] **Step 4: Eseguire i test** → PASS.
-- [ ] **Step 5: Commit:** `feat(vocal-chain): split-band de-esser with listen mode`.
+- [ ] **Step 5: Commit:** `feat(deep-throat): split-band de-esser with listen mode`.
 
 ---
 
 ### Task 8: Compressore stile Distressor
 
 **Files:**
-- Create: `src/vocal-chain/src/dsp/distressor_comp.{h,cpp}`
-- Modify: `tests/test_vocal_chain.cpp`, `CMakeLists.txt`
+- Create: `src/deep-throat/src/dsp/distressor_comp.{h,cpp}`
+- Modify: `tests/test_deep_throat.cpp`, `CMakeLists.txt`
 
 **Interfaces:**
 - Produces: `class DSP::DistressorComp { void prepare(double sampleRate, int channels); void reset(); void setMode(Mode); void setAmount(float amount01); void processFrame(float* samples); float lastGainReductionDb() const; }`. Feedforward, rilevatore di picco linkato stereo, ginocchio morbido di 6 dB, soglia = `-6 - 24 · Amount` dBFS, rapporto per modalità: Speak 2:1, Sing 3:1, Puke 8:1. Attacco 1 ms (Puke 0.5 ms). Rilascio programma-dipendente a due stadi: veloce 40 ms e lento 400 ms, il lento prevale con segnale sostenuto (rapporto picco/RMS basso). Distorsione: Speak nessuna, Sing Dist 2 (armoniche pari: waveshaper asimmetrico), Puke Dist 3 (dispari: `tanh`), con drive legato ad Amount. Compensazione del guadagno: un seno a -18 dBFS RMS esce entro ±3 dB dall'ingresso per qualunque Amount.
@@ -173,15 +173,15 @@
 - [ ] **Step 2: Eseguire e vedere fallire.**
 - [ ] **Step 3: Implementare** `DistressorComp`. Nessun riuso di `shared/hardware_emulation`: i waveshaper sono funzioni locali (YAGNI).
 - [ ] **Step 4: Eseguire i test** → PASS.
-- [ ] **Step 5: Commit:** `feat(vocal-chain): distressor-style compressor`.
+- [ ] **Step 5: Commit:** `feat(deep-throat): distressor-style compressor`.
 
 ---
 
 ### Task 9: Tone EQ e preset per modalità
 
 **Files:**
-- Create: `src/vocal-chain/src/dsp/tone_eq.{h,cpp}`, `src/vocal-chain/src/mode_presets.h`
-- Modify: `tests/test_vocal_chain.cpp`, `CMakeLists.txt`
+- Create: `src/deep-throat/src/dsp/tone_eq.{h,cpp}`, `src/deep-throat/src/mode_presets.h`
+- Modify: `tests/test_deep_throat.cpp`, `CMakeLists.txt`
 
 **Interfaces:**
 - Consumes: `DSP::Biquad` (Task 6).
@@ -192,15 +192,15 @@
 - [ ] **Step 2: Eseguire e vedere fallire.**
 - [ ] **Step 3: Implementare** `ToneEq` e `mode_presets.h`.
 - [ ] **Step 4: Eseguire i test** → PASS.
-- [ ] **Step 5: Commit:** `feat(vocal-chain): one-knob tone eq and mode presets`.
+- [ ] **Step 5: Commit:** `feat(deep-throat): one-knob tone eq and mode presets`.
 
 ---
 
 ### Task 10: Engine e integrazione nel Processor
 
 **Files:**
-- Create: `src/vocal-chain/src/engine.{h,cpp}`
-- Modify: `src/vocal-chain/src/{processor.cpp,controller.cpp}`, `tests/test_vocal_chain.cpp`, `CMakeLists.txt`
+- Create: `src/deep-throat/src/engine.{h,cpp}`
+- Modify: `src/deep-throat/src/{processor.cpp,controller.cpp}`, `tests/test_deep_throat.cpp`, `CMakeLists.txt`
 
 **Interfaces:**
 - Consumes: tutti i blocchi dei Task 2-9, `params.h`, `state.h`.
@@ -210,21 +210,21 @@
 - [ ] **Step 1: Scrivere i test:** `test_engine_defaults_finite_and_mapped`; `test_engine_silence_stays_silent` (10 s di zeri: uscita esattamente 0, nessun denormale); `test_engine_full_scale_finite` (rumore a ±1 per 2 s in tutte le modalità: nessun NaN, `|uscita| ≤ 4`); `test_engine_zero_and_one_sample_blocks` (alternare blocchi da 0, 1 e 64 campioni: uscita identica a un unico blocco da 65 entro 1e-6); `test_engine_mono_in_mono_out` (L = R in ingresso → L == R in uscita, in ogni modalità); `test_engine_latency_reported_and_bypass_delay` (bypass: uscita = ingresso ritardato di `latencySamples()`); `test_engine_breath_reduced_end_to_end` (frase, respiro a -35 dB, frase, Speak, Breath Amount 1: livello del respiro in uscita calato di almeno 6 dB rispetto a Amount 0); `test_engine_puke_scream_intact` (rumore forte continuo in Puke: Breath Amount 1 non lo abbassa più di 1 dB rispetto a Amount 0); `test_engine_mode_switch_no_blowup` (cambio di modalità ogni 100 ms con seno 220 Hz: `|campione|` ≤ 4, nessun NaN); `test_engine_sample_rates` (44.1, 48, 96, 192 kHz: prepare + 1 s di voce sintetica, tutto finito); `test_engine_no_alloc_in_process` (contatore `operator new` come in Pillow Talk: 0 allocazioni in `process`).
 - [ ] **Step 2: Eseguire e vedere fallire.**
 - [ ] **Step 3: Implementare** `Engine`, collegare `processor.cpp` (lettura dei parametri, `setSettings`, `getLatencySamples`, `setActive` che chiama `prepare`) e `controller.cpp` (nomi dei parametri in inglese: Bypass, Mode con scelte `Speak/Sing/Puke`, Input, Rider Target, Rider Range, Breath, De-ess, De-ess Listen, Compressor, Tone, Output).
-- [ ] **Step 4: Eseguire tutti i test** → PASS; costruire `vocal_chain` e rieseguire `vocal_chain_factory_test`.
-- [ ] **Step 5: Commit:** `feat(vocal-chain): engine and processor integration`.
+- [ ] **Step 4: Eseguire tutti i test** → PASS; costruire `deep_throat` e rieseguire `deep_throat_factory_test`.
+- [ ] **Step 5: Commit:** `feat(deep-throat): engine and processor integration`.
 
 ---
 
 ### Task 11: Documentazione e chiusura
 
 **Files:**
-- Create: `src/vocal-chain/README.md`
-- Modify: `docs/superpowers/specs/2026-10-10-vocal-chain-design.md` (§6: aggiungere `De-ess Listen`; §9: segnare risolta la decisione sul riuso del drive, deciso di non riusare), questo piano (spuntare i task), `CLAUDE.md` (§8 puntatori: aggiungere i due documenti)
+- Create: `src/deep-throat/README.md`
+- Modify: `docs/superpowers/specs/2026-10-10-deep-throat-design.md` (§6: aggiungere `De-ess Listen`; §9: segnare risolta la decisione sul riuso del drive, deciso di non riusare), questo piano (spuntare i task), `CLAUDE.md` (§8 puntatori: aggiungere i due documenti)
 
 - [ ] **Step 1: Scrivere il README** (in italiano): scopo, modalità, parametri, come costruire (comandi del piano), limiti noti (soglie non tarate su registrazioni reali, nessuna GUI).
 - [ ] **Step 2: Allineare spec, piano e CLAUDE.md** come da elenco.
-- [ ] **Step 3: Verifica finale:** eseguire `ctest --test-dir /tmp/vc-build -R vocal_chain --output-on-failure` e i test di Pillow Talk e The Stripper per escludere regressioni; riportare l'output.
-- [ ] **Step 4: Commit:** `docs(vocal-chain): readme and aligned spec and plan`.
+- [ ] **Step 3: Verifica finale:** eseguire `ctest --test-dir /tmp/vc-build -R deep_throat --output-on-failure` e i test di Pillow Talk e The Stripper per escludere regressioni; riportare l'output.
+- [ ] **Step 4: Commit:** `docs(deep-throat): readme and aligned spec and plan`.
 
 ---
 

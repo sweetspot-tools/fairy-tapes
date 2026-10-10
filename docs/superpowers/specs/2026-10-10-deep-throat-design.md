@@ -1,9 +1,9 @@
-# Vocal Chain — Design
+# Deep Throat — Design
 
 **Data:** 2026-10-10
 **Stato:** bozza per revisione
 **Suite:** Fairy Tapes (channel strip vocale "tutto dentro")
-**Nome:** provvisorio (`Vocal Chain`), da scegliere in tema con gli altri plugin
+**Nome:** Deep Throat (deciso il 2026-10-10)
 
 ## 1. Scopo
 
@@ -60,7 +60,7 @@ Bypass, Mode (Speak/Sing/Puke), Input, Rider Target, Rider Range, Breath Amount,
 
 ## 7. Struttura
 
-`src/vocal-chain/` con lo stesso schema degli altri plugin (`plug.cpp`, `controller`, `processor`, `params.h`, `cids.h`, `dsp/`, `tests/`, `docs/`). Namespace `FairyTapes::VocalChain`. Aggiunto con `add_subdirectory` nel `CMakeLists.txt` della radice. Grafica: `docs/DESIGN_SYSTEM.md`; testo visibile in inglese.
+`src/deep-throat/` con lo stesso schema degli altri plugin (`plug.cpp`, `controller`, `processor`, `params.h`, `cids.h`, `dsp/`, `tests/`, `docs/`). Namespace `FairyTapes::DeepThroat`. Aggiunto con `add_subdirectory` nel `CMakeLists.txt` della radice. Grafica: `docs/DESIGN_SYSTEM.md`; testo visibile in inglese.
 
 ## 8. Test
 
@@ -68,7 +68,7 @@ Ogni blocco ha un test che prima fallisce: Rider (guadagno verso il Target, ness
 
 ## 9. Decisioni aperte
 
-- Nome definitivo del plugin.
+- (risolta) Nome: Deep Throat.
 - Registrazioni di riferimento per tarare le soglie, soprattutto in Puke (growl e scream).
 - Dati etichettati per il livello 2 (rete RTNeural).
 - Riuso di drive/saturazione esistenti per il Distressor.
