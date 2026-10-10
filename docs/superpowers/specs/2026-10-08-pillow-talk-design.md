@@ -32,17 +32,18 @@ Riferimento DSP: `vendors/dusk-audio-plugins/plugins/tape-echo` (GPL-3, `TapeEch
 1. **Ingresso principale** stereo.
 2. **Sidechain opzionale** stereo (secondo bus di ingresso VST3). Se non è collegato, il rilevatore usa l'ingresso principale.
 3. **Rilevatore:** filtro passa-banda sulla gamma vocale, envelope follower, soglia, hold, release.
-4. **Gain di mandata:** applicato **all'ingresso del delay**, non all'uscita. Le code già emesse decadono in modo naturale, senza tagli.
+4. **Gain di ducking:** applicato **all'uscita wet** del delay, prima del mix; l'ingresso del delay resta sempre aperto. La frase viene registrata sul nastro mentre la voce canta; la coda già nella linea continua a decadere e si sente quando il gate si riapre (dopo hold e release).
 5. **Tape echo.**
 6. **Mix wet/dry** in parallelo.
 
 ## 4. Rilevatore e ducking
 
-- Dopo l'ultimo istante sopra soglia, il rilevatore mantiene il gain di mandata ridotto per il tempo di **Hold**.
+- Il gain di ducking agisce sull'uscita wet: durante la voce il ritorno del delay è ridotto di Depth, ma la linea continua a registrare e a decadere.
+- Dopo l'ultimo istante sopra soglia, il rilevatore mantiene il gain ridotto per il tempo di **Hold**.
 - Hold è espresso in **ms** o in **note** (1/16 – 1/2) calcolate dal BPM dell'host. Senza BPM dall'host si usa 120.
 - Terminato l'hold, il gain risale con una **curva esponenziale** governata da Release.
 - **Ducking depth** definisce la riduzione durante la voce: da pochi dB fino a muto totale. A depth minima il plugin si comporta come un delay normale.
-- Il gain di mandata è smussato per evitare click e pompaggi.
+- Il gain di ducking è smussato per evitare click e pompaggi.
 
 ## 5. Tape echo
 
@@ -71,7 +72,7 @@ Seguendo `src/the-stripper/tests/test_params.cpp`:
 
 - Parametri: valori, range, mapping.
 - Rilevatore: soglia e hold su segnali sintetici (impulso, burst, silenzio).
-- Gain di mandata: scende durante il burst, sale dopo hold e release.
+- Gain di ducking: scende durante il burst, sale dopo hold e release; nella pausa si sentono le ripetizioni della frase.
 - Delay: la prima ripetizione cade al tempo giusto, il feedback decade.
 - Sidechain: con ingresso esterno collegato, il rilevatore usa quello.
 
@@ -80,3 +81,19 @@ Seguendo `src/the-stripper/tests/test_params.cpp`:
 - Modalità BBD o delay digitale pulito (possibile estensione futura).
 - Rilevamento di frase "intelligente" (scartato: meno prevedibile, più difficile da tarare).
 - Interfaccia grafica personalizzata: segue la stessa strategia di The Stripper e sarà definita nel piano.
+
+## 10. Decisioni prese in implementazione
+
+- **Ducking sull'uscita wet**, non sull'ingresso del nastro (vedi §3 e §4): con l'ingresso abbassato la frase non veniva registrata e nelle pause non restava eco.
+- **Rilevatore:** rilascio dell'envelope a 3 ms con compensazione di 8 ms sull'hold, così l'hold parte dall'ultimo istante sopra soglia indipendentemente dal livello; passa-alto del 4° ordine a 120 Hz.
+- **Stato:** i valori non finiti si rifiutano e quelli ripristinati si limitano a 0..1.
+- **Modulo VST3:** factory con le macro del SDK, target `MODULE`, layout dei bundle come nei moduli CMake del SDK.
+- Il glide del Time non ha limite di slew e Saturation a 0 applica comunque `tanh` (comportamento da nastro, accettato).
+
+## 11. Decisioni aperte
+
+- **Default di Hold (224 ms), Release (316 ms) e Feedback (38 %):** con questi valori la coda della frase nella pausa è molto attenuata (circa -22 dB sull'intera pausa). Da tarare ad orecchio in un host.
+- **Non verificato:** build e bundle su Windows e macOS (la prima build vera è la CI), caricamento in Reaper e Cubase, attivazione del sidechain nei due host.
+- Il test della factory è registrato anche su macOS, dove fallirebbe (cerca `ModuleEntry`, macOS esporta `bundleEntry`).
+- Rilevamento di frase "intelligente" e modalità BBD restano fuori scopo.
+
