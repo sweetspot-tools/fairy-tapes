@@ -365,16 +365,16 @@ var F={
 };
 function onk(key){return function(v){P[key]=v;if(window.recompute)recompute();};}
 var NOTEMS=[125,250,500,1000];
-box(24,92,470,170,'DUCKING','bottom');
+box(24,92,500,170,'DUCKING','bottom');
 var gSc=grp();
-var SX=44,SY=108,SW=346,SH=130,SB=SY+SH-8,SSPAN=SH-34,NPT=220;
+var SX=44,SY=108,SW=376,SH=130,SB=SY+SH-8,SSPAN=SH-34,NPT=220;
 el('rect',{x:SX,y:SY,width:SW,height:SH,rx:3,fill:'#08080a',stroke:W,'stroke-width':1,opacity:.9});
 var voiceP=el('path',{fill:'#8e8e93',opacity:.55}),wetP=el('path',{fill:AMBL,opacity:.8}),gainP=el('path',{fill:'none',stroke:GRN,'stroke-width':1.6,'stroke-linejoin':'round'});
 var thrL=el('path',{fill:'none',stroke:W,'stroke-width':1,'stroke-dasharray':'4 4',opacity:.85});
 txt('VOICE',SX+10,SY+16,10,'#b9b9be','start',800);txt('ECHO',SX+58,SY+16,10,AMBL,'start',800);txt('SEND LEVEL',SX+98,SY+16,10,GRN,'start',800);
 txt('THRESHOLD',SX+SW-8,SY+16,9,DIMW,'end',700);
-gbtn(btn(442,150,'SIDECHAIN',false,function(b){toggle(b);},GRN));
-txt('detector input',442,196,9,DIMW,'middle',700);
+gbtn(btn(472,150,'SIDECHAIN',false,function(b){toggle(b);},GRN));
+txt('detector input',472,196,9,DIMW,'middle',700);
 endGrp();reg(gSc,false);
 var NSIM=500,DTS=.02,voice=[],wet=[],gain=[];
 (function(){var segs=[[.3,1.6],[2.0,3.1],[3.4,3.6],[6.6,7.9],[8.3,9.2]];
@@ -402,8 +402,8 @@ function drawScope(pos){
 }
 
 /* ---- LEVEL meters ---- */
-box(500,92,300,170,'LEVEL','bottom');
-var gMt=grp(),LX=566,STEP=16,NL=12;
+box(530,92,270,170,'LEVEL','bottom');
+var gMt=grp(),LX=598,STEP=16,NL=12;
 function ledRow(y,label,colFn){txt(label,LX-12,y+4,11,W,'end',800);var a=[];for(var i=0;i<NL;i++)a.push(el('circle',{cx:LX+i*STEP,cy:y,r:3.4,fill:OFFL,stroke:'#000','stroke-width':.6}));return {a:a,col:colFn};}
 function dbCol(i){var d=-60+i*(60/(NL-1));return d>=-1?RED:(d>=-9?YEL:(d>=-18?'#9fe03a':GRN));}
 var rIL=ledRow(114,'L',dbCol),rIR=ledRow(128,'R',dbCol),rOL=ledRow(156,'L',dbCol),rOR=ledRow(170,'R',dbCol);
