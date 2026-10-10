@@ -10,6 +10,19 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-09-the-stripper-completion-design.md`
 
+## Stato dei compiti (2026-10-10)
+
+- [x] Task 1 — `NamDrive` in `shared/nam_drive` (commit `5805520`, adattato a NAM v0.6.0 in `10cb131`; 49 test su 49; CUDA non verificato)
+- [ ] Task 2 — caricamento asincrono (da fare per primo: sblocca 3, 5 e 8)
+- [ ] Task 3 — parametri nuovi, stato v8 esteso (vedi spec §6), tabella bloccata
+- [ ] Task 4 — meter
+- [ ] Task 5 — messaggi del modello
+- [ ] Task 6 — tessera di grana
+- [ ] Task 7 — VSTGUI e controlli
+- [ ] Task 8 — editor (suddiviso in 8a layout/binding, 8b fascia meter, 8c striscia del modello e popup locale)
+- [ ] Task 9 — ricerca SSL 360 Link e docs
+- [ ] Task 10-14 — extra di interfaccia, vedi in fondo (usura, nastro, retro, viti, preferenze)
+
 ## Global Constraints
 
 - Fuori scopo: gain staging (i suoi due parametri restano inerti), integrazione Tone3000 (spec a parte, spec §10).
@@ -42,12 +55,12 @@
 **Interfaces:**
 - Produces: libreria CMake `nam_drive` (compila le `NAM_SOURCES`, dipende da `gpu_nam`; espone `include/` e le include dir di NAM come `PUBLIC`); classe `FairyTapes::Shared::DSP::NamDrive` con la stessa API di oggi.
 
-- [ ] **Step 1: Verificare lo stato di partenza**
+- [x] **Step 1: Verificare lo stato di partenza**
   Run: `cmake -S . -B build && cmake --build build --target the_stripper_tests && ctest --test-dir build -R the_stripper --output-on-failure`
   Expected: PASS (baseline).
-- [ ] **Step 2: Spostare i file con `git mv`**, cambiare il namespace in `FairyTapes::Shared::DSP` e creare la libreria `nam_drive` (modellata su `shared/gpu_nam/CMakeLists.txt`). Spostare `NAM_SOURCES` e `NAM_INCLUDE_DIRS` dal CMake dello Stripper a quello della libreria.
-- [ ] **Step 3: Aggiornare lo Stripper** perché colleghi `nam_drive` (plugin e test) e usi il nuovo namespace in `processor.{h,cpp}` e nei test.
-- [ ] **Step 4: Ricompilare e rieseguire i test** (comando dello Step 1). Expected: PASS identico alla baseline.
+- [x] **Step 2: Spostare i file con `git mv`**, cambiare il namespace in `FairyTapes::Shared::DSP` e creare la libreria `nam_drive` (modellata su `shared/gpu_nam/CMakeLists.txt`). Spostare `NAM_SOURCES` e `NAM_INCLUDE_DIRS` dal CMake dello Stripper a quello della libreria.
+- [x] **Step 3: Aggiornare lo Stripper** perché colleghi `nam_drive` (plugin e test) e usi il nuovo namespace in `processor.{h,cpp}` e nei test.
+- [x] **Step 4: Ricompilare e rieseguire i test** (comando dello Step 1). Expected: PASS identico alla baseline.
 - [ ] **Step 5: Commit**
 
 ```bash
@@ -267,3 +280,33 @@ git commit -m "feat(the-stripper): add VSTGUI editor with NAM model picker"
 git add src/the-stripper README.md
 git commit -m "docs(the-stripper): SSL 360 Link findings and docs aligned to code"
 ```
+
+---
+
+## Extra di interfaccia (Task 10-14)
+
+Compiti nati dopo le preview; ciascuno ha la propria spec nel §4 e §6 del documento di design. Si fanno dopo il Task 8 e dipendono dal Task 3 (stato v8 esteso).
+
+### Task 10: Preferenze dell'utente
+
+- File di preferenze (percorso per piattaforma), lettura e scrittura atomica; chiavi stabili (spec §6); nessuna dipendenza dallo stato del progetto.
+- Test: file mancante → default; file corrotto → default senza crash; scrittura e rilettura.
+
+### Task 11: Livelli e usura
+
+- Livelli dell'editor nell'ordine dello spec §4 (grana, bordi, serigrafia e valori, usura, viti, controlli) con bitmap generata una sola volta dal seme e rilasciata alla chiusura dell'editor.
+- Generatore dell'usura a partire dal seme (graffi, aloni, macchie, residui, croste a pennello); usura dei controlli (alluminio tornito: grana, bordi consumati, sporco alla base, puntini bruni e grigi, tacchetta) al 25% di opacità.
+- Test: stesso seme → stessa bitmap; Wear Off → nessun elemento; costo di generazione sotto una soglia ragionevole.
+
+### Task 12: Nastro, scritte e font a tracciati
+
+- Script che converte i glifi dei tre font (Zeyada, Rock Salt, Homemade Apple) in tracciati vettoriali con licenze incluse; disegno del testo con variazione per lettera dal seme; normalizzazione della dimensione per font.
+- Nastro scrivibile (campo di testo, 14 caratteri, salvato nello stato); striscia del nome del modello con troncamento per larghezza misurata.
+
+### Task 13: Retro del pannello (Settings e Credits)
+
+- Flip 3D, schede SETTINGS e CREDITS, controlli delle impostazioni (preferenze e comportamento) e testi di credits in inglese; licenze ricontrollate.
+
+### Task 14: Viti, valori digitabili, richiamo
+
+- Viti interattive (a taglio o a croce, angolo casuale, una può mancare con probabilità bassa), inserimento manuale del valore sotto la manopola (mappa inversa dei parametri), segni di richiamo e interruttore Notes (dopo la decisione sul §11).
