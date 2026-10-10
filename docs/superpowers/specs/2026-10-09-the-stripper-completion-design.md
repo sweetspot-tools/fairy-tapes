@@ -10,7 +10,7 @@ Portare The Stripper da "DSP completo con lista parametri dell'host" a plugin ut
 
 Fuori scopo (decisione del 2026-10-09):
 - **Gain staging** (parametri `kBypassGainStaging` e `kGainStagingTrim` restano, inerti, come oggi).
-- **Tone3000**: richiede rete e account.
+- **Integrazione Tone3000**: richiede rete e account; ha uno spec a parte (§10). Il popup di scelta modello nasce con la sola sorgente locale (§3.1).
 - Asset grafici disegnati a mano: la GUI è disegnata dal codice (§4); i PNG manuali sono solo un'opzione futura.
 
 ## 2. Componente condiviso: `shared/nam_drive`
@@ -30,16 +30,28 @@ Oggi `NamDrive::loadModel(path)` è sincrono e non c'è alcuna interfaccia per s
 - **Errori:** file mancante, illeggibile o non supportato → Drive in passthrough (comportamento attuale senza modello), nome del modello vuoto nell'editor e messaggio breve di errore accanto al pulsante. Nessun crash.
 - **Comunicazione processor ↔ controller:** il percorso passa con un `IMessage` dal controller al processor; lo stato di caricamento (nome del file o errore) torna con un messaggio inverso.
 
+### 3.1 Popup di scelta del modello
+
+Il clic sul campo del modello (Drive) apre un popup in stile rack (preview: `src/the-stripper/docs/mockups/stripper_model_browser.html`), con due schede:
+
+- **LOCAL:** elenco delle cartelle (aggiungi, rimuovi, riscansiona; scansione ricorsiva dei `.nam`, cartelle salvate nelle preferenze dell'utente) e elenco dei modelli con ricerca per nome, dimensione e tipo; il punto verde marca il modello caricato. Pulsanti LOAD, CANCEL e **NO MODEL** (scarica il modello e riporta il Drive in passthrough). La scansione gira fuori dal thread audio e dal thread dell'interfaccia.
+- **TONE3000:** scheda prevista dallo spec a parte (§10). Nella prima versione è assente o disabilitata.
+- **Architettura:** le sorgenti stanno dietro un'interfaccia comune (`ModelSource`: elenco, ricerca, risoluzione del percorso locale del file); `LocalFolderSource` è la prima implementazione, Tone3000 sarà la seconda. Il caricamento passa sempre dal percorso asincrono (§3).
+- **Nessun modello:** il Drive è in passthrough (nessun gain applicato) e il suo controllo si attenua come un modulo spento; il campo mostra "No model". Nessun modello viene incorporato nel binario del plugin.
+
 ## 4. GUI custom (VSTGUI4)
 
 Editor VSTGUI4 (`vendors/vst3sdk/vstgui4`), costruito in codice, senza file `.uidesc`.
 
-- **Dimensioni:** 1000 × 608, orizzontale, stile pannello rack (preview approvata: `src/the-stripper/docs/mockups/stripper_rack.html`, che resta il riferimento di layout). `docs/UI_ASSETS_SPEC.md` (480 × 720) è superato. Il disegno è vettoriale e la finestra è scalata dall'host, quindi non servono asset separati a 2x.
+- **Dimensioni:** 1000 × 628, orizzontale, stile pannello rack (preview approvata: `src/the-stripper/docs/mockups/stripper_rack.html`, che resta il riferimento di layout). `docs/UI_ASSETS_SPEC.md` (480 × 720) è superato. Il disegno è vettoriale e la finestra è scalata dall'host, quindi non servono asset separati a 2x.
 - **Layout, dall'alto:** riga 1: Input (gain) · Filters (High Pass, Low Pass) · Level (meter e LED di clip, §4.1) · Output (gain, Bypass globale, Chan/Bus) · riga 2: Equaliser a tutta larghezza (4 bande + Saturate; intestazioni LF/LM/HM/HF con etichette dei controlli solo Gain/Freq/Q) · riga 3: Compression (Amount, Mix, Voice/Drums/Classic in basso a destra, visibili solo in Channel) · Drive (Amount, campo del modello NAM) · Limiter (Pound) · Gate (Threshold). Sparisce il pulsante **Load .nam**: il campo con il nome del modello, in basso a destra nel riquadro Drive, è cliccabile e apre il selettore di file; un'icona a chip grigia indica l'inferenza su GPU.
 - **Pulsanti IN e Bypass:** ogni modulo (EQ, Compression, Drive, Limiter, Gate) e ogni filtro ha un pulsante **IN** in alto a destra del riquadro, **acceso di default** (un channel strip parte con tutto inserito). Solo l'interfaccia inverte la polarità: i parametri `kBypass*` restano com'erano (ID e valori invariati; IN acceso = bypass 0). Per i filtri `kEqHPFOn`/`kEqLPFOn` ha già polarità positiva; il loro default passa da 0 a 1 (neutro all'ascolto: HPF 20 Hz, LPF 20 kHz). Il **Bypass globale** resta un pulsante BYPASS nel riquadro Output. Le sezioni Bell di LF e HF sono un pulsante con l'icona della campana sulla riga d'intestazione della banda (spento = shelf).
 - **Attenuazione:** quando un IN è spento i controlli del suo modulo si attenuano (opacità 35%, dissolvenza 0,15 s). Con il Bypass globale acceso si attenuano tutti i moduli, tutti i pulsanti IN, Chan/Bus, il blocco GR e i LED di clip EQ/CMP/DRV/LIM; restano a piena luce solo i LED IN e OUT e i meter di livello. In bypass globale il segnale è identico in ingresso e uscita: gain reduction a zero, nessun clip se non in IN/OUT.
 - **Stile controlli:** pannello nero uniforme, riquadri con bordo bianco e titolo sul bordo, manopole **piatte e opache** (disco scuro, bordo sottile, indice bianco, tacche bianche e valori a fondo scala), pulsanti quadrati grigi piatti con LED sotto, LED senza alone. Niente gradienti lucidi, niente anello giallo, niente triangolo-puntatore. Ogni controllo è disegnato dal codice (VSTGUI `CDrawContext`); se esiste il PNG corrispondente (nomi da `UI_ASSETS_SPEC.md`) lo usa al posto del disegno, ma non serve per rilasciare. Niente nomi o marchi delle fonti d'ispirazione.
 - **Sfondo:** *(da riconfermare)* la preview approvata usa nero uniforme, senza texture. Se si conferma, il generatore di texture (Task 6) e la variante di texture nello stato (§6) escono dallo scopo.
+- **Lingua dell'interfaccia:** tutto il testo visibile nell'editor (etichette, suggerimenti, messaggi di errore, credits, popup) è **in inglese**.
+- **Credits:** a destra dell'intestazione, con lo stesso carattere e colore di "FAIRY TAPES", la voce **CREDITS →**; il clic ruota il pannello (flip 3D, circa 0,8 s) e mostra il retro con versione, licenza del plugin (GPL-3.0), componenti di terze parti con licenza (4K-EQ e Multi-Comp di Dusk Audio, Airwindows, Neural Amp Modeler Core, Eigen, nlohmann/json, VST 3 SDK, VSTGUI), avvisi (marchio VST di Steinberg, licenze dei modelli `.nam`). **← BACK** riporta alla vista frontale. Le licenze elencate vanno ricontrollate sui file `LICENSE` dei sottomoduli prima del rilascio. Con Tone3000 attivo si aggiunge "Powered by TONE3000" con link. Preview: `stripper_rack.html`.
+- **Spazio:** margine di circa 30 px sotto l'ultima riga di riquadri.
 - **Binding:** ogni controllo è legato a un `ParamID` e supporta automazione, annullamento e testo del valore fornito dal `Controller`.
 - **Mix bus:** i controlli non pertinenti (Voice/Drums/Classic) si nascondono; non si ricostruisce l'editor.
 
@@ -86,3 +98,13 @@ Servono per vedere a colpo d'occhio dove il segnale si sporca e quanto lavorano 
 ## 9. Dipendenze con altri piani
 
 Doggystyle riusa `shared/nam_drive` e il caricamento asincrono: questo spec va implementato **prima** (almeno §2 e §3).
+
+## 10. Tone3000 (spec a parte)
+
+Esito della ricerca del 2026-10-10 (pagine lette da un agente, riassunti non verificati sul testo integrale; da riconfermare prima di scrivere il codice):
+
+- Esiste un'API REST ufficiale (beta) con login OAuth2 PKCE (serve un account dell'utente), limite predefinito di 100 richieste al minuto. Lo sviluppo è gratuito; il livello gratuito è solo non commerciale (open source incluso) con ricerca limitata; un prodotto a pagamento richiede un accordo commerciale.
+- Condizioni d'uso: vietati download in blocco, mirror e cache del catalogo; vietato incorporare modelli nel plugin; download solo su richiesta dell'utente. Obbligo di "Powered by TONE3000" con link e di mantenere nome dell'autore, metadati e licenza. Il campo `license` di ogni modello (t3k, cc-by, cc-by-sa, cc-by-nc, cc0, ...) è esposto dall'API.
+- Non documentato: cache locale dei file già scaricati dall'utente (e quindi l'uso offline); da chiedere al supporto.
+- Esiste un plugin ufficiale open source (MIT, JUCE, libcurl) come riferimento di integrazione.
+- Conseguenze: nessun modello nel binario; scheda TONE3000 con badge di licenza; thread di rete dedicato, mai il thread audio; chiavi secret mai nel client.

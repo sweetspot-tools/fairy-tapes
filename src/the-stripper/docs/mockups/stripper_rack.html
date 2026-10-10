@@ -4,19 +4,25 @@
 body{margin:0;padding:16px;background:#e9e8e4;font-family:system-ui,sans-serif;color:#222}
 .bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:0 0 12px;font-size:13px}
 .stage{background:#d8d6d0;border-radius:12px;padding:12px;max-width:1040px;margin:auto}
-svg{width:100%;height:auto;display:block}
+.scene{perspective:2200px}
+.card{position:relative;transform-style:preserve-3d;transition:transform .8s cubic-bezier(.5,.1,.2,1)}
+.card.flipped{transform:rotateY(180deg)}
+.card svg{width:100%;height:auto;display:block;backface-visibility:hidden;-webkit-backface-visibility:hidden}
+#back{position:absolute;inset:0;transform:rotateY(180deg)}
+.card.flipped #ui{pointer-events:none}
+.card:not(.flipped) #back{pointer-events:none}
 </style></head><body>
 <div class="bar">
-  <label><input type="checkbox" id="anim" checked> Anima i meter</label>
-  <label>Segnale <input type="range" id="lvl" min="0" max="100" value="55" style="width:120px"></label>
-  <span style="color:#555">Preview in stile pannello rack (1000 × 608, orizzontale). Manopole: trascina in verticale, Maiusc = fine, doppio clic = default. Clic su un LED di clip: azzera tutti. Pulsante IN di un modulo spento (tutti accesi di default): i suoi controlli si attenuano; il BYPASS globale in alto a destra (Output) attenua tutto e mette il plugin in bypass.</span>
+  <label><input type="checkbox" id="anim" checked> Animate meters</label>
+  <label>Signal <input type="range" id="lvl" min="0" max="100" value="55" style="width:120px"></label>
+  <span style="color:#555">Rack-style panel preview (1000 × 628, landscape). Knobs: drag vertically, Shift = fine, double-click = default. Click a clip LED to clear all. When a module IN button is off (all on by default) its controls dim; the BYPASS button at the top right (Output) dims everything and puts the plugin in bypass.</span>
 </div>
-<div class="stage"><svg id="ui" viewBox="0 0 1000 608" role="img" aria-label="Editor di The Stripper in stile pannello rack"></svg></div>
+<div class="stage"><div class="scene"><div class="card" id="card"><svg id="ui" viewBox="0 0 1000 628" role="img" aria-label="The Stripper editor, rack-style panel"></svg><svg id="back" viewBox="0 0 1000 628" role="img" aria-label="Credits, references and licenses"></svg></div></div></div>
 <script>
 var NS='http://www.w3.org/2000/svg',svg=document.getElementById('ui');
 function el(n,a,p){var e=document.createElementNS(NS,n);for(var k in a)e.setAttribute(k,a[k]);(p||CUR||ROOT).appendChild(e);return e;}
 var CUR=null,ROOT=svg,DIM=0.35;
-/* gruppo dei controlli di un modulo: si attenua quando il modulo e' escluso (bypass acceso / filtro non inserito) */
+/* control group of a module: dims when the module is out (IN off / bypass on) */
 function grp(){var g=document.createElementNS(NS,'g');g.style.transition='opacity .15s';ROOT.appendChild(g);CUR=g;return g;}
 function endGrp(){CUR=null;}
 var MODS=[],GBTN=[],GB=false;
@@ -33,13 +39,16 @@ function grad(id,type,attrs,stops){var g=el(type,Object.assign({id:id},attrs),de
 grad('gk','radialGradient',{cx:'35%',cy:'30%',r:'80%'},[[0,'#4a4a4e'],[0.55,'#161617'],[1,'#050505']]);
 grad('gb','linearGradient',{x1:0,y1:0,x2:0,y2:1},[[0,'#e6e6e6'],[1,'#8f8f92']]);
 grad('gp','linearGradient',{x1:0,y1:0,x2:0,y2:1},[[0,'#1b1b1d'],[0.5,'#0b0b0c'],[1,'#121213']]);
-el('rect',{width:1000,height:608,rx:14,fill:'#0e0e0f'});
-el('rect',{x:2,y:2,width:996,height:604,rx:13,fill:'none',stroke:'#2c2c2f','stroke-width':2});
-[[18,18],[982,18],[18,590],[982,590]].forEach(function(p){el('circle',{cx:p[0],cy:p[1],r:5,fill:'#1e1e20',stroke:'#3a3a3d'});el('line',{x1:p[0]-3,y1:p[1],x2:p[0]+3,y2:p[1],stroke:'#4a4a4d'});});
+el('rect',{width:1000,height:628,rx:14,fill:'#0e0e0f'});
+el('rect',{x:2,y:2,width:996,height:624,rx:13,fill:'none',stroke:'#2c2c2f','stroke-width':2});
+[[18,18],[982,18],[18,610],[982,610]].forEach(function(p){el('circle',{cx:p[0],cy:p[1],r:5,fill:'#1e1e20',stroke:'#3a3a3d'});el('line',{x1:p[0]-3,y1:p[1],x2:p[0]+3,y2:p[1],stroke:'#4a4a4d'});});
 
 /* header */
 txt('THE STRIPPER',34,58,38,W,'start',900,svg,true);
 txt('FAIRY TAPES',36,78,11,DIMW,'start',700);
+var cr=el('g',{style:'cursor:pointer'});el('title',{},cr).textContent='Credits, references and licenses';
+el('rect',{x:872,y:66,width:100,height:18,fill:'transparent'},cr);txt('CREDITS  →',966,78,11,DIMW,'end',700,cr);
+cr.addEventListener('click',function(){document.getElementById('card').classList.add('flipped');});
 txt('CHANNEL STRIP  ·  4-BAND EQ  ·  COMPRESSOR  ·  NAM DRIVE  ·  LIMITER  ·  GATE',966,46,13,W,'end',700);
 
 /* section box: title on top or bottom border */
@@ -153,7 +162,7 @@ knob(ex[10],352,'SATURATE',0.2,'0','10','',{fmt:num,r:22});
 /* pulsante shelf/bell: icona della campana sulla riga d'intestazione della banda */
 function bellBtn(cx,cy){
   var g=el('g',{style:'cursor:pointer'});
-  el('title',{},g).textContent='Filtro a campana (spento = shelf)';
+  el('title',{},g).textContent='Bell filter (off = shelf)';
   var r=el('rect',{x:cx-13,y:cy-9,width:26,height:18,rx:2,stroke:'#b8b8bb'},g);
   var ic=el('path',{d:'M'+(cx-9)+' '+(cy+4)+' H'+(cx-5)+' C'+(cx-2)+' '+(cy+4)+' '+(cx-3)+' '+(cy-5)+' '+cx+' '+(cy-5)+' C'+(cx+3)+' '+(cy-5)+' '+(cx+2)+' '+(cy+4)+' '+(cx+5)+' '+(cy+4)+' H'+(cx+9),fill:'none','stroke-width':1.8,'stroke-linecap':'round','stroke-linejoin':'round'},g);
   g._on=false;g._paint=function(o){r.setAttribute('fill',o?AMBL:'#8e8e91');ic.setAttribute('stroke',o?'#2a1d05':'#1a1a1c');};
@@ -176,7 +185,7 @@ endGrp();byp(360,522,gCm);
 box(402,484,300,146,'DRIVE · NAM','bottom');var gDr=grp();
 knob(458,552,'DRIVE',0.3,'0','10','',{fmt:num,r:21});
 var nam=el('g',{style:'cursor:pointer'}),NX=512,GPUC='#7c7c80';
-el('title',{},nam).textContent='Clic per caricare un modello NAM · inferenza su GPU';
+el('title',{},nam).textContent='Click to load a NAM model · GPU inference';
 el('rect',{x:NX,y:580,width:166,height:28,rx:4,fill:'#050505',stroke:'#58585c'},nam);
 /* icona GPU (grigia): chip con piedini */
 for(var i=0;i<3;i++){el('rect',{x:NX+9+i*5,y:585,width:1.6,height:3,fill:GPUC},nam);el('rect',{x:NX+9+i*5,y:600,width:1.6,height:3,fill:GPUC},nam);
@@ -191,6 +200,32 @@ box(846,484,130,146,'GATE','bottom');
 var gGa=grp();knob(894,552,'THRESH',0.2,'-∞','0','',{fmt:function(v){return Math.round(-72+v*72)+' dB';}});endGrp();byp(940,522,gGa);
 ROOT=svg;
 setMode('c');
+
+
+/* ============ BACK: credits, references, licenses ============ */
+var back=document.getElementById('back');ROOT=back;CUR=null;
+el('rect',{width:1000,height:628,rx:14,fill:'#0e0e0f'});
+el('rect',{x:2,y:2,width:996,height:624,rx:13,fill:'none',stroke:'#2c2c2f','stroke-width':2});
+[[18,18],[982,18],[18,610],[982,610]].forEach(function(p){el('circle',{cx:p[0],cy:p[1],r:5,fill:'#1e1e20',stroke:'#3a3a3d'});el('line',{x1:p[0]-3,y1:p[1],x2:p[0]+3,y2:p[1],stroke:'#4a4a4d'});});
+txt('CREDITS',34,58,38,W,'start',900,back,true);
+txt('FAIRY TAPES',36,78,11,DIMW,'start',700);
+var bk=el('g',{style:'cursor:pointer'});el('rect',{x:872,y:66,width:100,height:18,fill:'transparent'},bk);txt('←  BACK',966,78,11,DIMW,'end',700,bk);
+bk.addEventListener('click',function(){document.getElementById('card').classList.remove('flipped');});
+txt('THE STRIPPER  ·  CHANNEL STRIP VST3',966,46,13,W,'end',700);
+box(24,102,952,118,'THE STRIPPER','top');
+txt('Version 1.0.0  ·  Fairy Tapes  ·  github.com/fairy-tapes',50,140,14,W,'start',700);
+txt('Free software: released under the GNU General Public License v3.0 (GPL-3.0), full text in the LICENSE file.',50,164,12,DIMW,'start',700);
+txt('The plugin includes GPL-3.0 components, so the combined work is distributed under the same license.',50,184,12,DIMW,'start',700);
+txt('Source code and build instructions are available in the project repository.',50,204,12,DIMW,'start',700);
+box(24,246,952,252,'COMPONENTS AND LICENSES','top');
+var CRD=[['4K-EQ · Multi-Comp','Dusk Audio','GPL-3.0'],['Airwindows','Chris Johnson','MIT'],['Neural Amp Modeler Core','Steven Atkinson','MIT'],['Eigen','Eigen contributors','MPL-2.0'],['nlohmann/json','Niels Lohmann','MIT'],['VST 3 SDK','Steinberg Media Technologies','MIT'],['VSTGUI','Steinberg Media Technologies','VSTGUI license (BSD)']];
+CRD.forEach(function(c,i){var y=284+i*30;txt(c[0],50,y,14,W,'start',800);txt(c[1],350,y,13,DIMW,'start',700);txt(c[2],950,y,13,AMBL,'end',700);
+  if(i<CRD.length-1)el('path',{d:'M50 '+(y+12)+' H950',stroke:DIMW,'stroke-width':1,opacity:.25});});
+box(24,522,952,88,'NOTICES','top');
+txt('VST is a trademark of Steinberg Media Technologies GmbH, registered in Europe and other countries.',50,556,12,DIMW,'start',700);
+txt('.nam models belong to their authors and each carries its own license.',50,578,12,DIMW,'start',700);
+txt('Third-party names are cited for attribution only.',50,598,12,DIMW,'start',700);
+ROOT=svg;
 
 /* ---- simulated signal ---- */
 var t=0,holdT=0,lvl=[-60,-60],lvlO=[-60,-60],grc=0,grl=0;

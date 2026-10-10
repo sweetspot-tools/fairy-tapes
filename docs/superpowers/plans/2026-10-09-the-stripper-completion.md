@@ -12,12 +12,13 @@
 
 ## Global Constraints
 
-- Fuori scopo: gain staging (i suoi due parametri restano inerti), Tone3000.
+- Fuori scopo: gain staging (i suoi due parametri restano inerti), integrazione Tone3000 (spec a parte, spec §10).
+- Tutto il testo visibile nell'editor è in inglese.
 - `NamDrive` in `shared/nam_drive`, namespace `FairyTapes::Shared::DSP`; il comportamento audio non cambia.
 - Il thread audio non alloca e non attende mai; il modello sostituito si rilascia fuori dal thread audio.
 - I nuovi `ParamID` (`kLimiterPound`, `kGateThreshold`) si aggiungono **in coda**, prima di `kNumParams`: gli ID esistenti non cambiano.
 - `kStateVersion` passa da 7 a 8 (aggiunge percorso del modello e variante di texture); lo stato v7 resta caricabile.
-- GUI: 1000 × 608 (layout e stile come `src/the-stripper/docs/mockups/stripper_rack.html`), vettoriale, nessun asset 2x; ogni controllo ha un `ParamID`; gli asset PNG manuali sono opzionali. I pulsanti IN dei moduli invertono solo nell'interfaccia i parametri `kBypass*` (ID e polarità invariati); default di `kEqHPFOn`/`kEqLPFOn` = 1.
+- GUI: 1000 × 628 (layout e stile come `src/the-stripper/docs/mockups/stripper_rack.html`), vettoriale, nessun asset 2x; ogni controllo ha un `ParamID`; gli asset PNG manuali sono opzionali. I pulsanti IN dei moduli invertono solo nell'interfaccia i parametri `kBypass*` (ID e polarità invariati); default di `kEqHPFOn`/`kEqLPFOn` = 1.
 - Texture: *(da riconfermare: la preview approvata usa nero uniforme; se confermato, il Task 6 e la variante di texture nello stato v8 vengono eliminati)*.
 - Licenza GPL-3.0; nessun nome o branding delle fonti nella UI.
 
@@ -230,12 +231,12 @@ git commit -m "feat(the-stripper): add VSTGUI4 integration and code-drawn contro
 
 **Interfaces:**
 - Consumes: `AnalogKnob`, `ToggleButton`, `ChoiceButtons` (Task 7); `Controller::requestModelLoad/modelName/modelError` (Task 5); texture di `assets/` e `PluginState::textureVariant` (Tasks 3 e 6); `MeterBar`, `ClipLed` (Task 7) e i valori di meter (Task 4).
-- Produces: `class Editor : public Steinberg::Vst::VSTGUIEditor, public VSTGUI::IControlListener`, 1000 × 608; layout come nello spec §4 e nella preview `stripper_rack.html`; pulsanti IN per modulo (acceso = bypass 0) con attenuazione dei controlli a IN spento, e Bypass globale che attenua tutto; `Editor::onModeChanged()` mostra/nasconde Voice/Drums/Classic senza ricostruire la finestra.
+- Produces: `class Editor : public Steinberg::Vst::VSTGUIEditor, public VSTGUI::IControlListener`, 1000 × 628; layout come nello spec §4 e nella preview `stripper_rack.html`; pulsanti IN per modulo (acceso = bypass 0) con attenuazione dei controlli a IN spento, e Bypass globale che attenua tutto; `Editor::onModeChanged()` mostra/nasconde Voice/Drums/Classic senza ricostruire la finestra.
 
 - [ ] **Step 1: Implementare `Editor::open`/`close`** costruendo le view in codice e registrandosi come listener dei parametri; `close` deve rimuovere tutti i listener e rilasciare le view.
 - [ ] **Step 2: Layout.** Una tabella `struct ControlSpec { ParamID id; ControlKind kind; Rect rect; const char* label; }` per sezione, senza calcolare coordinate sparse nel codice. Sfondo: PNG `panel_<variante>.png`, con tinta unita se manca.
 - [ ] **Step 2b: Fascia dei meter** sotto l'intestazione: due `MeterBar` stereo (Input, Output), due `MeterBar` per le gain reduction (Comp, Limiter, disegnate dall'alto verso il basso) e sei `ClipLed` (Input, EQ, Comp, Drive, Limiter, Output). I valori arrivano dai parametri `kMeter*` con un timer da 30 ms; il clic su un `ClipLed` scrive `kClearClips`.
-- [ ] **Step 3: Campo del modello NAM** (in basso a destra nel riquadro Drive, cliccabile, niente pulsante separato) che apre `CNewFileSelector` (filtro `*.nam`) e chiama `Controller::requestModelLoad`; mostra `modelName()` oppure `modelError()` in rosso, con icona a chip grigia per la GPU.
+- [ ] **Step 3: Campo del modello NAM** (in basso a destra nel riquadro Drive, cliccabile, niente pulsante separato) che apre il popup di scelta modello (spec §3.1, preview `stripper_model_browser.html`): scheda LOCAL con `LocalFolderSource` (scansione ricorsiva delle cartelle, ricerca, NO MODEL) e chiama `Controller::requestModelLoad`; mostra `modelName()` oppure `modelError()` in rosso, con icona a chip grigia per la GPU. Senza modello: passthrough e controllo Drive attenuato. Aggiungere anche la schermata CREDITS con flip (spec §4).
 - [ ] **Step 4: Variante di texture.** Se lo stato non ne contiene una, il controller ne sceglie una casuale alla prima creazione e la salva.
 - [ ] **Step 5: Verifica build e test.**
   Run: `cmake --build build --target the_stripper the_stripper_tests && ctest --test-dir build -R the_stripper --output-on-failure && ls "dist/The Stripper.vst3"`
