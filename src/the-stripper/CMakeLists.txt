@@ -21,33 +21,13 @@ set(VST3_SDK_PLUGINTERFACES "${VST3_SDK_PATH}/pluginterfaces")
 set(VST3_SDK_PUBLIC "${VST3_SDK_PATH}/public.sdk")
 
 # ---------------------------------------------------------------------------
-# NeuralAmpModelerCore (CPU inference for Drive stage)
-# ---------------------------------------------------------------------------
-set(NAM_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../vendors/NeuralAmpModelerCore")
-set(NAM_SOURCES
-  ${NAM_ROOT}/NAM/activations.cpp
-  ${NAM_ROOT}/NAM/container.cpp
-  ${NAM_ROOT}/NAM/conv1d.cpp
-  ${NAM_ROOT}/NAM/convnet.cpp
-  ${NAM_ROOT}/NAM/dsp.cpp
-  ${NAM_ROOT}/NAM/get_dsp.cpp
-  ${NAM_ROOT}/NAM/lstm.cpp
-  ${NAM_ROOT}/NAM/ring_buffer.cpp
-  ${NAM_ROOT}/NAM/slimmable_wavenet.cpp
-  ${NAM_ROOT}/NAM/util.cpp
-  ${NAM_ROOT}/NAM/wavenet.cpp
-)
-set(NAM_INCLUDE_DIRS
-  ${NAM_ROOT}
-  ${NAM_ROOT}/Dependencies/eigen
-  ${NAM_ROOT}/Dependencies/nlohmann
-)
-
-# ---------------------------------------------------------------------------
 # gpu_nam (GPU-accelerated NAM inference via CUDA, with CPU-stub fallback)
 # ---------------------------------------------------------------------------
 set(GPU_NAM_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../shared/gpu_nam")
 add_subdirectory(${GPU_NAM_DIR} ${CMAKE_CURRENT_BINARY_DIR}/gpu_nam)
+
+# NamDrive + NeuralAmpModelerCore (shared with other plugins; needs gpu_nam above)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../shared/nam_drive ${CMAKE_CURRENT_BINARY_DIR}/nam_drive)
 
 
 # Platform module entry point from the VST3 SDK (ModuleEntry / bundleEntry / InitDll).
@@ -69,8 +49,6 @@ add_library(the_stripper SHARED
   src/dsp/fourk_eq.cpp
   src/dsp/blockparty.cpp
   src/dsp/denoise.cpp
-  src/dsp/nam_drive.cpp
-  ${NAM_SOURCES}
 )
 
 target_include_directories(the_stripper PRIVATE
@@ -83,14 +61,12 @@ target_include_directories(the_stripper PRIVATE
   ${VST3_SDK_PLUGINTERFACES}/vst
   ${VST3_SDK_PUBLIC}/source
   ${VST3_SDK_PUBLIC}/source/vst
-  ${NAM_INCLUDE_DIRS}
 )
 
 target_compile_definitions(the_stripper PRIVATE
   UNICODE
   _UNICODE
   NDEBUG
-  NAM_SAMPLE_FLOAT
 )
 
 if(WIN32)
@@ -127,7 +103,7 @@ endif()
 
 # Link gpu_nam (GPU NAM inference with automatic CPU-stub fallback).
 # cudart is propagated as a PUBLIC dependency of gpu_nam.
-target_link_libraries(the_stripper PRIVATE gpu_nam sdk)
+target_link_libraries(the_stripper PRIVATE nam_drive gpu_nam sdk)
 if(APPLE)
   target_link_libraries(the_stripper PRIVATE "-framework CoreFoundation")
   target_link_options(the_stripper PRIVATE
@@ -149,8 +125,6 @@ add_executable(the_stripper_tests
   src/dsp/multicomp_engines.cpp
   src/dsp/blockparty.cpp
   src/dsp/denoise.cpp
-  src/dsp/nam_drive.cpp
-  ${NAM_SOURCES}
 )
 target_include_directories(the_stripper_tests PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -159,10 +133,8 @@ target_include_directories(the_stripper_tests PRIVATE
   ${VST3_SDK_PATH}
   ${VST3_SDK_PLUGINTERFACES}/base
   ${VST3_SDK_PLUGINTERFACES}/vst
-  ${NAM_INCLUDE_DIRS}
 )
-target_compile_definitions(the_stripper_tests PRIVATE NAM_SAMPLE_FLOAT)
-target_link_libraries(the_stripper_tests PRIVATE gpu_nam)
+target_link_libraries(the_stripper_tests PRIVATE nam_drive gpu_nam)
 add_test(NAME the_stripper_tests COMMAND the_stripper_tests)
 
 # Module/factory lifecycle smoke test: dlopens the built bundle from dist/ (exit 77 = skipped

@@ -1,5 +1,5 @@
 /**
- * Fairy Tapes · The Stripper — NAM Drive DSP implementation.
+ * Fairy Tapes · shared — NAM Drive DSP implementation.
  *
  * Inference path priority:
  *   1. GPU (custom CUDA via shared/gpu_nam) — if available and model supported.
@@ -23,7 +23,7 @@
 #include <cstring>
 #include <iostream>
 
-namespace FairyTapes::TheStripper::DSP {
+namespace FairyTapes::Shared::DSP {
 
 static constexpr float kRmsTimeConstantSec = 0.1f;
 static constexpr float kRmsFloor = 1e-6f;
@@ -213,4 +213,4 @@ void NamDrive::process(float* left, float* right, int numSamples) {
   }
 }
 
-} // namespace FairyTapes::TheStripper::DSP
+} // namespace FairyTapes::Shared::DSP

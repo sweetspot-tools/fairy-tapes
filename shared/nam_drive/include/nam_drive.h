@@ -1,5 +1,5 @@
 /**
- * Fairy Tapes · The Stripper — NAM Drive DSP wrapper.
+ * Fairy Tapes · shared — NAM Drive DSP wrapper.
  *
  * Single-knob drive: the Drive parameter controls how hard the signal is
  * pushed into the NAM model (0 = unity / coloration only, 1 = +20 dB).
@@ -25,7 +25,7 @@ namespace nam {
 class DSP;
 }
 
-namespace FairyTapes::TheStripper::DSP {
+namespace FairyTapes::Shared::DSP {
 
 class NamDrive {
 public:
@@ -84,4 +84,4 @@ private:
   std::vector<float> mono_out_;
 };
 
-} // namespace FairyTapes::TheStripper::DSP
+} // namespace FairyTapes::Shared::DSP
