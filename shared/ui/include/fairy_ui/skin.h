@@ -10,7 +10,7 @@
 
 namespace FairyTapes::Ui {
 
-// Agreed resource names. A control draws the bitmap unscaled at its rect when present.
+// Agreed resource names. A control draws the bitmap stretched to its view rect when present.
 namespace SkinAsset {
 inline constexpr const char* kPanel = "panel.png";  // whole editor background
 inline constexpr const char* kKnobBody = "knob_body.png";
