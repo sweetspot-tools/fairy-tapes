@@ -409,14 +409,14 @@ function dbCol(i){var d=-60+i*(60/(NL-1));return d>=-1?RED:(d>=-9?YEL:(d>=-18?'#
 var rIL=ledRow(114,'L',dbCol),rIR=ledRow(128,'R',dbCol),rOL=ledRow(156,'L',dbCol),rOR=ledRow(170,'R',dbCol);
 txt('IN',LX-36,124,11,YEL,'middle',800);txt('OUT',LX-36,166,11,YEL,'middle',800);
 [-60,-48,-36,-24,-12,0].forEach(function(d){var idx=Math.round((d+60)/(60/(NL-1)));txt(String(d),LX+idx*STEP,146,9,DIMW,'middle',700);});
-var rDK=ledRow(214,'',function(i){return i>8?RED:AMBL;});txt('DUCK',LX-36,218,11,YEL,'middle',800);
-txt('send level reduction',LX+5*STEP+8,236,9,DIMW,'middle',700);
+var rDK=ledRow(198,'',function(i){return i>8?RED:AMBL;});txt('DUCK',LX-36,202,11,YEL,'middle',800);
+txt('send level reduction',LX+5*STEP+8,216,9,DIMW,'middle',700);
 var clipEl=[],clipUntil=[0,0];
 ['IN','OUT'].forEach(function(n,i){var x=LX+4+i*64,g=el('g',{style:'cursor:pointer'});
-  var d=el('circle',{cx:x,cy:192,r:3.4,fill:OFFL,stroke:'#000','stroke-width':.6},g);txt(n,x+9,196,10,W,'start',800,g);
+  var d=el('circle',{cx:x,cy:238,r:3.4,fill:OFFL,stroke:'#000','stroke-width':.6},g);txt(n,x+9,242,10,W,'start',800,g);
   el('title',{},g).textContent='Clip (0 dBFS or above): click to clear';
   g.addEventListener('click',function(){clipUntil=[0,0];paintClips();});clipEl.push(d);});
-txt('CLIP',LX-36,196,11,YEL,'middle',800);
+txt('CLIP',LX-36,242,11,YEL,'middle',800);
 function paintClips(){var t=performance.now();clipEl.forEach(function(d,i){d.setAttribute('fill',t<clipUntil[i]?RED:OFFL);});}
 endGrp();reg(gMt,false);
 function setLeds(r,n){r.a.forEach(function(c,i){c.setAttribute('fill',i<n?r.col(i):OFFL);});}
@@ -430,8 +430,8 @@ function drawMeters(pos){
   setLeds(rDK,Math.round((1-gain[i])*NL));
 }
 box(806,92,170,170,'OUTPUT','bottom');
-var gOut=grp();knob(891,186,'MIX',P.mix,'DRY','WET','',{def:.3,fmt:F.pct,r:22,onchg:onk('mix')});endGrp();reg(gOut,false);
-btn(891,126,'BYPASS',false,function(b){toggle(b);GB=b._on;MODS.forEach(paint);GBTN.forEach(function(x){x.style.opacity=GB?DIM:1;if(x._lg)x._lg.style.opacity=GB?DIM:1;});});
+var gOut=grp();knob(891,176,'MIX',P.mix,'DRY','WET','',{def:.3,fmt:F.pct,r:22,onchg:onk('mix')});endGrp();reg(gOut,false);
+btn(940,130,'BYPASS',false,function(b){toggle(b);GB=b._on;MODS.forEach(paint);GBTN.forEach(function(x){x.style.opacity=GB?DIM:1;if(x._lg)x._lg.style.opacity=GB?DIM:1;});});
 
 /* ============ ROW B : DELAY ============ */
 box(24,282,952,150,'DELAY','bottom');
