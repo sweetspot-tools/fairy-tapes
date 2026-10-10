@@ -16,6 +16,7 @@
 #include "dsp/denoise.h"
 #include "dsp/meter.h"
 #include "nam_drive.h"
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -24,7 +25,7 @@ namespace FairyTapes::TheStripper {
 class Processor : public Steinberg::Vst::AudioEffect {
 public:
   Processor();
-  ~Processor() override = default;
+  ~Processor() override;
 
   Steinberg::tresult PLUGIN_API initialize(Steinberg::FUnknown* context) override;
   Steinberg::tresult PLUGIN_API setActive(Steinberg::TBool state) override;
@@ -34,6 +35,10 @@ public:
   Steinberg::tresult PLUGIN_API process(Steinberg::Vst::ProcessData& data) override;
   Steinberg::tresult PLUGIN_API setState(Steinberg::IBStream* state) override;
   Steinberg::tresult PLUGIN_API getState(Steinberg::IBStream* state) override;
+  // IConnectionPoint (messages from / to the controller: model loading)
+  Steinberg::tresult PLUGIN_API connect(Steinberg::Vst::IConnectionPoint* other) override;
+  Steinberg::tresult PLUGIN_API disconnect(Steinberg::Vst::IConnectionPoint* other) override;
+  Steinberg::tresult PLUGIN_API notify(Steinberg::Vst::IMessage* message) override;
 
 private:
   void updateParamsFromChanges(Steinberg::Vst::IParameterChanges* changes);
@@ -51,6 +56,11 @@ private:
   DSP::DeNoise gate_;
 
   // ---- metering (audio thread only; values leave through outputParameterChanges, see process()) ----
+  void requestModel(const std::string& path);   // message thread: ask NamDrive to (re)load; empty = no model
+  void sendModelStatus();                       // any non-audio thread: tell the controller how the load went
+  std::mutex peerMutex_;
+  std::string requestedPath_;
+
   void prepareMeters(double sampleRate);
   void publishMeters(Steinberg::Vst::ProcessData& data);
   DSP::PeakMeter peakIn_[2];

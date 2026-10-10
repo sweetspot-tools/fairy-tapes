@@ -149,6 +149,11 @@ target_include_directories(the_stripper_state_tests PRIVATE
 )
 add_test(NAME the_stripper_state_tests COMMAND the_stripper_state_tests)
 
+# Model messages (header-only, fake message objects): no SDK libraries needed.
+add_executable(the_stripper_message_tests tests/test_messages.cpp)
+target_include_directories(the_stripper_message_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+add_test(NAME the_stripper_message_tests COMMAND the_stripper_message_tests)
+
 # Module/factory lifecycle smoke test: dlopens the built bundle from dist/ (exit 77 = skipped
 # when the plugin has not been built). Links only the pluginterfaces IIDs, not the plugin.
 if(NOT WIN32)
@@ -173,6 +178,16 @@ if(NOT WIN32)
   target_link_libraries(the_stripper_meter_module_test PRIVATE pluginterfaces ${CMAKE_DL_LIBS})
   add_test(NAME the_stripper_meter_module_test COMMAND the_stripper_meter_module_test)
   set_tests_properties(the_stripper_meter_module_test PROPERTIES SKIP_RETURN_CODE 77)
+
+  # Model loading through messages, on the real module (mock host, peer and streams); skipped when the module is not built.
+  add_executable(the_stripper_model_module_test tests/test_processor_model.cpp ${VST3_SDK_PATH}/public.sdk/source/vst/vstinitiids.cpp)
+  target_include_directories(the_stripper_model_module_test PRIVATE ${VST3_SDK_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_compile_definitions(the_stripper_model_module_test PRIVATE
+    THE_STRIPPER_MODULE="${THE_STRIPPER_MODULE_PATH}"
+    NAM_DRIVE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/../../shared/nam_drive/tests/fixtures")
+  target_link_libraries(the_stripper_model_module_test PRIVATE pluginterfaces pthread ${CMAKE_DL_LIBS})
+  add_test(NAME the_stripper_model_module_test COMMAND the_stripper_model_module_test)
+  set_tests_properties(the_stripper_model_module_test PROPERTIES SKIP_RETURN_CODE 77)
 endif()
 
 # ---------------------------------------------------------------------------

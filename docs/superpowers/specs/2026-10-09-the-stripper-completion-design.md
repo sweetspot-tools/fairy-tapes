@@ -115,6 +115,8 @@ Servono per vedere a colpo d'occhio dove il segnale si sporca e quanto lavorano 
 - VSTGUI4 aggiunge dipendenze di build (finestra, bitmap, file selector) per piattaforma; Linux/Windows/macOS verificati dalla CI esistente (`.github/workflows/build.yml`).
 - I parametri di meter non devono saturare il canale host↔plugin: limite di una scrittura ogni 16 ms, verificato in test.
 
+- **Messaggi dal thread di caricamento:** lo stato del modello torna al controller con un `IMessage` inviato dal thread di lavoro di `NamDrive` (non dal thread audio, dove sarebbe vietato allocare). Il messaggio è serializzato con un mutex e il processor azzera la callback prima di distruggersi; resta da verificare che Reaper e Cubase accettino messaggi da un thread diverso da quello dell'interfaccia.
+
 ## 9. Dipendenze con altri piani
 
 Doggystyle riusa `shared/nam_drive` e il caricamento asincrono: questo spec va implementato **prima** (almeno §2 e §3).

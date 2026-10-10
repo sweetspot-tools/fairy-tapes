@@ -16,7 +16,7 @@
 - [x] Task 2 — caricamento asincrono (`requestLoad`, `LoadState`; 5 test, 25 ripetizioni senza errori). Trovato e corretto un difetto del Task 1: i registratori delle architetture NAM sono inizializzatori statici e il linker li scartava dalla libreria statica; i consumatori usano ora `nam_drive_link(<target>)` (collegamento whole-archive)
 - [x] Task 3 — `kLimiterPound` e `kGateThreshold` (ora usati dal processor), stato v8 (parametri + percorso del modello; `state.h` header-only, v1-v8 leggibili), tabella dei parametri bloccata (`tests/param_table_golden.h`: ID verificati a compilazione, default a runtime; mutazioni di prova rilevate). **Resta per il Task 14/§6:** seme, viti, scritte sul nastro, segni di richiamo e impostazioni di comportamento nello stato; nomi e numero di passi non sono nella tabella bloccata (solo ID e default)
 - [x] Task 4 — meter (picchi in/out, 6 LED di clip per stadio, gain reduction compressore e limiter; parametri di sola lettura da `kMeterBase = 1000`, scritti al massimo ogni 16 ms; `kClearClips` scrivibile). Il guadagno del compressore è letto dai motori (`currentGainReductionDb()`: il rapporto dei picchi non funziona con FET e Bus, che hanno guadagno in ingresso), quello del limiter dal rapporto dei picchi (BlockParty non lo espone). Test: unit (`test_meter.cpp`) e test nel modulo vero con code di parametri simulate (`test_processor_meters.cpp`)
-- [ ] Task 5 — messaggi del modello
+- [x] Task 5 — messaggi del modello (`messages.h`: `LoadModel` controller → processor, `ModelStatus` processor → controller; stringhe in UTF-8 binario; il processor ripristina il modello dallo stato; `Controller::requestModelLoad/modelName/modelError/modelState`; callback di fine caricamento di `NamDrive`; `requestLoad` con percorso vuoto = nessun modello). Test: messaggi con oggetti finti, `nam_drive` (vuoto e callback) e il modulo vero con host, peer e stream finti. **Da verificare in Reaper/Cubase:** il messaggio di stato parte dal thread di caricamento (non dal thread audio)
 - [ ] Task 6 — tessera di grana
 - [ ] Task 7 — VSTGUI e controlli
 - [ ] Task 8 — editor (suddiviso in 8a layout/binding, 8b fascia meter, 8c striscia del modello e popup locale)
@@ -169,11 +169,11 @@ git commit -m "feat(the-stripper): add peak/clip/gain-reduction metering as read
 - Consumes: `NamDrive::requestLoad/loadState/loadedModelName/lastError` (Task 2), `PluginState` (Task 3).
 - Produces: messaggi `IMessage` con id `"LoadModel"` (attributo stringa `path`, controller → processor) e `"ModelStatus"` (attributi `name` e `error`, processor → controller); il controller espone `std::string modelName() const`, `std::string modelError() const` e `void requestModelLoad(const std::string& path)`.
 
-- [ ] **Step 1: Scrivere i test** sulle parti pure: `test_model_message_roundtrip` (funzioni libere `encodeLoadMessage`/`decodeLoadMessage` su una classe `IMessage` di test); `test_state_restores_model_path_triggers_load` (dopo `setState` con percorso valido, `NamDrive` va in `Loading`/`Loaded`).
-- [ ] **Step 2: Eseguire, verificare il fallimento.**
-- [ ] **Step 3: Implementare.** Il processor gestisce `"LoadModel"` in `notify`, chiama `requestLoad`; ogni volta che lo stato cambia (controllato a fine `process`, senza allocazioni) invia `"ModelStatus"` tramite il canale di messaggi del host; `getState`/`setState` salvano e ricaricano il percorso. Il controller memorizza nome ed errore ricevuti e li passa all'editor.
-- [ ] **Step 4: Eseguire i test.** Expected: PASS.
-- [ ] **Step 5: Commit**
+- [x] **Step 1: Scrivere i test** sulle parti pure: `test_model_message_roundtrip` (funzioni libere `encodeLoadMessage`/`decodeLoadMessage` su una classe `IMessage` di test); `test_state_restores_model_path_triggers_load` (dopo `setState` con percorso valido, `NamDrive` va in `Loading`/`Loaded`).
+- [x] **Step 2: Eseguire, verificare il fallimento.**
+- [x] **Step 3: Implementare.** Il processor gestisce `"LoadModel"` in `notify`, chiama `requestLoad`; ogni volta che lo stato cambia (controllato a fine `process`, senza allocazioni) invia `"ModelStatus"` tramite il canale di messaggi del host; `getState`/`setState` salvano e ricaricano il percorso. Il controller memorizza nome ed errore ricevuti e li passa all'editor.
+- [x] **Step 4: Eseguire i test.** Expected: PASS.
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/the-stripper

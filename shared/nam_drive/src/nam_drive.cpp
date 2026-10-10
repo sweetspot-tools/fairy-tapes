@@ -60,6 +60,12 @@ struct NamDrive::Loaded {
   }
 };
 
+/// File names are reported as UTF-8 on every platform (a plain .string() would be the ANSI code page on Windows).
+static std::string toUtf8(const std::filesystem::path& p) {
+  const auto u = p.u8string();
+  return std::string(u.begin(), u.end());
+}
+
 NamDrive::NamDrive() = default;
 
 NamDrive::~NamDrive() {
@@ -181,6 +187,11 @@ std::string NamDrive::lastError() const {
   return last_error_;
 }
 
+void NamDrive::setLoadCallback(std::function<void()> cb) {
+  std::lock_guard<std::mutex> lk(cb_mutex_);
+  load_cb_ = std::move(cb);
+}
+
 void NamDrive::collectGarbage() {
   for (auto& slot : graveyard_)
     delete slot.exchange(nullptr, std::memory_order_acq_rel);
@@ -201,7 +212,7 @@ bool NamDrive::loadModel(const std::filesystem::path& path) {
     return false;
   }
   active_.store(m.release(), std::memory_order_release);
-  setInfo(LoadState::Loaded, path.filename().string(), "");
+  setInfo(LoadState::Loaded, toUtf8(path.filename()), "");
   return true;
 }
 
@@ -251,8 +262,11 @@ void NamDrive::workerLoop() {
     lk.unlock();
 
     std::string err;
-    auto m = build(path, sr, block, err);
+    std::unique_ptr<Loaded> m;
+    if (!path.empty())
+      m = build(path, sr, block, err);
 
+    bool published = false;
     {
       std::lock_guard<std::mutex> il(info_mutex_);
       if (generation_ == gen) {
@@ -260,13 +274,21 @@ void NamDrive::workerLoop() {
         Loaded* next = m ? m.release() : new Loaded();
         delete pending_.exchange(next, std::memory_order_acq_rel);
         if (next->valid())
-          setInfo(LoadState::Loaded, path.filename().string(), "");
+          setInfo(LoadState::Loaded, toUtf8(path.filename()), "");
+        else if (path.empty())
+          setInfo(LoadState::Idle, "", "");     // an explicit "no model" is not a failure
         else
           setInfo(LoadState::Failed, "", err);
+        published = true;
       }
       // else: a newer request superseded this one; the result is dropped (m is freed here)
     }
     collectGarbage();
+    if (published) {
+      std::lock_guard<std::mutex> cl(cb_mutex_);
+      if (load_cb_)
+        load_cb_();
+    }
     lk.lock();
   }
 }

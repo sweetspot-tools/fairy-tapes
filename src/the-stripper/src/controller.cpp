@@ -4,6 +4,7 @@
  */
 
 #include "controller.h"
+#include "pluginterfaces/base/funknownimpl.h"
 #include "state.h"
 #include "pluginterfaces/base/ipluginbase.h"
 #include "pluginterfaces/vst/ivstunits.h"
@@ -37,6 +38,7 @@ Steinberg::tresult PLUGIN_API Controller::queryInterface(const Steinberg::TUID i
   QUERY_INTERFACE(iid, obj, Steinberg::FUnknown::iid, Steinberg::Vst::IEditController)
   QUERY_INTERFACE(iid, obj, Steinberg::IPluginBase::iid, Steinberg::IPluginBase)
   QUERY_INTERFACE(iid, obj, Steinberg::Vst::IEditController::iid, Steinberg::Vst::IEditController)
+  QUERY_INTERFACE(iid, obj, Steinberg::Vst::IConnectionPoint::iid, Steinberg::Vst::IConnectionPoint)
   *obj = nullptr;
   return Steinberg::kNoInterface;
 }
@@ -54,7 +56,10 @@ Steinberg::tresult PLUGIN_API Controller::setState(Steinberg::IBStream* state) {
     return Steinberg::kResultFalse;
   for (int i = 0; i < kNumParams; ++i)
     param_value_[i] = static_cast<Steinberg::Vst::ParamValue>(st.params[i]);
-  modelPath_ = st.modelPath;
+  {
+    std::lock_guard<std::mutex> lk(modelMutex_);
+    modelPath_ = st.modelPath;
+  }
   return Steinberg::kResultOk;
 }
 
@@ -517,13 +522,56 @@ Steinberg::IPlugView* PLUGIN_API Controller::createView(Steinberg::FIDString nam
 }
 
 Steinberg::tresult PLUGIN_API Controller::initialize(Steinberg::FUnknown* context) {
-  (void)context;
+  host_ = Steinberg::U::cast<Steinberg::Vst::IHostApplication>(context);   // needed to allocate messages
   return Steinberg::kResultOk;
 }
 
 Steinberg::tresult PLUGIN_API Controller::terminate() {
-  component_handler_.reset();
+  peer_ = nullptr;
+  host_ = nullptr;
   return Steinberg::kResultOk;
 }
+
+Steinberg::tresult PLUGIN_API Controller::connect(Steinberg::Vst::IConnectionPoint* other) {
+  peer_ = other;
+  return Steinberg::kResultOk;
+}
+
+Steinberg::tresult PLUGIN_API Controller::disconnect(Steinberg::Vst::IConnectionPoint*) {
+  peer_ = nullptr;
+  return Steinberg::kResultOk;
+}
+
+Steinberg::tresult PLUGIN_API Controller::notify(Steinberg::Vst::IMessage* message) {
+  ModelStatus st;
+  if (!decodeStatusMessage(message, st))
+    return Steinberg::kResultFalse;
+  std::lock_guard<std::mutex> lk(modelMutex_);
+  modelStatus_ = st;
+  return Steinberg::kResultOk;
+}
+
+void Controller::requestModelLoad(const std::string& path) {
+  {
+    std::lock_guard<std::mutex> lk(modelMutex_);
+    modelPath_ = path;
+    modelStatus_.state = path.empty() ? 0 : 1;   // "loading" until the processor answers
+    modelStatus_.error.clear();
+    if (path.empty())
+      modelStatus_.name.clear();
+  }
+  if (!peer_ || !host_)
+    return;
+  if (Steinberg::Vst::IMessage* msg = Steinberg::Vst::allocateMessage(host_)) {
+    encodeLoadMessage(msg, path);
+    peer_->notify(msg);
+    msg->release();
+  }
+}
+
+std::string Controller::modelPath() const { std::lock_guard<std::mutex> lk(modelMutex_); return modelPath_; }
+std::string Controller::modelName() const { std::lock_guard<std::mutex> lk(modelMutex_); return modelStatus_.name; }
+std::string Controller::modelError() const { std::lock_guard<std::mutex> lk(modelMutex_); return modelStatus_.error; }
+int Controller::modelState() const { std::lock_guard<std::mutex> lk(modelMutex_); return modelStatus_.state; }
 
 } // namespace FairyTapes::TheStripper

@@ -7,11 +7,14 @@
 
 #include "processor.h"
 #include "state.h"
+#include "messages.h"
+#include "pluginterfaces/vst/ivstmessage.h"
 #include "base/source/fstreamer.h"
 #include "pluginterfaces/vst/ivstparameterchanges.h"
 #include "pluginterfaces/vst/ivstprocesscontext.h"
 #include "pluginterfaces/vst/vsttypes.h"
 #include <cstring>
+#include <filesystem>
 #include <algorithm>
 #include <cmath>
 
@@ -29,10 +32,16 @@ Processor::Processor() {
     param_value_[i] = defaults[i];
 }
 
+Processor::~Processor() {
+  namDrive_.setLoadCallback(nullptr);   // the worker thread must not call back into a half-destroyed processor
+}
+
 Steinberg::tresult PLUGIN_API Processor::initialize(Steinberg::FUnknown* context) {
   auto result = AudioEffect::initialize(context);
   if (result != Steinberg::kResultOk)
     return result;
+
+  namDrive_.setLoadCallback([this] { sendModelStatus(); });
 
   addAudioInput(STR16("Main Input"), Steinberg::Vst::SpeakerArr::kStereo);
   addAudioInput(STR16("Sidechain"), Steinberg::Vst::SpeakerArr::kStereo);
@@ -332,7 +341,60 @@ Steinberg::tresult PLUGIN_API Processor::setState(Steinberg::IBStream* state) {
   for (int i = 0; i < kNumParams; ++i)
     param_value_[i] = static_cast<Steinberg::Vst::ParamValue>(st.params[i]);
   modelPath_ = st.modelPath;
+  requestModel(modelPath_);   // restore the model the project was saved with
   return Steinberg::kResultOk;
+}
+
+void Processor::requestModel(const std::string& path) {
+  // A state restored with the model that is already loading or loaded does not reload it.
+  const auto st = namDrive_.loadState();
+  if (path == requestedPath_ && (st == Shared::DSP::NamDrive::LoadState::Loaded || st == Shared::DSP::NamDrive::LoadState::Loading))
+    return;
+  requestedPath_ = path;
+  modelPath_ = path;
+  const std::u8string u8(reinterpret_cast<const char8_t*>(path.data()), path.size());   // the path travels as UTF-8
+  namDrive_.requestLoad(std::filesystem::path(u8));
+}
+
+void Processor::sendModelStatus() {
+  std::lock_guard<std::mutex> lk(peerMutex_);
+  if (!getPeer())
+    return;
+  Steinberg::Vst::IMessage* msg = allocateMessage();
+  if (!msg)
+    return;
+  ModelStatus st;
+  st.state = static_cast<int>(namDrive_.loadState());
+  st.name = namDrive_.loadedModelName();
+  st.error = namDrive_.lastError();
+  encodeStatusMessage(msg, st);
+  sendMessage(msg);
+  msg->release();
+}
+
+Steinberg::tresult PLUGIN_API Processor::connect(Steinberg::Vst::IConnectionPoint* other) {
+  Steinberg::tresult r;
+  {
+    std::lock_guard<std::mutex> lk(peerMutex_);
+    r = AudioEffect::connect(other);
+  }
+  sendModelStatus();   // a controller that connects late learns the current state
+  return r;
+}
+
+Steinberg::tresult PLUGIN_API Processor::disconnect(Steinberg::Vst::IConnectionPoint* other) {
+  std::lock_guard<std::mutex> lk(peerMutex_);
+  return AudioEffect::disconnect(other);
+}
+
+Steinberg::tresult PLUGIN_API Processor::notify(Steinberg::Vst::IMessage* message) {
+  std::string path;
+  if (decodeLoadMessage(message, path)) {
+    requestModel(path);
+    sendModelStatus();   // "Loading" right away; the worker reports the outcome through the callback
+    return Steinberg::kResultOk;
+  }
+  return AudioEffect::notify(message);
 }
 
 Steinberg::tresult PLUGIN_API Processor::getState(Steinberg::IBStream* state) {

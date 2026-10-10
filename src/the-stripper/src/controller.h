@@ -8,12 +8,16 @@
 #include <string>
 #include "params.h"
 #include "pluginterfaces/base/funknown.h"
+#include "messages.h"
 #include "pluginterfaces/vst/ivsteditcontroller.h"
+#include "pluginterfaces/vst/ivstmessage.h"
+#include "pluginterfaces/vst/ivsthostapplication.h"
+#include <mutex>
 
 namespace FairyTapes::TheStripper {
 
 // IEditController already inherits from IPluginBase; avoid duplicate base.
-class Controller : public Steinberg::Vst::IEditController {
+class Controller : public Steinberg::Vst::IEditController, public Steinberg::Vst::IConnectionPoint {
 public:
   Controller();
   ~Controller() { FUNKNOWN_DTOR }
@@ -48,12 +52,28 @@ public:
   Steinberg::tresult PLUGIN_API setComponentHandler(Steinberg::Vst::IComponentHandler* handler) override;
   Steinberg::IPlugView* PLUGIN_API createView(Steinberg::FIDString name) override;
 
+  // IConnectionPoint: model loading messages (see messages.h)
+  Steinberg::tresult PLUGIN_API connect(Steinberg::Vst::IConnectionPoint* other) override;
+  Steinberg::tresult PLUGIN_API disconnect(Steinberg::Vst::IConnectionPoint* other) override;
+  Steinberg::tresult PLUGIN_API notify(Steinberg::Vst::IMessage* message) override;
+
+  /** Ask the processor to load a .nam model (UTF-8 path); empty = no model. The editor shows the outcome via the getters below. */
+  void requestModelLoad(const std::string& path);
+  std::string modelPath() const;
+  std::string modelName() const;    // file name of the loaded model, empty when none
+  std::string modelError() const;   // why the last load failed, empty otherwise
+  int modelState() const;           // 0 idle, 1 loading, 2 loaded, 3 failed
+
   DECLARE_FUNKNOWN_METHODS
 
 private:
   Steinberg::Vst::ParamValue param_value_[kNumParams];
   Steinberg::Vst::ParamValue meter_value_[kNumMeters] = {};   // written by the processor, read by the editor
   std::string modelPath_;
+  mutable std::mutex modelMutex_;   // notify() may arrive on a worker thread
+  ModelStatus modelStatus_;
+  Steinberg::IPtr<Steinberg::Vst::IConnectionPoint> peer_;
+  Steinberg::IPtr<Steinberg::Vst::IHostApplication> host_;
   Steinberg::IPtr<Steinberg::Vst::IComponentHandler> component_handler_;
 };
 

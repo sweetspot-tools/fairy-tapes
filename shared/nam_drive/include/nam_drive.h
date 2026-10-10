@@ -17,6 +17,7 @@
 #include <condition_variable>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -63,6 +64,10 @@ public:
   /// never allocates, locks or waits, and a replaced model is freed off the audio thread.
   /// A failed load unloads the current model: the Drive passes the signal through.
   void requestLoad(const std::filesystem::path& path);
+
+  /// Called from the worker thread each time a request has completed (loaded, failed or unloaded), never for a
+  /// request that was superseded. Keep it short; pass nullptr to clear (returns once a running call has finished).
+  void setLoadCallback(std::function<void()> cb);
 
   LoadState loadState() const { return static_cast<LoadState>(state_.load(std::memory_order_acquire)); }
 
@@ -119,7 +124,9 @@ private:
   bool stop_ = false;
   std::thread worker_;
 
-  double sample_rate_ = 48000.0;
+  std::atomic<double> sample_rate_{48000.0};   // written by the audio thread, read by requestLoad on the message thread
+  std::mutex cb_mutex_;
+  std::function<void()> load_cb_;
   int max_block_size_ = 8192;
   float drive_ = 0.0f;
 
