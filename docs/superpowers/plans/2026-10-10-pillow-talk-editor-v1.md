@@ -59,11 +59,11 @@
 **Interfaces:**
 - Produces: `enum class Wear { Off, Light, Heavy }`; `struct WearLayout { std::vector<TapePlacement> tapes; std::vector<ScrewPlacement> screws; }` con `WearLayout layoutFromSeed(uint32_t seed, Wear w, const Rect& panel)` (posizione e rotazione dei nastri, posizioni delle viti: pure e deterministiche, base fissa in `layout.h` con piccole variazioni dal seme); `void renderWear(uint8_t* rgba, int w, int h, int scale, uint32_t seed, Wear level)` che disegna graffi, segni e sporco semitrasparenti su un buffer RGBA trasparente (pure, senza VSTGUI); la bitmap risultante si mette in cache nell'editor e si ridisegna come un normale `drawBitmap`.
 
-- [ ] **Step 1: Test:** stesso seme e livello → stessi byte; semi diversi → byte diversi; Off lascia il buffer trasparente; Heavy ha più pixel coperti di Light; nastri e viti sempre dentro il pannello e al più una vite mancante; tempo di `renderWear` a 2000 × 1256 sotto una soglia larga (es. 400 ms in Release) come controllo di sanità, non come benchmark.
-- [ ] **Step 2: Eseguire, verificare il fallimento.**
-- [ ] **Step 3: Implementare** `wear.{h,cpp}` guardando la preview (`pillow_rack.html`) come riferimento visivo e confrontando a occhio Off/Light/Heavy; riportare nella spec §12 il tempo misurato. Se l'usura risulta troppo povera rispetto alla preview, **fermarsi e segnalarlo**: il ripiego concordato è aggiungere maschere PNG piccole in scala di grigi solo per l'usura, non sfondi interi.
-- [ ] **Step 4: Eseguire i test.** Expected: PASS.
-- [ ] **Step 5: Commit** `feat(pillow-talk): runtime wear generation from the instance seed`.
+- [x] **Step 1: Test:** stesso seme e livello → stessi byte; semi diversi → byte diversi; Off lascia il buffer trasparente; Heavy ha più pixel coperti di Light; nastri e viti sempre dentro il pannello e al più una vite mancante; tempo di `renderWear` a 2000 × 1256 sotto una soglia larga (es. 400 ms in Release) come controllo di sanità, non come benchmark.
+- [x] **Step 2: Eseguire, verificare il fallimento.**
+- [x] **Step 3: Implementare** `wear.{h,cpp}` guardando la preview (`pillow_rack.html`) come riferimento visivo e confrontando a occhio Off/Light/Heavy; riportare nella spec §12 il tempo misurato. Se l'usura risulta troppo povera rispetto alla preview, **fermarsi e segnalarlo**: il ripiego concordato è aggiungere maschere PNG piccole in scala di grigi solo per l'usura, non sfondi interi.
+- [x] **Step 4: Eseguire i test.** Expected: PASS.
+- [x] **Step 5: Commit** `feat(pillow-talk): runtime wear generation from the instance seed`.
 
 ---
 
