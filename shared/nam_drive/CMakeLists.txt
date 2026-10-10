@@ -36,3 +36,20 @@ target_include_directories(nam_drive PUBLIC
 )
 target_compile_definitions(nam_drive PUBLIC NAM_SAMPLE_FLOAT)
 target_link_libraries(nam_drive PUBLIC gpu_nam)
+
+# NeuralAmpModelerCore registers its architectures (Linear, WaveNet, ...) with static initialisers inside the
+# .cpp files. In a static library the linker drops object files nobody references, which would silently remove
+# those architectures ("No config parser registered for architecture: ..."). Consumers must therefore link the
+# whole archive: use nam_drive_link(<target>) instead of target_link_libraries(<target> ... nam_drive).
+function(nam_drive_link target)
+  target_link_libraries(${target} PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,nam_drive>")
+endfunction()
+
+# Tests (CTest): asynchronous loading. Fixtures live in tests/fixtures.
+add_executable(nam_drive_tests tests/test_nam_drive_async.cpp)
+nam_drive_link(nam_drive_tests)
+target_compile_definitions(nam_drive_tests PRIVATE NAM_DRIVE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures")
+if(UNIX AND NOT APPLE)
+  target_link_libraries(nam_drive_tests PRIVATE pthread)
+endif()
+add_test(NAME nam_drive_tests COMMAND nam_drive_tests)

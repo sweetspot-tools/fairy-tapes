@@ -103,7 +103,8 @@ endif()
 
 # Link gpu_nam (GPU NAM inference with automatic CPU-stub fallback).
 # cudart is propagated as a PUBLIC dependency of gpu_nam.
-target_link_libraries(the_stripper PRIVATE nam_drive gpu_nam sdk)
+nam_drive_link(the_stripper)
+target_link_libraries(the_stripper PRIVATE gpu_nam sdk)
 if(APPLE)
   target_link_libraries(the_stripper PRIVATE "-framework CoreFoundation")
   target_link_options(the_stripper PRIVATE
@@ -134,7 +135,8 @@ target_include_directories(the_stripper_tests PRIVATE
   ${VST3_SDK_PLUGINTERFACES}/base
   ${VST3_SDK_PLUGINTERFACES}/vst
 )
-target_link_libraries(the_stripper_tests PRIVATE nam_drive gpu_nam)
+nam_drive_link(the_stripper_tests)
+target_link_libraries(the_stripper_tests PRIVATE gpu_nam)
 add_test(NAME the_stripper_tests COMMAND the_stripper_tests)
 
 # Module/factory lifecycle smoke test: dlopens the built bundle from dist/ (exit 77 = skipped

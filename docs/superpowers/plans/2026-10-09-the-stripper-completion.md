@@ -13,7 +13,7 @@
 ## Stato dei compiti (2026-10-10)
 
 - [x] Task 1 — `NamDrive` in `shared/nam_drive` (commit `5805520`, adattato a NAM v0.6.0 in `10cb131`; 49 test su 49; CUDA non verificato)
-- [ ] Task 2 — caricamento asincrono (da fare per primo: sblocca 3, 5 e 8)
+- [x] Task 2 — caricamento asincrono (`requestLoad`, `LoadState`; 5 test, 25 ripetizioni senza errori). Trovato e corretto un difetto del Task 1: i registratori delle architetture NAM sono inizializzatori statici e il linker li scartava dalla libreria statica; i consumatori usano ora `nam_drive_link(<target>)` (collegamento whole-archive)
 - [ ] Task 3 — parametri nuovi, stato v8 esteso (vedi spec §6), tabella bloccata
 - [ ] Task 4 — meter
 - [ ] Task 5 — messaggi del modello
@@ -28,6 +28,7 @@
 - Fuori scopo: gain staging (i suoi due parametri restano inerti), integrazione Tone3000 (spec a parte, spec §10).
 - Tutto il testo visibile nell'editor è in inglese.
 - `NamDrive` in `shared/nam_drive`, namespace `FairyTapes::Shared::DSP`; il comportamento audio non cambia.
+- Collegare `nam_drive` con `nam_drive_link(<target>)`, non con `target_link_libraries`: serve il collegamento whole-archive (vedi Task 2).
 - Il thread audio non alloca e non attende mai; il modello sostituito si rilascia fuori dal thread audio.
 - I nuovi `ParamID` (`kLimiterPound`, `kGateThreshold`) si aggiungono **in coda**, prima di `kNumParams`: gli ID esistenti non cambiano.
 - `kStateVersion` passa da 7 a 8 (aggiunge il percorso del modello); lo stato v7 resta caricabile.
@@ -85,16 +86,16 @@ git commit -m "refactor: extract NamDrive to shared/nam_drive"
   - `std::string lastError() const` — vuoto se `loadState() != Failed`
   - `process()` adotta il modello pronto all'inizio del blocco, senza allocare né attendere.
 
-- [ ] **Step 1: Creare la fixture** `linear_unity.nam`: modello NAM di architettura `Linear` a un coefficiente 1.0, sample rate 48000 (formato dal loader `Linear` in `vendors/NeuralAmpModelerCore/NAM/dsp.cpp`; verificare che `nam::get_dsp` lo accetti).
-- [ ] **Step 2: Scrivere i test** (eseguibile con le macro di `test_params.cpp`): `test_requestLoad_reaches_Loaded` (attesa max 5 s, `loadedModelName() == "linear_unity.nam"`); `test_requestLoad_missing_file_fails_and_passes_through` (stato `Failed`, `lastError()` non vuoto, `process` lascia il segnale invariato); `test_requestLoad_garbage_file_fails` (file di testo); `test_last_request_wins` (due richieste ravvicinate, la seconda su un file inesistente → `Failed`, non `Loaded`); `test_process_during_load_is_finite` (un thread chiama `process` in loop su rumore mentre arriva `requestLoad`; nessun NaN, nessun valore oltre ±10).
-- [ ] **Step 3: Eseguire, verificare il fallimento** (API mancante).
+- [x] **Step 1: Creare la fixture** `linear_unity.nam`: modello NAM di architettura `Linear` a un coefficiente 1.0, sample rate 48000 (formato dal loader `Linear` in `vendors/NeuralAmpModelerCore/NAM/dsp.cpp`; verificare che `nam::get_dsp` lo accetti).
+- [x] **Step 2: Scrivere i test** (eseguibile con le macro di `test_params.cpp`): `test_requestLoad_reaches_Loaded` (attesa max 5 s, `loadedModelName() == "linear_unity.nam"`); `test_requestLoad_missing_file_fails_and_passes_through` (stato `Failed`, `lastError()` non vuoto, `process` lascia il segnale invariato); `test_requestLoad_garbage_file_fails` (file di testo); `test_last_request_wins` (due richieste ravvicinate, la seconda su un file inesistente → `Failed`, non `Loaded`); `test_process_during_load_is_finite` (un thread chiama `process` in loop su rumore mentre arriva `requestLoad`; nessun NaN, nessun valore oltre ±10).
+- [x] **Step 3: Eseguire, verificare il fallimento** (API mancante).
   Run: `cmake --build build --target nam_drive_tests`
   Expected: errore di compilazione.
-- [ ] **Step 4: Implementare l'API.** Thread di lavoro per richiesta (o un thread persistente con coda a un elemento), costruzione del modello fuori dal lock audio, scambio con `std::atomic<Model*>`; il thread audio fa `exchange` all'inizio di `process` e consegna il modello vecchio a una coda di rilascio svuotata dal thread di lavoro. `loadModel`/`unloadModel` sincroni restano per compatibilità.
-- [ ] **Step 5: Eseguire i test.**
+- [x] **Step 4: Implementare l'API.** Thread di lavoro per richiesta (o un thread persistente con coda a un elemento), costruzione del modello fuori dal lock audio, scambio con `std::atomic<Model*>`; il thread audio fa `exchange` all'inizio di `process` e consegna il modello vecchio a una coda di rilascio svuotata dal thread di lavoro. `loadModel`/`unloadModel` sincroni restano per compatibilità.
+- [x] **Step 5: Eseguire i test.**
   Run: `cmake --build build --target nam_drive_tests && ctest --test-dir build -R nam_drive --output-on-failure`
   Expected: PASS.
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add shared/nam_drive
