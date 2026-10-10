@@ -47,7 +47,7 @@ Più chat sullo stesso checkout si rovinano a vicenda (cambi di branch sotto i p
 
 ## 7. Grafica comune
 
-Le regole visive condivise sono in **`docs/DESIGN_SYSTEM.md`** (pannello rack, livelli, controlli, usura, nastro, viti, retro con Settings e Credits, lingua). Ogni plugin ha le proprie scelte di **materiale e texture** (vedi lì) ma segue lo stesso linguaggio. Le preview HTML di riferimento stanno in `src/<plugin>/docs/mockups/`; la preview di The Stripper (`stripper_rack.html`) è il riferimento del linguaggio comune. Tutto il testo visibile nell'editor è **in inglese**.
+Le regole visive condivise sono in **`docs/DESIGN_SYSTEM.md`** (pannello rack, livelli, controlli, usura, nastro, viti, retro con Settings e Credits, lingua). Materiale dei controlli e texture del pannello sono **uguali per tutti i plugin** (quelli di The Stripper, vedi lì). Le preview HTML di riferimento stanno in `src/<plugin>/docs/mockups/`; la preview di The Stripper (`stripper_rack.html`) è il riferimento del linguaggio comune. Tutto il testo visibile nell'editor è **in inglese**.
 
 ## 8. Puntatori utili
 

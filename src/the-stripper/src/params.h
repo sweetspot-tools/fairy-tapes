@@ -57,8 +57,8 @@ enum MeterID : Steinberg::Vst::ParamID {
   kMeterInR,
   kMeterOutL,
   kMeterOutR,
-  kMeterGrComp,             // gain reduction, 0..20 dB (shown downwards)
-  kMeterGrLimiter,          // 0..12 dB
+  kMeterGrComp,             // gain reduction in the SSL 360 Link encoding: 0 = none, dB = 20*log10(1 - value); visible, read-only
+  kMeterGrLimiter,          // same encoding
   kClipInput,               // 0/1: the stage's output reached 0 dBFS in the last 2 s
   kClipEq,
   kClipComp,

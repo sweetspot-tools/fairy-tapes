@@ -21,7 +21,7 @@ body{margin:0;padding:16px;background:#e9e8e4;font-family:system-ui,sans-serif;c
 </style></head><body>
 <div class="bar">
   <label><input type="checkbox" id="anim" checked> Animate meters</label>
-  <label>Texture <select id="tex"><option value="fine" selected>Fine grain</option><option value="wrinkle">Wrinkle (other plugins)</option><option value="none">None</option></select></label>
+  <label>Texture <select id="tex"><option value="fine" selected>Fine grain (all plugins)</option><option value="wrinkle">Wrinkle (reference only)</option><option value="none">None</option></select></label>
   <label><input type="checkbox" id="lit" checked> Light</label>
   <label>Wear <select id="wear"><option value="off">Off</option><option value="light">Light</option><option value="heavy">Heavy</option></select></label>
   <label>Zoom <select id="zoom"><option value="1">100%</option><option value="1.5">150%</option><option value="2">200%</option><option value="2.5">250%</option></select></label>
@@ -307,7 +307,7 @@ function box(x,y,w,h,title,where){
 function btn(cx,cy,label,on,cb,ledCol){
   var g=el('g',{style:'cursor:pointer'});
   var bi=++CTRL;aluBtnGap(g,cx-12,cy-11,24,22,bi);var ps=pressShadow(g,cx-12,cy-11,24,22,2);
-  el('rect',{x:cx-12,y:cy-11,width:24,height:22,rx:2,fill:'#9a9ca1',stroke:'#b8b8bb'},ps.face);aluBtnOverlay(ps.face,cx-12,cy-11,24,22,bi);
+  el('rect',{x:cx-12,y:cy-11,width:24,height:22,rx:2,fill:'#b9ae8d',stroke:'#d8cfb0'},ps.face);aluBtnOverlay(ps.face,cx-12,cy-11,24,22,bi);
   var led=el('circle',{cx:cx,cy:cy+21,r:3.4,stroke:'#000','stroke-width':.6},g);
   /* printed label: panel layer (below the tape); it follows its module / the global bypass for dimming */
   var lg=el('g',{transform:'translate(0,'+OFFY+')'},LY.scale);lg.style.transition='opacity .15s';txt(label,cx,cy-17,11,W,'middle',800,lg);g._lg=lg;if(CUR){(CUR._x=CUR._x||[]).push(lg);}

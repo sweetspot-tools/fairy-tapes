@@ -36,8 +36,8 @@ Output: `The Stripper.vst3` (bundle). Copy it into your host’s VST3 folder to 
 - [x] Minimal VST3 skeleton (pass-through)
 - [x] Parameters and state (strip mode, bypass per stage, gain staging trim, compress amount/mix)
 - [x] Processing chain: gain staging (Channel only, not implemented), ZLCompressor (Channel), Logical4 (Mix bus), 4K-EQ (Channel), stubs for Pultec (Mix bus EQ), Drive, Limiter, Gate
-- [x] No custom UI — Reaper (and other hosts) show standard parameter list
+- [x] Custom VSTGUI editor (1000 × 628, drawn by the code): layout, IN buttons, meters, NAM model picker; still to do: wear layers, tape fonts, back panel, screws (see `docs/superpowers/plans/`)
 - [ ] Gain staging stage (Channel): RMS + trim
 - [ ] Pultec (Mix bus EQ)
 - [ ] NAM with GPU extension (Drive); TapeHack2 when NAM off; BlockParty, Denoise
-- [ ] Custom strip UI + graphics
+- [x] Custom strip UI (first version, see above)

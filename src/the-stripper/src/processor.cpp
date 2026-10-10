@@ -317,8 +317,8 @@ void Processor::publishMeters(Steinberg::Vst::ProcessData& data) {
   put(kMeterInR, meterNormFromDb(peakIn_[1].levelDb(), -60.0, 6.0));
   put(kMeterOutL, meterNormFromDb(peakOut_[0].levelDb(), -60.0, 6.0));
   put(kMeterOutR, meterNormFromDb(peakOut_[1].levelDb(), -60.0, 6.0));
-  put(kMeterGrComp, meterNormFromDb(grComp_.value(), 0.0, 20.0));
-  put(kMeterGrLimiter, meterNormFromDb(grLimiter_.value(), 0.0, 12.0));
+  put(kMeterGrComp, DSP::grValueFromDb(grComp_.value()));   // SSL 360 Link encoding (spec 4.1)
+  put(kMeterGrLimiter, DSP::grValueFromDb(grLimiter_.value()));
   put(kClipInput, clip_[0].lit() ? 1.0 : 0.0);
   put(kClipEq, clip_[1].lit() ? 1.0 : 0.0);
   put(kClipComp, clip_[2].lit() ? 1.0 : 0.0);

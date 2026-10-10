@@ -38,6 +38,19 @@ inline double meterNormFromDb(double db, double minDb, double maxDb) {
   return std::clamp((db - minDb) / (maxDb - minDb), 0.0, 1.0);
 }
 
+/// Gain reduction as SSL 360 Link reads read-only VST3 meter parameters: 0 = none, 1 = full scale reduced to
+/// silence; the host side computes dB = 20 * log10(1 - value). Capped just below 1 so that stays finite.
+inline double grValueFromDb(double db) {
+  if (!(db > 0.0))
+    return 0.0;   // also NaN
+  return std::min(1.0 - 1e-9, 1.0 - std::pow(10.0, -db / 20.0));
+}
+inline double grDbFromValue(double value) {
+  if (!(value > 0.0))
+    return 0.0;   // also NaN
+  return -20.0 * std::log10(1.0 - std::min(value, 1.0 - 1e-9));
+}
+
 class PeakMeter {
 public:
   void prepare(double sampleRate) {

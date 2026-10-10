@@ -8,6 +8,7 @@
 
 #include "params.h"
 
+#include <cmath>
 #include <cstddef>
 
 namespace FairyTapes::TheStripper::Ui {
@@ -151,6 +152,14 @@ constexpr Rect clipRect(int index) { return {kClipFirstX + index * kClipStep - 4
 // Section tags printed left of the rows (amber) and the dB scale under the output rows (dim white).
 constexpr double kMeterScaleY = 146;
 constexpr int kMeterScaleDb[] = {-60, -48, -36, -24, -18, -12, -6, 0};   // one label per LED at most (no overlap)
+
+// Bar position (0..1) of a gain-reduction parameter value (SSL encoding) on a scale of `maxDb` dB.
+inline double grBarNorm(double value, double maxDb) {
+  if (!(value > 0.0) || !(maxDb > 0.0)) return 0.0;
+  const double db = -20.0 * std::log10(1.0 - (value < 1.0 - 1e-9 ? value : 1.0 - 1e-9));
+  return db >= maxDb ? 1.0 : db / maxDb;
+}
+constexpr double kGrCompMaxDb = 20.0, kGrLimiterMaxDb = 12.0;
 
 inline bool meterDimmed(bool alwaysLit, bool globalBypass) { return globalBypass && !alwaysLit; }
 

@@ -88,9 +88,11 @@ Steinberg::tresult PLUGIN_API Controller::getParameterInfo(Steinberg::int32 inde
     info.stepCount = 0;
     info.defaultNormalizedValue = 0.0;
     info.unitId = Steinberg::Vst::kRootUnitId;
-    info.flags = Steinberg::Vst::ParameterInfo::kIsHidden |
+    // The two gain-reduction parameters are read-only but visible: SSL 360 Link lists them as assignable meter data.
+    const bool gainReduction = id == kMeterGrComp || id == kMeterGrLimiter;
+    info.flags = (gainReduction ? 0 : Steinberg::Vst::ParameterInfo::kIsHidden) |
                  (id == kClearClips ? 0 : Steinberg::Vst::ParameterInfo::kIsReadOnly);
-    static const char* const kTitles[] = {"Meter In L", "Meter In R", "Meter Out L", "Meter Out R", "GR Comp", "GR Limiter",
+    static const char* const kTitles[] = {"Meter In L", "Meter In R", "Meter Out L", "Meter Out R", "Compressor Gain Reduction", "Limiter Gain Reduction",
                                           "Clip Input", "Clip EQ", "Clip Comp", "Clip Drive", "Clip Limiter", "Clip Output", "Clear Clips"};
     asciiToStr128(kTitles[id - kMeterBase], info.title);
     asciiToStr128(kTitles[id - kMeterBase], info.shortTitle);

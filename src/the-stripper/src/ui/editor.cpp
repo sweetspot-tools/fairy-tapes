@@ -260,7 +260,9 @@ void Editor::updateMeters() {
   lastTick_ = now;
   for (std::size_t i = 0; i < bars_.size(); ++i) {
     if (!bars_[i]) continue;
-    bars_[i]->setLevel(ctl_->meterValue(kMeterRows[i].id), dt);
+    double v = ctl_->meterValue(kMeterRows[i].id);
+    if (kMeterRows[i].gainReduction) v = grBarNorm(v, kMeterRows[i].id == kMeterGrComp ? kGrCompMaxDb : kGrLimiterMaxDb);
+    bars_[i]->setLevel(v, dt);
     bars_[i]->setDimmed(meterDimmed(kMeterRows[i].alwaysLit, globalBypass_));
   }
   for (int i = 0; i < kClipCount; ++i) {
