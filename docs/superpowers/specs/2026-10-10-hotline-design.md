@@ -28,6 +28,13 @@ Catena, in ordine:
 - **Mono:** tasto manuale, spento all'avvio, **non** legato al dispositivo (deciso). Con Mono attivo si somma L+R, si elabora e lo stesso segnale va su entrambe le uscite. Con Mono spento L e R sono elaborati separatamente, con rumore e risonanza decorrelati.
 - **Cambio di Device:** crossfade di circa 40 ms tra i valori dei blocchi, senza scatti.
 
+### 2.1 Controlli utente e valori iniziali (fissati dal piano)
+
+- Drive, Noise e Room moltiplicano il valore del dispositivo per `2·n` (n = 0,5 → ×1). Tone sposta l'LPF di `(n−0,5)·2` ottave e l'HPF di `−(n−0,5)` ottave. Gain = `−20 + 40·n` dB. Mix è dry/wet dell'intero dispositivo.
+- Default: Device 0, Morph 1, Gain 0,5, Mono 0, Drive 0,5, Tone 0,5, Noise 0,5, Room 0,5, Mix 1, IN 1, Bypass 0.
+- **IN di CHARACTER spento:** Drive, Tone, Noise, Room e Mix sono ignorati (restano banda, cono, crush e compander del dispositivo, Mix = 1). Risolve la decisione aperta su Mix.
+- Valori iniziali dei sei dispositivi: tabella nel piano (`docs/superpowers/plans/2026-10-10-hotline.md`), da regolare a orecchio.
+
 ### Dispositivi
 
 Megaphone, Telephone, Walkie-talkie, AM radio, Station PA, Cheap speaker. I valori di ogni tabella si regolano a orecchio durante l'implementazione.
@@ -73,7 +80,6 @@ Pannello rack orizzontale 1000 × 428 nel linguaggio comune. Materiale e texture
 ## 8. Decisioni aperte
 
 - Valori delle tabelle dei sei dispositivi (da regolare a orecchio).
-- Se Mix debba restare attivo a IN di CHARACTER spento (ora si attenua con gli altri).
 - Se tenere i meter LEVEL (aggiunti per coerenza con The Stripper, non nei parametri iniziali).
 - Retro: crediti e licenze di Hotline da scrivere (la preview ha ancora quelli di The Stripper).
 - Nessun supporto CUDA: Hotline non usa NAM.
