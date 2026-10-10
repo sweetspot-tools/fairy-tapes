@@ -5,16 +5,16 @@ Suite di plugin VST3 (C++20, VST3 SDK, VSTGUI4). Più chat e più agent lavorano
 ## 1. Branch e flusso
 
 - **`master`** è la linea rilasciata. Non si lavora e non si pusha mai direttamente su `master`: ci arriva solo un merge di `pre-release`.
-- **`pre-release`** è il raccoglitore. **Tutti i branch (presenti e futuri) si mergiano dentro `pre-release`** e **ogni nuovo branch si sgancia da `pre-release`**, non da `master`. Le PR dei singoli plugin hanno come destinazione `pre-release`.
+- **`pre-release`** è il raccoglitore e il branch di lavoro: di norma si lavora direttamente lì. I branch `feat/...` **non sono obbligatori**: se ne crea uno solo quando serve (lavoro lungo o rischioso, esperimento da poter scartare, più chat sullo stesso plugin nello stesso momento). Quando esiste un branch, si sgancia da `pre-release` (non da `master`), si mergia dentro `pre-release` e le sue PR hanno come destinazione `pre-release`.
 - La CI (`.github/workflows/build.yml`) parte solo su push e PR verso `master`: così la build gira una volta sola, al merge `pre-release` → `master`, e non a ogni merge di un plugin. Non aggiungere `pre-release` ai trigger senza chiedere.
-- Nome dei branch: `feat/<plugin>` (es. `feat/the-stripper`), `fix/<argomento>`, `docs/<argomento>`.
-- Prima di mergiare in `pre-release`, riportare nel proprio branch le novità di `pre-release` (merge di `pre-release` nel branch) e risolvere lì i conflitti.
+- Nome dei branch, quando servono: `feat/<plugin>` (es. `feat/the-stripper`), `fix/<argomento>`, `docs/<argomento>`.
+- Se si usa un branch, prima di mergiarlo in `pre-release` si riportano nel branch le novità di `pre-release` (merge di `pre-release` nel branch) e si risolvono lì i conflitti.
 
-## 2. Una chat, un worktree
+## 2. Più chat insieme: un worktree ciascuna
 
-Più chat sullo stesso checkout si rovinano a vicenda (cambi di branch sotto i piedi, file modificati da altri). Quindi:
+Più chat sullo stesso checkout si rovinano a vicenda (cambi di branch sotto i piedi, file modificati da altri). Se lavora una chat sola, si lavora su `pre-release` nel checkout principale. Se ne lavorano più insieme:
 
-- Ogni chat lavora nel **proprio worktree**, su un proprio branch:
+- Ogni chat lavora nel **proprio worktree**, su un proprio branch (qui il branch serve, perché due worktree non possono avere lo stesso):
   `git worktree add ../fairy-tapes-wt-<nome> -b feat/<nome> pre-release`
   poi, nel nuovo worktree: `git submodule update --init --recursive`.
 - Se un checkout è condiviso, **non cambiare branch** e non fare `git checkout`, `reset --hard`, `stash` o `clean` su file che non hai creato tu.
@@ -24,7 +24,7 @@ Più chat sullo stesso checkout si rovinano a vicenda (cambi di branch sotto i p
 ## 3. Commit e push
 
 - Messaggi di commit in inglese, nello stile `tipo(plugin): descrizione` (`feat`, `fix`, `docs`, `build`, `refactor`, `test`). Chiudi con la riga di co-autore richiesta dall'ambiente.
-- Push solo del **proprio** branch, e solo quando l'utente lo chiede ("committa e pusha"). Mai `--force` sui branch condivisi.
+- Push solo quando l'utente lo chiede ("committa e pusha"): del proprio branch oppure di `pre-release`. Mai `--force` sui branch condivisi.
 - Non dichiarare un lavoro finito senza averlo verificato: build e test eseguiti, oppure dichiarare con precisione cosa non è stato verificato.
 
 ## 4. Build e risorse
