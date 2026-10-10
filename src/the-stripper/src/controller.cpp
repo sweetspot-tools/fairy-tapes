@@ -70,11 +70,27 @@ Steinberg::tresult PLUGIN_API Controller::getState(Steinberg::IBStream* state) {
 }
 
 Steinberg::int32 PLUGIN_API Controller::getParameterCount() {
-  return kNumParams;
+  return kNumParams + kNumMeters;   // the persistent parameters, then the read-only meter parameters
 }
 
 Steinberg::tresult PLUGIN_API Controller::getParameterInfo(Steinberg::int32 index,
                                                            Steinberg::Vst::ParameterInfo& info) {
+  if (index >= kNumParams && index < kNumParams + kNumMeters) {
+    // Meter parameters: hidden from the host; read-only, except kClearClips (a click on a clip LED writes it).
+    const Steinberg::Vst::ParamID id = kMeterBase + static_cast<Steinberg::Vst::ParamID>(index - kNumParams);
+    info.id = id;
+    info.stepCount = 0;
+    info.defaultNormalizedValue = 0.0;
+    info.unitId = Steinberg::Vst::kRootUnitId;
+    info.flags = Steinberg::Vst::ParameterInfo::kIsHidden |
+                 (id == kClearClips ? 0 : Steinberg::Vst::ParameterInfo::kIsReadOnly);
+    static const char* const kTitles[] = {"Meter In L", "Meter In R", "Meter Out L", "Meter Out R", "GR Comp", "GR Limiter",
+                                          "Clip Input", "Clip EQ", "Clip Comp", "Clip Drive", "Clip Limiter", "Clip Output", "Clear Clips"};
+    asciiToStr128(kTitles[id - kMeterBase], info.title);
+    asciiToStr128(kTitles[id - kMeterBase], info.shortTitle);
+    asciiToStr128("", info.units);
+    return Steinberg::kResultOk;
+  }
   if (index < 0 || index >= kNumParams)
     return Steinberg::kResultFalse;
   info.flags = Steinberg::Vst::ParameterInfo::kCanAutomate;
@@ -318,6 +334,11 @@ Steinberg::tresult PLUGIN_API Controller::getParameterInfo(Steinberg::int32 inde
 Steinberg::tresult PLUGIN_API Controller::getParamStringByValue(Steinberg::Vst::ParamID tag,
     Steinberg::Vst::ParamValue valueNormalized, Steinberg::Vst::String128 string) {
   char buf[128];
+  if (tag >= kMeterBase && tag < kNumMeterIDs) {
+    snprintf(buf, sizeof(buf), "%.0f%%", valueNormalized * 100.0);
+    asciiToStr128(buf, string);
+    return Steinberg::kResultOk;
+  }
   switch (tag) {
   case kBypass:
     asciiToStr128(valueNormalized >= 0.5 ? "On" : "Off", string);
@@ -450,6 +471,8 @@ Steinberg::Vst::ParamValue PLUGIN_API Controller::plainParamToNormalized(
 }
 
 Steinberg::Vst::ParamValue PLUGIN_API Controller::getParamNormalized(Steinberg::Vst::ParamID tag) {
+  if (tag >= kMeterBase && tag < kNumMeterIDs)
+    return meter_value_[tag - kMeterBase];
   if (tag >= 0 && tag < kNumParams)
     return param_value_[tag];
   return 0.;
@@ -457,6 +480,17 @@ Steinberg::Vst::ParamValue PLUGIN_API Controller::getParamNormalized(Steinberg::
 
 Steinberg::tresult PLUGIN_API Controller::setParamNormalized(Steinberg::Vst::ParamID tag,
     Steinberg::Vst::ParamValue value) {
+  if (tag >= kMeterBase && tag < kNumMeterIDs) {
+    // Values written by the processor (or the clear request written by the editor). They never feed back into the
+    // host as an edit, except the explicit click on a clip LED.
+    meter_value_[tag - kMeterBase] = value;
+    if (tag == kClearClips && value >= 0.5 && component_handler_) {
+      component_handler_->beginEdit(tag);
+      component_handler_->performEdit(tag, value);
+      component_handler_->endEdit(tag);
+    }
+    return Steinberg::kResultOk;
+  }
   if (tag < 0 || tag >= kNumParams)
     return Steinberg::kResultFalse;
   if (tag == kCompressorMode) {

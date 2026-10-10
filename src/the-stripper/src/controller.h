@@ -26,6 +26,11 @@ public:
   Steinberg::tresult PLUGIN_API setComponentState(Steinberg::IBStream* state) override;
   Steinberg::tresult PLUGIN_API setState(Steinberg::IBStream* state) override;
   Steinberg::tresult PLUGIN_API getState(Steinberg::IBStream* state) override;
+
+  /** Latest value (0..1) of a meter parameter (kMeterInL ... kClearClips). Read by the editor from its timer. */
+  Steinberg::Vst::ParamValue meterValue(Steinberg::Vst::ParamID id) const {
+    return (id >= kMeterBase && id < kNumMeterIDs) ? meter_value_[id - kMeterBase] : 0.0;
+  }
   Steinberg::int32 PLUGIN_API getParameterCount() override;
   Steinberg::tresult PLUGIN_API getParameterInfo(Steinberg::int32 index,
                                                  Steinberg::Vst::ParameterInfo& info) override;
@@ -47,6 +52,7 @@ public:
 
 private:
   Steinberg::Vst::ParamValue param_value_[kNumParams];
+  Steinberg::Vst::ParamValue meter_value_[kNumMeters] = {};   // written by the processor, read by the editor
   std::string modelPath_;
   Steinberg::IPtr<Steinberg::Vst::IComponentHandler> component_handler_;
 };

@@ -877,6 +877,8 @@ void test_default_bypass_is_off() {
 
 } // namespace
 
+int run_meter_tests();  // tests/test_meter.cpp
+
 int main() {
   std::fprintf(stdout, "Running The Stripper tests...\n\n");
 
@@ -952,6 +954,8 @@ int main() {
   RUN_TEST(test_default_values_in_range);
   RUN_TEST(test_default_strip_mode_is_channel);
   RUN_TEST(test_default_bypass_is_off);
+
+  g_failed += run_meter_tests();
 
   std::fprintf(stdout, "\n%d passed, %d failed.\n", g_passed, g_failed);
   if (g_failed > 0) {

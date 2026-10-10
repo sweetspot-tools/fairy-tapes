@@ -72,10 +72,19 @@ void Processor::updateParamsFromChanges(Steinberg::Vst::IParameterChanges* chang
     if (!queue)
       continue;
     const Steinberg::Vst::ParamID id = queue->getParameterId();
-    if (id < 0 || id >= kNumParams)
-      continue;
     Steinberg::Vst::ParamValue value = 0.;
     Steinberg::int32 sample_offset = 0;
+    if (id == kClearClips) {
+      // The one writable meter parameter: a click on a clip LED asks for every clip LED to be cleared.
+      if (queue->getPoint(queue->getPointCount() - 1, sample_offset, value) == Steinberg::kResultOk && value >= 0.5) {
+        for (auto& c : clip_)
+          c.clear();
+        publishClearReset_ = true;
+      }
+      continue;
+    }
+    if (id < 0 || id >= kNumParams)
+      continue;
     if (queue->getPoint(queue->getPointCount() - 1, sample_offset, value) == Steinberg::kResultOk)
       param_value_[id] = value;
   }
@@ -107,6 +116,13 @@ void Processor::processChain(float* const* out, const float* const* in,
       L[i] = inL[i];
       R[i] = inR[i];
     }
+    // Bypassed: output equals input, no stage works, so only the Input and Output clip LEDs can light.
+    clip_[0].process(L, R, numSamples);
+    clip_[5].process(L, R, numSamples);
+    for (int i = 1; i <= 4; ++i)
+      clip_[i].clear();
+    grComp_.reset();
+    grLimiter_.reset();
     if (out[0] != L) std::memcpy(out[0], L, static_cast<size_t>(numSamples) * sizeof(float));
     if (out[1] != R) std::memcpy(out[1], R, static_cast<size_t>(numSamples) * sizeof(float));
     return;
@@ -117,6 +133,8 @@ void Processor::processChain(float* const* out, const float* const* in,
     L[i] = inL[i] * input_lin;
     R[i] = inR[i] * input_lin;
   }
+
+  clip_[0].process(L, R, numSamples);   // Input: output of the input gain stage
 
   // Gain staging (Channel only): not implemented (design). Params kBypassGainStaging and kGainStagingTrim
   // are kept for future use; no processing applied here.
@@ -151,6 +169,9 @@ void Processor::processChain(float* const* out, const float* const* in,
     eqp.eqTypeBlack = channel_mode; // Channel = Black (G), Mix bus = Brown (E)
     eqp.saturation = static_cast<float>(param_value_[kEqSaturation]);
     fourkEq_.process(L, R, numSamples, eqp);
+    clip_[1].process(L, R, numSamples);
+  } else {
+    clip_[1].clear();
   }
 
   // Compression: Multi-Comp (Opto/FET/VCA/Bus). Channel = Voice/Drums/Classic; Mix bus = Bus only.
@@ -166,6 +187,11 @@ void Processor::processChain(float* const* out, const float* const* in,
     const float mix = static_cast<float>(param_value_[kCompressMix]);
     compressionStub_.setParams(amount, mix);
     compressionStub_.process(L, R, numSamples, sidechainL, sidechainR);
+    grComp_.updateDb(compressionStub_.currentGainReductionDb(), numSamples);
+    clip_[2].process(L, R, numSamples);
+  } else {
+    grComp_.reset();
+    clip_[2].clear();
   }
 
   // Drive: NAM (CPU inference; GPU path planned). Auto-compensated output; always 100% wet.
@@ -174,6 +200,9 @@ void Processor::processChain(float* const* out, const float* const* in,
     namDrive_.setSampleRate(sampleRate);
     namDrive_.setDrive(static_cast<float>(param_value_[kDriveAmount]));
     namDrive_.process(L, R, numSamples);
+    clip_[3].process(L, R, numSamples);
+  } else {
+    clip_[3].clear();
   }
 
   // Limiter: BlockParty (Airwindows)
@@ -181,7 +210,13 @@ void Processor::processChain(float* const* out, const float* const* in,
   if (!bypass_limiter) {
     limiter_.setSampleRate(sampleRate);
     limiter_.setParams(static_cast<float>(param_value_[kLimiterPound]), 1.0f);
+    const float limiterIn = DSP::peakOf(L, R, numSamples);
     limiter_.process(L, R, numSamples);
+    grLimiter_.update(limiterIn, DSP::peakOf(L, R, numSamples), numSamples);   // BlockParty has no gain-reduction read-out: peak ratio
+    clip_[4].process(L, R, numSamples);
+  } else {
+    grLimiter_.reset();
+    clip_[4].clear();
   }
 
   // Gate: DeNoise (Airwindows)
@@ -197,6 +232,7 @@ void Processor::processChain(float* const* out, const float* const* in,
     L[i] *= output_lin;
     R[i] *= output_lin;
   }
+  clip_[5].process(L, R, numSamples);   // Output
   if (out[0] != L) std::memcpy(out[0], L, static_cast<size_t>(numSamples) * sizeof(float));
   if (out[1] != R) std::memcpy(out[1], R, static_cast<size_t>(numSamples) * sizeof(float));
 }
@@ -226,10 +262,64 @@ Steinberg::tresult PLUGIN_API Processor::process(Steinberg::Vst::ProcessData& da
     scR = (data.inputs[1].numChannels >= 2) ? data.inputs[1].channelBuffers32[1] : scL;
   }
 
+  if (sample_rate != meterSampleRate_)
+    prepareMeters(sample_rate);
+  if (num_channels >= 2 && num_samples > 0) {
+    peakIn_[0].process(in.channelBuffers32[0], num_samples);    // raw input, before everything
+    peakIn_[1].process(in.channelBuffers32[1], num_samples);
+  }
+
   processChain(out.channelBuffers32, in.channelBuffers32, num_channels, num_samples, sample_rate,
                scL, scR);
 
+  if (num_channels >= 2 && num_samples > 0) {
+    peakOut_[0].process(out.channelBuffers32[0], num_samples);  // after the output gain
+    peakOut_[1].process(out.channelBuffers32[1], num_samples);
+  }
+  if (meterRate_.advance(num_samples))
+    publishMeters(data);
+
   return Steinberg::kResultOk;
+}
+
+void Processor::prepareMeters(double sampleRate) {
+  meterSampleRate_ = sampleRate;
+  for (auto& m : peakIn_) m.prepare(sampleRate);
+  for (auto& m : peakOut_) m.prepare(sampleRate);
+  for (auto& c : clip_) c.prepare(sampleRate);
+  grComp_.prepare(sampleRate);
+  grLimiter_.prepare(sampleRate);
+  meterRate_.prepare(sampleRate, 16.0);
+}
+
+/// At most every 16 ms: write the read-only meter parameters (normalised) into the host's output queue.
+void Processor::publishMeters(Steinberg::Vst::ProcessData& data) {
+  if (!data.outputParameterChanges)
+    return;
+  auto put = [&](Steinberg::Vst::ParamID id, double v) {
+    Steinberg::int32 index = 0;
+    if (auto* q = data.outputParameterChanges->addParameterData(id, index)) {
+      Steinberg::int32 point = 0;
+      q->addPoint(0, v, point);
+    }
+  };
+  using DSP::meterNormFromDb;
+  put(kMeterInL, meterNormFromDb(peakIn_[0].levelDb(), -60.0, 6.0));
+  put(kMeterInR, meterNormFromDb(peakIn_[1].levelDb(), -60.0, 6.0));
+  put(kMeterOutL, meterNormFromDb(peakOut_[0].levelDb(), -60.0, 6.0));
+  put(kMeterOutR, meterNormFromDb(peakOut_[1].levelDb(), -60.0, 6.0));
+  put(kMeterGrComp, meterNormFromDb(grComp_.value(), 0.0, 20.0));
+  put(kMeterGrLimiter, meterNormFromDb(grLimiter_.value(), 0.0, 12.0));
+  put(kClipInput, clip_[0].lit() ? 1.0 : 0.0);
+  put(kClipEq, clip_[1].lit() ? 1.0 : 0.0);
+  put(kClipComp, clip_[2].lit() ? 1.0 : 0.0);
+  put(kClipDrive, clip_[3].lit() ? 1.0 : 0.0);
+  put(kClipLimiter, clip_[4].lit() ? 1.0 : 0.0);
+  put(kClipOutput, clip_[5].lit() ? 1.0 : 0.0);
+  if (publishClearReset_) {
+    put(kClearClips, 0.0);
+    publishClearReset_ = false;
+  }
 }
 
 Steinberg::tresult PLUGIN_API Processor::setState(Steinberg::IBStream* state) {

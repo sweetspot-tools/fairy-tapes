@@ -6,6 +6,9 @@
 
 #pragma once
 
+#include <algorithm>
+#include <cmath>
+
 #include "hardware_emulation/TransformerEmulation.h"
 #include "hardware_emulation/TubeEmulation.h"
 
@@ -25,6 +28,11 @@ class MultiCompOpto {
 public:
   void prepare(double sampleRate);
   void setParams(float amount, float mix);
+  /** Gain reduction (dB, >= 0) the envelope applies right now (the lower of the two channels). */
+  float currentGainReductionDb() const {
+    const float g = std::min(envelopeL_, envelopeR_);
+    return g >= 1.f ? 0.f : -20.f * std::log10(std::max(g, 1e-4f));
+  }
   /** When sidechainL/sidechainR are non-null, envelope detection uses sidechain instead of main. */
   void processStereo(float* left, float* right, int numSamples,
                      const float* sidechainL = nullptr, const float* sidechainR = nullptr);
@@ -57,6 +65,11 @@ class MultiCompFET {
 public:
   void prepare(double sampleRate);
   void setParams(float amount, float mix);
+  /** Gain reduction (dB, >= 0) the envelope applies right now (the lower of the two channels). */
+  float currentGainReductionDb() const {
+    const float g = std::min(envelopeL_, envelopeR_);
+    return g >= 1.f ? 0.f : -20.f * std::log10(std::max(g, 1e-4f));
+  }
   /** When sidechainL/sidechainR are non-null, envelope detection uses sidechain instead of main. */
   void processStereo(float* left, float* right, int numSamples,
                      const float* sidechainL = nullptr, const float* sidechainR = nullptr);
@@ -79,6 +92,11 @@ class MultiCompVCA {
 public:
   void prepare(double sampleRate);
   void setParams(float amount, float mix);
+  /** Gain reduction (dB, >= 0) the envelope applies right now (the lower of the two channels). */
+  float currentGainReductionDb() const {
+    const float g = std::min(envelopeL_, envelopeR_);
+    return g >= 1.f ? 0.f : -20.f * std::log10(std::max(g, 1e-4f));
+  }
   /** When sidechainL/sidechainR are non-null, envelope detection uses sidechain (RMS) instead of main. */
   void processStereo(float* left, float* right, int numSamples,
                      const float* sidechainL = nullptr, const float* sidechainR = nullptr);
@@ -103,6 +121,11 @@ class MultiCompBus {
 public:
   void prepare(double sampleRate);
   void setParams(float amount, float mix);
+  /** Gain reduction (dB, >= 0) the envelope applies right now (the lower of the two channels). */
+  float currentGainReductionDb() const {
+    const float g = std::min(envelopeL_, envelopeR_);
+    return g >= 1.f ? 0.f : -20.f * std::log10(std::max(g, 1e-4f));
+  }
   /** When sidechainL/sidechainR are non-null, envelope detection uses sidechain (with 60Hz HP) instead of main. */
   void processStereo(float* left, float* right, int numSamples,
                      const float* sidechainL = nullptr, const float* sidechainR = nullptr);

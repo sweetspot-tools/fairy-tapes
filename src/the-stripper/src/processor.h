@@ -14,6 +14,7 @@
 #include "dsp/fourk_eq.h"
 #include "dsp/blockparty.h"
 #include "dsp/denoise.h"
+#include "dsp/meter.h"
 #include "nam_drive.h"
 #include <string>
 #include <vector>
@@ -48,6 +49,18 @@ private:
   Shared::DSP::NamDrive namDrive_;
   DSP::BlockParty limiter_;
   DSP::DeNoise gate_;
+
+  // ---- metering (audio thread only; values leave through outputParameterChanges, see process()) ----
+  void prepareMeters(double sampleRate);
+  void publishMeters(Steinberg::Vst::ProcessData& data);
+  DSP::PeakMeter peakIn_[2];
+  DSP::PeakMeter peakOut_[2];
+  DSP::ClipDetector clip_[6];            // Input, EQ, Compression, Drive, Limiter, Output
+  DSP::GainReductionMeter grComp_;
+  DSP::GainReductionMeter grLimiter_;
+  DSP::UpdateLimiter meterRate_;
+  double meterSampleRate_ = 0.0;
+  bool publishClearReset_ = false;       // tell the controller that the clear request was handled
 
   double lastEqSampleRate_ = 0.0;
   int lastEqBlockSize_ = 0;

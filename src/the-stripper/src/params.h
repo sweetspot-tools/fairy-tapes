@@ -48,6 +48,28 @@ enum ParamID : Steinberg::Vst::ParamID {
   kNumParams
 };
 
+// Metering: read-only parameters the processor writes to the controller (about 60 Hz). They live in their own id
+// range, are not part of kNumParams, are never saved in the state and are not in the frozen parameter table.
+// All values are normalised 0..1. kClearClips is the only writable one: a click on a clip LED sets it to 1.
+constexpr Steinberg::Vst::ParamID kMeterBase = 1000;
+enum MeterID : Steinberg::Vst::ParamID {
+  kMeterInL = kMeterBase,   // peak, -60..+6 dBFS
+  kMeterInR,
+  kMeterOutL,
+  kMeterOutR,
+  kMeterGrComp,             // gain reduction, 0..20 dB (shown downwards)
+  kMeterGrLimiter,          // 0..12 dB
+  kClipInput,               // 0/1: the stage's output reached 0 dBFS in the last 2 s
+  kClipEq,
+  kClipComp,
+  kClipDrive,
+  kClipLimiter,
+  kClipOutput,
+  kClearClips,
+  kNumMeterIDs
+};
+constexpr int kNumMeters = static_cast<int>(kNumMeterIDs - kMeterBase);
+
 // Parameter count of state v7 (everything up to and including kDriveAmount).
 constexpr int kNumParamsV7 = static_cast<int>(kDriveAmount) + 1;
 
