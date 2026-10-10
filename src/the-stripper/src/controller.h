@@ -5,6 +5,7 @@
 #pragma once
 
 #include "cids.h"
+#include <string>
 #include "params.h"
 #include "pluginterfaces/base/funknown.h"
 #include "pluginterfaces/vst/ivsteditcontroller.h"
@@ -46,6 +47,7 @@ public:
 
 private:
   Steinberg::Vst::ParamValue param_value_[kNumParams];
+  std::string modelPath_;
   Steinberg::IPtr<Steinberg::Vst::IComponentHandler> component_handler_;
 };
 

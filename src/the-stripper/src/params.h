@@ -42,8 +42,14 @@ enum ParamID : Steinberg::Vst::ParamID {
   kEqSaturation,  // 0..1 (0..100%)
   // Drive (NAM): single knob. Output auto-compensated. Always 100% wet (bypass = off).
   kDriveAmount,   // 0 = unity (model coloration only), 1 = max (+20 dB into model)
+  // Added after state v7 (appended at the end so existing IDs never change):
+  kLimiterPound,  // Limiter (BlockParty) pound amount, 0..1
+  kGateThreshold, // Gate (DeNoise) threshold, 0..1
   kNumParams
 };
+
+// Parameter count of state v7 (everything up to and including kDriveAmount).
+constexpr int kNumParamsV7 = static_cast<int>(kDriveAmount) + 1;
 
 // Strip mode values (normalized)
 constexpr Steinberg::Vst::ParamValue kStripModeChannel = 0.0;
@@ -82,6 +88,10 @@ constexpr Steinberg::Vst::ParamValue kDefaultEqSaturation = 0.0;
 
 // Drive defaults
 constexpr Steinberg::Vst::ParamValue kDefaultDriveAmount = 0.0;   // unity (coloration only)
+
+// Limiter / Gate defaults (match the values that were hard-coded in the processor before they became parameters)
+constexpr Steinberg::Vst::ParamValue kDefaultLimiterPound = 0.5;
+constexpr Steinberg::Vst::ParamValue kDefaultGateThreshold = 0.0;
 
 // Gain range in dB for display; normalized 0 = -20 dB, 1 = +20 dB
 constexpr double kGainMinDb = -20.0;

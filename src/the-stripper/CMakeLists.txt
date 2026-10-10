@@ -139,6 +139,15 @@ nam_drive_link(the_stripper_tests)
 target_link_libraries(the_stripper_tests PRIVATE gpu_nam)
 add_test(NAME the_stripper_tests COMMAND the_stripper_tests)
 
+# State and frozen-parameter-table tests: header-only, no SDK libraries needed.
+add_executable(the_stripper_state_tests tests/test_state.cpp)
+target_include_directories(the_stripper_state_tests PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/src
+  ${VST3_SDK_PATH}
+  ${VST3_SDK_PLUGINTERFACES}/base
+)
+add_test(NAME the_stripper_state_tests COMMAND the_stripper_state_tests)
+
 # Module/factory lifecycle smoke test: dlopens the built bundle from dist/ (exit 77 = skipped
 # when the plugin has not been built). Links only the pluginterfaces IIDs, not the plugin.
 if(NOT WIN32)

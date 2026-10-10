@@ -15,6 +15,7 @@
 #include "dsp/blockparty.h"
 #include "dsp/denoise.h"
 #include "nam_drive.h"
+#include <string>
 #include <vector>
 
 namespace FairyTapes::TheStripper {
@@ -40,6 +41,7 @@ private:
                     const float* sidechainL = nullptr, const float* sidechainR = nullptr);
 
   Steinberg::Vst::ParamValue param_value_[kNumParams];
+  std::string modelPath_;  // NAM model path restored from / saved to the state (loaded in a later step)
   std::vector<float> scratch_[2];
   DSP::CompressionStub compressionStub_;
   DSP::FourKEQ fourkEq_;

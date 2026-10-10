@@ -169,8 +169,9 @@ void test_eqTypeFromStripMode() {
 // ---------------------------------------------------------------------------
 
 void test_kNumParams_count() {
-  // After simplifying Drive (single knob): kNumParams = 33
-  ASSERT_TRUE(kNumParams == 33);
+  // 33 up to kDriveAmount (state v7), plus kLimiterPound and kGateThreshold appended after it
+  ASSERT_TRUE(kNumParams == 35);
+  ASSERT_TRUE(kNumParamsV7 == 33);
   ASSERT_TRUE(kDriveAmount == 32);
   ASSERT_TRUE(kEqSaturation == 31);
 }
@@ -187,7 +188,7 @@ void test_param_enum_ordering() {
   ASSERT_TRUE(kCompressorMode == 14);
   ASSERT_TRUE(kEqHPFFreq == 15);
   ASSERT_TRUE(kEqSaturation == 31);
-  ASSERT_TRUE(kDriveAmount == kNumParams - 1);
+  ASSERT_TRUE(kDriveAmount == kNumParams - 3);   // kLimiterPound and kGateThreshold come after it
 }
 
 // ---------------------------------------------------------------------------

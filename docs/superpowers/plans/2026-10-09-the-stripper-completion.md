@@ -14,7 +14,7 @@
 
 - [x] Task 1 — `NamDrive` in `shared/nam_drive` (commit `5805520`, adattato a NAM v0.6.0 in `10cb131`; 49 test su 49; CUDA non verificato)
 - [x] Task 2 — caricamento asincrono (`requestLoad`, `LoadState`; 5 test, 25 ripetizioni senza errori). Trovato e corretto un difetto del Task 1: i registratori delle architetture NAM sono inizializzatori statici e il linker li scartava dalla libreria statica; i consumatori usano ora `nam_drive_link(<target>)` (collegamento whole-archive)
-- [ ] Task 3 — parametri nuovi, stato v8 esteso (vedi spec §6), tabella bloccata
+- [x] Task 3 — `kLimiterPound` e `kGateThreshold` (ora usati dal processor), stato v8 (parametri + percorso del modello; `state.h` header-only, v1-v8 leggibili), tabella dei parametri bloccata (`tests/param_table_golden.h`: ID verificati a compilazione, default a runtime; mutazioni di prova rilevate). **Resta per il Task 14/§6:** seme, viti, scritte sul nastro, segni di richiamo e impostazioni di comportamento nello stato; nomi e numero di passi non sono nella tabella bloccata (solo ID e default)
 - [ ] Task 4 — meter
 - [ ] Task 5 — messaggi del modello
 - [ ] Task 6 — tessera di grana
@@ -116,14 +116,14 @@ git commit -m "feat(nam-drive): add asynchronous model loading"
   - In `processor.h`: `struct PluginState { double params[kNumParams]; std::string modelPath; };` con `bool readState(Steinberg::IBStream*, PluginState&)` e `bool writeState(Steinberg::IBStream*, const PluginState&)` (funzioni libere testabili con un `IBStream` in memoria).
   - Il processor applica `kLimiterPound` a `BlockParty::setParams(pound, 1.0)` e `kGateThreshold` a `DeNoise::setParams(threshold, speed_attuale, 1.0)`.
 
-- [ ] **Step 1: Scrivere i test:** `test_new_params_appended_at_end` (`kLimiterPound == kNumParams - 2`, `kGateThreshold == kNumParams - 1`, e nessun ID precedente cambiato); `test_param_table_matches_golden` (tabella ID → nome → passi → default letta da `param_table_golden.h`, generata dallo stato attuale del codice **prima** dell'aggiunta e poi estesa con i due nuovi); `test_state_v8_roundtrip` (parametri, percorso con caratteri non ASCII); `test_state_v7_loads_with_defaults` (fixture v7 scritta con la vecchia struttura: percorso vuoto); `test_state_unknown_version_rejected`.
-- [ ] **Step 2: Generare `param_table_golden.h` dal codice attuale** (che include già `kDefaultEqHPFFreq = 0.0`, vedi spec §4, Default dei filtri) con un piccolo programma temporaneo, estenderlo a mano con i due nuovi parametri e verificare che il test sul nome/ordine fallisca se si scambiano due ID.
-- [ ] **Step 3: Eseguire, verificare il fallimento.**
-- [ ] **Step 4: Implementare** parametri, `readState`/`writeState` (versione 8; lettura v7 mantenuta), uso dei due parametri nel processor, titoli e unità nel controller.
-- [ ] **Step 5: Eseguire i test.**
+- [x] **Step 1: Scrivere i test:** `test_new_params_appended_at_end` (`kLimiterPound == kNumParams - 2`, `kGateThreshold == kNumParams - 1`, e nessun ID precedente cambiato); `test_param_table_matches_golden` (tabella ID → nome → passi → default letta da `param_table_golden.h`, generata dallo stato attuale del codice **prima** dell'aggiunta e poi estesa con i due nuovi); `test_state_v8_roundtrip` (parametri, percorso con caratteri non ASCII); `test_state_v7_loads_with_defaults` (fixture v7 scritta con la vecchia struttura: percorso vuoto); `test_state_unknown_version_rejected`.
+- [x] **Step 2: Generare `param_table_golden.h` dal codice attuale** (che include già `kDefaultEqHPFFreq = 0.0`, vedi spec §4, Default dei filtri) con un piccolo programma temporaneo, estenderlo a mano con i due nuovi parametri e verificare che il test sul nome/ordine fallisca se si scambiano due ID.
+- [x] **Step 3: Eseguire, verificare il fallimento.**
+- [x] **Step 4: Implementare** parametri, `readState`/`writeState` (versione 8; lettura v7 mantenuta), uso dei due parametri nel processor, titoli e unità nel controller.
+- [x] **Step 5: Eseguire i test.**
   Run: `cmake --build build --target the_stripper_tests && ctest --test-dir build -R the_stripper --output-on-failure`
   Expected: PASS.
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/the-stripper
