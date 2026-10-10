@@ -411,13 +411,21 @@ txt('IN',LX-36,124,11,YEL,'middle',800);txt('OUT',LX-36,166,11,YEL,'middle',800)
 [-60,-48,-36,-24,-12,0].forEach(function(d){var idx=Math.round((d+60)/(60/(NL-1)));txt(String(d),LX+idx*STEP,146,9,DIMW,'middle',700);});
 var rDK=ledRow(214,'',function(i){return i>8?RED:AMBL;});txt('DUCK',LX-36,218,11,YEL,'middle',800);
 txt('send level reduction',LX+5*STEP+8,236,9,DIMW,'middle',700);
+var clipEl=[],clipUntil=[0,0];
+['IN','OUT'].forEach(function(n,i){var x=LX+4+i*64,g=el('g',{style:'cursor:pointer'});
+  var d=el('circle',{cx:x,cy:192,r:3.4,fill:OFFL,stroke:'#000','stroke-width':.6},g);txt(n,x+9,196,10,W,'start',800,g);
+  el('title',{},g).textContent='Clip (0 dBFS or above): click to clear';
+  g.addEventListener('click',function(){clipUntil=[0,0];paintClips();});clipEl.push(d);});
+txt('CLIP',LX-36,196,11,YEL,'middle',800);
+function paintClips(){var t=performance.now();clipEl.forEach(function(d,i){d.setAttribute('fill',t<clipUntil[i]?RED:OFFL);});}
 endGrp();reg(gMt,false);
 function setLeds(r,n){r.a.forEach(function(c,i){c.setAttribute('fill',i<n?r.col(i):OFFL);});}
 function dbN(d){return Math.max(0,Math.min(NL,Math.round((d+60)/(60/(NL-1))+.5)));}
 function toDb(a){return a<=.001?-90:20*Math.log10(a);}
 function drawMeters(pos){
   var i=Math.floor(pos)%NSIM,v=voice[i],o=v*(1-P.mix)+wet[i]*P.mix;
-  var il=toDb(v*.8),ol=toDb(o*.8);
+  var il=toDb(v*1.15),ol=toDb(o*1.15),now=performance.now();
+  if(il>=0)clipUntil[0]=now+2000;if(ol>=0)clipUntil[1]=now+2000;paintClips();
   setLeds(rIL,dbN(il));setLeds(rIR,dbN(il-1.5));setLeds(rOL,dbN(ol));setLeds(rOR,dbN(ol-1.5));
   setLeds(rDK,Math.round((1-gain[i])*NL));
 }
