@@ -56,7 +56,7 @@ Valori numerici da tarare con registrazioni reali (vedi "Decisioni aperte").
 
 ## 6. Parametri esposti
 
-Bypass, Mode (Speak/Sing/Puke), Input, Rider Target, Rider Range, Breath Amount, De-esser Amount, Comp Amount, Tone, Output. Il resto è interno per modalità.
+Bypass, Mode (Speak/Sing/Puke), Input, Rider Target, Rider Range, Breath Amount, De-esser Amount, De-ess Listen, Comp Amount, Tone, Output (11). Il resto è interno per modalità.
 
 ## 7. Struttura
 
