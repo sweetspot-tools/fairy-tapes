@@ -108,6 +108,13 @@ else()
   )
 endif()
 
+# Bitmap resources (the panel grain tile) go to Contents/Resources of the bundle, where VSTGUI looks for them.
+add_custom_command(TARGET the_stripper POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E make_directory "${THE_STRIPPER_BUNDLE}/Contents/Resources"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/assets/panel_grain.png"
+          "${THE_STRIPPER_BUNDLE}/Contents/Resources/panel_grain.png"
+  VERBATIM)
+
 # Link gpu_nam (GPU NAM inference with automatic CPU-stub fallback).
 # cudart is propagated as a PUBLIC dependency of gpu_nam.
 nam_drive_link(the_stripper)

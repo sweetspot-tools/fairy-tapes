@@ -17,7 +17,7 @@
 - [x] Task 3 — `kLimiterPound` e `kGateThreshold` (ora usati dal processor), stato v8 (parametri + percorso del modello; `state.h` header-only, v1-v8 leggibili), tabella dei parametri bloccata (`tests/param_table_golden.h`: ID verificati a compilazione, default a runtime; mutazioni di prova rilevate). **Resta per il Task 14/§6:** seme, viti, scritte sul nastro, segni di richiamo e impostazioni di comportamento nello stato; nomi e numero di passi non sono nella tabella bloccata (solo ID e default)
 - [x] Task 4 — meter (picchi in/out, 6 LED di clip per stadio, gain reduction compressore e limiter; parametri di sola lettura da `kMeterBase = 1000`, scritti al massimo ogni 16 ms; `kClearClips` scrivibile). Il guadagno del compressore è letto dai motori (`currentGainReductionDb()`: il rapporto dei picchi non funziona con FET e Bus, che hanno guadagno in ingresso), quello del limiter dal rapporto dei picchi (BlockParty non lo espone). Test: unit (`test_meter.cpp`) e test nel modulo vero con code di parametri simulate (`test_processor_meters.cpp`)
 - [x] Task 5 — messaggi del modello (`messages.h`: `LoadModel` controller → processor, `ModelStatus` processor → controller; stringhe in UTF-8 binario; il processor ripristina il modello dallo stato; `Controller::requestModelLoad/modelName/modelError/modelState`; callback di fine caricamento di `NamDrive`; `requestLoad` con percorso vuoto = nessun modello). Test: messaggi con oggetti finti, `nam_drive` (vuoto e callback) e il modulo vero con host, peer e stream finti. **Da verificare in Reaper/Cubase:** il messaggio di stato parte dal thread di caricamento (non dal thread audio)
-- [ ] Task 6 — tessera di grana
+- [x] Task 6 — tessera di grana (`tools/gen_panel_grain.py` con NumPy/Pillow, 5 test pytest: dimensioni, determinismo per seme, quasi invisibile (alfa max 0,07, media ≤ 0,04), senza giunture; asset `assets/panel_grain.png` seme 4 copiato in `Contents/Resources` del bundle dal CMake; l'editor la usa già se presente). Comune a tutti i plugin dal 2026-10-10
 - [x] Task 7 — VSTGUI e controlli: già fatti in `shared/ui` dalla chat di Pillow Talk (VSTGUI nella build e nella CI, `knob_math`, `AnalogKnob`/`ToggleButton`/`ChoiceButtons`, `Skin`); aggiunti `meter_math.h` (LED accesi, colori, peak hold), `MeterBar` e `ClipLed` (`shared/ui`), collegata la libreria a The Stripper. **Resta da fare (Task 8 e 11):** l'aspetto dei controlli condivisi è ancora quello vecchio (arco ambra, disco piatto); va portato al design approvato (scala di puntini, valori di fondo scala, alluminio tornito, usura)
 - [ ] Task 8 — editor (suddiviso in 8a layout/binding, 8b fascia meter, 8c striscia del modello e popup locale). **8a fatto (2026-10-10):** `ui/layout.h` (tabella di layout, polarità IN, regole di attenuazione, test `the_stripper_layout_tests`), `ui/editor.{h,cpp}`, `ui/panel_view.{h,cpp}` (tinta, gradiente, riquadri con interruzione per il titolo, intestazione, testate delle bande EQ), `shared/ui/editor_size.h` (+ test). Il controller ha `beginEdit/performEdit/endEdit`; `setParamNormalized` è solo host → controller (prima rimandava le modifiche all'host: un anello che poteva sovrascrivere l'automazione registrata). L'editor legge i valori dal controller con un timer da 30 ms (nessun listener sui parametri). Default di `kEqHPFOn`/`kEqLPFOn` = 1 (tabella bloccata aggiornata). Il plugin ora è un `MODULE` e usa `InitModule`/`DeinitModule` dell'SDK (servono a `VSTGUI::init`). **8b fatto:** fascia dei meter nel riquadro LEVEL (6 `MeterBar`, 6 `ClipLed`, clic su un LED → `kClearClips`, attenuazione col Bypass globale tranne IN/OUT e i meter di livello; geometria in `ui/layout.h`, test inclusi). La scala dB stampata ha 8 etichette (−60 … 0, una per LED al massimo) invece di 12: quelle vicine a 0 si sovrapponevano; aggiornata anche la preview. **8c fatto (parte locale):** `ui/model_source.h` (scansione ricorsiva delle cartelle, filtro, nome senza `.nam`, troncamento per larghezza misurata; test `the_stripper_model_source_tests`), `ui/model_strip` (striscia di nastro cliccabile, "No model"/"Loading..."/errore in rosso; Drive attenuato senza modello), `ui/model_browser` + `ui/browser_widgets` (popup modale: cartelle con ADD via selettore di cartella nativo/REMOVE/rescan, ricerca con `CTextEdit`, elenco, LOAD, NO MODEL, CANCEL; scansione su thread). **Restano:** persistenza delle cartelle (oggi in memoria nel processo, con default `~/NAM` ecc.: Task 10), icona chip GPU (serve un campo GPU in `ModelStatus`), font del nastro (Task 12), tooltip con il nome completo, scheda TONE3000 (assente). Strumento di sviluppo `the_stripper_render` (`tools/render_editor.cpp`): disegna l'editor fuori schermo in un PNG, senza host
 - [ ] Task 9 — ricerca SSL 360 Link e docs
@@ -184,6 +184,8 @@ git commit -m "feat(the-stripper): load NAM model via controller/processor messa
 
 ### Task 6: Tessera di grana del pannello
 
+> Dal 2026-10-10 la grana fine è la texture di **tutti** i plugin (non solo The Stripper): lo script e l'asset restano in `src/the-stripper/` finché non nasce il kit comune in `shared/`.
+
 **Files:**
 - Create: `src/the-stripper/tools/gen_panel_grain.py`, `src/the-stripper/tools/test_gen_panel_grain.py`
 - Create: `src/the-stripper/assets/panel_grain.png` (generato e committato)
@@ -191,15 +193,15 @@ git commit -m "feat(the-stripper): load NAM model via controller/processor messa
 **Interfaces:**
 - Produces: `gen_panel_grain.py [--out FILE] [--seed N]` che scrive una tessera 256 × 256 RGBA ripetibile senza giunture visibili: pixel bianchi con alfa derivato da rumore illuminato (equivalente al filtro `tfine` della preview `stripper_rack.html`), alfa massimo circa 0,07, deterministica per un dato seed.
 
-- [ ] **Step 1: Scrivere il test** (`pytest`): dimensioni 256 × 256 RGBA; stesso seed → file identici (hash); seed diversi → file diversi; alfa massimo ≤ 0,10 e media ≤ 0,04 (grana quasi impercettibile); la tessera è ripetibile (differenza media tra bordo sinistro e destro, e tra alto e basso, non maggiore di quella tra colonne adiacenti interne).
-- [ ] **Step 2: Eseguire, verificare il fallimento.**
+- [x] **Step 1: Scrivere il test** (`pytest`): dimensioni 256 × 256 RGBA; stesso seed → file identici (hash); seed diversi → file diversi; alfa massimo ≤ 0,10 e media ≤ 0,04 (grana quasi impercettibile); la tessera è ripetibile (differenza media tra bordo sinistro e destro, e tra alto e basso, non maggiore di quella tra colonne adiacenti interne).
+- [x] **Step 2: Eseguire, verificare il fallimento.**
   Run: `python3 -m pytest src/the-stripper/tools -q`
   Expected: FAIL (script mancante).
-- [ ] **Step 3: Implementare con NumPy e Pillow** (rumore bianco filtrato con una piccola sfocatura periodica per la ripetibilità, illuminazione da un'altezza derivata dal rumore, alfa ricavato dalle sole luci). Documentare le dipendenze in testa allo script.
-- [ ] **Step 4: Eseguire i test, poi generare l'asset con seed fisso** e confrontarlo a occhio con la preview.
+- [x] **Step 3: Implementare con NumPy e Pillow** (rumore bianco filtrato con una piccola sfocatura periodica per la ripetibilità, illuminazione da un'altezza derivata dal rumore, alfa ricavato dalle sole luci). Documentare le dipendenze in testa allo script.
+- [x] **Step 4: Eseguire i test, poi generare l'asset con seed fisso** e confrontarlo a occhio con la preview.
   Run: `python3 -m pytest src/the-stripper/tools -q && python3 src/the-stripper/tools/gen_panel_grain.py --out src/the-stripper/assets/panel_grain.png --seed 4`
   Expected: PASS e PNG creato.
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/the-stripper/tools src/the-stripper/assets
@@ -308,7 +310,7 @@ Compiti nati dopo le preview; ciascuno ha la propria spec nel §4 e §6 del docu
 
 ### Task 13: Retro del pannello (Settings e Credits)
 
-- Sezione di spiegazione dei pulsanti che impongono configurazioni o cambiano modelli, con i valori che impongono (spec §4, deciso 2026-10-10).
+- Scheda dedicata che spiega i pulsanti che impongono configurazioni o cambiano modelli, con i valori che impongono, **generata dalla stessa tabella usata dal codice** (spec §4; allineare al caso di Hotline, scheda DEVICES).
 - Flip 3D, schede SETTINGS e CREDITS, controlli delle impostazioni (preferenze e comportamento) e testi di credits in inglese; licenze ricontrollate.
 
 ### Task 14: Viti, valori digitabili, richiamo
