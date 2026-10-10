@@ -38,6 +38,16 @@ void CompressionStub::setParams(float amount, float mix) {
   bus_.setParams(amount_, mix_);
 }
 
+float CompressionStub::currentGainReductionDb() const {
+  switch (mode_) {
+    case 0: return opto_.currentGainReductionDb();
+    case 1: return fet_.currentGainReductionDb();
+    case 2: return vca_.currentGainReductionDb();
+    case 3: return bus_.currentGainReductionDb();
+    default: return vca_.currentGainReductionDb();
+  }
+}
+
 void CompressionStub::process(float* left, float* right, int numSamples,
                               const float* sidechainL, const float* sidechainR) {
   const float* scL = sidechainL;

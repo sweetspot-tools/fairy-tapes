@@ -4,6 +4,7 @@
  */
 
 #include "controller.h"
+#include "state.h"
 #include "pluginterfaces/base/ipluginbase.h"
 #include "pluginterfaces/vst/ivstunits.h"
 #include "pluginterfaces/vst/vsttypes.h"
@@ -14,15 +15,6 @@
 namespace FairyTapes::TheStripper {
 
 namespace {
-constexpr int kStateVersion = 7;
-constexpr int kNumParamsV5 = 32;   // param count before Drive params
-constexpr int kNumParamsV6 = 35;   // v6 had kDriveAmount, kDriveOutput, kDriveMix
-constexpr int kOldDriveOutputSlotV6 = 33;
-constexpr int kOldDriveMixSlotV6 = 34;
-constexpr int kNumParamsV2 = 18;
-constexpr int kNumParamsV3 = 32;  // before Compressor Mode
-constexpr int kNumParamsV4 = 33;  // before kEqType removal
-constexpr int kOldEqTypeSlotV4 = 31;
 
 void asciiToStr128(const char* src, Steinberg::Vst::String128 dst) {
   for (int i = 0; i < 127 && src[i]; ++i)
@@ -33,39 +25,10 @@ void asciiToStr128(const char* src, Steinberg::Vst::String128 dst) {
 
 Controller::Controller() {
   FUNKNOWN_CTOR
-  param_value_[kBypass] = kDefaultBypass;
-  param_value_[kStripMode] = kDefaultStripMode;
-  param_value_[kInputGain] = kDefaultInputGain;
-  param_value_[kOutputGain] = kDefaultOutputGain;
-  param_value_[kBypassGainStaging] = kDefaultBypassStage;
-  param_value_[kBypassLPHP] = kDefaultBypassStage;
-  param_value_[kBypassEQ] = kDefaultBypassStage;
-  param_value_[kBypassCompression] = kDefaultBypassStage;
-  param_value_[kBypassDrive] = kDefaultBypassStage;
-  param_value_[kBypassLimiter] = kDefaultBypassStage;
-  param_value_[kBypassGate] = kDefaultBypassStage;
-  param_value_[kGainStagingTrim] = kDefaultGainStagingTrim;
-  param_value_[kCompressAmount] = kDefaultCompressAmount;
-  param_value_[kCompressMix] = kDefaultCompressMix;
-  param_value_[kCompressorMode] = kDefaultCompressorMode;
-  param_value_[kEqHPFFreq] = kDefaultEqHPFFreq;
-  param_value_[kEqHPFOn] = kDefaultEqHPFOn;
-  param_value_[kEqLPFFreq] = kDefaultEqLPFFreq;
-  param_value_[kEqLPFOn] = kDefaultEqLPFOn;
-  param_value_[kEqLFGain] = kDefaultEqLFGain;
-  param_value_[kEqLFFreq] = kDefaultEqLFFreq;
-  param_value_[kEqLFBell] = kDefaultEqLFBell;
-  param_value_[kEqLMGain] = kDefaultEqLMGain;
-  param_value_[kEqLMFreq] = kDefaultEqLMFreq;
-  param_value_[kEqLMQ] = kDefaultEqLMQ;
-  param_value_[kEqHMGain] = kDefaultEqHMGain;
-  param_value_[kEqHMFreq] = kDefaultEqHMFreq;
-  param_value_[kEqHMQ] = kDefaultEqHMQ;
-  param_value_[kEqHFGain] = kDefaultEqHFGain;
-  param_value_[kEqHFFreq] = kDefaultEqHFFreq;
-  param_value_[kEqHFBell] = kDefaultEqHFBell;
-  param_value_[kEqSaturation] = kDefaultEqSaturation;
-  param_value_[kDriveAmount] = kDefaultDriveAmount;
+  double defaults[kNumParams];
+  fillDefaultParams(defaults);
+  for (int i = 0; i < kNumParams; ++i)
+    param_value_[i] = defaults[i];
 }
 
 IMPLEMENT_REFCOUNT(Controller)
@@ -86,108 +49,12 @@ Steinberg::tresult PLUGIN_API Controller::setState(Steinberg::IBStream* state) {
   if (!state)
     return Steinberg::kResultFalse;
   Steinberg::IBStreamer s(state, kLittleEndian);
-  Steinberg::int32 version = 0;
-  if (s.readInt32(version) == false)
+  PluginState st;
+  if (!readState(s, st))
     return Steinberg::kResultFalse;
-  if (version == 4) {
-    double buf[kNumParamsV4];
-    for (int i = 0; i < kNumParamsV4; ++i) {
-      if (s.readDouble(buf[i]) == false)
-        return Steinberg::kResultFalse;
-    }
-    int dst = 0;
-    for (int i = 0; i < kNumParamsV4 && dst < kNumParams; ++i) {
-      if (i == kOldEqTypeSlotV4)
-        continue;
-      param_value_[dst++] = static_cast<Steinberg::Vst::ParamValue>(buf[i]);
-    }
-  } else if (version == 5) {
-    for (int i = 0; i < kNumParamsV5; ++i) {
-      double v = 0.;
-      if (s.readDouble(v) == false)
-        return Steinberg::kResultFalse;
-      param_value_[i] = static_cast<Steinberg::Vst::ParamValue>(v);
-    }
-    param_value_[kDriveAmount] = kDefaultDriveAmount;
-  } else if (version == 6) {
-    double buf[kNumParamsV6];
-    for (int i = 0; i < kNumParamsV6; ++i) {
-      if (s.readDouble(buf[i]) == false)
-        return Steinberg::kResultFalse;
-    }
-    int dst = 0;
-    for (int i = 0; i < kNumParamsV6 && dst < kNumParams; ++i) {
-      if (i == kOldDriveOutputSlotV6 || i == kOldDriveMixSlotV6)
-        continue;
-      param_value_[dst++] = static_cast<Steinberg::Vst::ParamValue>(buf[i]);
-    }
-  } else if (version >= 7) {
-    for (int i = 0; i < kNumParams; ++i) {
-      double v = 0.;
-      if (s.readDouble(v) == false)
-        return Steinberg::kResultFalse;
-      param_value_[i] = static_cast<Steinberg::Vst::ParamValue>(v);
-    }
-  } else {
-    const int n = (version == 1) ? 3 : (version == 2) ? kNumParamsV2 : kNumParamsV3;
-    for (int i = 0; i < n; ++i) {
-      double v = 0.;
-      if (s.readDouble(v) == false)
-        return Steinberg::kResultFalse;
-      if (i < kNumParams)
-        param_value_[i] = static_cast<Steinberg::Vst::ParamValue>(v);
-    }
-    if (version == 1) {
-      for (int i = 3; i < kNumParams; ++i)
-        param_value_[i] = 0.5;
-      param_value_[kBypass] = 0.0;
-      param_value_[kStripMode] = kDefaultStripMode;
-      param_value_[kInputGain] = kDefaultInputGain;
-      param_value_[kOutputGain] = kDefaultOutputGain;
-      param_value_[kBypassGainStaging] = kDefaultBypassStage;
-      param_value_[kBypassLPHP] = kDefaultBypassStage;
-      param_value_[kBypassEQ] = kDefaultBypassStage;
-      param_value_[kBypassCompression] = kDefaultBypassStage;
-      param_value_[kBypassDrive] = kDefaultBypassStage;
-      param_value_[kBypassLimiter] = kDefaultBypassStage;
-      param_value_[kBypassGate] = kDefaultBypassStage;
-      param_value_[kGainStagingTrim] = kDefaultGainStagingTrim;
-      param_value_[kCompressAmount] = kDefaultCompressAmount;
-      param_value_[kCompressMix] = kDefaultCompressMix;
-      param_value_[kCompressorMode] = kDefaultCompressorMode;
-    }
-    if (version == 3) {
-      for (int i = kNumParams - 1; i >= static_cast<int>(kCompressorMode) + 1; --i)
-        param_value_[i] = param_value_[i - 1];
-      param_value_[kCompressorMode] = kDefaultCompressorMode;
-    }
-    if (version == 2) {
-      param_value_[kEqHPFFreq] = param_value_[14];
-      param_value_[kEqHPFOn] = param_value_[15];
-      param_value_[kEqLPFFreq] = param_value_[16];
-      param_value_[kEqLPFOn] = param_value_[17];
-      param_value_[kCompressorMode] = kDefaultCompressorMode;
-    }
-    for (int i = kNumParamsV2; i < kNumParams; ++i)
-      param_value_[i] = 0.5;
-    param_value_[kEqHPFOn] = kDefaultEqHPFOn;
-    param_value_[kEqLPFOn] = kDefaultEqLPFOn;
-    param_value_[kEqLFBell] = kDefaultEqLFBell;
-    param_value_[kEqHFBell] = kDefaultEqHFBell;
-    param_value_[kEqSaturation] = kDefaultEqSaturation;
-    param_value_[kEqHPFFreq] = kDefaultEqHPFFreq;
-    param_value_[kEqLPFFreq] = kDefaultEqLPFFreq;
-    param_value_[kEqLFGain] = kDefaultEqLFGain;
-    param_value_[kEqLFFreq] = kDefaultEqLFFreq;
-    param_value_[kEqLMGain] = kDefaultEqLMGain;
-    param_value_[kEqLMFreq] = kDefaultEqLMFreq;
-    param_value_[kEqLMQ] = kDefaultEqLMQ;
-    param_value_[kEqHMGain] = kDefaultEqHMGain;
-    param_value_[kEqHMFreq] = kDefaultEqHMFreq;
-    param_value_[kEqHMQ] = kDefaultEqHMQ;
-    param_value_[kEqHFGain] = kDefaultEqHFGain;
-    param_value_[kEqHFFreq] = kDefaultEqHFFreq;
-  }
+  for (int i = 0; i < kNumParams; ++i)
+    param_value_[i] = static_cast<Steinberg::Vst::ParamValue>(st.params[i]);
+  modelPath_ = st.modelPath;
   return Steinberg::kResultOk;
 }
 
@@ -195,20 +62,35 @@ Steinberg::tresult PLUGIN_API Controller::getState(Steinberg::IBStream* state) {
   if (!state)
     return Steinberg::kResultFalse;
   Steinberg::IBStreamer s(state, kLittleEndian);
-  if (s.writeInt32(kStateVersion) == false)
-    return Steinberg::kResultFalse;
+  PluginState st;
   for (int i = 0; i < kNumParams; ++i)
-    if (s.writeDouble(static_cast<double>(param_value_[i])) == false)
-      return Steinberg::kResultFalse;
-  return Steinberg::kResultOk;
+    st.params[i] = static_cast<double>(param_value_[i]);
+  st.modelPath = modelPath_;
+  return writeState(s, st) ? Steinberg::kResultOk : Steinberg::kResultFalse;
 }
 
 Steinberg::int32 PLUGIN_API Controller::getParameterCount() {
-  return kNumParams;
+  return kNumParams + kNumMeters;   // the persistent parameters, then the read-only meter parameters
 }
 
 Steinberg::tresult PLUGIN_API Controller::getParameterInfo(Steinberg::int32 index,
                                                            Steinberg::Vst::ParameterInfo& info) {
+  if (index >= kNumParams && index < kNumParams + kNumMeters) {
+    // Meter parameters: hidden from the host; read-only, except kClearClips (a click on a clip LED writes it).
+    const Steinberg::Vst::ParamID id = kMeterBase + static_cast<Steinberg::Vst::ParamID>(index - kNumParams);
+    info.id = id;
+    info.stepCount = 0;
+    info.defaultNormalizedValue = 0.0;
+    info.unitId = Steinberg::Vst::kRootUnitId;
+    info.flags = Steinberg::Vst::ParameterInfo::kIsHidden |
+                 (id == kClearClips ? 0 : Steinberg::Vst::ParameterInfo::kIsReadOnly);
+    static const char* const kTitles[] = {"Meter In L", "Meter In R", "Meter Out L", "Meter Out R", "GR Comp", "GR Limiter",
+                                          "Clip Input", "Clip EQ", "Clip Comp", "Clip Drive", "Clip Limiter", "Clip Output", "Clear Clips"};
+    asciiToStr128(kTitles[id - kMeterBase], info.title);
+    asciiToStr128(kTitles[id - kMeterBase], info.shortTitle);
+    asciiToStr128("", info.units);
+    return Steinberg::kResultOk;
+  }
   if (index < 0 || index >= kNumParams)
     return Steinberg::kResultFalse;
   info.flags = Steinberg::Vst::ParameterInfo::kCanAutomate;
@@ -430,6 +312,18 @@ Steinberg::tresult PLUGIN_API Controller::getParameterInfo(Steinberg::int32 inde
     asciiToStr128("Drive", info.shortTitle);
     asciiToStr128("", info.units);
     break;
+  case kLimiterPound:
+    info.defaultNormalizedValue = kDefaultLimiterPound;
+    asciiToStr128("Limiter Pound", info.title);
+    asciiToStr128("Pound", info.shortTitle);
+    asciiToStr128("", info.units);
+    break;
+  case kGateThreshold:
+    info.defaultNormalizedValue = kDefaultGateThreshold;
+    asciiToStr128("Gate Threshold", info.title);
+    asciiToStr128("Thresh", info.shortTitle);
+    asciiToStr128("", info.units);
+    break;
   default:
     return Steinberg::kResultFalse;
   }
@@ -440,6 +334,11 @@ Steinberg::tresult PLUGIN_API Controller::getParameterInfo(Steinberg::int32 inde
 Steinberg::tresult PLUGIN_API Controller::getParamStringByValue(Steinberg::Vst::ParamID tag,
     Steinberg::Vst::ParamValue valueNormalized, Steinberg::Vst::String128 string) {
   char buf[128];
+  if (tag >= kMeterBase && tag < kNumMeterIDs) {
+    snprintf(buf, sizeof(buf), "%.0f%%", valueNormalized * 100.0);
+    asciiToStr128(buf, string);
+    return Steinberg::kResultOk;
+  }
   switch (tag) {
   case kBypass:
     asciiToStr128(valueNormalized >= 0.5 ? "On" : "Off", string);
@@ -535,6 +434,14 @@ Steinberg::tresult PLUGIN_API Controller::getParamStringByValue(Steinberg::Vst::
     snprintf(buf, sizeof(buf), "%.0f%%", valueNormalized * 100.0);
     asciiToStr128(buf, string);
     return Steinberg::kResultOk;
+  case kLimiterPound:
+    snprintf(buf, sizeof(buf), "%.1f", valueNormalized * 10.0);
+    asciiToStr128(buf, string);
+    return Steinberg::kResultOk;
+  case kGateThreshold:
+    snprintf(buf, sizeof(buf), "%.0f dB", -72.0 + valueNormalized * 72.0);
+    asciiToStr128(buf, string);
+    return Steinberg::kResultOk;
   default:
     string[0] = 0;
     return Steinberg::kResultFalse;
@@ -564,6 +471,8 @@ Steinberg::Vst::ParamValue PLUGIN_API Controller::plainParamToNormalized(
 }
 
 Steinberg::Vst::ParamValue PLUGIN_API Controller::getParamNormalized(Steinberg::Vst::ParamID tag) {
+  if (tag >= kMeterBase && tag < kNumMeterIDs)
+    return meter_value_[tag - kMeterBase];
   if (tag >= 0 && tag < kNumParams)
     return param_value_[tag];
   return 0.;
@@ -571,6 +480,17 @@ Steinberg::Vst::ParamValue PLUGIN_API Controller::getParamNormalized(Steinberg::
 
 Steinberg::tresult PLUGIN_API Controller::setParamNormalized(Steinberg::Vst::ParamID tag,
     Steinberg::Vst::ParamValue value) {
+  if (tag >= kMeterBase && tag < kNumMeterIDs) {
+    // Values written by the processor (or the clear request written by the editor). They never feed back into the
+    // host as an edit, except the explicit click on a clip LED.
+    meter_value_[tag - kMeterBase] = value;
+    if (tag == kClearClips && value >= 0.5 && component_handler_) {
+      component_handler_->beginEdit(tag);
+      component_handler_->performEdit(tag, value);
+      component_handler_->endEdit(tag);
+    }
+    return Steinberg::kResultOk;
+  }
   if (tag < 0 || tag >= kNumParams)
     return Steinberg::kResultFalse;
   if (tag == kCompressorMode) {

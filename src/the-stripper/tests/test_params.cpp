@@ -169,8 +169,9 @@ void test_eqTypeFromStripMode() {
 // ---------------------------------------------------------------------------
 
 void test_kNumParams_count() {
-  // After simplifying Drive (single knob): kNumParams = 33
-  ASSERT_TRUE(kNumParams == 33);
+  // 33 up to kDriveAmount (state v7), plus kLimiterPound and kGateThreshold appended after it
+  ASSERT_TRUE(kNumParams == 35);
+  ASSERT_TRUE(kNumParamsV7 == 33);
   ASSERT_TRUE(kDriveAmount == 32);
   ASSERT_TRUE(kEqSaturation == 31);
 }
@@ -187,7 +188,7 @@ void test_param_enum_ordering() {
   ASSERT_TRUE(kCompressorMode == 14);
   ASSERT_TRUE(kEqHPFFreq == 15);
   ASSERT_TRUE(kEqSaturation == 31);
-  ASSERT_TRUE(kDriveAmount == kNumParams - 1);
+  ASSERT_TRUE(kDriveAmount == kNumParams - 3);   // kLimiterPound and kGateThreshold come after it
 }
 
 // ---------------------------------------------------------------------------
@@ -876,6 +877,8 @@ void test_default_bypass_is_off() {
 
 } // namespace
 
+int run_meter_tests();  // tests/test_meter.cpp
+
 int main() {
   std::fprintf(stdout, "Running The Stripper tests...\n\n");
 
@@ -951,6 +954,8 @@ int main() {
   RUN_TEST(test_default_values_in_range);
   RUN_TEST(test_default_strip_mode_is_channel);
   RUN_TEST(test_default_bypass_is_off);
+
+  g_failed += run_meter_tests();
 
   std::fprintf(stdout, "\n%d passed, %d failed.\n", g_passed, g_failed);
   if (g_failed > 0) {

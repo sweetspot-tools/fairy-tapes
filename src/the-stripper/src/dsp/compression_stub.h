@@ -21,6 +21,8 @@ public:
   void setMode(int mode);
   /** amount 0..1 (more = more compression), mix 0=dry 1=wet. */
   void setParams(float amount, float mix);
+  /** Gain reduction (dB, >= 0) of the active engine right now. */
+  float currentGainReductionDb() const;
   /** Process stereo in place. Optional sidechain: when non-null, used for envelope detection only. */
   void process(float* left, float* right, int numSamples,
                const float* sidechainL = nullptr, const float* sidechainR = nullptr);

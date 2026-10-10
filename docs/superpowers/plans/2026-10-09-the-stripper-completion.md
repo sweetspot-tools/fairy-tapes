@@ -14,8 +14,8 @@
 
 - [x] Task 1 — `NamDrive` in `shared/nam_drive` (commit `5805520`, adattato a NAM v0.6.0 in `10cb131`; 49 test su 49; CUDA non verificato)
 - [x] Task 2 — caricamento asincrono (`requestLoad`, `LoadState`; 5 test, 25 ripetizioni senza errori). Trovato e corretto un difetto del Task 1: i registratori delle architetture NAM sono inizializzatori statici e il linker li scartava dalla libreria statica; i consumatori usano ora `nam_drive_link(<target>)` (collegamento whole-archive)
-- [ ] Task 3 — parametri nuovi, stato v8 esteso (vedi spec §6), tabella bloccata
-- [ ] Task 4 — meter
+- [x] Task 3 — `kLimiterPound` e `kGateThreshold` (ora usati dal processor), stato v8 (parametri + percorso del modello; `state.h` header-only, v1-v8 leggibili), tabella dei parametri bloccata (`tests/param_table_golden.h`: ID verificati a compilazione, default a runtime; mutazioni di prova rilevate). **Resta per il Task 14/§6:** seme, viti, scritte sul nastro, segni di richiamo e impostazioni di comportamento nello stato; nomi e numero di passi non sono nella tabella bloccata (solo ID e default)
+- [x] Task 4 — meter (picchi in/out, 6 LED di clip per stadio, gain reduction compressore e limiter; parametri di sola lettura da `kMeterBase = 1000`, scritti al massimo ogni 16 ms; `kClearClips` scrivibile). Il guadagno del compressore è letto dai motori (`currentGainReductionDb()`: il rapporto dei picchi non funziona con FET e Bus, che hanno guadagno in ingresso), quello del limiter dal rapporto dei picchi (BlockParty non lo espone). Test: unit (`test_meter.cpp`) e test nel modulo vero con code di parametri simulate (`test_processor_meters.cpp`)
 - [ ] Task 5 — messaggi del modello
 - [ ] Task 6 — tessera di grana
 - [ ] Task 7 — VSTGUI e controlli
@@ -116,14 +116,14 @@ git commit -m "feat(nam-drive): add asynchronous model loading"
   - In `processor.h`: `struct PluginState { double params[kNumParams]; std::string modelPath; };` con `bool readState(Steinberg::IBStream*, PluginState&)` e `bool writeState(Steinberg::IBStream*, const PluginState&)` (funzioni libere testabili con un `IBStream` in memoria).
   - Il processor applica `kLimiterPound` a `BlockParty::setParams(pound, 1.0)` e `kGateThreshold` a `DeNoise::setParams(threshold, speed_attuale, 1.0)`.
 
-- [ ] **Step 1: Scrivere i test:** `test_new_params_appended_at_end` (`kLimiterPound == kNumParams - 2`, `kGateThreshold == kNumParams - 1`, e nessun ID precedente cambiato); `test_param_table_matches_golden` (tabella ID → nome → passi → default letta da `param_table_golden.h`, generata dallo stato attuale del codice **prima** dell'aggiunta e poi estesa con i due nuovi); `test_state_v8_roundtrip` (parametri, percorso con caratteri non ASCII); `test_state_v7_loads_with_defaults` (fixture v7 scritta con la vecchia struttura: percorso vuoto); `test_state_unknown_version_rejected`.
-- [ ] **Step 2: Generare `param_table_golden.h` dal codice attuale** (che include già `kDefaultEqHPFFreq = 0.0`, vedi spec §4, Default dei filtri) con un piccolo programma temporaneo, estenderlo a mano con i due nuovi parametri e verificare che il test sul nome/ordine fallisca se si scambiano due ID.
-- [ ] **Step 3: Eseguire, verificare il fallimento.**
-- [ ] **Step 4: Implementare** parametri, `readState`/`writeState` (versione 8; lettura v7 mantenuta), uso dei due parametri nel processor, titoli e unità nel controller.
-- [ ] **Step 5: Eseguire i test.**
+- [x] **Step 1: Scrivere i test:** `test_new_params_appended_at_end` (`kLimiterPound == kNumParams - 2`, `kGateThreshold == kNumParams - 1`, e nessun ID precedente cambiato); `test_param_table_matches_golden` (tabella ID → nome → passi → default letta da `param_table_golden.h`, generata dallo stato attuale del codice **prima** dell'aggiunta e poi estesa con i due nuovi); `test_state_v8_roundtrip` (parametri, percorso con caratteri non ASCII); `test_state_v7_loads_with_defaults` (fixture v7 scritta con la vecchia struttura: percorso vuoto); `test_state_unknown_version_rejected`.
+- [x] **Step 2: Generare `param_table_golden.h` dal codice attuale** (che include già `kDefaultEqHPFFreq = 0.0`, vedi spec §4, Default dei filtri) con un piccolo programma temporaneo, estenderlo a mano con i due nuovi parametri e verificare che il test sul nome/ordine fallisca se si scambiano due ID.
+- [x] **Step 3: Eseguire, verificare il fallimento.**
+- [x] **Step 4: Implementare** parametri, `readState`/`writeState` (versione 8; lettura v7 mantenuta), uso dei due parametri nel processor, titoli e unità nel controller.
+- [x] **Step 5: Eseguire i test.**
   Run: `cmake --build build --target the_stripper_tests && ctest --test-dir build -R the_stripper --output-on-failure`
   Expected: PASS.
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/the-stripper
@@ -142,16 +142,16 @@ git commit -m "feat(the-stripper): add limiter/gate params, state v8 and frozen 
 - Produces:
   - In `params.h`: `constexpr Steinberg::Vst::ParamID kMeterBase = 1000;` e `enum MeterID : Steinberg::Vst::ParamID { kMeterInL = kMeterBase, kMeterInR, kMeterOutL, kMeterOutR, kMeterGrComp, kMeterGrLimiter, kClipInput, kClipEq, kClipComp, kClipDrive, kClipLimiter, kClipOutput, kClearClips, kNumMeterIDs };` (valori normalizzati 0..1; tutti in sola lettura tranne `kClearClips`, scrivibile e nascosto: un clic su un LED lo imposta a 1 e il processor azzera i `ClipDetector` e lo riporta a 0; picchi: -60..+6 dBFS, GR comp: 0..-20 dB, GR limiter: 0..-12 dB, clip: 0/1)
   - In `dsp/meter.h`: `class PeakMeter { void prepare(double sampleRate); float process(const float* x, int numSamples); /* picco del blocco in lineare */ float levelDb() const; /* con rilascio 20 dB/s */ float holdDb() const; /* picco mantenuto 1.5 s */ void reset(); };` e `class ClipDetector { void prepare(double sampleRate); void process(const float* x, int numSamples); bool lit() const; /* acceso fino a 2 s dopo |x| >= 1.0 */ void clear(); };`
-  - `float currentGainReductionDb() const` (>= 0) su `MultiCompOpto/FET/VCA/Bus` e `BlockParty` (da `envelope`/coefficienti del motore; per `BlockParty`, se non esposto, dal rapporto tra picchi di uscita e ingresso dell'ultimo blocco).
+  - `float currentGainReductionDb() const` (>= 0) su `MultiCompOpto/FET/VCA/Bus` e `CompressionStub` (dall'inviluppo del motore); per `BlockParty` (non lo espone) dal rapporto tra picchi di uscita e ingresso del blocco (`GainReductionMeter::update`).
 
-- [ ] **Step 1: Scrivere i test:** `test_peakmeter_instant_attack_and_release` (impulso a 0.5 → `levelDb ≈ -6` subito; dopo 1 s di silenzio sceso di 20 ± 1 dB); `test_peakmeter_hold_1_5s` (`holdDb` resta al picco per 1.4 s e cade dopo 1.6 s); `test_clip_detects_at_exactly_one` (0.9999 → spento; 1.0 → acceso); `test_clip_hold_2s_and_clear` (acceso a 1.9 s, spento a 2.1 s; `clear()` lo spegne subito); `test_gr_zero_when_not_compressing` e `test_gr_positive_when_compressing` per ciascun motore (rumore a -30 dBFS e a -6 dBFS con Amount 0.8); `test_meter_ids_do_not_collide_with_params` (`kMeterBase >= kNumParams`, intervalli disgiunti); `test_meters_not_in_state` (`writeState` non cambia di dimensione aggiungendo i meter); `test_meter_update_rate_limit` (con blocchi da 64 campioni a 48 kHz, al massimo una scrittura ogni 16 ms).
-- [ ] **Step 2: Eseguire, verificare il fallimento.**
-- [ ] **Step 3: Implementare `PeakMeter`, `ClipDetector` e `currentGainReductionDb()`** sui motori.
-- [ ] **Step 4: Integrare nel `Processor`:** un `ClipDetector` per stadio (misurato all'uscita di Input gain, EQ, Compression, Drive, Limiter e Output gain) e due `PeakMeter` stereo (ingresso prima di tutto, uscita dopo l'Output gain); a fine blocco, se sono passati almeno 16 ms, scrivere i valori normalizzati in `outputParameterChanges` come parametri di sola lettura. Gli stadi in bypass non accendono il loro LED. Il `Controller` registra i parametri con `kIsReadOnly | kIsHidden`.
-- [ ] **Step 5: Eseguire i test.**
+- [x] **Step 1: Scrivere i test:** `test_peakmeter_instant_attack_and_release` (impulso a 0.5 → `levelDb ≈ -6` subito; dopo 1 s di silenzio sceso di 20 ± 1 dB); `test_peakmeter_hold_1_5s` (`holdDb` resta al picco per 1.4 s e cade dopo 1.6 s); `test_clip_detects_at_exactly_one` (0.9999 → spento; 1.0 → acceso); `test_clip_hold_2s_and_clear` (acceso a 1.9 s, spento a 2.1 s; `clear()` lo spegne subito); `test_gr_zero_when_not_compressing` e `test_gr_positive_when_compressing` per ciascun motore (rumore a -30 dBFS e a -6 dBFS con Amount 0.8); `test_meter_ids_do_not_collide_with_params` (`kMeterBase >= kNumParams`, intervalli disgiunti); `test_meters_not_in_state` (`writeState` non cambia di dimensione aggiungendo i meter); `test_meter_update_rate_limit` (con blocchi da 64 campioni a 48 kHz, al massimo una scrittura ogni 16 ms).
+- [x] **Step 2: Eseguire, verificare il fallimento.**
+- [x] **Step 3: Implementare `PeakMeter`, `ClipDetector` e `currentGainReductionDb()`** sui motori.
+- [x] **Step 4: Integrare nel `Processor`:** un `ClipDetector` per stadio (misurato all'uscita di Input gain, EQ, Compression, Drive, Limiter e Output gain) e due `PeakMeter` stereo (ingresso prima di tutto, uscita dopo l'Output gain); a fine blocco, se sono passati almeno 16 ms, scrivere i valori normalizzati in `outputParameterChanges` come parametri di sola lettura. Gli stadi in bypass non accendono il loro LED. Il `Controller` registra i parametri con `kIsReadOnly | kIsHidden`.
+- [x] **Step 5: Eseguire i test.**
   Run: `cmake --build build --target the_stripper_tests && ctest --test-dir build -R the_stripper --output-on-failure`
   Expected: PASS.
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/the-stripper

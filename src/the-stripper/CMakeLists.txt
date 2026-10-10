@@ -121,6 +121,7 @@ endif()
 # ---------------------------------------------------------------------------
 add_executable(the_stripper_tests
   tests/test_params.cpp
+  tests/test_meter.cpp
   src/dsp/fourk_eq.cpp
   src/dsp/compression_stub.cpp
   src/dsp/multicomp_engines.cpp
@@ -139,6 +140,15 @@ nam_drive_link(the_stripper_tests)
 target_link_libraries(the_stripper_tests PRIVATE gpu_nam)
 add_test(NAME the_stripper_tests COMMAND the_stripper_tests)
 
+# State and frozen-parameter-table tests: header-only, no SDK libraries needed.
+add_executable(the_stripper_state_tests tests/test_state.cpp)
+target_include_directories(the_stripper_state_tests PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/src
+  ${VST3_SDK_PATH}
+  ${VST3_SDK_PLUGINTERFACES}/base
+)
+add_test(NAME the_stripper_state_tests COMMAND the_stripper_state_tests)
+
 # Module/factory lifecycle smoke test: dlopens the built bundle from dist/ (exit 77 = skipped
 # when the plugin has not been built). Links only the pluginterfaces IIDs, not the plugin.
 if(NOT WIN32)
@@ -154,6 +164,15 @@ if(NOT WIN32)
   target_link_libraries(the_stripper_factory_test PRIVATE pluginterfaces ${CMAKE_DL_LIBS})
   add_test(NAME the_stripper_factory_test COMMAND the_stripper_factory_test)
   set_tests_properties(the_stripper_factory_test PROPERTIES SKIP_RETURN_CODE 77)
+
+  # Processor metering through the real module (mock host queues); skipped when the module is not built.
+  add_executable(the_stripper_meter_module_test tests/test_processor_meters.cpp ${VST3_SDK_PATH}/public.sdk/source/vst/vstinitiids.cpp)
+  target_include_directories(the_stripper_meter_module_test PRIVATE ${VST3_SDK_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_compile_definitions(the_stripper_meter_module_test PRIVATE
+    THE_STRIPPER_MODULE="${THE_STRIPPER_MODULE_PATH}")
+  target_link_libraries(the_stripper_meter_module_test PRIVATE pluginterfaces ${CMAKE_DL_LIBS})
+  add_test(NAME the_stripper_meter_module_test COMMAND the_stripper_meter_module_test)
+  set_tests_properties(the_stripper_meter_module_test PROPERTIES SKIP_RETURN_CODE 77)
 endif()
 
 # ---------------------------------------------------------------------------
