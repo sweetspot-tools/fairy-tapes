@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Stripper preview — model browser</title>
+<style>
+html,body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+input,select,textarea{-webkit-user-select:text;user-select:text}
+svg,svg *{-webkit-user-select:none;user-select:none}
+svg{touch-action:none}
+
+:root{--w:#f4f4f0;--dim:#c9c9c2;--bg:#0e0e0f;--panel:#151516;--line:#58585c;--amb:#f0b429;--grn:#37d04a;--red:#e8392b;--btn:#8e8e91}
+*{box-sizing:border-box}
+body{margin:0;padding:16px;background:#e9e8e4;font-family:system-ui,sans-serif;color:#222}
+.note{font-size:13px;color:#555;margin:0 0 12px;max-width:900px}
+.stage{background:#d8d6d0;border-radius:12px;padding:20px;display:flex;justify-content:center}
+.pop{width:760px;background:var(--bg);color:var(--w);border-radius:14px;border:2px solid #2c2c2f;padding:18px 20px 16px;font-family:'Arial Narrow','Helvetica Neue',Helvetica,Arial,sans-serif;font-weight:700}
+.head{display:flex;align-items:center;gap:14px;margin-bottom:12px}
+.head h1{margin:0;font-size:22px;font-style:italic;font-weight:900;letter-spacing:.3px}
+.head .sp{flex:1}
+.x{width:26px;height:22px;background:var(--btn);border:1px solid #b8b8bb;border-radius:2px;color:#1a1a1c;text-align:center;line-height:20px;cursor:pointer}
+.tabs{display:flex;gap:8px;margin-bottom:12px}
+.tab{padding:6px 18px;border:2px solid var(--w);border-radius:9px;font-size:13px;cursor:pointer;letter-spacing:.5px;color:var(--w);background:none;font:inherit;font-size:13px}
+.tab.on{background:var(--w);color:#0e0e0f}
+.box{position:relative;border:2px solid var(--w);border-radius:11px;padding:16px 12px 12px}
+.box>.t{position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:var(--bg);padding:0 8px;font-size:13px;letter-spacing:.4px}
+.row2{display:grid;grid-template-columns:230px 1fr;gap:14px}
+.list{height:268px;overflow:auto;font-size:13px}
+.item{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:4px;cursor:pointer;border:1px solid transparent;white-space:nowrap}
+.item:hover{background:#1d1d1f}
+.item.sel{border-color:var(--amb);color:var(--amb)}
+.item .meta{margin-left:auto;color:var(--dim);font-size:11px;font-weight:700}
+.dot{width:7px;height:7px;border-radius:50%;background:#2a2a2c;flex:none}
+.dot.on{background:var(--grn)}
+.btn{display:inline-block;background:var(--btn);color:#1a1a1c;border:1px solid #b8b8bb;border-radius:2px;padding:5px 12px;font:inherit;font-size:12px;cursor:pointer}
+.btn.sm{padding:3px 8px;font-size:11px;white-space:nowrap}
+.btn.off{opacity:.4;pointer-events:none}
+.field{display:flex;align-items:center;gap:8px;background:#050505;border:1px solid var(--line);border-radius:4px;padding:6px 10px;margin-bottom:10px;font-size:13px;color:var(--amb)}
+.field input{flex:1;background:none;border:0;outline:0;color:var(--amb);font:inherit}
+.chips{display:flex;gap:6px;margin-bottom:8px}
+.chip{border:1px solid var(--line);border-radius:12px;padding:2px 10px;font-size:11px;cursor:pointer;color:var(--dim)}
+.chip.on{border-color:var(--amb);color:var(--amb)}
+.lic{border:1px solid var(--line);border-radius:3px;padding:0 5px;font-size:10px;color:var(--dim)}
+.lic.ok{border-color:var(--grn);color:var(--grn)}
+.lic.no{border-color:var(--red);color:var(--red)}
+.foot{display:flex;align-items:center;gap:10px;margin-top:14px;font-size:12px}
+.foot .path{flex:1;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hide{display:none}
+.status{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dim);margin-bottom:10px}
+.small{font-size:11px;color:var(--dim);margin-top:6px}
+</style></head><body>
+<p class="note">NAM model picker popup preview, same rack-panel style. Both tabs (Local and Tone3000) are navigable; data is sample data. The Tone3000 tab is only a draft: it depends on API and terms of use still to be verified.</p>
+<div class="stage"><div class="pop">
+  <div class="head"><h1>MODEL BROWSER</h1><span class="sp"></span><span class="btn off" id="unload" style="pointer-events:auto;opacity:1" title="Unload the model: Drive passes the signal through">NO MODEL</span><span class="x" title="Close">✕</span></div>
+  <div class="tabs"><button class="tab on" data-t="loc">LOCAL</button><button class="tab" data-t="net">TONE3000</button></div>
+
+  <!-- LOCALE -->
+  <div id="loc" class="row2">
+    <div class="box"><span class="t">FOLDERS</span>
+      <div class="list" id="folders" style="height:216px"></div>
+      <div style="display:flex;gap:6px;margin-top:8px"><span class="btn sm" id="addf">+ ADD</span><span class="btn sm" id="remf">REMOVE</span><span class="btn sm" id="rescan" title="Rescan folders">↻</span></div>
+    </div>
+    <div class="box"><span class="t">MODELS</span>
+      <div class="field"><span>⌕</span><input id="q" placeholder="Search by name" value=""></div>
+      <div class="list" id="models" style="height:210px"></div>
+      <div class="small" id="count"></div>
+    </div>
+  </div>
+
+  <!-- TONE3000 -->
+  <div id="net" class="hide">
+    <div class="status"><span class="dot on"></span><span>Signed in as <b style="color:var(--w)">sample_user</b></span><span class="btn sm" style="margin-left:auto">SIGN OUT</span></div>
+    <div class="box"><span class="t">CATALOG</span>
+      <div class="field"><span>⌕</span><input placeholder="Search Tone3000" value="crunch"></div>
+      <div class="chips"><span class="chip on">ALL</span><span class="chip">AMP</span><span class="chip">PEDAL</span><span class="chip">RIG</span><span class="chip" style="margin-left:auto">FREE LICENSES ONLY</span></div>
+      <div class="list" id="net-list" style="height:200px"></div>
+      <div class="small">Offline: the tab shows only models already downloaded. Downloaded models go to the local “Tone3000” folder and also appear in the Local tab.</div>
+    </div>
+  </div>
+
+  <div class="foot"><span class="dot"></span><span class="path" id="path">No selection</span><span class="btn" id="cancel">CANCEL</span><span class="btn off" id="load">LOAD</span></div>
+</div></div>
+<script>
+var $=function(i){return document.getElementById(i)};
+var FOLDERS=[['All models',null],['~/NAM/Amps',[['JCM_clean_v2.nam','Amp','38 KB'],['Plexi_crunch.nam','Amp','41 KB'],['AC_chime.nam','Amp','36 KB'],['Twin_edge.nam','Amp','44 KB']]],['~/NAM/Pedals',[['TS_drive.nam','Pedal','12 KB'],['Fuzz_face.nam','Pedal','14 KB']]],['~/Documents/Tone3000',[['Crunch_70s.nam','Rig','52 KB']]]];
+var curFolder=0,sel=null,loaded='JCM_clean_v2.nam';
+function all(){var a=[];FOLDERS.forEach(function(f,i){if(f[1])f[1].forEach(function(m){a.push(m.concat([f[0]]))})});return a;}
+function drawFolders(){var h='';FOLDERS.forEach(function(f,i){h+='<div class="item'+(i===curFolder?' sel':'')+'" data-i="'+i+'">'+f[0]+'<span class="meta">'+(f[1]?f[1].length:all().length)+'</span></div>';});$('folders').innerHTML=h;
+  $('folders').querySelectorAll('.item').forEach(function(e){e.onclick=function(){curFolder=+e.dataset.i;drawFolders();drawModels();};});}
+function drawModels(){var q=$('q').value.toLowerCase(),src=curFolder?FOLDERS[curFolder][1].map(function(m){return m.concat([FOLDERS[curFolder][0]]);}):all();
+  src=src.filter(function(m){return m[0].toLowerCase().indexOf(q)>=0;});
+  $('models').innerHTML=src.map(function(m){return '<div class="item'+(m[0]===sel?' sel':'')+'" data-n="'+m[0]+'" data-p="'+m[3]+'/'+m[0]+'"><span class="dot'+(m[0]===loaded?' on':'')+'"></span>'+m[0]+'<span class="meta">'+m[1]+' · '+m[2]+'</span></div>';}).join('');
+  $('count').textContent=src.length+' models · the green dot marks the loaded one';
+  $('models').querySelectorAll('.item').forEach(function(e){e.onclick=function(){sel=e.dataset.n;$('path').textContent=e.dataset.p;$('load').classList.remove('off');drawModels();};});}
+$('q').oninput=drawModels;
+var NET=[['Crunch_70s_Marshall','Amp','CC-BY','ok','12k'],['BritCrunch_full','Rig','CC0','ok','8k'],['Crunch_pedal_mod','Pedal','CC-BY-NC','no','5k'],['Vox_crunchy','Amp','CC-BY','ok','3k'],['Mesa_crunch_hi','Amp','Not specified','no','2k']];
+$('net-list').innerHTML=NET.map(function(m){return '<div class="item"><span>'+m[0]+'</span><span class="lic '+m[3]+'">'+m[2]+'</span><span class="meta">'+m[1]+' · ↓ '+m[4]+'</span><span class="btn sm">DOWNLOAD</span></div>';}).join('');
+document.querySelectorAll('.tab').forEach(function(b){b.onclick=function(){document.querySelectorAll('.tab').forEach(function(x){x.classList.toggle('on',x===b)});$('loc').classList.toggle('hide',b.dataset.t!=='loc');$('net').classList.toggle('hide',b.dataset.t!=='net');};});
+drawFolders();drawModels();
+</script></body></html>

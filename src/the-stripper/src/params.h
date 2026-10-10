@@ -62,7 +62,7 @@ constexpr Steinberg::Vst::ParamValue kDefaultCompressMix = 1.0;
 constexpr Steinberg::Vst::ParamValue kDefaultCompressorMode = 0.0;
 
 // 4K-EQ defaults
-constexpr Steinberg::Vst::ParamValue kDefaultEqHPFFreq = 20.0 / 500.0;   // 20 Hz norm
+constexpr Steinberg::Vst::ParamValue kDefaultEqHPFFreq = 0.0;            // 20 Hz (eqNormToHPFFreq(0))
 constexpr Steinberg::Vst::ParamValue kDefaultEqHPFOn = 0.0;
 constexpr Steinberg::Vst::ParamValue kDefaultEqLPFFreq = 1.0;            // 20 kHz norm
 constexpr Steinberg::Vst::ParamValue kDefaultEqLPFOn = 0.0;

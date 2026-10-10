@@ -9,7 +9,7 @@
 #include "dsp/compression_stub.h"
 #include "dsp/blockparty.h"
 #include "dsp/denoise.h"
-#include "dsp/nam_drive.h"
+#include "nam_drive.h"
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -607,7 +607,7 @@ void test_drive_defaults_in_range() {
 // ---------------------------------------------------------------------------
 
 void test_namdrive_passthrough_no_model() {
-  DSP::NamDrive drv;
+  FairyTapes::Shared::DSP::NamDrive drv;
   drv.setSampleRate(48000.0);
   drv.setDrive(0.5f);
 
@@ -622,12 +622,12 @@ void test_namdrive_passthrough_no_model() {
 }
 
 void test_namdrive_is_model_loaded_default() {
-  DSP::NamDrive drv;
+  FairyTapes::Shared::DSP::NamDrive drv;
   ASSERT_TRUE(!drv.isModelLoaded());
 }
 
 void test_namdrive_load_invalid_path() {
-  DSP::NamDrive drv;
+  FairyTapes::Shared::DSP::NamDrive drv;
   drv.setSampleRate(48000.0);
   bool ok = drv.loadModel("/nonexistent/path/to/model.nam");
   ASSERT_TRUE(!ok);
@@ -635,7 +635,7 @@ void test_namdrive_load_invalid_path() {
 }
 
 void test_namdrive_load_example_model() {
-  DSP::NamDrive drv;
+  FairyTapes::Shared::DSP::NamDrive drv;
   drv.setSampleRate(48000.0);
 
   // Use the example WaveNet A2 model from the NAM repo
@@ -654,7 +654,7 @@ void test_namdrive_load_example_model() {
 }
 
 void test_namdrive_process_with_model() {
-  DSP::NamDrive drv;
+  FairyTapes::Shared::DSP::NamDrive drv;
   drv.setSampleRate(48000.0);
 
   std::filesystem::path model_path =
@@ -694,7 +694,7 @@ void test_namdrive_process_with_model() {
 }
 
 void test_namdrive_unload_model() {
-  DSP::NamDrive drv;
+  FairyTapes::Shared::DSP::NamDrive drv;
   drv.setSampleRate(48000.0);
 
   std::filesystem::path model_path =
@@ -719,7 +719,7 @@ void test_namdrive_unload_model() {
 }
 
 void test_namdrive_reset_clears_state() {
-  DSP::NamDrive drv;
+  FairyTapes::Shared::DSP::NamDrive drv;
   drv.setSampleRate(48000.0);
   drv.setDrive(0.8f);
   drv.reset();
@@ -735,7 +735,7 @@ void test_namdrive_reset_clears_state() {
 }
 
 void test_namdrive_no_nan_inf() {
-  DSP::NamDrive drv;
+  FairyTapes::Shared::DSP::NamDrive drv;
   drv.setSampleRate(48000.0);
 
   std::filesystem::path model_path =
@@ -767,7 +767,7 @@ void test_namdrive_no_nan_inf() {
 // ---------------------------------------------------------------------------
 
 void test_namdrive_auto_compensation_rms() {
-  DSP::NamDrive drv;
+  FairyTapes::Shared::DSP::NamDrive drv;
   drv.setSampleRate(48000.0);
 
   std::filesystem::path model_path =
@@ -811,7 +811,7 @@ void test_namdrive_auto_compensation_rms() {
 }
 
 void test_namdrive_coloration_at_zero_drive() {
-  DSP::NamDrive drv;
+  FairyTapes::Shared::DSP::NamDrive drv;
   drv.setSampleRate(48000.0);
 
   std::filesystem::path model_path =

@@ -4,21 +4,36 @@
 
 **Goal:** Aggiungere a The Stripper la scelta del modello NAM, un editor VSTGUI disegnato dal codice, i parametri di limiter e gate, la conformità SSL 360 Link e i docs allineati.
 
-**Architecture:** `NamDrive` si estrae in `shared/nam_drive` e riceve un caricamento asincrono (thread di lavoro + scambio atomico). Il controller invia al processor il percorso del `.nam` con un `IMessage`. L'editor VSTGUI è costruito in codice, con controlli disegnati da `CDrawContext` e texture PNG prodotte da uno script.
+**Architecture:** `NamDrive` si estrae in `shared/nam_drive` e riceve un caricamento asincrono (thread di lavoro + scambio atomico). Il controller invia al processor il percorso del `.nam` con un `IMessage`. L'editor VSTGUI è costruito in codice, con controlli disegnati da `CDrawContext` e una tessera di grana PNG prodotta da uno script.
 
-**Tech Stack:** C++20, VST3 SDK + VSTGUI4 (`vendors/vst3sdk/vstgui4`), NeuralAmpModelerCore, CUDA opzionale (`shared/gpu_nam`), Python 3 (script texture), CMake/CTest.
+**Tech Stack:** C++20, VST3 SDK + VSTGUI4 (`vendors/vst3sdk/vstgui4`), NeuralAmpModelerCore, CUDA opzionale (`shared/gpu_nam`), Python 3 (script della tessera di grana), CMake/CTest.
 
 **Spec:** `docs/superpowers/specs/2026-10-09-the-stripper-completion-design.md`
 
+## Stato dei compiti (2026-10-10)
+
+- [x] Task 1 — `NamDrive` in `shared/nam_drive` (commit `5805520`, adattato a NAM v0.6.0 in `10cb131`; 49 test su 49; CUDA non verificato)
+- [x] Task 2 — caricamento asincrono (`requestLoad`, `LoadState`; 5 test, 25 ripetizioni senza errori). Trovato e corretto un difetto del Task 1: i registratori delle architetture NAM sono inizializzatori statici e il linker li scartava dalla libreria statica; i consumatori usano ora `nam_drive_link(<target>)` (collegamento whole-archive)
+- [ ] Task 3 — parametri nuovi, stato v8 esteso (vedi spec §6), tabella bloccata
+- [ ] Task 4 — meter
+- [ ] Task 5 — messaggi del modello
+- [ ] Task 6 — tessera di grana
+- [ ] Task 7 — VSTGUI e controlli
+- [ ] Task 8 — editor (suddiviso in 8a layout/binding, 8b fascia meter, 8c striscia del modello e popup locale)
+- [ ] Task 9 — ricerca SSL 360 Link e docs
+- [ ] Task 10-14 — extra di interfaccia, vedi in fondo (usura, nastro, retro, viti, preferenze)
+
 ## Global Constraints
 
-- Fuori scopo: gain staging (i suoi due parametri restano inerti), Tone3000.
+- Fuori scopo: gain staging (i suoi due parametri restano inerti), integrazione Tone3000 (spec a parte, spec §10).
+- Tutto il testo visibile nell'editor è in inglese.
 - `NamDrive` in `shared/nam_drive`, namespace `FairyTapes::Shared::DSP`; il comportamento audio non cambia.
+- Collegare `nam_drive` con `nam_drive_link(<target>)`, non con `target_link_libraries`: serve il collegamento whole-archive (vedi Task 2).
 - Il thread audio non alloca e non attende mai; il modello sostituito si rilascia fuori dal thread audio.
 - I nuovi `ParamID` (`kLimiterPound`, `kGateThreshold`) si aggiungono **in coda**, prima di `kNumParams`: gli ID esistenti non cambiano.
-- `kStateVersion` passa da 7 a 8 (aggiunge percorso del modello e variante di texture); lo stato v7 resta caricabile.
-- GUI: 480 × 780, vettoriale, nessun asset 2x; ogni controllo ha un `ParamID`; gli asset PNG manuali sono opzionali.
-- Texture: 3 PNG generati da `src/the-stripper/tools/gen_textures.py`, in `src/the-stripper/assets/`.
+- `kStateVersion` passa da 7 a 8 (aggiunge il percorso del modello); lo stato v7 resta caricabile.
+- GUI: 1000 × 628 (layout e stile come `src/the-stripper/docs/mockups/stripper_rack.html`), vettoriale, nessun asset 2x; ogni controllo ha un `ParamID`; gli asset PNG manuali sono opzionali. I pulsanti IN dei moduli invertono solo nell'interfaccia i parametri `kBypass*` (ID e polarità invariati); default di `kEqHPFOn`/`kEqLPFOn` = 1.
+- Texture: una sola tessera di grana finissima (spec §4, Sfondo), da `src/the-stripper/tools/gen_panel_grain.py` in `src/the-stripper/assets/panel_grain.png`; nessuna variante nello stato.
 - Licenza GPL-3.0; nessun nome o branding delle fonti nella UI.
 
 ## Review Focus
@@ -26,7 +41,7 @@
 - Aprire e chiudere l'editor 50 volte di fila (anche con la finestra ridimensionata dall'host): nessun crash, nessun listener sui parametri rimasto agganciato.
 - `process()` in esecuzione mentre `requestLoad` completa: nessuna allocazione, nessun glitch udibile (uscita senza NaN e continua).
 - File `.nam` inesistente, vuoto o di formato errato: Drive in passthrough, messaggio di errore, nessun crash.
-- Stato v7 (senza percorso né variante): si carica con percorso vuoto e variante 0, parametri invariati.
+- Stato v7 (senza percorso): si carica con percorso vuoto, parametri invariati.
 - Cambio di Strip Mode con l'editor aperto: i controlli Voice/Drums/Classic compaiono e spariscono senza ricostruire la finestra.
 
 ---
@@ -41,12 +56,12 @@
 **Interfaces:**
 - Produces: libreria CMake `nam_drive` (compila le `NAM_SOURCES`, dipende da `gpu_nam`; espone `include/` e le include dir di NAM come `PUBLIC`); classe `FairyTapes::Shared::DSP::NamDrive` con la stessa API di oggi.
 
-- [ ] **Step 1: Verificare lo stato di partenza**
+- [x] **Step 1: Verificare lo stato di partenza**
   Run: `cmake -S . -B build && cmake --build build --target the_stripper_tests && ctest --test-dir build -R the_stripper --output-on-failure`
   Expected: PASS (baseline).
-- [ ] **Step 2: Spostare i file con `git mv`**, cambiare il namespace in `FairyTapes::Shared::DSP` e creare la libreria `nam_drive` (modellata su `shared/gpu_nam/CMakeLists.txt`). Spostare `NAM_SOURCES` e `NAM_INCLUDE_DIRS` dal CMake dello Stripper a quello della libreria.
-- [ ] **Step 3: Aggiornare lo Stripper** perché colleghi `nam_drive` (plugin e test) e usi il nuovo namespace in `processor.{h,cpp}` e nei test.
-- [ ] **Step 4: Ricompilare e rieseguire i test** (comando dello Step 1). Expected: PASS identico alla baseline.
+- [x] **Step 2: Spostare i file con `git mv`**, cambiare il namespace in `FairyTapes::Shared::DSP` e creare la libreria `nam_drive` (modellata su `shared/gpu_nam/CMakeLists.txt`). Spostare `NAM_SOURCES` e `NAM_INCLUDE_DIRS` dal CMake dello Stripper a quello della libreria.
+- [x] **Step 3: Aggiornare lo Stripper** perché colleghi `nam_drive` (plugin e test) e usi il nuovo namespace in `processor.{h,cpp}` e nei test.
+- [x] **Step 4: Ricompilare e rieseguire i test** (comando dello Step 1). Expected: PASS identico alla baseline.
 - [ ] **Step 5: Commit**
 
 ```bash
@@ -71,16 +86,16 @@ git commit -m "refactor: extract NamDrive to shared/nam_drive"
   - `std::string lastError() const` — vuoto se `loadState() != Failed`
   - `process()` adotta il modello pronto all'inizio del blocco, senza allocare né attendere.
 
-- [ ] **Step 1: Creare la fixture** `linear_unity.nam`: modello NAM di architettura `Linear` a un coefficiente 1.0, sample rate 48000 (formato dal loader `Linear` in `vendors/NeuralAmpModelerCore/NAM/dsp.cpp`; verificare che `nam::get_dsp` lo accetti).
-- [ ] **Step 2: Scrivere i test** (eseguibile con le macro di `test_params.cpp`): `test_requestLoad_reaches_Loaded` (attesa max 5 s, `loadedModelName() == "linear_unity.nam"`); `test_requestLoad_missing_file_fails_and_passes_through` (stato `Failed`, `lastError()` non vuoto, `process` lascia il segnale invariato); `test_requestLoad_garbage_file_fails` (file di testo); `test_last_request_wins` (due richieste ravvicinate, la seconda su un file inesistente → `Failed`, non `Loaded`); `test_process_during_load_is_finite` (un thread chiama `process` in loop su rumore mentre arriva `requestLoad`; nessun NaN, nessun valore oltre ±10).
-- [ ] **Step 3: Eseguire, verificare il fallimento** (API mancante).
+- [x] **Step 1: Creare la fixture** `linear_unity.nam`: modello NAM di architettura `Linear` a un coefficiente 1.0, sample rate 48000 (formato dal loader `Linear` in `vendors/NeuralAmpModelerCore/NAM/dsp.cpp`; verificare che `nam::get_dsp` lo accetti).
+- [x] **Step 2: Scrivere i test** (eseguibile con le macro di `test_params.cpp`): `test_requestLoad_reaches_Loaded` (attesa max 5 s, `loadedModelName() == "linear_unity.nam"`); `test_requestLoad_missing_file_fails_and_passes_through` (stato `Failed`, `lastError()` non vuoto, `process` lascia il segnale invariato); `test_requestLoad_garbage_file_fails` (file di testo); `test_last_request_wins` (due richieste ravvicinate, la seconda su un file inesistente → `Failed`, non `Loaded`); `test_process_during_load_is_finite` (un thread chiama `process` in loop su rumore mentre arriva `requestLoad`; nessun NaN, nessun valore oltre ±10).
+- [x] **Step 3: Eseguire, verificare il fallimento** (API mancante).
   Run: `cmake --build build --target nam_drive_tests`
   Expected: errore di compilazione.
-- [ ] **Step 4: Implementare l'API.** Thread di lavoro per richiesta (o un thread persistente con coda a un elemento), costruzione del modello fuori dal lock audio, scambio con `std::atomic<Model*>`; il thread audio fa `exchange` all'inizio di `process` e consegna il modello vecchio a una coda di rilascio svuotata dal thread di lavoro. `loadModel`/`unloadModel` sincroni restano per compatibilità.
-- [ ] **Step 5: Eseguire i test.**
+- [x] **Step 4: Implementare l'API.** Thread di lavoro per richiesta (o un thread persistente con coda a un elemento), costruzione del modello fuori dal lock audio, scambio con `std::atomic<Model*>`; il thread audio fa `exchange` all'inizio di `process` e consegna il modello vecchio a una coda di rilascio svuotata dal thread di lavoro. `loadModel`/`unloadModel` sincroni restano per compatibilità.
+- [x] **Step 5: Eseguire i test.**
   Run: `cmake --build build --target nam_drive_tests && ctest --test-dir build -R nam_drive --output-on-failure`
   Expected: PASS.
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add shared/nam_drive
@@ -97,12 +112,12 @@ git commit -m "feat(nam-drive): add asynchronous model loading"
 
 **Interfaces:**
 - Produces:
-  - In `params.h`: `kLimiterPound`, `kGateThreshold` appesi in coda a `ParamID` (default 0.5 e 0.0); `constexpr int kTextureVariantCount = 3;`
-  - In `processor.h`: `struct PluginState { double params[kNumParams]; std::string modelPath; int textureVariant; };` con `bool readState(Steinberg::IBStream*, PluginState&)` e `bool writeState(Steinberg::IBStream*, const PluginState&)` (funzioni libere testabili con un `IBStream` in memoria).
+  - In `params.h`: `kLimiterPound`, `kGateThreshold` appesi in coda a `ParamID` (default 0.5 e 0.0)
+  - In `processor.h`: `struct PluginState { double params[kNumParams]; std::string modelPath; };` con `bool readState(Steinberg::IBStream*, PluginState&)` e `bool writeState(Steinberg::IBStream*, const PluginState&)` (funzioni libere testabili con un `IBStream` in memoria).
   - Il processor applica `kLimiterPound` a `BlockParty::setParams(pound, 1.0)` e `kGateThreshold` a `DeNoise::setParams(threshold, speed_attuale, 1.0)`.
 
-- [ ] **Step 1: Scrivere i test:** `test_new_params_appended_at_end` (`kLimiterPound == kNumParams - 2`, `kGateThreshold == kNumParams - 1`, e nessun ID precedente cambiato); `test_param_table_matches_golden` (tabella ID → nome → passi → default letta da `param_table_golden.h`, generata dallo stato attuale del codice **prima** dell'aggiunta e poi estesa con i due nuovi); `test_state_v8_roundtrip` (parametri, percorso con caratteri non ASCII, variante 2); `test_state_v7_loads_with_defaults` (fixture v7 scritta con la vecchia struttura: percorso vuoto, variante 0); `test_state_unknown_version_rejected`.
-- [ ] **Step 2: Generare `param_table_golden.h` dal codice attuale** con un piccolo programma temporaneo, estenderlo a mano con i due nuovi parametri e verificare che il test sul nome/ordine fallisca se si scambiano due ID.
+- [ ] **Step 1: Scrivere i test:** `test_new_params_appended_at_end` (`kLimiterPound == kNumParams - 2`, `kGateThreshold == kNumParams - 1`, e nessun ID precedente cambiato); `test_param_table_matches_golden` (tabella ID → nome → passi → default letta da `param_table_golden.h`, generata dallo stato attuale del codice **prima** dell'aggiunta e poi estesa con i due nuovi); `test_state_v8_roundtrip` (parametri, percorso con caratteri non ASCII); `test_state_v7_loads_with_defaults` (fixture v7 scritta con la vecchia struttura: percorso vuoto); `test_state_unknown_version_rejected`.
+- [ ] **Step 2: Generare `param_table_golden.h` dal codice attuale** (che include già `kDefaultEqHPFFreq = 0.0`, vedi spec §4, Default dei filtri) con un piccolo programma temporaneo, estenderlo a mano con i due nuovi parametri e verificare che il test sul nome/ordine fallisca se si scambiano due ID.
 - [ ] **Step 3: Eseguire, verificare il fallimento.**
 - [ ] **Step 4: Implementare** parametri, `readState`/`writeState` (versione 8; lettura v7 mantenuta), uso dei due parametri nel processor, titoli e unità nel controller.
 - [ ] **Step 5: Eseguire i test.**
@@ -167,28 +182,28 @@ git commit -m "feat(the-stripper): load NAM model via controller/processor messa
 
 ---
 
-### Task 6: Generatore di texture
+### Task 6: Tessera di grana del pannello
 
 **Files:**
-- Create: `src/the-stripper/tools/gen_textures.py`, `src/the-stripper/tools/test_gen_textures.py`
-- Create: `src/the-stripper/assets/panel_0.png`, `panel_1.png`, `panel_2.png` (generati e committati)
+- Create: `src/the-stripper/tools/gen_panel_grain.py`, `src/the-stripper/tools/test_gen_panel_grain.py`
+- Create: `src/the-stripper/assets/panel_grain.png` (generato e committato)
 
 **Interfaces:**
-- Produces: `gen_textures.py [--out DIR] [--seed N]` che scrive `panel_0.png` (metallo spazzolato), `panel_1.png` (vernice consumata), `panel_2.png` (serigrafia sbiadita), tutti 480 × 780, RGB, deterministici per un dato seed.
+- Produces: `gen_panel_grain.py [--out FILE] [--seed N]` che scrive una tessera 256 × 256 RGBA ripetibile senza giunture visibili: pixel bianchi con alfa derivato da rumore illuminato (equivalente al filtro `tfine` della preview `stripper_rack.html`), alfa massimo circa 0,07, deterministica per un dato seed.
 
-- [ ] **Step 1: Scrivere il test** (`pytest`): stesse dimensioni 480 × 780 per i tre file; stesso seed → file identici (hash); seed diversi → file diversi; le tre varianti differiscono tra loro; luminanza media tra 0.15 e 0.6 (sfondo scuro che non rovina la leggibilità).
+- [ ] **Step 1: Scrivere il test** (`pytest`): dimensioni 256 × 256 RGBA; stesso seed → file identici (hash); seed diversi → file diversi; alfa massimo ≤ 0,10 e media ≤ 0,04 (grana quasi impercettibile); la tessera è ripetibile (differenza media tra bordo sinistro e destro, e tra alto e basso, non maggiore di quella tra colonne adiacenti interne).
 - [ ] **Step 2: Eseguire, verificare il fallimento.**
   Run: `python3 -m pytest src/the-stripper/tools -q`
   Expected: FAIL (script mancante).
-- [ ] **Step 3: Implementare con NumPy e Pillow** (rumore gaussiano filtrato direzionalmente per le spazzolature, rumore a bassa frequenza per l'usura, tinta di base per variante). Documentare le dipendenze in testa allo script.
-- [ ] **Step 4: Eseguire i test, poi generare gli asset con seed fisso** e controllarli a occhio.
-  Run: `python3 -m pytest src/the-stripper/tools -q && python3 src/the-stripper/tools/gen_textures.py --out src/the-stripper/assets --seed 7`
-  Expected: PASS e tre PNG creati.
+- [ ] **Step 3: Implementare con NumPy e Pillow** (rumore bianco filtrato con una piccola sfocatura periodica per la ripetibilità, illuminazione da un'altezza derivata dal rumore, alfa ricavato dalle sole luci). Documentare le dipendenze in testa allo script.
+- [ ] **Step 4: Eseguire i test, poi generare l'asset con seed fisso** e confrontarlo a occhio con la preview.
+  Run: `python3 -m pytest src/the-stripper/tools -q && python3 src/the-stripper/tools/gen_panel_grain.py --out src/the-stripper/assets/panel_grain.png --seed 4`
+  Expected: PASS e PNG creato.
 - [ ] **Step 5: Commit**
 
 ```bash
 git add src/the-stripper/tools src/the-stripper/assets
-git commit -m "feat(the-stripper): add procedural panel texture generator"
+git commit -m "feat(the-stripper): add procedural panel grain tile generator"
 ```
 
 ---
@@ -202,14 +217,14 @@ git commit -m "feat(the-stripper): add procedural panel texture generator"
 
 **Interfaces:**
 - Produces:
-  - `ui/knob_math.h` (senza dipendenze da VSTGUI): `double knobAngleFromNorm(double n)` (da 225° a -45°, rotazione oraria), `double normFromDrag(double startNorm, double dyPixels, bool fine)` (200 px = pieno range, 1/10 in modalità fine), `int choiceIndexFromNorm(double n, int count)`, `double normFromChoiceIndex(int i, int count)`, `double meterNormFromDb(double db, double minDb, double maxDb)` (lineare in dB, clamp a 0..1).
+  - `ui/knob_math.h` (senza dipendenze da VSTGUI): `double knobAngleFromNorm(double n)` (da 225° a -45°, rotazione oraria), `double normFromDrag(double startNorm, double dyPixels, bool fine)` (200 px = pieno range, 1/10 in modalità fine), `double normOnDoubleClick(double defaultNorm)` (restituisce il default, clampato a 0..1), `int choiceIndexFromNorm(double n, int count)`, `double normFromChoiceIndex(int i, int count)`, `double meterNormFromDb(double db, double minDb, double maxDb)` (lineare in dB, clamp a 0..1).
   - `ui/controls.h`: `class AnalogKnob : public VSTGUI::CControl`, `class ToggleButton : public VSTGUI::CControl`, `class ChoiceButtons : public VSTGUI::CControl`, `class MeterBar : public VSTGUI::CControl` (barra a LED orizzontale, picco mantenuto, ingresso in dB) e `class ClipLed : public VSTGUI::CControl` (LED che al clic invia l'azzeramento), tutti disegnati con `CDrawContext` (gradienti, ombra, tacche, indicatore) e con il PNG opzionale dalla cartella degli asset se presente.
 
-- [ ] **Step 1: Scrivere i test** per `knob_math.h`: `test_knobAngle_endpoints` (0 → 225°, 1 → -45°, 0.5 → 90°), `test_normFromDrag_clamps_and_fine_mode`, `test_choice_index_roundtrip` (per count 2, 3, 4), `test_meterNormFromDb` (-60 → 0, +6 → 1, -27 → 0.5 entro 1e-6, fuori range clampato).
+- [ ] **Step 1: Scrivere i test** per `knob_math.h`: `test_knobAngle_endpoints` (0 → 225°, 1 → -45°, 0.5 → 90°), `test_normFromDrag_clamps_and_fine_mode`, `test_choice_index_roundtrip` (per count 2, 3, 4), `test_double_click_returns_default` (per i default reali di `params.h`; l'HPF torna a 20 Hz e il LPF a 20 kHz), `test_meterNormFromDb` (-60 → 0, +6 → 1, -27 → 0.5 entro 1e-6, fuori range clampato).
 - [ ] **Step 2: Eseguire, verificare il fallimento.**
 - [ ] **Step 3: Implementare `knob_math.h`.**
 - [ ] **Step 4: Aggiungere VSTGUI al CMake** del plugin (sorgenti e include da `vendors/vst3sdk/vstgui4`, librerie di sistema per Linux: X11, xcb, cairo, freetype, fontconfig; framework nativi su macOS e Windows) e i pacchetti `apt` al job Linux del workflow.
-- [ ] **Step 5: Implementare le classi di controllo.** Disegno vettoriale; trascinamento verticale con `normFromDrag`; doppio clic riporta al default; la modalità fine con il tasto Maiuscolo.
+- [ ] **Step 5: Implementare le classi di controllo.** Disegno vettoriale; trascinamento verticale con `normFromDrag`; doppio clic riporta al valore predefinito del parametro (`getDefaultValue()`) come modifica unica annullabile; la modalità fine con il tasto Maiuscolo.
 - [ ] **Step 6: Eseguire test e build del plugin.**
   Run: `cmake --build build --target the_stripper the_stripper_tests && ctest --test-dir build -R the_stripper --output-on-failure`
   Expected: build senza errori, test PASS.
@@ -229,14 +244,14 @@ git commit -m "feat(the-stripper): add VSTGUI4 integration and code-drawn contro
 - Modify: `src/the-stripper/src/controller.{h,cpp}` (`createView` ritorna l'editor), `src/the-stripper/src/plug.cpp` se serve per i metadati dell'editor
 
 **Interfaces:**
-- Consumes: `AnalogKnob`, `ToggleButton`, `ChoiceButtons` (Task 7); `Controller::requestModelLoad/modelName/modelError` (Task 5); texture di `assets/` e `PluginState::textureVariant` (Tasks 3 e 6); `MeterBar`, `ClipLed` (Task 7) e i valori di meter (Task 4).
-- Produces: `class Editor : public Steinberg::Vst::VSTGUIEditor, public VSTGUI::IControlListener`, 480 × 780; sezioni nell'ordine dello spec §4 (Globale, LP/HP, EQ, Compression, Drive, Limiter, Gate); `Editor::onModeChanged()` mostra/nasconde Voice/Drums/Classic senza ricostruire la finestra.
+- Consumes: `AnalogKnob`, `ToggleButton`, `ChoiceButtons` (Task 7); `Controller::requestModelLoad/modelName/modelError` (Task 5); la tessera `assets/panel_grain.png` (Task 6); `MeterBar`, `ClipLed` (Task 7) e i valori di meter (Task 4).
+- Produces: `class Editor : public Steinberg::Vst::VSTGUIEditor, public VSTGUI::IControlListener`, 1000 × 628; layout come nello spec §4 e nella preview `stripper_rack.html`; pulsanti IN per modulo (acceso = bypass 0) con attenuazione dei controlli a IN spento, e Bypass globale che attenua tutto; `Editor::onModeChanged()` mostra/nasconde Voice/Drums/Classic senza ricostruire la finestra.
 
 - [ ] **Step 1: Implementare `Editor::open`/`close`** costruendo le view in codice e registrandosi come listener dei parametri; `close` deve rimuovere tutti i listener e rilasciare le view.
-- [ ] **Step 2: Layout.** Una tabella `struct ControlSpec { ParamID id; ControlKind kind; Rect rect; const char* label; }` per sezione, senza calcolare coordinate sparse nel codice. Sfondo: PNG `panel_<variante>.png`, con tinta unita se manca.
+- [ ] **Step 2: Layout.** Una tabella `struct ControlSpec { ParamID id; ControlKind kind; Rect rect; const char* label; }` per sezione, senza calcolare coordinate sparse nel codice. Sfondo: vedi Step 4.
 - [ ] **Step 2b: Fascia dei meter** sotto l'intestazione: due `MeterBar` stereo (Input, Output), due `MeterBar` per le gain reduction (Comp, Limiter, disegnate dall'alto verso il basso) e sei `ClipLed` (Input, EQ, Comp, Drive, Limiter, Output). I valori arrivano dai parametri `kMeter*` con un timer da 30 ms; il clic su un `ClipLed` scrive `kClearClips`.
-- [ ] **Step 3: Pulsante Load .nam** con `CNewFileSelector` (filtro `*.nam`) che chiama `Controller::requestModelLoad`; etichetta accanto con `modelName()` oppure con `modelError()` in rosso.
-- [ ] **Step 4: Variante di texture.** Se lo stato non ne contiene una, il controller ne sceglie una casuale alla prima creazione e la salva.
+- [ ] **Step 3: Nastro con il nome del modello NAM** (in basso a destra nel riquadro Drive, striscia fissa cliccabile, niente pulsante né riquadro di input; nome senza `.nam`, nel font del nastro, troncato per larghezza misurata con puntino di sospensione) che apre il popup di scelta modello (spec §3.1, preview `stripper_model_browser.html`): scheda LOCAL con `LocalFolderSource` (scansione ricorsiva delle cartelle, ricerca, NO MODEL) e chiama `Controller::requestModelLoad`; mostra `modelName()` oppure `modelError()` in rosso, con icona a chip grigia per la GPU. Senza modello: passthrough e controllo Drive attenuato. Aggiungere anche la schermata CREDITS con flip (spec §4).
+- [ ] **Step 4: Sfondo.** Tinta `#161617`, tessera di grana ripetuta sopra, gradiente di luce disegnato dal codice; se il PNG manca, solo tinta e gradiente. Bordi dei riquadri tracciati con un'interruzione per il titolo (nessun rettangolo di mascheratura), così la grana passa anche dietro i titoli.
 - [ ] **Step 5: Verifica build e test.**
   Run: `cmake --build build --target the_stripper the_stripper_tests && ctest --test-dir build -R the_stripper --output-on-failure && ls "dist/The Stripper.vst3"`
   Expected: build senza errori, test PASS, bundle presente.
@@ -266,3 +281,33 @@ git commit -m "feat(the-stripper): add VSTGUI editor with NAM model picker"
 git add src/the-stripper README.md
 git commit -m "docs(the-stripper): SSL 360 Link findings and docs aligned to code"
 ```
+
+---
+
+## Extra di interfaccia (Task 10-14)
+
+Compiti nati dopo le preview; ciascuno ha la propria spec nel §4 e §6 del documento di design. Si fanno dopo il Task 8 e dipendono dal Task 3 (stato v8 esteso).
+
+### Task 10: Preferenze dell'utente
+
+- File di preferenze (percorso per piattaforma), lettura e scrittura atomica; chiavi stabili (spec §6); nessuna dipendenza dallo stato del progetto.
+- Test: file mancante → default; file corrotto → default senza crash; scrittura e rilettura.
+
+### Task 11: Livelli e usura
+
+- Livelli dell'editor nell'ordine dello spec §4 (grana, bordi, serigrafia e valori, usura, viti, controlli) con bitmap generata una sola volta dal seme e rilasciata alla chiusura dell'editor.
+- Generatore dell'usura a partire dal seme (graffi, aloni, macchie, residui, croste a pennello); usura dei controlli (alluminio tornito: grana, bordi consumati, sporco alla base, puntini bruni e grigi, tacchetta) al 25% di opacità.
+- Test: stesso seme → stessa bitmap; Wear Off → nessun elemento; costo di generazione sotto una soglia ragionevole.
+
+### Task 12: Nastro, scritte e font a tracciati
+
+- Script che converte i glifi dei tre font (Zeyada, Rock Salt, Homemade Apple) in tracciati vettoriali con licenze incluse; disegno del testo con variazione per lettera dal seme; normalizzazione della dimensione per font.
+- Nastro scrivibile (campo di testo, 14 caratteri, salvato nello stato); striscia del nome del modello con troncamento per larghezza misurata.
+
+### Task 13: Retro del pannello (Settings e Credits)
+
+- Flip 3D, schede SETTINGS e CREDITS, controlli delle impostazioni (preferenze e comportamento) e testi di credits in inglese; licenze ricontrollate.
+
+### Task 14: Viti, valori digitabili, richiamo
+
+- Viti interattive (a taglio o a croce, angolo casuale, una può mancare con probabilità bassa), inserimento manuale del valore sotto la manopola (mappa inversa dei parametri), segni di richiamo e interruttore Notes (dopo la decisione sul §11).

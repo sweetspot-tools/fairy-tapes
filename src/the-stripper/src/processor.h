@@ -14,7 +14,7 @@
 #include "dsp/fourk_eq.h"
 #include "dsp/blockparty.h"
 #include "dsp/denoise.h"
-#include "dsp/nam_drive.h"
+#include "nam_drive.h"
 #include <vector>
 
 namespace FairyTapes::TheStripper {
@@ -43,7 +43,7 @@ private:
   std::vector<float> scratch_[2];
   DSP::CompressionStub compressionStub_;
   DSP::FourKEQ fourkEq_;
-  DSP::NamDrive namDrive_;
+  Shared::DSP::NamDrive namDrive_;
   DSP::BlockParty limiter_;
   DSP::DeNoise gate_;
 
