@@ -57,6 +57,11 @@ public:
   Steinberg::tresult PLUGIN_API disconnect(Steinberg::Vst::IConnectionPoint* other) override;
   Steinberg::tresult PLUGIN_API notify(Steinberg::Vst::IMessage* message) override;
 
+  /** User gestures from the editor: the value is stored and reported to the host (setParamNormalized is host -> controller only). */
+  void beginEdit(Steinberg::Vst::ParamID tag);
+  void performEdit(Steinberg::Vst::ParamID tag, Steinberg::Vst::ParamValue value);
+  void endEdit(Steinberg::Vst::ParamID tag);
+
   /** Ask the processor to load a .nam model (UTF-8 path); empty = no model. The editor shows the outcome via the getters below. */
   void requestModelLoad(const std::string& path);
   std::string modelPath() const;

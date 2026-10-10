@@ -39,11 +39,14 @@ else()
   set(PLUGIN_MAIN_SOURCE ${VST3_SDK_PATH}/public.sdk/source/main/linuxmain.cpp)
 endif()
 
-add_library(the_stripper SHARED
+# MODULE (not SHARED), as the SDK's smtg_add_vst3plugin does: CMake only honours BUNDLE for MODULE libraries on macOS.
+add_library(the_stripper MODULE
   ${PLUGIN_MAIN_SOURCE}
   src/plug.cpp
   src/processor.cpp
   src/controller.cpp
+  src/ui/editor.cpp
+  src/ui/panel_view.cpp
   src/dsp/compression_stub.cpp
   src/dsp/multicomp_engines.cpp
   src/dsp/fourk_eq.cpp
@@ -148,6 +151,16 @@ target_include_directories(the_stripper_state_tests PRIVATE
   ${VST3_SDK_PLUGINTERFACES}/base
 )
 add_test(NAME the_stripper_state_tests COMMAND the_stripper_state_tests)
+
+# Editor layout table and dimming rules (header-only, no VSTGUI).
+add_executable(the_stripper_layout_tests tests/test_layout.cpp)
+target_include_directories(the_stripper_layout_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${VST3_SDK_PATH} ${VST3_SDK_PLUGINTERFACES}/base)
+add_test(NAME the_stripper_layout_tests COMMAND the_stripper_layout_tests)
+
+# Developer tool: draws the editor offscreen into a PNG (no host needed). Not built by default.
+add_executable(the_stripper_render EXCLUDE_FROM_ALL tools/render_editor.cpp ${VST3_SDK_PUBLIC}/source/main/moduleinit.cpp ${VST3_SDK_PUBLIC}/source/main/pluginfactory.cpp src/controller.cpp src/ui/editor.cpp src/ui/panel_view.cpp)
+target_include_directories(the_stripper_render PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${VST3_SDK_PATH} ${VST3_SDK_BASE}/source ${VST3_SDK_PLUGINTERFACES}/base ${VST3_SDK_PLUGINTERFACES}/vst ${VST3_SDK_PUBLIC}/source ${VST3_SDK_PUBLIC}/source/vst)
+target_link_libraries(the_stripper_render PRIVATE sdk pluginterfaces fairy_ui fairy_ui_widgets)
 
 # Model messages (header-only, fake message objects): no SDK libraries needed.
 add_executable(the_stripper_message_tests tests/test_messages.cpp)

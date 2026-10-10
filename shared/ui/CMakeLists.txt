@@ -17,6 +17,10 @@ add_executable(fairy_ui_meter_math_tests tests/test_meter_math.cpp)
 target_link_libraries(fairy_ui_meter_math_tests PRIVATE fairy_ui)
 add_test(NAME fairy_ui_meter_math_tests COMMAND fairy_ui_meter_math_tests)
 
+add_executable(fairy_ui_editor_size_tests tests/test_editor_size.cpp)
+target_link_libraries(fairy_ui_editor_size_tests PRIVATE fairy_ui)
+add_test(NAME fairy_ui_editor_size_tests COMMAND fairy_ui_editor_size_tests)
+
 add_executable(fairy_ui_sanitize_tests tests/test_sanitize.cpp)
 target_link_libraries(fairy_ui_sanitize_tests PRIVATE fairy_ui)
 add_test(NAME fairy_ui_sanitize_tests COMMAND fairy_ui_sanitize_tests)

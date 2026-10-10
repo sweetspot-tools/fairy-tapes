@@ -24,9 +24,9 @@
   X(kCompressMix, 13, 1.0) \
   X(kCompressorMode, 14, 0.0) \
   X(kEqHPFFreq, 15, 0.0) \
-  X(kEqHPFOn, 16, 0.0) \
+  X(kEqHPFOn, 16, 1.0) \
   X(kEqLPFFreq, 17, 1.0) \
-  X(kEqLPFOn, 18, 0.0) \
+  X(kEqLPFOn, 18, 1.0) \
   X(kEqLFGain, 19, 0.5) \
   X(kEqLFFreq, 20, 0.15555556118488312) \
   X(kEqLFBell, 21, 0.0) \

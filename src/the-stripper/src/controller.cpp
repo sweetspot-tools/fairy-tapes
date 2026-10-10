@@ -6,6 +6,7 @@
 #include "controller.h"
 #include "pluginterfaces/base/funknownimpl.h"
 #include "state.h"
+#include "ui/editor.h"
 #include "pluginterfaces/base/ipluginbase.h"
 #include "pluginterfaces/vst/ivstunits.h"
 #include "pluginterfaces/vst/vsttypes.h"
@@ -501,13 +502,30 @@ Steinberg::tresult PLUGIN_API Controller::setParamNormalized(Steinberg::Vst::Par
   if (tag == kCompressorMode) {
     value = (value < 0.25) ? 0.0 : (value < 0.75) ? 0.5 : 1.0;
   }
+  // Host -> controller (automation, presets, undo): store only. Telling the host back would loop and could
+  // overwrite recorded automation; user gestures in the editor go through beginEdit/performEdit/endEdit.
   param_value_[tag] = value;
-  if (component_handler_) {
-    component_handler_->beginEdit(tag);
-    component_handler_->performEdit(tag, value);
-    component_handler_->endEdit(tag);
-  }
   return Steinberg::kResultOk;
+}
+
+void Controller::beginEdit(Steinberg::Vst::ParamID tag) {
+  if (tag < kNumParams && component_handler_)
+    component_handler_->beginEdit(tag);
+}
+
+void Controller::performEdit(Steinberg::Vst::ParamID tag, Steinberg::Vst::ParamValue value) {
+  if (tag >= kNumParams)
+    return;
+  if (tag == kCompressorMode)
+    value = (value < 0.25) ? 0.0 : (value < 0.75) ? 0.5 : 1.0;
+  param_value_[tag] = value;
+  if (component_handler_)
+    component_handler_->performEdit(tag, value);
+}
+
+void Controller::endEdit(Steinberg::Vst::ParamID tag) {
+  if (tag < kNumParams && component_handler_)
+    component_handler_->endEdit(tag);
 }
 
 Steinberg::tresult PLUGIN_API Controller::setComponentHandler(
@@ -517,7 +535,8 @@ Steinberg::tresult PLUGIN_API Controller::setComponentHandler(
 }
 
 Steinberg::IPlugView* PLUGIN_API Controller::createView(Steinberg::FIDString name) {
-  (void)name;
+  if (name && std::strcmp(name, Steinberg::Vst::ViewType::kEditor) == 0)
+    return new Ui::Editor(this);
   return nullptr;
 }
 
