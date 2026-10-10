@@ -40,6 +40,6 @@ Una sola voce **BACK →** davanti; il retro (flip 3D) ha le schede **SETTINGS**
 ## Per plugin
 
 - **The Stripper:** controlli in alluminio tornito nero anodizzato; sfondo `#161617` con grana finissima (tessera 256 × 256 da script); materiale e texture fissi (non casuali).
-- **Pillow Talk (delay):** controlli in plastica invecchiata (ingiallita verso il bordo, micro-crepe); texture del pannello propria, da decidere (la finitura rugosa "wrinkle" provata nella preview è di riserva per questo).
+- **Pillow Talk (delay):** controlli in **plastica invecchiata** (ingiallita verso il bordo, micro-crepe); pannello con la finitura rugosa **"wrinkle"** (scelta dall'utente il 2026-10-10). Nella preview di The Stripper il wrinkle è il filtro `twrink` (opzione "Wrinkle (other plugins)" del menu Texture), con intensità ridotta allo stesso rapporto di visibilità della grana fine (alfa 0,047 contro 0,07 della grana fine); va regolato a occhio sul plugin vero.
 - **Doggystyle:** da decidere.
 - Il "kit" di interfaccia comune (usura, nastro, viti, retro, controlli) potrà vivere in `shared/` quando si inizia il secondo plugin con editor; fino ad allora ogni modifica comune si riporta nella preview e in questo documento.
