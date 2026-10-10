@@ -1,6 +1,6 @@
 # Fairy Tapes — Linguaggio grafico comune
 
-Regole visive condivise da tutti i plugin della suite. Ogni plugin sceglie **materiale dei controlli** e **texture del pannello** (sezione "Per plugin"); tutto il resto è comune. Riferimento vivo: `src/the-stripper/docs/mockups/stripper_rack.html` (preview), con `stripper_controls_lab.html` (materiali) e `stripper_model_browser.html` (popup di scelta). Il dettaglio di The Stripper è nella sua spec (§4).
+Regole visive condivise da tutti i plugin della suite. **Materiali e texture sono comuni a tutti i plugin** (decisione del 2026-10-10): stesso sfondo, stessi pulsanti e stesse manopole; la sezione "Per plugin" elenca solo le differenze di contenuto. Riferimento vivo: `src/the-stripper/docs/mockups/stripper_rack.html` (preview), con `stripper_controls_lab.html` (materiali) e `stripper_model_browser.html` (popup di scelta). Il dettaglio di The Stripper è nella sua spec (§4).
 
 ## Pannello
 
@@ -40,6 +40,6 @@ Una sola voce **BACK →** davanti; il retro (flip 3D) ha le schede **SETTINGS**
 ## Per plugin
 
 - **The Stripper:** controlli in alluminio tornito nero anodizzato; sfondo `#161617` con grana finissima (tessera 256 × 256 da script); materiale e texture fissi (non casuali).
-- **Pillow Talk (delay):** controlli in **plastica invecchiata** (ingiallita verso il bordo, micro-crepe); pannello con la finitura rugosa **"wrinkle"** (scelta dall'utente il 2026-10-10). Nella preview di The Stripper il wrinkle è il filtro `twrink` (opzione "Wrinkle (other plugins)" del menu Texture), con intensità ridotta allo stesso rapporto di visibilità della grana fine (alfa 0,047 contro 0,07 della grana fine); va regolato a occhio sul plugin vero.
+- **Pillow Talk (delay):** stessi materiali e stessa texture di The Stripper (alluminio tornito nero anodizzato, sfondo `#161617` con grana finissima), per decisione del 2026-10-10. La plastica invecchiata e la finitura "wrinkle" non si usano più.
 - **Doggystyle:** da decidere.
 - Il "kit" di interfaccia comune (usura, nastro, viti, retro, controlli) potrà vivere in `shared/` quando si inizia il secondo plugin con editor; fino ad allora ogni modifica comune si riporta nella preview e in questo documento.
