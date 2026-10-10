@@ -85,6 +85,9 @@ void Engine::prepare(double sampleRate, int maxBlockSize) {
   const double sr = sampleRate > 0.0 ? sampleRate : 48000.0;
   mixCoef_ = (float)std::exp(-1.0 / (0.001 * kMixSmoothMs * sr));
   mixInit_ = false;
+  clipHoldSamples_ = (long long)(sr * kClipHoldSeconds);
+  clipInLeft_ = clipOutLeft_ = 0;
+  levels_ = LevelValues{};
 }
 
 void Engine::setSettings(const Settings& s) {
@@ -108,6 +111,7 @@ void Engine::process(const float* inL, const float* inR, const float* scL, const
     return;
   }
   voicePeak_ = echoPeak_ = 0.f;
+  inPeakL_ = inPeakR_ = outPeakL_ = outPeakR_ = 0.f;
   for (int off = 0; off < numSamples; off += maxBlock_) {
     const int n = std::min(maxBlock_, numSamples - off);
     processChunk(inL + off, inR + off, scL ? scL + off : nullptr, scR ? scR + off : nullptr,
@@ -116,6 +120,15 @@ void Engine::process(const float* inL, const float* inR, const float* scL, const
   const auto toDb = [](float peak) { return 20.f * std::log10(std::max(peak, 1e-6f)); };
   display_.voiceDb = toDb(voicePeak_);
   display_.echoDb = toDb(echoPeak_);
+  levels_.inL = toDb(inPeakL_);
+  levels_.inR = toDb(inPeakR_);
+  levels_.outL = toDb(outPeakL_);
+  levels_.outR = toDb(outPeakR_);
+  const auto hold = [&](long long& left, float peak) {
+    left = peak >= 1.f ? clipHoldSamples_ : std::max(0LL, left - numSamples);
+  };
+  hold(clipInLeft_, std::max(inPeakL_, inPeakR_));
+  hold(clipOutLeft_, std::max(outPeakL_, outPeakR_));
 }
 
 void Engine::processChunk(const float* inL, const float* inR, const float* scL, const float* scR,
@@ -128,6 +141,10 @@ void Engine::processChunk(const float* inL, const float* inR, const float* scL, 
   float* g = gain_.data();
   std::memcpy(dL, inL, sizeof(float) * (size_t)n);
   std::memcpy(dR, inR, sizeof(float) * (size_t)n);
+  for (int i = 0; i < n; ++i) {  // input level, measured before anything else
+    inPeakL_ = std::max(inPeakL_, std::fabs(dL[i]));
+    inPeakR_ = std::max(inPeakR_, std::fabs(dR[i]));
+  }
   const float* detL = scL ? scL : dL;
   const float* detR = scL ? (scR ? scR : scL) : dR;
   for (int i = 0; i < n; ++i) {
@@ -151,6 +168,8 @@ void Engine::processChunk(const float* inL, const float* inR, const float* scL, 
     echoPeak_ = std::max({echoPeak_, std::fabs(wL[i] * g[i] * m), std::fabs(wR[i] * g[i] * m)});
     outL[i] = dL[i] * (1.f - m) + (wL[i] * g[i]) * m;
     if (outR) outR[i] = dR[i] * (1.f - m) + (wR[i] * g[i]) * m;
+    outPeakL_ = std::max(outPeakL_, std::fabs(outL[i]));
+    outPeakR_ = std::max(outPeakR_, std::fabs(outR ? outR[i] : outL[i]));
   }
 }
 

@@ -74,10 +74,16 @@ void Processor::updateParamsFromChanges(Steinberg::Vst::IParameterChanges* chang
     if (!queue)
       continue;
     const Steinberg::Vst::ParamID id = queue->getParameterId();
-    if (id >= kNumParams)
-      continue;
     Steinberg::Vst::ParamValue value = 0.;
     Steinberg::int32 sample_offset = 0;
+    if (id == kClearClips) {  // writable display parameter: not part of the persistent table
+      if (queue->getPoint(queue->getPointCount() - 1, sample_offset, value) == Steinberg::kResultOk &&
+          value >= 0.5)
+        clear_clips_requested_ = true;
+      continue;
+    }
+    if (id >= kNumParams)
+      continue;
     if (queue->getPoint(queue->getPointCount() - 1, sample_offset, value) == Steinberg::kResultOk)
       param_value_[id] = value;
   }
@@ -85,18 +91,31 @@ void Processor::updateParamsFromChanges(Steinberg::Vst::IParameterChanges* chang
 
 void Processor::publishDisplay(Steinberg::Vst::ProcessData& data) {
   display_acc_.add(engine_.lastDisplay());
-  if (!display_limiter_.advance(data.numSamples) || !data.outputParameterChanges)
+  level_acc_.add(engine_.lastLevels());
+  auto* out = data.outputParameterChanges;
+  const auto put = [out](Steinberg::Vst::ParamID id, double v) {
+    Steinberg::int32 index = 0;
+    if (auto* queue = out->addParameterData(id, index))
+      queue->addPoint(0, v, index);
+  };
+  if (out && clear_clips_ack_) {
+    clear_clips_ack_ = false;
+    put(kClearClips, 0.0);  // acknowledge: the editor's trigger goes back to 0
+  }
+  if (!display_limiter_.advance(data.numSamples) || !out)
     return;
   const DisplayValues d = display_acc_.take();
-  const double values[3] = {Ui::meterNormFromDb(d.voiceDb, -60.0, 0.0),
+  const LevelValues l = level_acc_.take();
+  const double values[9] = {Ui::meterNormFromDb(d.voiceDb, -60.0, 0.0),
                             std::clamp((double)d.sendGain, 0.0, 1.0),
-                            Ui::meterNormFromDb(d.echoDb, -60.0, 0.0)};
-  for (int i = 0; i < 3; ++i) {
-    Steinberg::int32 index = 0;
-    auto* queue = data.outputParameterChanges->addParameterData(kDispVoice + i, index);
-    if (queue)
-      queue->addPoint(0, values[i], index);
-  }
+                            Ui::meterNormFromDb(d.echoDb, -60.0, 0.0),
+                            Ui::meterNormFromDb(l.inL, -60.0, 0.0),
+                            Ui::meterNormFromDb(l.inR, -60.0, 0.0),
+                            Ui::meterNormFromDb(l.outL, -60.0, 0.0),
+                            Ui::meterNormFromDb(l.outR, -60.0, 0.0),
+                            l.clipIn ? 1.0 : 0.0,
+                            l.clipOut ? 1.0 : 0.0};
+  for (int i = 0; i < 9; ++i) put(kDispVoice + i, values[i]);
 }
 
 Steinberg::tresult PLUGIN_API Processor::process(Steinberg::Vst::ProcessData& data) {
@@ -129,6 +148,12 @@ Steinberg::tresult PLUGIN_API Processor::process(Steinberg::Vst::ProcessData& da
                        data.inputs[1].numChannels, data.inputs[1].channelBuffers32);
   }
 
+  if (clear_clips_requested_) {
+    engine_.clearClips();
+    level_acc_.clearClips();
+    clear_clips_requested_ = false;
+    clear_clips_ack_ = true;
+  }
   engine_.process(inL, inR, sc.L, sc.R, outL, outR, data.numSamples);
   publishDisplay(data);
   out.silenceFlags = 0;

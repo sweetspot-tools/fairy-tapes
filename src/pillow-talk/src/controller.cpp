@@ -69,6 +69,14 @@ Steinberg::tresult PLUGIN_API Controller::initialize(Steinberg::FUnknown* contex
   parameters.addParameter(STR16("Display Voice"), nullptr, 0, 0.0, display, kDispVoice);
   parameters.addParameter(STR16("Display Send"), nullptr, 0, 1.0, display, kDispSend);
   parameters.addParameter(STR16("Display Echo"), nullptr, 0, 0.0, display, kDispEcho);
+  parameters.addParameter(STR16("Display In L"), nullptr, 0, 0.0, display, kDispInL);
+  parameters.addParameter(STR16("Display In R"), nullptr, 0, 0.0, display, kDispInR);
+  parameters.addParameter(STR16("Display Out L"), nullptr, 0, 0.0, display, kDispOutL);
+  parameters.addParameter(STR16("Display Out R"), nullptr, 0, 0.0, display, kDispOutR);
+  parameters.addParameter(STR16("Display Clip In"), nullptr, 1, 0.0, display, kDispClipIn);
+  parameters.addParameter(STR16("Display Clip Out"), nullptr, 1, 0.0, display, kDispClipOut);
+  // Writable (no kIsReadOnly): the editor sets it to 1 to clear the clip LEDs, the processor resets it to 0.
+  parameters.addParameter(STR16("Clear Clips"), nullptr, 1, 0.0, ParameterInfo::kIsHidden, kClearClips);
 
   return Steinberg::kResultOk;
 }

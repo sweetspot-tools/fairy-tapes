@@ -36,6 +36,13 @@ enum DisplayID : Steinberg::Vst::ParamID {
   kDispVoice = kMeterBase,
   kDispSend,
   kDispEcho,
+  kDispInL,      // LEVEL block: input/output peaks, meter norm over -60..0 dB
+  kDispInR,
+  kDispOutL,
+  kDispOutR,
+  kDispClipIn,   // 0/1, held 2 s of audio time
+  kDispClipOut,
+  kClearClips,   // the only writable one: the editor sets it to 1, the processor clears the clip flags and resets it to 0
   kNumDisplayIDs
 };
 
