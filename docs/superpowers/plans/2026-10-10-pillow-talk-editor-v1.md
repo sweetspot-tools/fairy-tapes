@@ -4,9 +4,9 @@
 
 **Goal:** Sostituire l'editor verticale provvisorio con l'editor rack 1000 × 628 della preview, con il sistema di texture comune della suite, e chiudere una prima versione di Pillow Talk.
 
-**Architecture:** Sfondi PNG pre-renderizzati dalla preview (strati statici) più un manifest; il plugin sceglie la variante dal seme salvato nello stato. Controlli, LED, display, meter, valori, scritte sul nastro e viti sono disegnati dal codice con `shared/ui`. Il processor pubblica in più i picchi di ingresso e uscita e i clip.
+**Architecture:** Approccio ibrido, senza PNG di sfondo: pannello, riquadri, titoli e serigrafia sono disegnati dal codice con la grana come tile piccola (come The Stripper); l'usura è generata a runtime dal seme salvato nello stato, una sola volta all'apertura dell'editor, in una bitmap in cache. Controlli, LED, display, meter, valori, scritte sul nastro e viti sono disegnati dal codice con `shared/ui`. Il processor pubblica in più i picchi di ingresso e uscita e i clip.
 
-**Tech Stack:** C++20, VST3 SDK + VSTGUI4, `shared/ui`; Python 3 (`Pillow`, `numpy`, `fontTools`) e Google Chrome headless per gli strumenti di generazione; CMake/CTest.
+**Tech Stack:** C++20, VST3 SDK + VSTGUI4, `shared/ui`; Python 3 (`fontTools`) per lo strumento che converte i font del nastro; CMake/CTest.
 
 **Spec:** `docs/superpowers/specs/2026-10-09-pillow-talk-gui-design.md` (§12 e §10-11). Preview di riferimento: `src/pillow-talk/docs/mockups/pillow_rack.html`. Linguaggio grafico: `docs/DESIGN_SYSTEM.md`.
 
@@ -24,7 +24,8 @@
 ## Review Focus
 
 - Stato v1 (senza seme, viti, nastri) si carica con valori di default; stato con seme assente o a 0 genera un seme nuovo e lo salva.
-- PNG o manifest mancanti o malformati: l'editor si apre con sfondo a tinta unita e senza usura, senza crash né log in eccesso.
+- Tile di grana mancante o usura non generabile (memoria): l'editor si apre con sfondo a tinta unita e senza usura, senza crash né log in eccesso.
+- La generazione dell'usura è deterministica (stesso seme e livello → stessi pixel), gira una sola volta per apertura o cambio di Wear e mai sul thread audio; costo atteso 50-200 ms su 1000 × 628 (da misurare).
 - File delle preferenze mancante, vuoto o corrotto: valori di default; scrittura non riuscita: ignorata.
 - Testo del nastro molto lungo o con caratteri non previsti: troncato e filtrato, mai fuori dal nastro.
 - Cambio di Wear con l'editor aperto: lo sfondo cambia senza ricostruire la finestra; il flip con un campo di testo aperto lo chiude confermando.
@@ -49,20 +50,20 @@
 
 ---
 
-### Task 2: Generatore degli sfondi PNG
+### Task 2: Usura generata a runtime
 
 **Files:**
-- Modify: `src/pillow-talk/docs/mockups/pillow_rack.html` (modalità `?bg=1`: solo strati statici, senza controlli, valori, display, LED, scritte sul nastro e viti)
-- Create: `src/pillow-talk/tools/render_backgrounds.py`, `src/pillow-talk/tools/test_render_backgrounds.py`, `src/pillow-talk/assets/` (PNG e `manifest.json` generati e committati)
+- Create: `src/pillow-talk/src/ui/wear.{h,cpp}`, `src/pillow-talk/tests/test_wear.cpp`
+- Modify: `src/pillow-talk/CMakeLists.txt`
 
 **Interfaces:**
-- Produces: `render_backgrounds.py [--out DIR] [--chrome PATH]` che, per ogni variante `(wear, seed)` di una lista fissa (Off ×1, Light ×2, Heavy ×2), apre la preview con `?bg=1&wear=<w>&seed=<n>&scale=<1|2>` in Chrome headless e salva `panel_<wear>_<n>.png` (1000 × 628) e `panel_<wear>_<n>@2x.png` (2000 × 1256); scrive `manifest.json` con, per variante, i nastri (`x, y, w, h, rot`) e le posizioni delle viti. Il PNG ha sfondo opaco e angoli arrotondati trasparenti.
+- Produces: `enum class Wear { Off, Light, Heavy }`; `struct WearLayout { std::vector<TapePlacement> tapes; std::vector<ScrewPlacement> screws; }` con `WearLayout layoutFromSeed(uint32_t seed, Wear w, const Rect& panel)` (posizione e rotazione dei nastri, posizioni delle viti: pure e deterministiche, base fissa in `layout.h` con piccole variazioni dal seme); `void renderWear(uint8_t* rgba, int w, int h, int scale, uint32_t seed, Wear level)` che disegna graffi, segni e sporco semitrasparenti su un buffer RGBA trasparente (pure, senza VSTGUI); la bitmap risultante si mette in cache nell'editor e si ridisegna come un normale `drawBitmap`.
 
-- [ ] **Step 1: Test** (`pytest`, senza Chrome dove possibile): il manifest ha le varianti attese; ogni nastro sta dentro il pannello; stesso seme → stesso manifest; il PNG ha le dimensioni attese e gli angoli trasparenti (se i PNG esistono); un controllo che nessun PNG superi un limite di peso concordato (da misurare in questo task e riportare nella spec).
+- [ ] **Step 1: Test:** stesso seme e livello → stessi byte; semi diversi → byte diversi; Off lascia il buffer trasparente; Heavy ha più pixel coperti di Light; nastri e viti sempre dentro il pannello e al più una vite mancante; tempo di `renderWear` a 2000 × 1256 sotto una soglia larga (es. 400 ms in Release) come controllo di sanità, non come benchmark.
 - [ ] **Step 2: Eseguire, verificare il fallimento.**
-- [ ] **Step 3: Implementare** la modalità `?bg=1` nella preview (parametri dall'URL; strati dei controlli nascosti; nastri senza testo e senza gestore di clic; viti non disegnate) e `render_backgrounds.py` (Chrome headless `--screenshot`, ritaglio e trasparenza con Pillow).
-- [ ] **Step 4: Generare gli asset** e controllarli a occhio (un PNG per livello di usura); riportare numero e peso totale nella spec §12 e fermarsi a segnalare se il totale supera 15 MB.
-- [ ] **Step 5: Commit** `feat(pillow-talk): background renderer and generated panel variants`.
+- [ ] **Step 3: Implementare** `wear.{h,cpp}` guardando la preview (`pillow_rack.html`) come riferimento visivo e confrontando a occhio Off/Light/Heavy; riportare nella spec §12 il tempo misurato. Se l'usura risulta troppo povera rispetto alla preview, **fermarsi e segnalarlo**: il ripiego concordato è aggiungere maschere PNG piccole in scala di grigi solo per l'usura, non sfondi interi.
+- [ ] **Step 4: Eseguire i test.** Expected: PASS.
+- [ ] **Step 5: Commit** `feat(pillow-talk): runtime wear generation from the instance seed`.
 
 ---
 
@@ -82,23 +83,23 @@
 
 ---
 
-### Task 4: Editor orizzontale con sfondo PNG
+### Task 4: Editor orizzontale con pannello da codice
 
 **Files:**
 - Modify: `src/pillow-talk/src/ui/editor.{h,cpp}`, `src/pillow-talk/src/ui/panel_view.{h,cpp}`, `src/pillow-talk/CMakeLists.txt` (copia degli asset nel bundle)
-- Create: `src/pillow-talk/src/ui/layout.h`, `src/pillow-talk/src/ui/background.{h,cpp}`, `src/pillow-talk/tests/test_layout.cpp`
+- Create: `src/pillow-talk/src/ui/layout.h`, `src/pillow-talk/src/ui/panel_art.{h,cpp}`, `src/pillow-talk/tests/test_layout.cpp`
 
 **Interfaces:**
-- Produces: `layout.h` con la tabella dati dei controlli alle posizioni della preview (riquadri DUCKING 24,92 / LEVEL / OUTPUT / DELAY / AUTO DUCK, manopole e Sync/note) con test su: ogni parametro persistente ha esattamente un controllo, nessun rettangolo esce dal pannello 1000 × 628 né si sovrappone ad un altro; `background.h`: `struct Variant { std::string png; std::vector<Tape> tapes; std::vector<Screw> screws; }; std::optional<Manifest> loadManifest(const std::filesystem::path&)` e `size_t pickVariant(uint32_t seed, Wear wear, const Manifest&)` (deterministica).
+- Produces: `layout.h` con la tabella dati dei controlli alle posizioni della preview (riquadri DUCKING 24,92 / LEVEL / OUTPUT / DELAY / AUTO DUCK, manopole e Sync/note) con test su: ogni parametro persistente ha esattamente un controllo, nessun rettangolo esce dal pannello 1000 × 628 né si sovrappone ad un altro; `panel_art.h`: disegno del pannello da codice (sfondo `#161617`, tile di grana riusata da `shared/ui` se pubblicata dallo Stripper, altrimenti tile piccola generata da script, riquadri con bordo bianco e titoli, serigrafia) più la bitmap in cache dell'usura del Task 2.
 - L'editor passa a 1000 × 628; `DuckScope` si ridimensiona al riquadro (376 × 130); LEVEL usa `MeterBar`/`ClipLed`; Sync/note con dimming come oggi; Bypass in alto a destra del riquadro OUTPUT.
 
-- [ ] **Step 1: Test** per `layout.h` e `pickVariant`/`loadManifest` (manifest valido, malformato, mancante; seme 0; livello senza varianti).
+- [ ] **Step 1: Test** per `layout.h`.
 - [ ] **Step 2: Eseguire, verificare il fallimento.**
-- [ ] **Step 3: Implementare** layout, caricamento dello sfondo (tinta unita `#161617` se manca) e la nuova `Editor`; aggiornare `checkSizeConstraint`/HiDPI alla nuova dimensione.
+- [ ] **Step 3: Implementare** layout, disegno del pannello e cache dell'usura (tinta unita `#161617` se la tile manca; rigenerata solo se cambiano seme, livello o fattore di scala) e la nuova `Editor`; aggiornare `checkSizeConstraint`/HiDPI alla nuova dimensione.
 - [ ] **Step 4: Build e test.**
   Run: `cmake --build <scratch> --target pillow_talk pillow_talk_tests pillow_talk_factory_test -j2 && ctest --test-dir <scratch> -R pillow_talk --output-on-failure`
   Expected: PASS, 0 simboli `Steinberg::*` indefiniti.
-- [ ] **Step 5: Commit** `feat(pillow-talk): landscape rack editor with PNG background`.
+- [ ] **Step 5: Commit** `feat(pillow-talk): landscape rack editor with code-drawn panel`.
 
 ---
 
@@ -126,7 +127,7 @@
 - Modify: `src/pillow-talk/src/ui/editor.cpp`
 
 **Interfaces:**
-- Produces: `tape_fonts.h` con i contorni vettoriali dei glifi ASCII stampabili dei tre font (curve quadratiche e cubiche, `advance`, `unitsPerEm`); `tape_view.h`: `class TapeView : public VSTGUI::CView` (un nastro del manifest: disegna il testo con il font scelto e piccola variazione per lettera dal seme; un clic apre un campo di testo da 14 caratteri al massimo, Invio conferma, Esc annulla) e funzioni pure `std::string sanitizeTapeText(std::string)` e `float fitScale(float textWidth, float tapeWidth)`.
+- Produces: `tape_fonts.h` con i contorni vettoriali dei glifi ASCII stampabili dei tre font (curve quadratiche e cubiche, `advance`, `unitsPerEm`); `tape_view.h`: `class TapeView : public VSTGUI::CView` (un nastro di `WearLayout`: disegna il testo con il font scelto e piccola variazione per lettera dal seme; un clic apre un campo di testo da 14 caratteri al massimo, Invio conferma, Esc annulla) e funzioni pure `std::string sanitizeTapeText(std::string)` e `float fitScale(float textWidth, float tapeWidth)`.
 
 - [ ] **Step 1: Test:** `gen_tape_fonts` produce l'header deterministicamente e ogni glifo ASCII stampabile esiste; `sanitizeTapeText` (lunghezza 14, caratteri non stampabili rimossi, spazi ai bordi tolti); `fitScale` non supera mai il nastro.
 - [ ] **Step 2: Eseguire, verificare il fallimento.**
@@ -146,7 +147,7 @@
 - Produces: `class ScrewView : public VSTGUI::CView` (taglio o croce, angolo iniziale dal seme, una può mancare con bassa probabilità, trascinamento che ruota; l'angolo si salva nello stato) e funzioni pure `float angleFromDrag(...)`, `ScrewKind kindFromSeed(uint32_t seed, int index)`, `bool missingFromSeed(uint32_t seed, int index)` (al più una vite mancante).
 
 - [ ] **Step 1: Test** delle funzioni pure (deterministiche, una sola vite mancante al massimo, angolo normalizzato).
-- [ ] **Step 2: Eseguire, verificare il fallimento; implementare** `ScrewView` e collegarla alle posizioni del manifest.
+- [ ] **Step 2: Eseguire, verificare il fallimento; implementare** `ScrewView` e collegarla alle posizioni di `WearLayout`.
 - [ ] **Step 3: Eseguire i test e la build.** Expected: PASS.
 - [ ] **Step 4: Commit** `feat(pillow-talk): rotatable screws`.
 
@@ -173,7 +174,7 @@
 **Files:**
 - Modify: `src/pillow-talk/README.md`, `src/pillow-talk/docs/CONTROLS.md`, `src/pillow-talk/docs/UI_ASSETS.md`, `README.md` radice, spec §10-12 (stato dei compiti e decisioni), questo piano (compiti spuntati)
 
-- [ ] **Step 1: Aggiornare i docs** al codice reale: layout, meter e LED di clip, Wear, nastro e viti, retro, preferenze (dove vivono), asset e come rigenerarli (`render_backgrounds.py`, `gen_tape_fonts.py`), dipendenze di sistema per Linux.
+- [ ] **Step 1: Aggiornare i docs** al codice reale: layout, meter e LED di clip, Wear, nastro e viti, retro, preferenze (dove vivono), come rigenerare l'header dei font (`gen_tape_fonts.py`) e cosa genera l'usura a runtime, dipendenze di sistema per Linux.
 - [ ] **Step 2: Verifica finale**
   Run: `cmake --build <scratch> --target pillow_talk pillow_talk_tests pillow_talk_factory_test fairy_ui_tests -j2 && ctest --test-dir <scratch> -R "pillow_talk|fairy_ui" --output-on-failure`
   Expected: PASS.
