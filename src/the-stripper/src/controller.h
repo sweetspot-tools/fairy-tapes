@@ -16,6 +16,10 @@
 
 namespace FairyTapes::TheStripper {
 
+namespace Ui {
+struct EditorPreview;
+}
+
 // IEditController already inherits from IPluginBase; avoid duplicate base.
 class Controller : public Steinberg::Vst::IEditController, public Steinberg::Vst::IConnectionPoint {
 public:
@@ -57,6 +61,11 @@ public:
   Steinberg::tresult PLUGIN_API disconnect(Steinberg::Vst::IConnectionPoint* other) override;
   Steinberg::tresult PLUGIN_API notify(Steinberg::Vst::IMessage* message) override;
 
+  /** User gestures from the editor: the value is stored and reported to the host (setParamNormalized is host -> controller only). */
+  void beginEdit(Steinberg::Vst::ParamID tag);
+  void performEdit(Steinberg::Vst::ParamID tag, Steinberg::Vst::ParamValue value);
+  void endEdit(Steinberg::Vst::ParamID tag);
+
   /** Ask the processor to load a .nam model (UTF-8 path); empty = no model. The editor shows the outcome via the getters below. */
   void requestModelLoad(const std::string& path);
   std::string modelPath() const;
@@ -67,6 +76,7 @@ public:
   DECLARE_FUNKNOWN_METHODS
 
 private:
+  friend struct Ui::EditorPreview;   // tools/render_editor.cpp sets the model status without a processor
   Steinberg::Vst::ParamValue param_value_[kNumParams];
   Steinberg::Vst::ParamValue meter_value_[kNumMeters] = {};   // written by the processor, read by the editor
   std::string modelPath_;
