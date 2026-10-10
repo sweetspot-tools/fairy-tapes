@@ -75,15 +75,34 @@ var LY=null,OFFY=0,BOXOVR=null;
 function layers(){return {box:el('g',{}),scale:el('g',{}),wear:el('g',{}),screw:el('g',{})};}
 function rnd(R,a,b){return a+R()*(b-a);}
 function pick(R,arr){return arr[Math.floor(R()*arr.length)];}
-(function(){var f=el('filter',{id:'wb',x:'-30%',y:'-30%',width:'160%',height:'160%'},defs);el('feGaussianBlur',{stdDeviation:4},f);
+(function(){var rg=el('filter',{id:'rgh',x:'-40%',y:'-40%',width:'180%',height:'180%'},defs);el('feTurbulence',{type:'fractalNoise',baseFrequency:'0.22',numOctaves:2,seed:7,result:'n'},rg);el('feDisplacementMap',{in:'SourceGraphic',in2:'n',scale:2.6,xChannelSelector:'R',yChannelSelector:'G'},rg);
+  var f=el('filter',{id:'wb',x:'-30%',y:'-30%',width:'160%',height:'160%'},defs);el('feGaussianBlur',{stdDeviation:4},f);
   var g=el('filter',{id:'wb2',x:'-10%',y:'-30%',width:'120%',height:'160%'},defs);el('feGaussianBlur',{stdDeviation:1.1},g);
   var h=el('filter',{id:'wb3'},defs);el('feGaussianBlur',{stdDeviation:.6},h);})();
 function blob(R,cx,cy,rx,ry,n){var pts=[];for(var i=0;i<n;i++){var a=i/n*Math.PI*2,k=rnd(R,.55,1.15);pts.push((cx+Math.cos(a)*rx*k).toFixed(1)+','+(cy+Math.sin(a)*ry*k).toFixed(1));}return pts.join(' ');}
 function wear(L,R,amt,face){
   if(!amt)return;
   var n=function(c){return Math.round(c*amt);};
+  var TL=el('g',{},L);  /* handwriting on the tape: kept above ALL tape pieces (re-appended last) */
   var st=el('g',{filter:'url(#wb)'},L);
-  for(var i=0;i<n(face?3:6);i++){var warm=R()<.45;el('polygon',{points:blob(R,rnd(R,40,960),rnd(R,100,600),rnd(R,25,95),rnd(R,12,45),9),fill:warm?'#b99a5a':'#d8d8d2',opacity:rnd(R,.025,.07)},st);}
+  for(var i=0;i<n(face?3:6);i++){var warm=R()<.45;el('polygon',{points:blob(R,rnd(R,40,960),rnd(R,100,600),rnd(R,25,95),rnd(R,12,45),9),fill:warm?'#b99a5a':'#d8d8d2',opacity:rnd(R,.012,.04)},st);}
+  /* stuck-on residue as touches of a very dry brush: bundles of thin bristle marks, opaque, broken by gaps (the panel shows through between bristles),
+     heavy where the stroke lands and dragging out into ragged, uneven tails. No shadow, no blur. */
+  var gk=el('g',{},L);
+  for(var q=0;q<n(face?4:9);q++){
+    var big=R()<.7,cx0=rnd(R,30,970),cy0=rnd(R,100,600),dir=rnd(R,0,Math.PI*2),len=big?rnd(R,22,70):rnd(R,7,16),width=big?rnd(R,5,13):rnd(R,2.5,5),m=Math.round(width/rnd(R,.55,.9)),
+        col=pick(R,['#6a5a38','#54472d','#7a6a46','#8c8778','#9a8e6e','#5b3f2c','#47402f']),cs=Math.cos(dir),sn=Math.sin(dir);
+    for(var i=0;i<m;i++){
+      var t=(i-(m-1)/2)/Math.max(1,m-1),off=t*width+rnd(R,-.35,.35),edge=Math.abs(t)*2,
+          l=len*rnd(R,.45,1)*(1-edge*.35),s0=-len/2+rnd(R,0,len*.28)+edge*len*.08,
+          x1=cx0-sn*off+cs*s0,y1=cy0+cs*off+sn*s0,x2=x1+cs*l,y2=y1+sn*l,
+          bend=rnd(R,-1.6,1.6),mx=(x1+x2)/2-sn*bend,my=(y1+y2)/2+cs*bend,
+          dash=R()<.55?[rnd(R,3,16),rnd(R,.8,4),rnd(R,2,9),rnd(R,1,5),rnd(R,6,20),rnd(R,1,6)].map(function(v){return v.toFixed(1);}).join(' '):null;
+      var at={d:'M'+x1.toFixed(1)+' '+y1.toFixed(1)+' Q'+mx.toFixed(1)+' '+my.toFixed(1)+' '+x2.toFixed(1)+' '+y2.toFixed(1),fill:'none',stroke:R()<.14?'#16120a':col,'stroke-width':(rnd(R,.45,1.15)*(1-edge*.3)).toFixed(2),'stroke-linecap':R()<.5?'butt':'round'};
+      if(dash)at['stroke-dasharray']=dash;el('path',at,gk);}
+    /* heavier loading at the start of the touch */
+    for(var h=0;h<1+(R()*3|0);h++){var ho=rnd(R,-width*.4,width*.4),hx=cx0-len/2*cs-sn*ho,hy=cy0-len/2*sn+cs*ho;el('line',{x1:hx.toFixed(1),y1:hy.toFixed(1),x2:(hx+cs*len*rnd(R,.1,.25)).toFixed(1),y2:(hy+sn*len*rnd(R,.1,.25)).toFixed(1),stroke:col,'stroke-width':rnd(R,1.2,2.2).toFixed(2),'stroke-linecap':'round'},gk);}
+  }
   var sc=el('g',{},L);
   for(var j=0;j<n(face?25:55);j++){var x=rnd(R,20,980),y=rnd(R,20,608),len=R()<.12?rnd(R,120,260):rnd(R,14,90),ang=(R()<.6?rnd(R,-.35,.35):rnd(R,0,Math.PI*2)),cur=rnd(R,-.12,.12);
     var x2=x+Math.cos(ang)*len,y2=y+Math.sin(ang)*len,mx=(x+x2)/2+Math.sin(ang)*len*cur,my=(y+y2)/2-Math.cos(ang)*len*cur,d='M'+x.toFixed(1)+' '+y.toFixed(1)+' Q'+mx.toFixed(1)+' '+my.toFixed(1)+' '+x2.toFixed(1)+' '+y2.toFixed(1),w=rnd(R,.35,.9);
@@ -94,7 +113,7 @@ function wear(L,R,amt,face){
   var tp=face?0:n(1)+(R()<.5?1:0),TI=0;
   for(var t=0;t<tp;t++){
     var tx=rnd(R,70,900),ty=rnd(R,110,560),tw=rnd(R,58,96),th=rnd(R,19,26),rot=rnd(R,-9,9);
-    var g=el('g',{transform:'translate('+tx.toFixed(1)+' '+ty.toFixed(1)+') rotate('+rot.toFixed(1)+')'},L);
+    var tr='translate('+tx.toFixed(1)+' '+ty.toFixed(1)+') rotate('+rot.toFixed(1)+')',g=el('g',{transform:tr},L),gt=el('g',{transform:tr},TL);
     var pts=['0,'+rnd(R,0,2.5).toFixed(1)];
     for(var k=1;k<=4;k++)pts.push((tw*k/4).toFixed(1)+','+rnd(R,-1.2,1.2).toFixed(1));
     for(var q=0;q<=5;q++)pts.push((tw+rnd(R,-3,3)).toFixed(1)+','+(th*q/5).toFixed(1));
@@ -104,15 +123,16 @@ function wear(L,R,amt,face){
     el('polygon',{points:pts.join(' '),fill:'#d9cfa6',opacity:.8},g);
     for(var f=0;f<5;f++)el('line',{x1:rnd(R,0,tw*.3),x2:rnd(R,tw*.6,tw),y1:rnd(R,2,th-2),y2:rnd(R,2,th-2),stroke:'#8f8560',opacity:rnd(R,.08,.2),'stroke-width':.5},g);
     var ti=TI++,dflt=R()<.45?pick(R,['VOX','TAKE 3','DRUMS?','BUS','GTR','OLD','7/12','keep!']):'';
-    var tt=el('text',{x:tw/2,y:th*.68,'text-anchor':'middle','font-size':(rnd(R,11,14)*TAPEFONTS[TAPEFONT]).toFixed(1),'font-family':"'"+TAPEFONT+"',cursive",'font-weight':400,fill:'#2b2620',opacity:.82,transform:'rotate('+rnd(R,-3,3).toFixed(1)+' '+(tw/2)+' '+(th/2)+')'},g);
+    var tt=el('text',{x:tw/2,y:th*.68,'text-anchor':'middle','font-size':(rnd(R,11,14)*TAPEFONTS[TAPEFONT]).toFixed(1),'font-family':"'"+TAPEFONT+"',cursive",'font-weight':400,fill:'#2b2620',opacity:.95,transform:'rotate('+rnd(R,-3,3).toFixed(1)+' '+(tw/2)+' '+(th/2)+')'},gt);
     tt.textContent=(ti in TAPETXT)?TAPETXT[ti]:dflt;
-    g.style.cursor='text';el('title',{},g).textContent='Click to write on the tape';
-    (function(ti,tt,g,dflt){g.addEventListener('click',function(e){e.stopPropagation();editText(g,tt.textContent,function(v){v=v.slice(0,14);tt.textContent=v;TAPETXT[ti]=v;lsSet('st_tape',JSON.stringify(TAPETXT));},{max:14,minw:90,color:'#2b2620',bg:'#d9cfa6',border:'#8f8560',font:'400 '+Math.round(16*TAPEFONTS[TAPEFONT])+'px \''+TAPEFONT+'\',cursive'});});})(ti,tt,g,dflt);
+    g.style.cursor='text';gt.style.cursor='text';el('title',{},g).textContent='Click to write on the tape';
+    (function(ti,tt,g,gt,dflt){var open=function(e){e.stopPropagation();editText(g,tt.textContent,function(v){v=v.slice(0,14);tt.textContent=v;TAPETXT[ti]=v;lsSet('st_tape',JSON.stringify(TAPETXT));},{max:14,minw:90,color:'#2b2620',bg:'#d9cfa6',border:'#8f8560',font:'400 '+Math.round(16*TAPEFONTS[TAPEFONT])+'px \''+TAPEFONT+'\',cursive'});};g.addEventListener('click',open);gt.addEventListener('click',open);})(ti,tt,g,gt,dflt);
   }
   for(var m=0;m<n(1.4);m++){var rx=rnd(R,60,880),ry=rnd(R,110,560),rw=rnd(R,50,90),rh=rnd(R,18,26),rr=rnd(R,-9,9);
     var gg=el('g',{transform:'translate('+rx.toFixed(1)+' '+ry.toFixed(1)+') rotate('+rr.toFixed(1)+')'},L);
     el('polygon',{points:blob(R,rw/2,rh/2,rw/2,rh/2,14),fill:'#b8a66b',opacity:.07,filter:'url(#wb2)'},gg);
     for(var d2=0;d2<10;d2++)el('circle',{cx:rnd(R,2,rw-2),cy:rnd(R,2,rh-2),r:rnd(R,.4,1.4),fill:'#9d8c58',opacity:rnd(R,.08,.2)},gg);}
+  L.appendChild(TL);
 }
 /* dirt / sweat on a knob cap or button face (clipped); redrawn in place when the wear level or the seed changes */
 var GRIME=[],WEARL=[],SCRL=[];
