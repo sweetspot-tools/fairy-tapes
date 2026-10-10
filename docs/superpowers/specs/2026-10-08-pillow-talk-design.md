@@ -81,3 +81,19 @@ Seguendo `src/the-stripper/tests/test_params.cpp`:
 - Modalità BBD o delay digitale pulito (possibile estensione futura).
 - Rilevamento di frase "intelligente" (scartato: meno prevedibile, più difficile da tarare).
 - Interfaccia grafica personalizzata: segue la stessa strategia di The Stripper e sarà definita nel piano.
+
+## 10. Decisioni prese in implementazione
+
+- **Ducking sull'uscita wet**, non sull'ingresso del nastro (vedi §3 e §4): con l'ingresso abbassato la frase non veniva registrata e nelle pause non restava eco.
+- **Rilevatore:** rilascio dell'envelope a 3 ms con compensazione di 8 ms sull'hold, così l'hold parte dall'ultimo istante sopra soglia indipendentemente dal livello; passa-alto del 4° ordine a 120 Hz.
+- **Stato:** i valori non finiti si rifiutano e quelli ripristinati si limitano a 0..1.
+- **Modulo VST3:** factory con le macro del SDK, target `MODULE`, layout dei bundle come nei moduli CMake del SDK.
+- Il glide del Time non ha limite di slew e Saturation a 0 applica comunque `tanh` (comportamento da nastro, accettato).
+
+## 11. Decisioni aperte
+
+- **Default di Hold (224 ms), Release (316 ms) e Feedback (38 %):** con questi valori la coda della frase nella pausa è molto attenuata (circa -22 dB sull'intera pausa). Da tarare ad orecchio in un host.
+- **Non verificato:** build e bundle su Windows e macOS (la prima build vera è la CI), caricamento in Reaper e Cubase, attivazione del sidechain nei due host.
+- Il test della factory è registrato anche su macOS, dove fallirebbe (cerca `ModuleEntry`, macOS esporta `bundleEntry`).
+- Rilevamento di frase "intelligente" e modalità BBD restano fuori scopo.
+

@@ -49,16 +49,16 @@
   - Costanti `kDefault*` per ogni parametro: Time 0.5, Feedback 0.4, Tone 0.6, Saturation 0.3, WowFlutter 0.2, Mix 0.3, Threshold 0.42 (≈ -35 dB), Depth 0.6 (≈ 36 dB), Hold 0.5, Release 0.5, TimeSync 0, HoldSync 0, Sidechain 0.
 - `cids.h`: `kProcessorUID`, `kControllerUID` con FUID nuovi e diversi da quelli dello Stripper.
 
-- [ ] **Step 1: Scrivere i test (falliscono perché `params.h` non esiste)** in `tests/test_pillow_talk.cpp` copiando le macro di `the-stripper/tests/test_params.cpp`: `test_noteToMs_120bpm` (0→125, 1→250, 2→500, 3→1000), `test_noteToMs_bpm_zero_uses_120`, `test_ranges_boundaries` (estremi di ogni `*FromNorm`), `test_duckDepth_full_is_mute_constant` (`duckDepthDbFromNorm(1.0) == kDuckMuteDb`), `test_param_enum_count` (`kNumParams == 16`), `test_feedback_never_exceeds_095`.
-- [ ] **Step 2: Creare `CMakeLists.txt` del plugin** con il solo eseguibile `pillow_talk_tests` + `add_test`, modellato su `the-stripper/CMakeLists.txt` (C++20, include di `src/` e del VST3 SDK, path `VST3_SDK_PATH`). Aggiungere `add_subdirectory(src/pillow-talk)` alla radice.
-- [ ] **Step 3: Eseguire, verificare il fallimento**
+- [x] **Step 1: Scrivere i test (falliscono perché `params.h` non esiste)** in `tests/test_pillow_talk.cpp` copiando le macro di `the-stripper/tests/test_params.cpp`: `test_noteToMs_120bpm` (0→125, 1→250, 2→500, 3→1000), `test_noteToMs_bpm_zero_uses_120`, `test_ranges_boundaries` (estremi di ogni `*FromNorm`), `test_duckDepth_full_is_mute_constant` (`duckDepthDbFromNorm(1.0) == kDuckMuteDb`), `test_param_enum_count` (`kNumParams == 16`), `test_feedback_never_exceeds_095`.
+- [x] **Step 2: Creare `CMakeLists.txt` del plugin** con il solo eseguibile `pillow_talk_tests` + `add_test`, modellato su `the-stripper/CMakeLists.txt` (C++20, include di `src/` e del VST3 SDK, path `VST3_SDK_PATH`). Aggiungere `add_subdirectory(src/pillow-talk)` alla radice.
+- [x] **Step 3: Eseguire, verificare il fallimento**
   Run: `cmake -S . -B build && cmake --build build --target pillow_talk_tests`
   Expected: errore di compilazione (`params.h` mancante).
-- [ ] **Step 4: Implementare `params.h` e `cids.h`** con le firme sopra. Mapping logaritmico: `min * pow(max/min, n)`.
-- [ ] **Step 5: Eseguire i test**
+- [x] **Step 4: Implementare `params.h` e `cids.h`** con le firme sopra. Mapping logaritmico: `min * pow(max/min, n)`.
+- [x] **Step 5: Eseguire i test**
   Run: `cmake --build build --target pillow_talk_tests && ctest --test-dir build -R pillow_talk --output-on-failure`
   Expected: PASS.
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add CMakeLists.txt src/pillow-talk
@@ -81,11 +81,11 @@ git commit -m "feat(pillow-talk): add params, class IDs and test target"
   - `float processSample(float scL, float scR)` — ritorna il gain di mandata in `[0, 1]`
   - `void reset()`
 
-- [ ] **Step 1: Scrivere i test** (sample rate 48000, soglia -40 dB, depth 30 dB, hold 200 ms, release 300 ms): `test_ducker_silence_gain_is_unity`; `test_ducker_burst_ducks_to_depth` (burst di sinusoide a 1 kHz di ampiezza 0.5 e 300 ms → gain finale ≈ 10^(-30/20) entro 0.02); `test_ducker_holds_after_burst` (a 100 ms dalla fine del burst il gain è ancora ridotto); `test_ducker_reopens_after_hold_and_release` (a hold + 3×release dalla fine il gain > 0.95); `test_ducker_full_depth_is_mute` (depth = `kDuckMuteDb` → gain < 1e-4 durante il burst); `test_ducker_below_threshold_ignored` (ampiezza 0.001 non abbassa il gain); `test_ducker_ignores_sub_80hz_rumble` (sinusoide 40 Hz ampiezza 0.5 non abbassa il gain di oltre 3 dB).
-- [ ] **Step 2: Eseguire, verificare il fallimento** (`ducker.h` mancante).
-- [ ] **Step 3: Implementare `Ducker`.** Rilevatore: somma mono dei due canali → passa-alto 120 Hz e passa-basso 5 kHz (biquad Butterworth locali al file) → envelope peak con attacco 2 ms e rilascio 40 ms. Macchina a stati: sopra soglia → `active`, contatore hold riazzerato; sotto soglia il gain target resta ridotto finché il contatore hold non scade; poi il target torna a 1 con rilascio esponenziale a costante di tempo `releaseMs`. Il gain finale passa in uno smoother a 3 ms per evitare click.
-- [ ] **Step 4: Eseguire i test** (comando del Task 1). Expected: PASS.
-- [ ] **Step 5: Commit**
+- [x] **Step 1: Scrivere i test** (sample rate 48000, soglia -40 dB, depth 30 dB, hold 200 ms, release 300 ms): `test_ducker_silence_gain_is_unity`; `test_ducker_burst_ducks_to_depth` (burst di sinusoide a 1 kHz di ampiezza 0.5 e 300 ms → gain finale ≈ 10^(-30/20) entro 0.02); `test_ducker_holds_after_burst` (a 100 ms dalla fine del burst il gain è ancora ridotto); `test_ducker_reopens_after_hold_and_release` (a hold + 3×release dalla fine il gain > 0.95); `test_ducker_full_depth_is_mute` (depth = `kDuckMuteDb` → gain < 1e-4 durante il burst); `test_ducker_below_threshold_ignored` (ampiezza 0.001 non abbassa il gain); `test_ducker_ignores_sub_80hz_rumble` (sinusoide 40 Hz ampiezza 0.5 non abbassa il gain di oltre 3 dB).
+- [x] **Step 2: Eseguire, verificare il fallimento** (`ducker.h` mancante).
+- [x] **Step 3: Implementare `Ducker`.** Rilevatore: somma mono dei due canali → passa-alto 120 Hz e passa-basso 5 kHz (biquad Butterworth locali al file) → envelope peak con attacco 2 ms e rilascio 40 ms. Macchina a stati: sopra soglia → `active`, contatore hold riazzerato; sotto soglia il gain target resta ridotto finché il contatore hold non scade; poi il target torna a 1 con rilascio esponenziale a costante di tempo `releaseMs`. Il gain finale passa in uno smoother a 3 ms per evitare click.
+- [x] **Step 4: Eseguire i test** (comando del Task 1). Expected: PASS.
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/pillow-talk
@@ -107,11 +107,11 @@ git commit -m "feat(pillow-talk): add vocal-aware ducker with hold and release"
   - `void process(float* L, float* R, const float* sendGain, int numSamples)` — **sostituisce** `L`/`R` con il solo segnale wet; `sendGain[i]` moltiplica l'ingresso prima della linea; `numSamples == 0` è un no-op
   - `void reset()`
 
-- [ ] **Step 1: Scrivere i test** (48 kHz, wowFlutter 0, saturation 0, tone 12000, `sendGain` tutto 1): `test_echo_first_repeat_at_time` (impulso a campione 0, Time 100 ms → picco massimo in 4800 ± 2 campioni); `test_echo_feedback_decays` (feedback 0.5 → ogni ripetizione più bassa della precedente di un fattore tra 0.3 e 0.6); `test_echo_zero_send_gain_is_silent` (sendGain 0 → uscita < 1e-6); `test_echo_send_gain_not_applied_to_tail` (impulso con gain 1 poi gain 0: la ripetizione già in linea esce comunque); `test_echo_tone_darkens` (rumore bianco con tone 800 Hz ha meno energia sopra 6 kHz che con tone 12000); `test_echo_max_feedback_is_bounded` (feedback 0.95, saturation 1.0, ingresso sinusoidale ampiezza 1.0 per 10 s → |uscita| < 4.0 e nessun NaN); `test_echo_silence_stays_silent` (60 s di zeri → tutti i campioni esattamente 0 dopo che la linea si è svuotata, senza denormali); `test_echo_zero_and_one_sample_blocks`; `test_echo_time_change_has_no_click` (Time da 100 a 400 ms a metà di una sinusoide: massima differenza tra campioni consecutivi < 0.5).
-- [ ] **Step 2: Eseguire, verificare il fallimento.**
-- [ ] **Step 3: Implementare `TapeEcho`** come da spec §5: linea con interpolazione a 4 punti, tempo effettivo = Time smussato (glide ~120 ms) + modulazione wow (LFO ~0.6 Hz) e flutter (LFO ~7 Hz più rumore filtrato) con profondità proporzionale a `wowFlutter`; nel loop di feedback HP 100 Hz, LP a `toneHz`, `tanh` con bias leggero a oversampling 2x (filtro half-band FIR corto, stato in `reset()`); flush dei denormali all'uscita del loop.
-- [ ] **Step 4: Eseguire i test.** Expected: PASS.
-- [ ] **Step 5: Commit**
+- [x] **Step 1: Scrivere i test** (48 kHz, wowFlutter 0, saturation 0, tone 12000, `sendGain` tutto 1): `test_echo_first_repeat_at_time` (impulso a campione 0, Time 100 ms → picco massimo in 4800 ± 2 campioni); `test_echo_feedback_decays` (feedback 0.5 → ogni ripetizione più bassa della precedente di un fattore tra 0.3 e 0.6); `test_echo_zero_send_gain_is_silent` (sendGain 0 → uscita < 1e-6); `test_echo_send_gain_not_applied_to_tail` (impulso con gain 1 poi gain 0: la ripetizione già in linea esce comunque); `test_echo_tone_darkens` (rumore bianco con tone 800 Hz ha meno energia sopra 6 kHz che con tone 12000); `test_echo_max_feedback_is_bounded` (feedback 0.95, saturation 1.0, ingresso sinusoidale ampiezza 1.0 per 10 s → |uscita| < 4.0 e nessun NaN); `test_echo_silence_stays_silent` (60 s di zeri → tutti i campioni esattamente 0 dopo che la linea si è svuotata, senza denormali); `test_echo_zero_and_one_sample_blocks`; `test_echo_time_change_has_no_click` (Time da 100 a 400 ms a metà di una sinusoide: massima differenza tra campioni consecutivi < 0.5).
+- [x] **Step 2: Eseguire, verificare il fallimento.**
+- [x] **Step 3: Implementare `TapeEcho`** come da spec §5: linea con interpolazione a 4 punti, tempo effettivo = Time smussato (glide ~120 ms) + modulazione wow (LFO ~0.6 Hz) e flutter (LFO ~7 Hz più rumore filtrato) con profondità proporzionale a `wowFlutter`; nel loop di feedback HP 100 Hz, LP a `toneHz`, `tanh` con bias leggero a oversampling 2x (filtro half-band FIR corto, stato in `reset()`); flush dei denormali all'uscita del loop.
+- [x] **Step 4: Eseguire i test.** Expected: PASS.
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/pillow-talk
@@ -131,16 +131,16 @@ git commit -m "feat(pillow-talk): add tape echo with wow/flutter and saturated f
 - Consumes: `params.h` (Task 1), `Ducker` (Task 2), `TapeEcho` (Task 3).
 - Produces: classi `Processor` e `Controller` in `FairyTapes::PillowTalk`, factory identica a `the-stripper/src/plug.cpp` con nome `"Pillow Talk"`. Stato versionato (`kStateVersion = 1`): versione + `kNumParams` valori `double`.
 
-- [ ] **Step 1: Scrivere i test** per la parte non legata all'SDK, sfruttando le unità già testate: `test_chain_sidechain_ducks_echo` (Ducker + TapeEcho + mix come da formula del Processor: con voce nel sidechain il wet è più basso che con sidechain silenzioso) e `test_state_roundtrip` (un helper puro `serializeState(const double*, std::vector<uint8_t>&)` / `deserializeState` in `processor.h`, ripristina tutti i valori e scarta versioni sconosciute).
-- [ ] **Step 2: Eseguire, verificare il fallimento.**
-- [ ] **Step 3: Implementare `Processor`.** Bus: `addAudioInput("Main Input", kStereo)`, `addAudioInput("Sidechain", kStereo)` (inattivo di default), `addAudioOutput("Main Output", kStereo)`. In `process`: se `kSidechain` è attivo e il bus è attivo con puntatori validi, il rilevatore legge il sidechain; altrimenti legge l'ingresso principale. BPM da `processContext->tempo` se `kTempoValid`, altrimenti 120. Per ogni campione: `gain = ducker.processSample(...)`; wet = `TapeEcho` con `sendGain = gain`; uscita = `dry*(1-mix) + wet*mix`. `kBypass` passa il dry. Parametri smussati dove cambiano a salti.
-- [ ] **Step 4: Implementare `Controller`** con `StringListParameter` per `kTimeNote`/`kHoldNote` (1/16, 1/8, 1/4, 1/2), parametri a due stati per Sync/Sidechain/Bypass, e `getParamStringByValue` con unità (ms, dB, %). Nessuna GUI custom, come The Stripper.
-- [ ] **Step 5: Completare `CMakeLists.txt` e scrivere `README.md` e `docs/CONTROLS.md`** (ogni parametro con range e default; nota su Reaper: sidechain sui canali 3/4; su Cubase: attivare il sidechain dal plugin). Aggiornare il `README.md` radice.
-- [ ] **Step 6: Build completa e test**
+- [x] **Step 1: Scrivere i test** per la parte non legata all'SDK, sfruttando le unità già testate: `test_chain_sidechain_ducks_echo` (Ducker + TapeEcho + mix come da formula del Processor: con voce nel sidechain il wet è più basso che con sidechain silenzioso) e `test_state_roundtrip` (un helper puro `serializeState(const double*, std::vector<uint8_t>&)` / `deserializeState` in `processor.h`, ripristina tutti i valori e scarta versioni sconosciute).
+- [x] **Step 2: Eseguire, verificare il fallimento.**
+- [x] **Step 3: Implementare `Processor`.** Bus: `addAudioInput("Main Input", kStereo)`, `addAudioInput("Sidechain", kStereo)` (inattivo di default), `addAudioOutput("Main Output", kStereo)`. In `process`: se `kSidechain` è attivo e il bus è attivo con puntatori validi, il rilevatore legge il sidechain; altrimenti legge l'ingresso principale. BPM da `processContext->tempo` se `kTempoValid`, altrimenti 120. Per ogni campione: `gain = ducker.processSample(...)`; wet = `TapeEcho` con `sendGain = gain`; uscita = `dry*(1-mix) + wet*mix`. `kBypass` passa il dry. Parametri smussati dove cambiano a salti.
+- [x] **Step 4: Implementare `Controller`** con `StringListParameter` per `kTimeNote`/`kHoldNote` (1/16, 1/8, 1/4, 1/2), parametri a due stati per Sync/Sidechain/Bypass, e `getParamStringByValue` con unità (ms, dB, %). Nessuna GUI custom, come The Stripper.
+- [x] **Step 5: Completare `CMakeLists.txt` e scrivere `README.md` e `docs/CONTROLS.md`** (ogni parametro con range e default; nota su Reaper: sidechain sui canali 3/4; su Cubase: attivare il sidechain dal plugin). Aggiornare il `README.md` radice.
+- [x] **Step 6: Build completa e test**
   Run: `cmake --build build --target pillow_talk pillow_talk_tests && ctest --test-dir build -R pillow_talk --output-on-failure && ls "dist/Pillow Talk.vst3"`
   Expected: build senza errori, test PASS, bundle presente.
 - [ ] **Step 7: Verifica manuale in Reaper e Cubase** (a cura dell'utente): inserire come insert sulla voce, poi su un bus di ritorno con sidechain dalla voce; controllare che il delay si abbassi cantando e si apra nelle pause.
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/pillow-talk README.md

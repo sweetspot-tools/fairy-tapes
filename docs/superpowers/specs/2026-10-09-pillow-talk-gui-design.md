@@ -60,3 +60,22 @@ Finestra scorrevole di circa 6 secondi, da destra a sinistra, con tre tracce: **
 - VSTGUI4 aggiunge dipendenze di sistema su Linux e richiede che la CI le installi; è la causa più probabile di build rosse.
 - Il comportamento della finestra (DPI, scala dell'host) differisce tra Reaper e Cubase e non si può verificare headless.
 - Il display dipende dai parametri di sola lettura: se un host non li inoltra al controller, il display resta fermo ma il plugin funziona.
+
+## 10. Decisioni prese in implementazione
+
+- **Traccia Voice:** mostra l'inviluppo del rilevatore (il segnale filtrato e mono che il ducker confronta con la soglia), non il picco grezzo. Un seno stazionario si legge circa 4 dB sotto il suo picco (media del segnale raddrizzato). Calibrare il ducker avrebbe spostato l'innesco di circa 4 dB.
+- **Traccia Echo:** livello dell'uscita dopo ducking e Mix; con Bypass o Mix a 0 va al minimo.
+- **Picchi tra le scritture:** il processor accumula massimi (voce, eco) e minimo (mandata) tra due scritture da 16 ms.
+- **HiDPI:** l'editor implementa `IPlugViewContentScaleSupport`; la dimensione logica resta 480 × 560 e il frame si ingrandisce con il fattore dell'host (su macOS il fattore resta 1).
+- **Linux:** solo incorporamento X11; le finestre Wayland native sono rifiutate.
+- **`plug.cpp`:** senza `InitModule/DeinitModule` propri, così il SDK esegue `VSTGUI::init`.
+- I controlli (`AnalogKnob`, `ToggleButton`, `ChoiceButtons`, `Skin`) vivono in `shared/ui`; la cache della `Skin` dura quanto l'`Editor`.
+
+## 11. Decisioni aperte
+
+- **Formato delle immagini della skin** (filmstrip delle manopole, pulsanti, @2x) e copia degli asset nel bundle: da fissare con le grafiche definitive. Il linguaggio visivo comune è in `docs/DESIGN_SYSTEM.md` e va allineato all'editor attuale (pannello rack, livelli, usura, retro con Settings e Credits, testo in inglese).
+- Nota nei docs sul fatto che la traccia Voice si legge circa 4 dB sotto il picco (README e CONTROLS).
+- Arrotondamento di 1 px in `attached()` con fattori di scala non esatti; `attached()` che riporta successo dopo un `open()` fallito; supporto alla rotellina del mouse.
+- Polling a 30 ms contro scritture a 16 ms (alcuni estremi si perdono), reset dell'accumulatore alla riattivazione, visibilità dei simboli, `build.sh` su cartella pulita, dipendenze Linux nel README.
+- Verifica manuale in Reaper e Cubase (apertura e chiusura ripetute, automazione, undo, Sync, HiDPI, display con voce vera) e build su Windows e macOS.
+
