@@ -42,11 +42,11 @@
 - Produces: in `params.h` nuovi `DisplayID` dopo `kDispEcho`: `kDispInL, kDispInR, kDispOutL, kDispOutR, kDispClipIn, kDispClipOut, kClearClips` (tutti in sola lettura e nascosti, tranne `kClearClips` scrivibile e nascosto); picchi normalizzati con `meterNormFromDb(db, -60, 0)`, clip 0/1. In `Engine`: `struct LevelValues { float inL, inR, outL, outR; bool clipIn, clipOut; }; LevelValues lastLevels() const; void clearClips();` (ingresso misurato prima di tutto, uscita dopo Mix e Bypass, clip se |x| ≥ 1.0 con hold di 2 s di tempo audio).
 - Riusa `DisplayAccumulator` e `DisplayRateLimiter` (massimo tra due scritture da 16 ms).
 
-- [ ] **Step 1: Test:** `test_levels_silence_is_floor`; `test_levels_in_out_peaks_follow_signal` (sinusoide -12 dBFS entro ±1.5 dB, canali diversi danno valori diversi); `test_levels_out_after_mix_and_bypass` (Mix 0 e Bypass portano l'uscita a seguire l'ingresso; l'uscita non include l'eco con Mix 0); `test_clip_at_exactly_one_and_hold_2s`; `test_clip_clear`; `test_level_ids_do_not_collide_and_not_in_state`; `test_levels_accumulator_holds_peaks`.
-- [ ] **Step 2: Eseguire, verificare il fallimento.**
-- [ ] **Step 3: Implementare** in `Engine`/`Processor`/`Controller` (registrazione read-only/hidden; `kClearClips` scrivibile e azzerato dal processor), senza allocazioni.
-- [ ] **Step 4: Eseguire i test del plugin.** Expected: PASS.
-- [ ] **Step 5: Commit** `feat(pillow-talk): publish input/output peaks and clip flags`.
+- [x] **Step 1: Test:** `test_levels_silence_is_floor`; `test_levels_in_out_peaks_follow_signal` (sinusoide -12 dBFS entro ±1.5 dB, canali diversi danno valori diversi); `test_levels_out_after_mix_and_bypass` (Mix 0 e Bypass portano l'uscita a seguire l'ingresso; l'uscita non include l'eco con Mix 0); `test_clip_at_exactly_one_and_hold_2s`; `test_clip_clear`; `test_level_ids_do_not_collide_and_not_in_state`; `test_levels_accumulator_holds_peaks`.
+- [x] **Step 2: Eseguire, verificare il fallimento.**
+- [x] **Step 3: Implementare** in `Engine`/`Processor`/`Controller` (registrazione read-only/hidden; `kClearClips` scrivibile e azzerato dal processor), senza allocazioni.
+- [x] **Step 4: Eseguire i test del plugin.** Expected: PASS.
+- [x] **Step 5: Commit** `feat(pillow-talk): publish input/output peaks and clip flags`.
 
 ---
 

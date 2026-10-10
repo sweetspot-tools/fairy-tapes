@@ -53,6 +53,15 @@ struct DisplayValues {
   float echoDb = -120.f;   // peak of the echo at the output (after ducking and Mix), dB
 };
 
+// LEVEL block data. Peaks in dB (floor -120) over the last process() call; the input is measured
+// before anything else, the output after Mix and Bypass. A clip flag is set by any |sample| >= 1.0
+// and held for kClipHoldSeconds of audio time (or until Engine::clearClips()).
+struct LevelValues {
+  float inL = -120.f, inR = -120.f, outL = -120.f, outR = -120.f;
+  bool clipIn = false, clipOut = false;
+};
+constexpr double kClipHoldSeconds = 2.0;
+
 // Allows one display write per kDisplayIntervalMs of audio time; the first block writes.
 constexpr double kDisplayIntervalMs = 16.0;
 class DisplayRateLimiter {
@@ -93,6 +102,28 @@ private:
   DisplayValues acc_;
 };
 
+// Holds the extremes seen between two display writes: max of the peaks, OR of the clip flags.
+class LevelAccumulator {
+public:
+  void add(const LevelValues& l) {
+    acc_.inL = std::max(acc_.inL, l.inL);
+    acc_.inR = std::max(acc_.inR, l.inR);
+    acc_.outL = std::max(acc_.outL, l.outL);
+    acc_.outR = std::max(acc_.outR, l.outR);
+    acc_.clipIn = acc_.clipIn || l.clipIn;
+    acc_.clipOut = acc_.clipOut || l.clipOut;
+  }
+  LevelValues take() {
+    const LevelValues r = acc_;
+    acc_ = LevelValues{};
+    return r;
+  }
+  void clearClips() { acc_.clipIn = acc_.clipOut = false; }
+
+private:
+  LevelValues acc_;
+};
+
 class Engine {
 public:
   // Allocates all buffers; never allocates afterwards.
@@ -106,6 +137,14 @@ public:
 
   // Display values of the last process() call (peaks over that call); no allocation.
   DisplayValues lastDisplay() const { return display_; }
+  // Input/output peaks of the last process() call and the held clip flags; no allocation.
+  LevelValues lastLevels() const {
+    LevelValues l = levels_;
+    l.clipIn = clipInLeft_ > 0;
+    l.clipOut = clipOutLeft_ > 0;
+    return l;
+  }
+  void clearClips() { clipInLeft_ = clipOutLeft_ = 0; }
 
 private:
   void processChunk(const float* inL, const float* inR, const float* scL, const float* scR,
@@ -119,6 +158,9 @@ private:
   bool mixInit_ = false;
   DisplayValues display_;
   float voicePeak_ = 0.f, echoPeak_ = 0.f;
+  float inPeakL_ = 0.f, inPeakR_ = 0.f, outPeakL_ = 0.f, outPeakR_ = 0.f;
+  LevelValues levels_;
+  long long clipInLeft_ = 0, clipOutLeft_ = 0, clipHoldSamples_ = 96000;
 };
 
 } // namespace FairyTapes::PillowTalk

@@ -904,7 +904,7 @@ void test_display_ids_do_not_collide() {
   ASSERT_TRUE(kMeterBase >= (Steinberg::Vst::ParamID)kNumParams);
   ASSERT_TRUE(kDispVoice == kMeterBase);
   ASSERT_TRUE(kDispSend == kMeterBase + 1 && kDispEcho == kMeterBase + 2);
-  ASSERT_TRUE(kNumDisplayIDs == kMeterBase + 3);
+  ASSERT_TRUE(kNumDisplayIDs == kMeterBase + 10);
 }
 
 void test_display_not_in_state() {
@@ -989,6 +989,168 @@ void test_display_accumulator_holds_extremes_between_writes() {
   ASSERT_APPROX(publishedSend, 0.05);
   const DisplayValues r = acc.take();  // reset after publishing
   ASSERT_TRUE(r.voiceDb <= -120.f && r.echoDb <= -120.f && r.sendGain == 1.f);
+}
+
+// ---- Task 1 (editor v1): LEVEL block data ---------------------------------------------
+void test_levels_silence_is_floor() {
+  Engine e;
+  e.prepare(kSr, 512);
+  e.setSettings(echoSettings());
+  const Buf z(4800, 0.f);
+  runEngine(e, z, z, nullptr);
+  const auto l = e.lastLevels();
+  ASSERT_TRUE(l.inL <= -100.f && l.inR <= -100.f && l.outL <= -100.f && l.outR <= -100.f);
+  ASSERT_TRUE(!l.clipIn && !l.clipOut);
+}
+
+void test_levels_in_out_peaks_follow_signal() {
+  Engine e;
+  e.prepare(kSr, 512);
+  e.setSettings(echoSettings(0.f));
+  const Buf l = sine(4800, 1000.0, (float)std::pow(10.0, -12.0 / 20.0));
+  const Buf r = sine(4800, 1000.0, (float)std::pow(10.0, -24.0 / 20.0));
+  runEngine(e, l, r, nullptr);
+  const auto lv = e.lastLevels();
+  ASSERT_TRUE(std::fabs(lv.inL + 12.f) <= 1.5f);
+  ASSERT_TRUE(std::fabs(lv.inR + 24.f) <= 1.5f);
+  ASSERT_TRUE(lv.inL > lv.inR + 6.f);
+  ASSERT_TRUE(std::fabs(lv.outL + 12.f) <= 1.5f);
+  ASSERT_TRUE(std::fabs(lv.outR + 24.f) <= 1.5f);
+}
+
+void test_levels_out_after_mix_and_bypass() {
+  const float amp = (float)std::pow(10.0, -12.0 / 20.0);
+  // Mix 0: output follows the input and carries no echo once the input stops.
+  Engine e;
+  e.prepare(kSr, 512);
+  Settings st = echoSettings(0.f);
+  st.feedback = 0.7f;
+  e.setSettings(st);
+  const Buf s = sine(4800, 440.0, amp);
+  runEngine(e, s, s, nullptr);
+  ASSERT_TRUE(std::fabs(e.lastLevels().outL - e.lastLevels().inL) <= 0.5f);
+  const Buf z((size_t)kSr, 0.f);
+  float outMax = -120.f;
+  for (size_t i = 0; i + 512 <= z.size(); i += 512) {
+    Buf o(512);
+    e.process(z.data(), z.data(), nullptr, nullptr, o.data(), o.data(), 512);
+    outMax = std::max(outMax, e.lastLevels().outL);
+  }
+  ASSERT_TRUE(outMax <= -100.f);
+  // Mix 1 would show the echo: the same input after Mix 1 reads on the output (sanity of the test).
+  Engine w;
+  w.prepare(kSr, 512);
+  w.setSettings(echoSettings(1.f));
+  runEngine(w, s, s, nullptr);
+  float echoMax = -120.f;
+  for (size_t i = 0; i + 512 <= z.size(); i += 512) {
+    Buf o(512);
+    w.process(z.data(), z.data(), nullptr, nullptr, o.data(), o.data(), 512);
+    echoMax = std::max(echoMax, w.lastLevels().outL);
+  }
+  ASSERT_TRUE(echoMax > -50.f);
+  // Bypass: once the mix has ramped to 0 the output follows the input.
+  Engine b;
+  b.prepare(kSr, 512);
+  Settings bs = echoSettings(1.f);
+  b.setSettings(bs);
+  runEngine(b, s, s, nullptr);
+  bs.bypass = true;
+  b.setSettings(bs);
+  const Buf long_ = sine(9600, 440.0, amp);
+  runEngine(b, long_, long_, nullptr);
+  ASSERT_TRUE(std::fabs(b.lastLevels().outL - b.lastLevels().inL) <= 0.5f);
+}
+
+void test_clip_at_exactly_one_and_hold_2s() {
+  Engine e;
+  e.prepare(kSr, 512);
+  e.setSettings(echoSettings(0.f));
+  Buf x(512, 0.f);
+  x[10] = 0.9999f;
+  Buf o(512);
+  e.process(x.data(), x.data(), nullptr, nullptr, o.data(), o.data(), 512);
+  ASSERT_TRUE(!e.lastLevels().clipIn && !e.lastLevels().clipOut);
+  x[10] = 1.0f;
+  e.process(x.data(), x.data(), nullptr, nullptr, o.data(), o.data(), 512);
+  ASSERT_TRUE(e.lastLevels().clipIn && e.lastLevels().clipOut);
+  const Buf z(512, 0.f);
+  auto runFor = [&](double seconds) {
+    for (int i = 0; i < (int)(seconds * kSr / 512); ++i)
+      e.process(z.data(), z.data(), nullptr, nullptr, o.data(), o.data(), 512);
+  };
+  runFor(1.8);
+  ASSERT_TRUE(e.lastLevels().clipIn && e.lastLevels().clipOut);
+  runFor(0.4);
+  ASSERT_TRUE(!e.lastLevels().clipIn && !e.lastLevels().clipOut);
+  // Negative full scale clips too, on the right channel only.
+  Buf n(512, 0.f);
+  n[3] = -1.0f;
+  e.process(z.data(), n.data(), nullptr, nullptr, o.data(), o.data(), 512);
+  ASSERT_TRUE(e.lastLevels().clipIn);
+}
+
+void test_clip_clear() {
+  Engine e;
+  e.prepare(kSr, 512);
+  e.setSettings(echoSettings(0.f));
+  Buf x(512, 0.f);
+  x[0] = 1.5f;
+  Buf o(512);
+  e.process(x.data(), x.data(), nullptr, nullptr, o.data(), o.data(), 512);
+  ASSERT_TRUE(e.lastLevels().clipIn && e.lastLevels().clipOut);
+  e.clearClips();
+  ASSERT_TRUE(!e.lastLevels().clipIn && !e.lastLevels().clipOut);
+  const Buf z(512, 0.f);
+  e.process(z.data(), z.data(), nullptr, nullptr, o.data(), o.data(), 512);
+  ASSERT_TRUE(!e.lastLevels().clipIn && !e.lastLevels().clipOut);
+}
+
+void test_levels_process_does_not_allocate() {
+  Engine e;
+  e.prepare(kSr, 512);
+  e.setSettings(echoSettings());
+  const Buf in = sine(4096, 440.0, 1.2f);
+  Buf o(4096);
+  g_allocs = 0;
+  g_countAllocs = true;
+  for (int i = 0; i < 4096; i += 512) {
+    e.process(in.data() + i, in.data() + i, nullptr, nullptr, o.data() + i, o.data() + i, 512);
+    (void)e.lastLevels();
+  }
+  e.clearClips();
+  g_countAllocs = false;
+  ASSERT_TRUE(g_allocs == 0);
+}
+
+void test_level_ids_do_not_collide_and_not_in_state() {
+  ASSERT_TRUE(kDispInL == kMeterBase + 3 && kDispInR == kMeterBase + 4);
+  ASSERT_TRUE(kDispOutL == kMeterBase + 5 && kDispOutR == kMeterBase + 6);
+  ASSERT_TRUE(kDispClipIn == kMeterBase + 7 && kDispClipOut == kMeterBase + 8);
+  ASSERT_TRUE(kClearClips == kMeterBase + 9);
+  ASSERT_TRUE(kClearClips < kNumDisplayIDs && kNumDisplayIDs == kMeterBase + 10);
+  ASSERT_TRUE(kDispInL >= (Steinberg::Vst::ParamID)kNumParams);
+  ASSERT_TRUE((int)kNumParams == 16 && kStateSize == sizeof(int32_t) + sizeof(double) * 16);
+}
+
+void test_levels_accumulator_holds_peaks() {
+  LevelAccumulator acc;
+  LevelValues a;
+  a.inL = -30.f; a.inR = -40.f; a.outL = -50.f; a.outR = -60.f;
+  LevelValues b;
+  b.inL = -6.f; b.inR = -90.f; b.outL = -80.f; b.outR = -3.f; b.clipIn = true;
+  LevelValues c = a;
+  acc.add(a);
+  acc.add(b);
+  acc.add(c);
+  const LevelValues r = acc.take();
+  ASSERT_APPROX(r.inL, -6.0);
+  ASSERT_APPROX(r.inR, -40.0);
+  ASSERT_APPROX(r.outL, -50.0);
+  ASSERT_APPROX(r.outR, -3.0);
+  ASSERT_TRUE(r.clipIn && !r.clipOut);
+  const LevelValues z = acc.take();  // reset after taking
+  ASSERT_TRUE(z.inL <= -120.f && z.outR <= -120.f && !z.clipIn && !z.clipOut);
 }
 
 void test_history_order_before_full() {
@@ -1126,6 +1288,14 @@ int main() {
   RUN_TEST(test_display_write_rate_limit);
   RUN_TEST(test_display_echo_is_measured_after_ducking);
   RUN_TEST(test_display_accumulator_holds_extremes_between_writes);
+  RUN_TEST(test_levels_silence_is_floor);
+  RUN_TEST(test_levels_in_out_peaks_follow_signal);
+  RUN_TEST(test_levels_out_after_mix_and_bypass);
+  RUN_TEST(test_clip_at_exactly_one_and_hold_2s);
+  RUN_TEST(test_clip_clear);
+  RUN_TEST(test_levels_process_does_not_allocate);
+  RUN_TEST(test_level_ids_do_not_collide_and_not_in_state);
+  RUN_TEST(test_levels_accumulator_holds_peaks);
   RUN_TEST(test_history_order_before_full);
   RUN_TEST(test_history_wraps_oldest_first);
   RUN_TEST(test_history_zero_capacity_is_safe);
