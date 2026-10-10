@@ -1,5 +1,7 @@
 # The Stripper — UI assets & dimensions
 
+> **Superato (2026-10-10).** L'editor è disegnato dal codice, 1000 × 628, senza asset obbligatori: vedi la spec `docs/superpowers/specs/2026-10-09-the-stripper-completion-design.md` §4 e `docs/DESIGN_SYSTEM.md`. L'unico asset è la tessera di grana `assets/panel_grain.png` (generata da `tools/gen_panel_grain.py`). Le dimensioni e i PNG qui sotto restano solo come riferimento storico.
+
 Bozze grafiche per l’editor del plugin. Rispetta queste specifiche per integrazione nel codice.
 
 ---

@@ -342,32 +342,23 @@ The **compression** stage uses **Multi-Comp** (Dusk Audio, GPL-3.0). The **EQ** 
 
 ## 4. SSL 360 Link compatibility (requirement)
 
-**Goal:** The Stripper must be **100% compatible** with mapping in **SSL 360 Link** (application that maps external plugins to SSL mixers). Some plugins map easily, others do not; we target full compatibility.
+**Goal:** The Stripper must work well when hosted in **SSL 360 Link** (the SSL plug-in that hosts third-party VST3 plug-ins and maps their parameters to the UC1, UF8 and UF1 controllers and to the 360 Plug-in Mixer).
 
-**What we need to establish:**
+### 4.1 What SSL documents (researched 2026-10-10)
 
-1. **How SSL 360 Link discovers and maps plugins**
-   - Does it scan standard VST3 paths only?
-   - Any extra registration or manifest (e.g. specific XML, plugin list file)?
-   - Any SSL SDK or “certified” plugin program?
+Sources: [SSL 360 Link – User Guide](https://support.solidstatelogic.com/hc/en-gb/articles/17183407536285-SSL-360-Link-User-Guide) (including the release notes up to v1.1.7, November 2024) and [SSL 360 Link: How 3rd Party Plug-ins can send Gain Reduction Metering Data to UC1](https://support.solidstatelogic.com/hc/en-gb/articles/26329849372317-SSL-360-Link-How-3rd-Party-Plug-ins-can-send-Gain-Reduction-Metering-Data-to-UC1) (28 May 2025).
 
-2. **What makes a plugin “mappable”**
-   - VST3 parameter layout (e.g. parameter count, naming, order)?
-   - Specific parameter IDs or host automation conventions?
-   - Required VST3 interfaces or behaviors (e.g. IEditController, IComponentHandler)?
+- **No SDK, certification or registration.** Hosted plug-ins are found by scanning the user's VST3 folders; mapping of generic VST3 parameters to 360 controls is done entirely on the SSL side, by the user (factory maps exist only for some popular plug-ins). Buttons can be inverted and can cycle through more than two states, so the inverted polarity of our IN buttons (parameter `kBypass*`, lit = bypass 0) is mappable.
+- **Format:** only **VST3** is hosted. Link supports up to **stereo** input/output and a mono or stereo sidechain, no MIDI.
+- **Gain reduction metering** (UC1 5-segment Comp/Gate meter) works only if the plug-in exposes it, in one of two ways: **read-only VST3 parameters** (`kIsReadOnly`, recommended by SSL, any number of lanes: e.g. one for compression, one for gate), or the PreSonus `IGainReductionInfo` extension (one value per plug-in). Value encoding for parameters: a 0…1 float, **0 = no gain reduction, 1 = full scale reduced to silence**; Link computes `dB = 20 * log10(1 - value)`. The plug-in applies its own ballistics. Meters appear under "ASSIGNABLE METERING DATA" in Link's mapping tab.
+- Not documented: whether parameters flagged `kIsHidden` are listed; naming or ordering rules for parameters.
 
-3. **Where to find the rules**
-   - SSL developer portal or support (“SSL 360 Link plugin compatibility”, “SSL 360 Link developer”).
-   - Official list of “supported” or “tested” plugins and any published requirements.
-   - SSL 360 Link manual or FAQ for “adding” or “mapping” third-party plugins.
+### 4.2 What The Stripper does
 
-**Action:**
-
-- Search for: **“SSL 360 Link” + “plugin compatibility” / “developer” / “SDK” / “supported plugins”**.
-- If SSL provides a checklist or SDK, implement every required item (parameters, IDs, behavior).
-- Once we have concrete requirements, add a subsection here (e.g. “4.1 SSL 360 Link requirements”) and track implementation in the codebase.
-
-Until we have official or reliable sources, assume: **strict VST3 compliance** (correct parameter info, stable IDs, no optional behavior that could break host automation) and **clear, stable parameter names** to improve mapping in any host or controller app.
+- Stereo VST3 only, stable parameter IDs (frozen table), clear parameter names.
+- **`Compressor Gain Reduction` and `Limiter Gain Reduction`** are read-only, **visible** (not hidden) parameters in the encoding above, with the plug-in's own ballistics (instant attack, 60 dB/s release) already applied. The other meter parameters are hidden (the hidden flag is not needed by SSL).
+- Not done: a **gate** gain-reduction lane (Denoise exposes no read-out), and `IGainReductionInfo` (read-only parameters cover the same need with more lanes).
+- **To verify with the real software:** that Link lists both parameters under assignable meter data and that the dB values look right. No test against SSL 360 Link has been made.
 
 ---
 

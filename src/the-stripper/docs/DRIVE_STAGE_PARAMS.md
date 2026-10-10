@@ -82,7 +82,8 @@ Stereo in (L, R)
 
 ## 5. State version
 
-- **v7** (current): `kDriveAmount` is the only Drive parameter. `kNumParams` = 33.
+- **v8** (current): adds `kLimiterPound`, `kGateThreshold` (`kNumParams` = 35) and the model path (UTF-8 string with length, empty = no model); the model is restored on load. `state.h` reads v1…v8.
+- **v7**: `kDriveAmount` is the only Drive parameter. `kNumParams` = 33.
 - **v6** (previous): Had `kDriveAmount`, `kDriveOutput`, `kDriveMix` (35 params). Migration: positions 33 and 34 are skipped when loading v6 states.
 - **v5** and earlier: No Drive params. `kDriveAmount` defaults to 0.0 on migration.
 
@@ -90,4 +91,4 @@ Stereo in (L, R)
 
 ## 6. GPU acceleration (planned)
 
-The NAM inference currently runs on CPU via `NeuralAmpModelerCore`. GPU acceleration via `gpuaudio-sdk` is planned as the next step. The `NamDrive` interface is designed to accommodate a GPU backend without changing the processor integration.
+`NamDrive` lives in `shared/nam_drive` (NeuralAmpModelerCore v0.6.0) and loads models asynchronously (`requestLoad`); the audio thread swaps the model between blocks. The CUDA path of `gpu_nam` falls back to a CPU stub; it has not been verified on a machine with an NVIDIA driver.

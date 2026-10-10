@@ -150,6 +150,19 @@ void test_global_bypass_is_transparent_and_only_input_output_clip() {
   h.close();
 }
 
+void test_compressor_gain_reduction_uses_the_ssl_encoding() {
+  Host h; CHECK(h.open());
+  MockChanges c; c.set(kCompressAmount, 1.0);
+  h.block(0.7f, &c);
+  for (int i = 0; i < 200; ++i) h.block(0.7f);
+  const double v = h.last(kMeterGrComp);
+  CHECK(v > 0.0 && v < 1.0);                     // compressing: some reduction, never the full-scale 1.0
+  const double db = -20.0 * std::log10(1.0 - v); // what SSL 360 Link shows
+  CHECK(db > 0.05 && db < 40.0);                 // this steady square wave is only lightly compressed
+  CHECK(std::fabs(v - (1.0 - std::pow(10.0, -db / 20.0))) < 1e-9);
+  h.close();
+}
+
 void test_clear_clips_request() {
   Host h; CHECK(h.open());
   for (int i = 0; i < 40; ++i) h.block(1.5f);
@@ -168,6 +181,7 @@ int main() {
   if (stat(THE_STRIPPER_MODULE, &st) != 0) { std::printf("SKIP: module not built: %s\n", THE_STRIPPER_MODULE); return kSkip; }
   test_meters_are_published_at_most_every_16ms();
   test_global_bypass_is_transparent_and_only_input_output_clip();
+  test_compressor_gain_reduction_uses_the_ssl_encoding();
   test_clear_clips_request();
   std::printf(g_failed ? "Processor meter tests FAILED\n" : "Processor meter tests OK\n");
   return g_failed ? 1 : 0;

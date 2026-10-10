@@ -24,7 +24,7 @@ Da FEATURES.md: layout della strip, stage bypassabili, due modalità (Channel / 
 
 ## 2. Parametri attuali (implementati)
 
-Fonte: `params.h` + `controller.cpp` + uso in `processor.cpp`. Totale: **32** parametri (`kNumParams`).
+Fonte: `params.h` + `controller.cpp` + uso in `processor.cpp`. Totale: **35** parametri (`kNumParams`), più i parametri di meter da `kMeterBase = 1000` (vedi [CONTROLS.md](CONTROLS.md)).
 
 | ID (nome interno) | Titolo (host) | Unità | Plugin/stage |
 |-------------------|---------------|-------|--------------|
@@ -51,8 +51,11 @@ Fonte: `params.h` + `controller.cpp` + uso in `processor.cpp`. Totale: **32** pa
 | kEqHMGain, kEqHMFreq, kEqHMQ | EQ HM Gain/Freq/Q | dB, Hz, — | 4K-EQ Mid High |
 | kEqHFGain, kEqHFFreq, kEqHFBell | EQ HF Gain/Freq/Bell | dB, Hz, — | 4K-EQ High |
 | kEqSaturation | EQ Saturation | % | 4K-EQ |
+| kDriveAmount | Drive Amount | — | Drive (NAM) |
+| kLimiterPound | Limiter Pound | — | Limiter (BlockParty) |
+| kGateThreshold | Gate Threshold | — | Gate (Denoise) |
 
-Nessun parametro esposto per: **Drive** (oltre bypass), **Limiter** (oltre bypass), **Gate** (oltre bypass). Solo/Mute per band non previsti (UI semplificata, §1.1). kEqType rimosso; kEqSaturation ha scalato posizione.
+Solo/Mute per banda non previsti. `kEqType` è stato rimosso (il tipo deriva da Strip Mode).
 
 ---
 

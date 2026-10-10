@@ -80,6 +80,20 @@ void test_clip_hold_2s_and_clear() {
   c.clear(); CHECK(!c.lit());
 }
 
+void test_ssl_gain_reduction_encoding() {
+  // SSL 360 Link: 0 = no reduction, 1 = full scale reduced to silence, dB = 20 * log10(1 - value)
+  CHECK_NEAR(grValueFromDb(0.0), 0.0, 1e-12);
+  CHECK_NEAR(grValueFromDb(-5.0), 0.0, 1e-12);          // negative reduction is none
+  CHECK_NEAR(grValueFromDb(6.0206), 0.5, 1e-4);         // half the amplitude
+  CHECK_NEAR(grValueFromDb(20.0), 0.9, 1e-12);
+  CHECK(grValueFromDb(300.0) < 1.0);                    // never exactly 1: the dB conversion stays finite
+  CHECK(grValueFromDb(std::nan("")) == 0.0);
+  for (double db : {0.5, 3.0, 12.0, 20.0}) CHECK_NEAR(grDbFromValue(grValueFromDb(db)), db, 1e-9);
+  CHECK_NEAR(grDbFromValue(0.0), 0.0, 1e-12);
+  CHECK(std::isfinite(grDbFromValue(1.0)) && grDbFromValue(1.0) > 100.0);
+  CHECK_NEAR(grDbFromValue(std::nan("")), 0.0, 1e-12);
+}
+
 void test_gain_reduction_math() {
   GainReductionMeter g; g.prepare(kSr);
   CHECK_NEAR(g.update(0.5f, 0.5f, kBlock), 0.0, 1e-6);     // nothing removed
@@ -153,6 +167,7 @@ int run_meter_tests() {
   test_peakmeter_reset();
   test_clip_detects_at_exactly_one();
   test_clip_hold_2s_and_clear();
+  test_ssl_gain_reduction_encoding();
   test_gain_reduction_math();
   test_gr_zero_when_not_compressing_and_positive_when_compressing();
   test_meter_ids_do_not_collide_with_params();

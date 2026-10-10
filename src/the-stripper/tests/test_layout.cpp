@@ -5,6 +5,7 @@
 #include "ui/layout.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <set>
 
@@ -143,6 +144,14 @@ void test_meter_dimming() {
   CHECK(kClips[0].alwaysLit && kClips[5].alwaysLit);
   for (int i = 1; i < 5; ++i) CHECK(!kClips[i].alwaysLit);
 }
+void test_gr_bar_norm() {
+  CHECK(grBarNorm(0.0, 20) == 0.0);
+  CHECK(grBarNorm(std::nan(""), 20) == 0.0);
+  CHECK(std::fabs(grBarNorm(0.9, 20) - 1.0) < 1e-9);          // 20 dB on a 20 dB scale
+  CHECK(std::fabs(grBarNorm(1.0 - std::pow(10.0, -10.0 / 20.0), 20) - 0.5) < 1e-9);   // 10 dB -> half
+  CHECK(grBarNorm(0.99, 20) == 1.0);                           // beyond the scale: full
+  CHECK(grBarNorm(0.5, 0) == 0.0);
+}
 } // namespace
 
 int main() {
@@ -157,6 +166,7 @@ int main() {
   test_mode_visibility();
   test_meter_band_fits_level_box();
   test_meter_dimming();
+  test_gr_bar_norm();
   if (g_failed) { std::fprintf(stderr, "%d check(s) failed\n", g_failed); return 1; }
   std::puts("test_layout: ok");
   return 0;
