@@ -82,6 +82,7 @@ function pick(R,arr){return arr[Math.floor(R()*arr.length)];}
 function blob(R,cx,cy,rx,ry,n){var pts=[];for(var i=0;i<n;i++){var a=i/n*Math.PI*2,k=rnd(R,.55,1.15);pts.push((cx+Math.cos(a)*rx*k).toFixed(1)+','+(cy+Math.sin(a)*ry*k).toFixed(1));}return pts.join(' ');}
 function wear(L,R,amt,face){
   if(!amt)return;
+  L.style.pointerEvents='none';
   var n=function(c){return Math.round(c*amt);};
   var TL=el('g',{},L);  /* handwriting on the tape: kept above ALL tape pieces (re-appended last) */
   var st=el('g',{filter:'url(#wb)'},L);
@@ -113,7 +114,7 @@ function wear(L,R,amt,face){
   var tp=face?0:n(1)+(R()<.5?1:0),TI=0;
   for(var t=0;t<tp;t++){
     var tx=rnd(R,70,900),ty=rnd(R,110,560),tw=rnd(R,58,96),th=rnd(R,19,26),rot=rnd(R,-9,9);
-    var tr='translate('+tx.toFixed(1)+' '+ty.toFixed(1)+') rotate('+rot.toFixed(1)+')',g=el('g',{transform:tr},L),gt=el('g',{transform:tr},TL);
+    var tr='translate('+tx.toFixed(1)+' '+ty.toFixed(1)+') rotate('+rot.toFixed(1)+')',g=el('g',{transform:tr},L),gt=el('g',{transform:tr},TL);g.style.pointerEvents='all';gt.style.pointerEvents='all';
     var pts=['0,'+rnd(R,0,2.5).toFixed(1)];
     for(var k=1;k<=4;k++)pts.push((tw*k/4).toFixed(1)+','+rnd(R,-1.2,1.2).toFixed(1));
     for(var q=0;q<=5;q++)pts.push((tw+rnd(R,-3,3)).toFixed(1)+','+(th*q/5).toFixed(1));
@@ -198,7 +199,7 @@ function withNum(f,n){f.num=n;return f;}
 /* the three tape fonts (all open): thin nervous scribble, rough marker, fountain-pen cursive */
 var TAPEFONTS={'Zeyada':1.45,'Rock Salt':.78,'Homemade Apple':.8};
 var TAPEFONT=lsGet('st_tapefont','Zeyada');if(!(TAPEFONT in TAPEFONTS))TAPEFONT='Zeyada';
-var HWTXT=[],HW=lsGet('st_hw','0')==='1',NORM={};
+var HWTXT=[],HW=lsGet('st_hw','1')==='1',NORM={};
 /* every handwriting font draws digits at a different size: scale each one so its digit height equals the standard text (x1.3 for legibility) */
 function digitAscent(weight,family){var c=document.createElement('canvas').getContext('2d');c.font=weight+' 100px '+family;return c.measureText('0123456789').actualBoundingBoxAscent/100||.7;}
 function computeNorm(){var a0=digitAscent('bold',FONT);Object.keys(TAPEFONTS).forEach(function(f){NORM[f]=a0/digitAscent('normal',"'"+f+"',cursive")*1.3;});}
@@ -206,6 +207,75 @@ function applyHW(){var f="'"+TAPEFONT+"',cursive",k=NORM[TAPEFONT]||TAPEFONTS[TA
   HWTXT.forEach(function(h){var t=h[0];if(HW){t.setAttribute('font-family',f);t.setAttribute('font-size',(h[1]*k).toFixed(1));t.setAttribute('font-weight',400);}else{t.setAttribute('font-family',FONT);t.setAttribute('font-size',h[1]);t.setAttribute('font-weight',700);}});}
 (document.fonts&&document.fonts.load?Promise.all(Object.keys(TAPEFONTS).map(function(n){return document.fonts.load("20px '"+n+"'","0123 Hz dB");})):Promise.resolve()).then(function(){computeNorm();applyHW();fitName();}).catch(function(){});
 var TAPETXT=(function(){try{var o=JSON.parse(lsGet('st_tape','{}'));return(o&&typeof o==='object')?o:{};}catch(e){return {};}})();
+/* ===== controls: turned aluminium with a black anodised finish (The Stripper) =====
+   Worn edges sit on the finger side (lower right); grime gathers at the base of each knob and in the gap around each button;
+   specks are either dirt (browns) or scratched paint (greys). All of it is crisp and opaque, and follows the Wear setting live. */
+function litNoise(id,freq,oct,scale,elev,k,dark,seed){var f=el('filter',{id:id,x:0,y:0,width:'100%',height:'100%','color-interpolation-filters':'sRGB'},defs);
+  el('feTurbulence',{type:'fractalNoise',baseFrequency:freq,numOctaves:oct,seed:seed,result:'n'},f);
+  var l=el('feDiffuseLighting',{in:'n',surfaceScale:scale,diffuseConstant:1,'lighting-color':'#fff',result:'l'},f);el('feDistantLight',{azimuth:235,elevation:elev},l);
+  el('feColorMatrix',{in:'l',type:'matrix',values:dark?'0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  '+(-k)+' 0 0 0 '+(0.5*k):'0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  '+k+' 0 0 0 '+(-0.5*k)},f);}
+litNoise('grL',0.85,3,1.6,55,1.5,false,3);litNoise('grD',0.85,3,1.6,55,1.6,true,3);
+litNoise('pitL',0.35,2,2.2,50,1.2,false,11);litNoise('pitD',0.35,2,2.2,50,1.3,true,11);
+(function(){var g=el('radialGradient',{id:'sheen',cx:'33%',cy:'28%',r:'85%'},defs);[[0,'#fff',.13],[.45,'#fff',.02],[1,'#000',.38]].forEach(function(t){el('stop',{offset:t[0],'stop-color':t[1],'stop-opacity':t[2]},g);});})();
+/* texture and wear on the controls sit lightly over the base colour: every texture layer is semi-transparent (TV) */
+var TV=.25;
+function AC(){return A;}
+var ALU={base:'#232427',hi:'#3c3d41',bare:'#c9cbd0',inlay:'#d4d1c5'};
+function speck(g,x,y,rad,R){var kind=R(),col=kind<.5?['#6a5a38','#54472d','#3a2f1d','#7a6a46','#4a3d27'][R()*5|0]:['#8d8d90','#a2a2a6','#6f6f73','#b4b4b8'][R()*4|0];el('circle',{cx:x,cy:y,r:rad,fill:col},g);}
+function sblobG(R,cx,cy,rx,ry,k){var P=[],i;for(i=0;i<k;i++){var an=i/k*Math.PI*2,m=rnd(R,.62,1.18);P.push([cx+Math.cos(an)*rx*m,cy+Math.sin(an)*ry*m]);}
+  var d='M'+P[0][0].toFixed(1)+' '+P[0][1].toFixed(1);for(i=0;i<k;i++){var p0=P[(i+k-1)%k],p1=P[i],p2=P[(i+1)%k],p3=P[(i+2)%k];d+=' C'+(p1[0]+(p2[0]-p0[0])/6).toFixed(1)+' '+(p1[1]+(p2[1]-p0[1])/6).toFixed(1)+' '+(p2[0]-(p3[0]-p1[0])/6).toFixed(1)+' '+(p2[1]-(p3[1]-p1[1])/6).toFixed(1)+' '+p2[0].toFixed(1)+' '+p2[1].toFixed(1);}return d+'Z';}
+function arcPath(cx,cy,r,a0,a1){var p0=[cx+Math.cos(a0)*r,cy+Math.sin(a0)*r],p1=[cx+Math.cos(a1)*r,cy+Math.sin(a1)*r];return 'M'+p0[0].toFixed(2)+' '+p0[1].toFixed(2)+' A'+r+' '+r+' 0 '+((a1-a0)>Math.PI?1:0)+' 1 '+p1[0].toFixed(2)+' '+p1[1].toFixed(2);}
+function dynGroup(parent,fn){var q=el('g',{opacity:(parent&&parent._noTV)?1:TV},parent);GRIME.push(function(){while(q.firstChild)q.removeChild(q.firstChild);fn(q);});GRIME[GRIME.length-1]();return q;}
+function aluKnob(g,cx,cy,R,idx){
+  var s=R/56,Zf=Math.max(.35,s),Z=function(v){return v*Zf;},m=ALU,seed=ctrlSeed(idx);
+  /* grime where the knob meets the panel: ragged opaque patches, more of them toward the bottom, plus specks */
+  dynGroup(g,function(q){if(!A)return;var r=mulberry32(seed^0x11),rg=el('g',{filter:'url(#rgh)'},q),i;
+    for(i=0;i<Math.round(26*AC());i++){var a=rnd(r,0,6.2832),down=.35+.65*Math.pow(Math.sin(a)*.5+.5,1.5);if(r()>down)continue;var d=rnd(r,1.04,1.3)*R;el('path',{d:sblobG(r,cx+Math.cos(a)*d,cy+Math.sin(a)*d,Z(rnd(r,2,8)),Z(rnd(r,1.2,3.6)),7),fill:r()<.7?'#0c0a07':'#17130d'},rg);}
+    for(i=0;i<Math.round(14*AC());i++){var a2=rnd(r,0,6.28),d2=rnd(r,1.04,1.34)*R;speck(q,cx+Math.cos(a2)*d2,cy+Math.sin(a2)*d2,Z(rnd(r,.4,1.1)),r);}});
+  el('circle',{cx:cx+R*.05,cy:cy+R*.16,r:R*1.02,fill:'#000',opacity:.85,filter:'url(#ks)'},g);                                   /* contact shadow */
+  el('circle',{cx:cx,cy:cy,r:R*1.1,fill:'#0e0e0f'},g);el('circle',{cx:cx,cy:cy,r:R*1.1,fill:'none',stroke:m.hi,'stroke-width':Z(1.1),opacity:.55,transform:'translate(-.6 -.7)'},g);   /* skirt */
+  el('circle',{cx:cx,cy:cy,r:R,fill:m.base},g);
+  var cp=el('clipPath',{id:'ka'+idx},defs);el('circle',{cx:cx,cy:cy,r:R},cp);
+  var body=el('g',{'clip-path':'url(#ka'+idx+')',opacity:TV},g);
+  dynGroup(body,function(q){if(!A)return;[['grL','#fff',.09*AC()],['grD','#000',.22],['pitL','#fff',.07*AC()],['pitD','#000',.2]].forEach(function(f){el('rect',{x:cx-R,y:cy-R,width:2*R,height:2*R,fill:f[1],filter:'url(#'+f[0]+')',opacity:f[2]},q);});});
+  var nr=Math.round(36*Math.max(.5,s));for(var q=1;q<=nr;q++){el('circle',{cx:cx,cy:cy,r:R*q/nr*.97,fill:'none',stroke:(q%2?'#fff':'#000'),'stroke-width':Z(.5),opacity:q%2?.06:.12},body);}   /* turning marks */
+  el('circle',{cx:cx,cy:cy,r:R*.93,fill:'none',stroke:'#8f9196','stroke-width':Z(2.2),opacity:.45,transform:'translate(-.5 -.6)'},body);   /* chamfer */
+  el('circle',{cx:cx,cy:cy,r:R,fill:'url(#sheen)',opacity:.7},g);
+  /* worn edge: chipped bands (crisp outer edge, ragged inner boundary) on the finger side, bare metal showing; tiny dents */
+  dynGroup(g,function(q){if(!A)return;var r=mulberry32(seed^0x33),bias=.78+rnd(r,-.25,.25),wg=el('g',{filter:'url(#rgh)'},q),i,k;
+    for(i=0;i<Math.round(40*AC());i++){var a3=rnd(r,0,6.2832),wt=Math.pow(Math.cos((a3-bias)/2),2),p=.05+.6*wt;if(r()>p)continue;var len=rnd(r,.03,.14)*(.5+wt),steps=3+(len*40|0),pts=[];
+      for(k=0;k<=steps;k++){var an=a3+len*k/steps;pts.push((cx+Math.cos(an)*R*.997).toFixed(2)+','+(cy+Math.sin(an)*R*.997).toFixed(2));}
+      for(k=steps;k>=0;k--){var an2=a3+len*k/steps,dp=(k===0||k===steps)?.004:rnd(r,.01,.075)*(.45+wt);pts.push((cx+Math.cos(an2)*R*(1-dp)).toFixed(2)+','+(cy+Math.sin(an2)*R*(1-dp)).toFixed(2));}
+      el('polygon',{points:pts.join(' '),fill:m.bare,opacity:rnd(r,.6,.95)},wg);}
+    for(i=0;i<Math.round(4*AC());i++){var a4=rnd(r,0,6.2832),px=cx+Math.cos(a4)*R*.985,py=cy+Math.sin(a4)*R*.985;el('circle',{cx:px,cy:py,r:Z(rnd(r,.8,1.6)),fill:'#050505'},q);el('circle',{cx:px-.4*s,cy:py-.5*s,r:Z(.7),fill:m.bare,opacity:.7},q);}});
+  el('circle',{cx:cx,cy:cy,r:R-.5,fill:'none',stroke:'#fff','stroke-width':Z(.8),opacity:.08,transform:'translate(-.5 -.6)'},g);el('circle',{cx:cx,cy:cy,r:R-.3,fill:'none',stroke:'#000','stroke-width':Z(1),opacity:.6,transform:'translate(.5 .7)'},g);
+  /* residue and specks on the cap (dirt = browns, scratched paint = greys) */
+  dynGroup(g,function(q){if(!A)return;var r=mulberry32(seed^0x44),rs=el('g',{filter:'url(#rgh)','clip-path':'url(#ka'+idx+')'},q),i;
+    for(i=0;i<Math.round(3*AC());i++){var a5=rnd(r,0,6.28),d5=rnd(r,.25,.8)*R,col=['#34302a','#2a251d','#3d3a36','#2f2a20'][r()*4|0];el('path',{d:sblobG(r,cx+Math.cos(a5)*d5,cy+Math.sin(a5)*d5,R*rnd(r,.06,.2),R*rnd(r,.04,.12),8),fill:col,transform:'rotate('+rnd(r,0,180).toFixed(0)+' '+(cx+Math.cos(a5)*d5)+' '+(cy+Math.sin(a5)*d5)+')'},rs);}
+    for(i=0;i<Math.round(16*AC());i++){var a6=rnd(r,0,6.28),d6=Math.sqrt(r())*R*.95;speck(q,cx+Math.cos(a6)*d6,cy+Math.sin(a6)*d6,Z(rnd(r,.3,.9)),r);}});
+  /* pointer: a groove with an inlay that is worn through in places; drawn pointing right and rotated by the caller */
+  var pg=el('g',{},g);pg._noTV=true;
+  el('line',{x1:cx+R*.3,y1:cy,x2:cx+R*.86,y2:cy,stroke:'#000','stroke-width':Z(4.6),'stroke-linecap':'round',opacity:.28},pg);
+  /* inlay: a clean mark; wear = a few dull stretches (the grey-black of the cap showing through the cream) and one or two tiny nicks */
+  dynGroup(pg,function(q){var r=mulberry32(seed^0x55),ih=Z(3.2),i,n;
+    el('rect',{x:cx+R*.3,y:cy-ih/2,width:R*.56,height:ih,rx:ih*.2,fill:m.inlay},q);
+    for(i=0,n=A?3+(r()*2|0):0;i<n;i++){var c0=rnd(r,.06,.8),w=rnd(r,.12,.32);el('rect',{x:cx+R*(.3+.56*c0),y:cy-ih/2,width:R*.56*Math.min(w,1-c0),height:ih,fill:m.base,opacity:rnd(r,.4,.62)},q);}
+    for(i=0,n=A?2+(r()*2|0):0;i<n;i++){var k0=rnd(r,.1,.9);el('rect',{x:cx+R*(.3+.56*k0),y:cy-ih/2,width:R*.56*Math.min(rnd(r,.03,.06),1-k0),height:ih,fill:'#0c0c0d'},q);}});
+  return pg;
+}
+function aluBtnGap(g,x,y,w,h,idx){dynGroup(g,function(q){if(!A)return;var r=mulberry32(ctrlSeed(idx)^0x22);el('rect',{x:x-1.6,y:y-1.6,width:w+3.2,height:h+3.2,rx:3.6,fill:'#0b0a08',filter:'url(#rgh)'},q);
+  for(var i=0;i<Math.round(14*AC());i++){var side=r()<.5,px=side?x+rnd(r,-3,w+3):(r()<.5?x-rnd(r,1,3.5):x+w+rnd(r,1,3.5)),py=side?(r()<.5?y-rnd(r,1,3.5):y+h+rnd(r,1,3.5)):y+rnd(r,-3,h+3);speck(q,px,py,rnd(r,.3,.9),r);}});}
+function aluBtnOverlay(face,x,y,w,h,idx){
+  var cp=el('clipPath',{id:'ba'+idx},defs);el('rect',{x:x,y:y,width:w,height:h,rx:2},cp);var body=el('g',{'clip-path':'url(#ba'+idx+')',opacity:TV},face);
+  dynGroup(body,function(q){if(!A)return;[['grL','#fff',.45*Math.min(1,AC())],['grD','#000',.45],['pitD','#000',.3]].forEach(function(f){el('rect',{x:x,y:y,width:w,height:h,fill:f[1],filter:'url(#'+f[0]+')',opacity:f[2]},q);});});
+  el('rect',{x:x+.6,y:y+.6,width:w-1.2,height:h-1.2,rx:1.8,fill:'none',stroke:'#fff','stroke-width':1,opacity:.28,transform:'translate(-.3 -.4)'},face);
+  el('rect',{x:x+.5,y:y+.5,width:w-1,height:h-1,rx:1.8,fill:'none',stroke:'#000','stroke-width':1.2,opacity:.4,transform:'translate(.7 .9)'},face);
+  dynGroup(face,function(q){if(!A)return;var r=mulberry32(ctrlSeed(idx)^0x66),wg=el('g',{filter:'url(#rgh)'},q),bare='#e0e2e6',i;
+    [[x,y],[x+w,y],[x,y+h],[x+w,y+h]].forEach(function(cn,ci){if(r()>(ci===3?.95:ci===2?.65:.45)*Math.min(1,AC()+.2))return;var sx=cn[0]===x?1:-1,sy=cn[1]===y?1:-1,L=rnd(r,w*.1,w*.3);el('path',{d:'M'+(cn[0]+sx*L).toFixed(1)+' '+cn[1].toFixed(1)+' Q'+cn[0].toFixed(1)+' '+cn[1].toFixed(1)+' '+cn[0].toFixed(1)+' '+(cn[1]+sy*L*.8).toFixed(1),fill:'none',stroke:bare,'stroke-width':rnd(r,.9,1.8),'stroke-linecap':'butt'},wg);});
+    for(i=0;i<Math.round(4*AC());i++){var ex=x+rnd(r,w*.05,w*.95),L2=rnd(r,w*.06,w*.22);el('line',{x1:ex,y1:y+h-.5,x2:ex+L2,y2:y+h-.5,stroke:bare,'stroke-width':rnd(r,.6,1.1),opacity:.9},wg);}
+    for(i=0;i<Math.round(3*AC());i++){var sx0=x+rnd(r,0,w),sy0=y+rnd(r,0,h);el('line',{x1:sx0,y1:sy0,x2:sx0+rnd(r,-w*.4,w*.4),y2:sy0+rnd(r,-h*.3,h*.3),stroke:'#fff',opacity:rnd(r,.12,.3),'stroke-width':.3},q);}
+    for(i=0;i<Math.round(8*AC());i++)speck(q,x+rnd(r,1,w-1),y+rnd(r,1,h-1),rnd(r,.25,.7),r);});
+}
 /* soft shadow under a raised part; pressed parts get a shorter, tighter shadow */
 function pressShadow(g,x,y,w,h,rx){var sh=el('rect',{x:x,y:y,width:w,height:h,rx:rx,fill:'#000'},g);var fc=el('g',{},g);
   return {face:fc,paint:function(on){sh.setAttribute('transform','translate(0,'+(on?1.5:5)+')');sh.setAttribute('filter','url(#'+(on?'bp':'bs')+')');sh.setAttribute('opacity',on?.55:.9);fc.setAttribute('transform','translate(0,'+(on?1.5:0)+')');}};}
@@ -238,8 +308,8 @@ function box(x,y,w,h,title,where){
 /* square grey button with LED underneath */
 function btn(cx,cy,label,on,cb,ledCol){
   var g=el('g',{style:'cursor:pointer'});
-  var ps=pressShadow(g,cx-12,cy-11,24,22,2);
-  el('rect',{x:cx-12,y:cy-11,width:24,height:22,rx:2,fill:'#8e8e91',stroke:'#b8b8bb'},ps.face);grimeRect(ps.face,cx-12,cy-11,24,22,++CTRL);
+  var bi=++CTRL;aluBtnGap(g,cx-12,cy-11,24,22,bi);var ps=pressShadow(g,cx-12,cy-11,24,22,2);
+  el('rect',{x:cx-12,y:cy-11,width:24,height:22,rx:2,fill:'#9a9ca1',stroke:'#b8b8bb'},ps.face);aluBtnOverlay(ps.face,cx-12,cy-11,24,22,bi);
   var led=el('circle',{cx:cx,cy:cy+21,r:3.4,stroke:'#000','stroke-width':.6},g);
   /* printed label: panel layer (below the tape); it follows its module / the global bypass for dimming */
   var lg=el('g',{transform:'translate(0,'+OFFY+')'},LY.scale);lg.style.transition='opacity .15s';txt(label,cx,cy-17,11,W,'middle',800,lg);g._lg=lg;if(CUR){(CUR._x=CUR._x||[]).push(lg);}
@@ -255,16 +325,14 @@ function knob(cx,cy,label,v,lo,hi,sub,opt){
   var sg=el('g',{transform:'translate(0,'+OFFY+')'},LY.scale);sg.style.transition='opacity .15s';if(CUR){(CUR._x=CUR._x||[]).push(sg);}
   for(var i=0;i<=10;i++){var a=polar(cx,cy,R+9,225-270*i/10);el('circle',{cx:a[0],cy:a[1],r:i%5===0?1.9:1.2,fill:W},sg);}
   var ex0=(R+9)*0.7071,ey0=cy+ex0+3.5;txt(lo,cx-ex0-6,ey0,8,W,'end',700,sg);txt(hi,cx+ex0+6,ey0,8,W,'start',700,sg);
-  el('circle',{cx:cx,cy:cy+5.5,r:R+1,fill:'#000',opacity:.9,filter:'url(#ks)'},g);
-  el('circle',{cx:cx,cy:cy,r:R,fill:'#1a1a1c',stroke:'#4a4a4e','stroke-width':1},g);
-  grimeKnob(g,cx,cy,R,++CTRL);
-  var ind=el('line',{stroke:W,'stroke-width':2.4,'stroke-linecap':'butt'},g);
+  var pg=aluKnob(g,cx,cy,R,++CTRL);
   var hit=el('circle',{cx:cx,cy:cy,r:R+14,fill:'transparent'},g);
   txt(label,cx,cy+R+24,12,W,'middle',800,sg);
-  var subT=txt(sub||'',cx,cy+R+39.5,10,AMBL,'middle',700,g);HWTXT.push([subT,10]);
+  /* the yellow value readout lives on the panel layer too: scratches, stains and tape lie over it (clicks still reach it, see wear()) */
+  var vg=el('g',{transform:'translate(0,'+OFFY+')'},LY.scale);vg.style.transition='opacity .15s';if(CUR){(CUR._x=CUR._x||[]).push(vg);}
+  var subT=txt(sub||'',cx,cy+R+39.5,10,AMBL,'middle',700,vg);HWTXT.push([subT,10]);
   function draw(){
-    var ang=225-270*v,a=polar(cx,cy,R*0.35,ang),b=polar(cx,cy,R-2,ang);
-    ind.setAttribute('x1',a[0]);ind.setAttribute('y1',a[1]);ind.setAttribute('x2',b[0]);ind.setAttribute('y2',b[1]);
+    var ang=225-270*v;pg.setAttribute('transform','rotate('+(-ang)+' '+cx+' '+cy+')');
     if(opt.fmt)subT.textContent=opt.fmt(v);
   }
   draw();var y0=0,v0=0,drag=false,def=(opt.def!==undefined?opt.def:v);
@@ -350,8 +418,8 @@ knob(ex[10],352,'SATURATE',0.2,'0','10','',{def:0,fmt:num,r:22});
 function bellBtn(cx,cy){
   var g=el('g',{style:'cursor:pointer'});
   el('title',{},g).textContent='Bell filter (off = shelf)';
-  var ps=pressShadow(g,cx-13,cy-9,26,18,2);
-  var r=el('rect',{x:cx-13,y:cy-9,width:26,height:18,rx:2,stroke:'#b8b8bb'},ps.face);
+  var bi=++CTRL;aluBtnGap(g,cx-13,cy-9,26,18,bi);var ps=pressShadow(g,cx-13,cy-9,26,18,2);
+  var r=el('rect',{x:cx-13,y:cy-9,width:26,height:18,rx:2,stroke:'#b8b8bb'},ps.face);aluBtnOverlay(ps.face,cx-13,cy-9,26,18,bi);
   var ic=el('path',{d:'M'+(cx-9)+' '+(cy+4)+' H'+(cx-5)+' C'+(cx-2)+' '+(cy+4)+' '+(cx-3)+' '+(cy-5)+' '+cx+' '+(cy-5)+' C'+(cx+3)+' '+(cy-5)+' '+(cx+2)+' '+(cy+4)+' '+(cx+5)+' '+(cy+4)+' H'+(cx+9),fill:'none','stroke-width':1.8,'stroke-linecap':'round','stroke-linejoin':'round'},ps.face);
   g._on=false;g._paint=function(o){r.setAttribute('fill',o?AMBL:'#8e8e91');ic.setAttribute('stroke',o?'#2a1d05':'#1a1a1c');ps.paint(o);};
   g._paint(false);g.addEventListener('click',function(){g._on=!g._on;g._paint(g._on);});
@@ -386,7 +454,7 @@ el('title',{},nam).textContent='Click to choose a NAM model';
   for(var f=0;f<6;f++)el('line',{x1:rnd(R,0,NW*.3),x2:rnd(R,NW*.6,NW),y1:rnd(R,2,NH-2),y2:rnd(R,2,NH-2),stroke:'#8f8560',opacity:rnd(R,.08,.2),'stroke-width':.5},tg);
   window.NAMT=el('text',{x:12,y:NH*.68,'text-anchor':'start',fill:'#2b2620'},tg);})();
 /* GPU icon: sits to the left of the module IN button, dims with the module (it is part of the Drive group) */
-(function(){var c=el('g',{transform:'translate(625 508)'});el('title',{},c).textContent='GPU inference active';var C='#7c7c80',i;
+(function(){var c=el('g',{transform:'translate(619 511)'});el('title',{},c).textContent='GPU inference active';var C='#5d5d62',i;
   for(i=0;i<3;i++){el('rect',{x:9+i*4,y:5,width:1.4,height:2.6,fill:C},c);el('rect',{x:9+i*4,y:20.4,width:1.4,height:2.6,fill:C},c);el('rect',{x:5,y:10+i*3.6,width:2.6,height:1.4,fill:C},c);el('rect',{x:20.4,y:10+i*3.6,width:2.6,height:1.4,fill:C},c);}
   el('rect',{x:7.6,y:7.8,width:12.8,height:12.4,rx:1.3,fill:'none',stroke:C,'stroke-width':1.3},c);el('rect',{x:11.5,y:11.8,width:5,height:4.5,fill:C},c);})();
 var NAMMAX=NW-12-12;
