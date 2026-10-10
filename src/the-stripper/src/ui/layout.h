@@ -116,6 +116,44 @@ struct EqBand {
 constexpr double kEqBandRuleY = 306;
 constexpr EqBand kEqBands[] = {{"LF", 42, 162}, {"LM", 204, 440}, {"HM", 448, 684}, {"HF", 692, 812}};
 
+// Level box: LED rows (peak meters, then gain reduction) and the clip LEDs (spec 4.1).
+constexpr int kMeterLeds = 15;
+constexpr double kMeterLeft = 489, kMeterPitch = 18, kMeterBarHeight = 8;
+constexpr double kMeterLabelX = 486;   // row tags (L/R/C), right-aligned just left of the bars
+struct MeterRow {
+  Steinberg::Vst::ParamID id;
+  double cy;
+  const char* tag;
+  bool gainReduction;
+  bool alwaysLit;   // stays at full light under the global bypass
+};
+constexpr MeterRow kMeterRows[] = {
+    {kMeterInL, 114, "L", false, true},    {kMeterInR, 128, "R", false, true},
+    {kMeterOutL, 156, "L", false, true},   {kMeterOutR, 170, "R", false, true},
+    {kMeterGrComp, 194, "C", true, false}, {kMeterGrLimiter, 208, "L", true, false},
+};
+constexpr Rect meterBarRect(const MeterRow& row) {
+  return {kMeterLeft, row.cy - kMeterBarHeight / 2, kMeterPitch * kMeterLeds, kMeterBarHeight};
+}
+
+struct ClipSpec {
+  Steinberg::Vst::ParamID id;
+  const char* label;
+  bool alwaysLit;
+};
+constexpr int kClipCount = 6;
+constexpr ClipSpec kClips[kClipCount] = {{kClipInput, "IN", true}, {kClipEq, "EQ", false}, {kClipComp, "CMP", false},
+                                         {kClipDrive, "DRV", false}, {kClipLimiter, "LIM", false},
+                                         {kClipOutput, "OUT", true}};
+constexpr double kClipRowY = 232, kClipFirstX = 502, kClipStep = 44;   // LED centre of the first, pitch
+constexpr Rect clipRect(int index) { return {kClipFirstX + index * kClipStep - 4.4, kClipRowY - 8, 40, 16}; }
+
+// Section tags printed left of the rows (amber) and the dB scale under the output rows (dim white).
+constexpr double kMeterScaleY = 146;
+constexpr int kMeterScaleDb[] = {-60, -48, -36, -24, -18, -12, -6, 0};   // one label per LED at most (no overlap)
+
+inline bool meterDimmed(bool alwaysLit, bool globalBypass) { return globalBypass && !alwaysLit; }
+
 inline const ControlSpec* inButtonOf(Module m) {
   for (const auto& c : kControls)
     if (c.isIn && c.module == m) return &c;

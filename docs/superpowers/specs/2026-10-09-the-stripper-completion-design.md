@@ -7,7 +7,7 @@
 ## 0. Avanzamento (2026-10-10)
 
 - **Fatto:** pacchetto VST3 corretto (factory, bundle Windows/macOS); `NamDrive` estratto in `shared/nam_drive` e compilato con NAM v0.6.0 (49 test su 49, CUDA non verificato); default dell'HPF a 20 Hz.
-- **Editor (in corso):** layout, binding e attenuazione dei moduli fatti (8a); mancano meter (8b), striscia del modello e popup (8c), grana, usura, nastro, retro, viti (Task 6, 10-14). I controlli hanno ancora l'aspetto vecchio.
+- **Editor (in corso):** layout, binding, attenuazione dei moduli e fascia dei meter fatti (8a, 8b); mancano striscia del modello e popup (8c), grana, usura, nastro, retro, viti (Task 6, 10-14). I controlli hanno ancora l'aspetto vecchio.
 - **Solo design (nelle preview HTML):** il resto dell'interfaccia (§3.1, §4).
 - **Da implementare (piano):** caricamento asincrono del modello, nuovi parametri e stato v8, meter, messaggi del modello, editor VSTGUI e relative extra (Task 2-5 e 7-14 del piano).
 - **Decisioni aperte:** vedi §11.

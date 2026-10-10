@@ -12,6 +12,9 @@
 #include "vstgui/lib/cgradient.h"
 #include "vstgui/lib/cgraphicspath.h"
 
+#include <cmath>
+#include <string>
+
 namespace FairyTapes::TheStripper::Ui {
 
 using namespace VSTGUI;
@@ -22,6 +25,7 @@ constexpr CColor kTint(0x16, 0x16, 0x17);
 constexpr CColor kEdge(0x2c, 0x2c, 0x2f);
 constexpr CColor kWhite(0xf4, 0xf4, 0xf0);
 constexpr CColor kDimWhite(0xc9, 0xc9, 0xc2);
+constexpr CColor kAmber(0xf0, 0xb4, 0x29);
 constexpr char kGrainTile[] = "panel_grain.png";   // optional 256 x 256 tile (tools/gen_panel_grain.py)
 
 constexpr CCoord kPanelRadius = 14;
@@ -71,6 +75,7 @@ PanelView::PanelView(const CRect& size, const FairyTapes::Ui::Skin* skin)
   smallFont_ = makeOwned<CFontDesc>("Arial", 11, kBoldFace);
   taglineFont_ = makeOwned<CFontDesc>("Arial", 13, kBoldFace);
   bandFont_ = makeOwned<CFontDesc>("Arial", 10, kBoldFace);
+  scaleFont_ = makeOwned<CFontDesc>("Arial", 9, kBoldFace);
   setMouseEnabled(false);
 }
 
@@ -137,6 +142,32 @@ void PanelView::draw(CDrawContext* ctx) {
   for (const auto& band : kEqBands) {
     ctx->drawLine(o + CPoint(band.left, kEqBandRuleY), o + CPoint(band.right, kEqBandRuleY));
     ctx->drawString(band.name, o + CPoint((band.left + band.right) / 2 - ctx->getStringWidth(band.name) / 2, kEqBandRuleY - 6));
+  }
+
+  // Level box silkscreen: row tags, section tags, dB scale. (The LEDs themselves are views.)
+  ctx->setFont(smallFont_);
+  ctx->setFontColor(kWhite);
+  for (const auto& row : kMeterRows) {
+    const double w = ctx->getStringWidth(row.tag);
+    ctx->drawString(row.tag, o + CPoint(kMeterLabelX - w, row.cy + 4));
+  }
+  ctx->setFontColor(kAmber);
+  struct Tag {
+    const char* text;
+    double y;
+  };
+  for (const Tag& t : {Tag{"IN", 124}, Tag{"OUT", 166}, Tag{"GR", 204}, Tag{"CLIP", 236}}) {
+    const double w = ctx->getStringWidth(t.text);
+    ctx->drawString(t.text, o + CPoint(464 - w / 2, t.y));
+  }
+  ctx->setFont(scaleFont_);
+  ctx->setFontColor(kDimWhite);
+  const double perLed = 66.0 / (kMeterLeds - 1);
+  for (const int db : kMeterScaleDb) {
+    const int index = static_cast<int>(std::lround((db + 60) / perLed));
+    const std::string text = (db > 0 ? "+" : "") + std::to_string(db);
+    const double w = ctx->getStringWidth(text.c_str());
+    ctx->drawString(text.c_str(), o + CPoint(kMeterLeft + kMeterPitch * (index + 0.5) - w / 2, kMeterScaleY));
   }
 
   ctx->restoreGlobalState();

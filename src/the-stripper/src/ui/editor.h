@@ -15,9 +15,12 @@
 #include "vstgui/lib/cvstguitimer.h"
 
 #include <array>
+#include <chrono>
 
 namespace FairyTapes::Ui {
 class NormalizedControl;
+class MeterBar;
+class ClipLed;
 }
 
 namespace FairyTapes::TheStripper {
@@ -67,6 +70,7 @@ private:
   void onTimer();
   // Copies controller values into the controls (all of them when `force`), then refreshes dimming and mode.
   void syncFromController(bool force);
+  void updateMeters();
   void refreshModules();
   const ControlSpec* specOf(VSTGUI::CControl* control) const;
 
@@ -76,6 +80,10 @@ private:
   std::array<FairyTapes::Ui::NormalizedControl*, kNumParams> controls_{};   // owned by the frame
   std::array<const ControlSpec*, kNumParams> specs_{};
   std::array<double, kNumParams> seen_{};   // controller value last copied into the control
+  std::array<FairyTapes::Ui::MeterBar*, 6> bars_{};   // owned by the frame, in kMeterRows order
+  std::array<FairyTapes::Ui::ClipLed*, kClipCount> clips_{};
+  std::chrono::steady_clock::time_point lastTick_{};
+  bool globalBypass_ = false;
   bool channelMode_ = true;
   VSTGUI::SharedPointer<VSTGUI::CVSTGUITimer> timer_;
 };

@@ -112,6 +112,37 @@ void test_mode_visibility() {
   CHECK(visibleInMode(kCompressAmount, false));
   CHECK(visibleInMode(kEqLFGain, false));
 }
+void test_meter_band_fits_level_box() {
+  const BoxSpec* level = boxOf(Module::Level);
+  CHECK(level != nullptr);
+  for (const auto& row : kMeterRows) {
+    CHECK(row.id >= kMeterBase && row.id < kNumMeterIDs);
+    CHECK(inside(meterBarRect(row), level->rect));
+  }
+  for (int i = 0; i < kClipCount; ++i) {
+    CHECK(kClips[i].id >= kClipInput && kClips[i].id <= kClipOutput);
+    CHECK(inside(clipRect(i), level->rect));
+    for (int j = i + 1; j < kClipCount; ++j) CHECK(!overlaps(clipRect(i), clipRect(j)));
+  }
+  // rows must not touch each other
+  const int n = static_cast<int>(sizeof(kMeterRows) / sizeof(kMeterRows[0]));
+  for (int i = 0; i < n; ++i) {
+    for (int j = i + 1; j < n; ++j) CHECK(!overlaps(meterBarRect(kMeterRows[i]), meterBarRect(kMeterRows[j])));
+    for (int c = 0; c < kClipCount; ++c) CHECK(!overlaps(meterBarRect(kMeterRows[i]), clipRect(c)));
+  }
+}
+
+void test_meter_dimming() {
+  // global bypass dims GR and the EQ/CMP/DRV/LIM clip LEDs; the level meters and the IN/OUT LEDs stay lit
+  for (const auto& row : kMeterRows) {
+    const bool gr = row.id == kMeterGrComp || row.id == kMeterGrLimiter;
+    CHECK(meterDimmed(row.alwaysLit, true) == !row.alwaysLit);
+    CHECK(row.alwaysLit == !gr);
+    CHECK(!meterDimmed(row.alwaysLit, false));
+  }
+  CHECK(kClips[0].alwaysLit && kClips[5].alwaysLit);
+  for (int i = 1; i < 5; ++i) CHECK(!kClips[i].alwaysLit);
+}
 } // namespace
 
 int main() {
@@ -124,6 +155,8 @@ int main() {
   test_ui_value_mapping();
   test_module_dimming();
   test_mode_visibility();
+  test_meter_band_fits_level_box();
+  test_meter_dimming();
   if (g_failed) { std::fprintf(stderr, "%d check(s) failed\n", g_failed); return 1; }
   std::puts("test_layout: ok");
   return 0;

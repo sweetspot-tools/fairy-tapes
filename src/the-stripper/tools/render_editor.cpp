@@ -1,5 +1,5 @@
 // Developer tool: draws the editor offscreen into a PNG, no host or window needed.
-//   the_stripper_render out.png [bypass] [bus] [eq-off] [mix <name>=<0..1> ...]
+//   the_stripper_render out.png [bypass] [bus] [eq-off] [meters]
 // Used to check the look of the code-drawn GUI on a machine without a plugin host.
 #include "controller.h"
 #include "ui/editor.h"
@@ -28,6 +28,7 @@ struct EditorPreview {
     auto root = VSTGUI::makeOwned<VSTGUI::CViewContainer>(VSTGUI::CRect(0, 0, Editor::kWidth, Editor::kHeight));
     ed.createViews(root);
     ed.syncFromController(true);
+    ed.updateMeters();
     auto ctx = VSTGUI::COffscreenContext::create(VSTGUI::CPoint(Editor::kWidth, Editor::kHeight), 1.0);
     if (!ctx) return false;
     ctx->beginDraw();
@@ -55,6 +56,11 @@ int main(int argc, char** argv) {
     if (!std::strcmp(argv[i], "bypass")) ctl.setParamNormalized(kBypass, 1.0);
     else if (!std::strcmp(argv[i], "bus")) ctl.setParamNormalized(kStripMode, 1.0);
     else if (!std::strcmp(argv[i], "eq-off")) ctl.setParamNormalized(kBypassEQ, 1.0);
+    else if (!std::strcmp(argv[i], "meters")) {
+      const double v[][2] = {{kMeterInL, .8}, {kMeterInR, .62}, {kMeterOutL, .7}, {kMeterOutR, .55}, {kMeterGrComp, .4},
+                             {kMeterGrLimiter, .2}, {kClipEq, 1.0}, {kClipOutput, 1.0}};
+      for (const auto& e : v) ctl.setParamNormalized(static_cast<Steinberg::Vst::ParamID>(e[0]), e[1]);
+    }
   }
   return Ui::EditorPreview::render(ctl, argv[1]) ? 0 : 1;
 }

@@ -6,6 +6,7 @@
 
 #include "fairy_ui/controls.h"
 #include "fairy_ui/editor_size.h"
+#include "fairy_ui/meters.h"
 #include "fairy_ui/sanitize.h"
 
 #include "public.sdk/source/vst/utility/stringconvert.h"
@@ -28,6 +29,9 @@ namespace FairyTapes::TheStripper::Ui {
 using namespace VSTGUI;
 using FairyTapes::Ui::AnalogKnob;
 using FairyTapes::Ui::ChoiceButtons;
+using FairyTapes::Ui::ClipLed;
+using FairyTapes::Ui::MeterBar;
+using FairyTapes::Ui::MeterKind;
 using FairyTapes::Ui::NormalizedControl;
 using FairyTapes::Ui::ToggleButton;
 using Steinberg::Vst::ParamID;
@@ -147,6 +151,8 @@ void PLUGIN_API Editor::close() {
     frame = nullptr;
   }
   controls_.fill(nullptr);
+  bars_.fill(nullptr);
+  clips_.fill(nullptr);
   seen_.fill(std::nan(""));
 }
 
@@ -181,9 +187,45 @@ void Editor::createViews(CViewContainer* parent) {
     parent->addView(control);
     controls_[spec.id] = control;
   }
+
+  for (std::size_t i = 0; i < bars_.size(); ++i) {
+    const MeterRow& row = kMeterRows[i];
+    bars_[i] = new MeterBar(toCRect(meterBarRect(row)), row.gainReduction ? MeterKind::GainReduction : MeterKind::Level,
+                            kMeterLeds);
+    parent->addView(bars_[i]);
+  }
+  for (int i = 0; i < kClipCount; ++i) {
+    clips_[i] = new ClipLed(toCRect(clipRect(i)), kClips[i].label);
+    clips_[i]->onClick = [this] {
+      // One click clears every clip LED of the plugin (hidden writable parameter).
+      ctl_->setParamNormalized(kClearClips, 1.0);
+      ctl_->setParamNormalized(kClearClips, 0.0);   // re-arm: the next click is a new edit
+    };
+    parent->addView(clips_[i]);
+  }
 }
 
-void Editor::onTimer() { syncFromController(false); }
+void Editor::onTimer() {
+  syncFromController(false);
+  updateMeters();
+}
+
+// Meter values come from the read-only parameters the processor writes (controller.meterValue()).
+void Editor::updateMeters() {
+  const auto now = std::chrono::steady_clock::now();
+  const double dt = lastTick_.time_since_epoch().count() == 0 ? 0.0 : std::chrono::duration<double>(now - lastTick_).count();
+  lastTick_ = now;
+  for (std::size_t i = 0; i < bars_.size(); ++i) {
+    if (!bars_[i]) continue;
+    bars_[i]->setLevel(ctl_->meterValue(kMeterRows[i].id), dt);
+    bars_[i]->setDimmed(meterDimmed(kMeterRows[i].alwaysLit, globalBypass_));
+  }
+  for (int i = 0; i < kClipCount; ++i) {
+    if (!clips_[i]) continue;
+    clips_[i]->setLit(ctl_->meterValue(kClips[i].id) >= 0.5);
+    clips_[i]->setDimmed(meterDimmed(kClips[i].alwaysLit, globalBypass_));
+  }
+}
 
 void Editor::syncFromController(bool force) {
   bool changed = force;
@@ -205,6 +247,7 @@ void Editor::syncFromController(bool force) {
 void Editor::refreshModules() {
   ModuleState state;
   state.globalBypass = seen_[kBypass] >= 0.5;
+  globalBypass_ = state.globalBypass;
   for (const Module m : kModules) {
     const ControlSpec* in = inButtonOf(m);
     if (in && !std::isnan(seen_[in->id])) state.in[static_cast<int>(m)] = uiValue(in->inverted, seen_[in->id]) >= 0.5;
