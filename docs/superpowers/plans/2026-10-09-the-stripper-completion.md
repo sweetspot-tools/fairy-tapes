@@ -18,7 +18,7 @@
 - [x] Task 4 — meter (picchi in/out, 6 LED di clip per stadio, gain reduction compressore e limiter; parametri di sola lettura da `kMeterBase = 1000`, scritti al massimo ogni 16 ms; `kClearClips` scrivibile). Il guadagno del compressore è letto dai motori (`currentGainReductionDb()`: il rapporto dei picchi non funziona con FET e Bus, che hanno guadagno in ingresso), quello del limiter dal rapporto dei picchi (BlockParty non lo espone). Test: unit (`test_meter.cpp`) e test nel modulo vero con code di parametri simulate (`test_processor_meters.cpp`)
 - [x] Task 5 — messaggi del modello (`messages.h`: `LoadModel` controller → processor, `ModelStatus` processor → controller; stringhe in UTF-8 binario; il processor ripristina il modello dallo stato; `Controller::requestModelLoad/modelName/modelError/modelState`; callback di fine caricamento di `NamDrive`; `requestLoad` con percorso vuoto = nessun modello). Test: messaggi con oggetti finti, `nam_drive` (vuoto e callback) e il modulo vero con host, peer e stream finti. **Da verificare in Reaper/Cubase:** il messaggio di stato parte dal thread di caricamento (non dal thread audio)
 - [ ] Task 6 — tessera di grana
-- [ ] Task 7 — VSTGUI e controlli
+- [x] Task 7 — VSTGUI e controlli: già fatti in `shared/ui` dalla chat di Pillow Talk (VSTGUI nella build e nella CI, `knob_math`, `AnalogKnob`/`ToggleButton`/`ChoiceButtons`, `Skin`); aggiunti `meter_math.h` (LED accesi, colori, peak hold), `MeterBar` e `ClipLed` (`shared/ui`), collegata la libreria a The Stripper. **Resta da fare (Task 8 e 11):** l'aspetto dei controlli condivisi è ancora quello vecchio (arco ambra, disco piatto); va portato al design approvato (scala di puntini, valori di fondo scala, alluminio tornito, usura)
 - [ ] Task 8 — editor (suddiviso in 8a layout/binding, 8b fascia meter, 8c striscia del modello e popup locale)
 - [ ] Task 9 — ricerca SSL 360 Link e docs
 - [ ] Task 10-14 — extra di interfaccia, vedi in fondo (usura, nastro, retro, viti, preferenze)
@@ -210,6 +210,8 @@ git commit -m "feat(the-stripper): add procedural panel grain tile generator"
 
 ### Task 7: Integrazione VSTGUI4 e controlli disegnati dal codice
 
+> **Stato:** quasi tutto esisteva già in `shared/ui` (Pillow Talk). Qui restava solo ciò che mancava per The Stripper (meter e LED di clip). I nomi e i percorsi sotto sono quelli del piano originale; la libreria vera è `shared/ui` (namespace `FairyTapes::Ui`).
+
 **Files:**
 - Modify: `src/the-stripper/CMakeLists.txt`, `.github/workflows/build.yml` (pacchetti di sistema per VSTGUI su Linux)
 - Create: `src/the-stripper/src/ui/knob_math.h`, `src/the-stripper/src/ui/controls.{h,cpp}`
@@ -220,15 +222,15 @@ git commit -m "feat(the-stripper): add procedural panel grain tile generator"
   - `ui/knob_math.h` (senza dipendenze da VSTGUI): `double knobAngleFromNorm(double n)` (da 225° a -45°, rotazione oraria), `double normFromDrag(double startNorm, double dyPixels, bool fine)` (200 px = pieno range, 1/10 in modalità fine), `double normOnDoubleClick(double defaultNorm)` (restituisce il default, clampato a 0..1), `int choiceIndexFromNorm(double n, int count)`, `double normFromChoiceIndex(int i, int count)`, `double meterNormFromDb(double db, double minDb, double maxDb)` (lineare in dB, clamp a 0..1).
   - `ui/controls.h`: `class AnalogKnob : public VSTGUI::CControl`, `class ToggleButton : public VSTGUI::CControl`, `class ChoiceButtons : public VSTGUI::CControl`, `class MeterBar : public VSTGUI::CControl` (barra a LED orizzontale, picco mantenuto, ingresso in dB) e `class ClipLed : public VSTGUI::CControl` (LED che al clic invia l'azzeramento), tutti disegnati con `CDrawContext` (gradienti, ombra, tacche, indicatore) e con il PNG opzionale dalla cartella degli asset se presente.
 
-- [ ] **Step 1: Scrivere i test** per `knob_math.h`: `test_knobAngle_endpoints` (0 → 225°, 1 → -45°, 0.5 → 90°), `test_normFromDrag_clamps_and_fine_mode`, `test_choice_index_roundtrip` (per count 2, 3, 4), `test_double_click_returns_default` (per i default reali di `params.h`; l'HPF torna a 20 Hz e il LPF a 20 kHz), `test_meterNormFromDb` (-60 → 0, +6 → 1, -27 → 0.5 entro 1e-6, fuori range clampato).
-- [ ] **Step 2: Eseguire, verificare il fallimento.**
-- [ ] **Step 3: Implementare `knob_math.h`.**
-- [ ] **Step 4: Aggiungere VSTGUI al CMake** del plugin (sorgenti e include da `vendors/vst3sdk/vstgui4`, librerie di sistema per Linux: X11, xcb, cairo, freetype, fontconfig; framework nativi su macOS e Windows) e i pacchetti `apt` al job Linux del workflow.
-- [ ] **Step 5: Implementare le classi di controllo.** Disegno vettoriale; trascinamento verticale con `normFromDrag`; doppio clic riporta al valore predefinito del parametro (`getDefaultValue()`) come modifica unica annullabile; la modalità fine con il tasto Maiuscolo.
-- [ ] **Step 6: Eseguire test e build del plugin.**
+- [x] **Step 1: Scrivere i test** per `knob_math.h`: `test_knobAngle_endpoints` (0 → 225°, 1 → -45°, 0.5 → 90°), `test_normFromDrag_clamps_and_fine_mode`, `test_choice_index_roundtrip` (per count 2, 3, 4), `test_double_click_returns_default` (per i default reali di `params.h`; l'HPF torna a 20 Hz e il LPF a 20 kHz), `test_meterNormFromDb` (-60 → 0, +6 → 1, -27 → 0.5 entro 1e-6, fuori range clampato).
+- [x] **Step 2: Eseguire, verificare il fallimento.**
+- [x] **Step 3: Implementare `knob_math.h`.**
+- [x] **Step 4: Aggiungere VSTGUI al CMake** del plugin (sorgenti e include da `vendors/vst3sdk/vstgui4`, librerie di sistema per Linux: X11, xcb, cairo, freetype, fontconfig; framework nativi su macOS e Windows) e i pacchetti `apt` al job Linux del workflow.
+- [x] **Step 5: Implementare le classi di controllo.** Disegno vettoriale; trascinamento verticale con `normFromDrag`; doppio clic riporta al valore predefinito del parametro (`getDefaultValue()`) come modifica unica annullabile; la modalità fine con il tasto Maiuscolo.
+- [x] **Step 6: Eseguire test e build del plugin.**
   Run: `cmake --build build --target the_stripper the_stripper_tests && ctest --test-dir build -R the_stripper --output-on-failure`
   Expected: build senza errori, test PASS.
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/the-stripper .github/workflows/build.yml

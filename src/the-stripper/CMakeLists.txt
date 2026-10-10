@@ -104,7 +104,7 @@ endif()
 # Link gpu_nam (GPU NAM inference with automatic CPU-stub fallback).
 # cudart is propagated as a PUBLIC dependency of gpu_nam.
 nam_drive_link(the_stripper)
-target_link_libraries(the_stripper PRIVATE gpu_nam sdk)
+target_link_libraries(the_stripper PRIVATE gpu_nam sdk fairy_ui fairy_ui_widgets)   # shared code-drawn VSTGUI controls (shared/ui)
 if(APPLE)
   target_link_libraries(the_stripper PRIVATE "-framework CoreFoundation")
   target_link_options(the_stripper PRIVATE
