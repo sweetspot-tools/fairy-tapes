@@ -102,6 +102,14 @@ TapeText Controller::tapeText(int index) const {
   return tapeTexts_[static_cast<std::size_t>(index)];
 }
 
+void Controller::rerollWear() {
+  std::random_device rd;
+  std::lock_guard<std::mutex> lk(uiMutex_);
+  const std::uint32_t old = wearSeed_;
+  do wearSeed_ = rd(); while (wearSeed_ == 0 || wearSeed_ == old);
+  tapeTexts_.clear();
+}
+
 void Controller::setTapeText(int index, const std::string& text) {
   if (index < 0 || index >= kMaxTapePieces)
     return;

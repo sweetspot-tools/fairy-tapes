@@ -72,6 +72,7 @@ public:
   std::uint32_t wearSeed() const;
   TapeText tapeText(int index) const;                       // `set` false when never written (or out of range)
   void setTapeText(int index, const std::string& text);     // UTF-8, cut to kMaxTapeTextBytes
+  void rerollWear();                                        // RE-ROLL: a new seed (new wear, dirt, tape) and the writing erased
 
   /** Ask the processor to load a .nam model (UTF-8 path); empty = no model. The editor shows the outcome via the getters below. */
   void requestModelLoad(const std::string& path);

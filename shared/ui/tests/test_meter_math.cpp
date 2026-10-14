@@ -57,6 +57,22 @@ void test_peak_hold_is_nan_safe() {
   h.update(0.5, -1.0);                          // negative time does not break the state
   CHECK(h.hold() >= 0.0 && h.hold() <= 1.0);
 }
+void test_peak_hold_user_settings() {
+  // hold off: the marker is the live value
+  { PeakHold h; h.configure(0.0, 20.0); CHECK(!h.holdEnabled()); h.update(0.8, 0.01); h.update(0.3, 0.01); CHECK(near(h.hold(), 0.3)); }
+  // 3 seconds: held for 3 s, not 1.5
+  { PeakHold h; h.configure(3.0, 20.0); h.update(0.9, 0.01); h.update(0.1, 2.9); CHECK(near(h.hold(), 0.9)); h.update(0.1, 0.5); h.update(0.1, 1.0); CHECK(h.hold() < 0.9); }
+  // forever: never falls, until a higher peak
+  { PeakHold h; h.configure(PeakHold::kForeverSeconds, 20.0); h.update(0.9, 0.01); for (int i = 0; i < 100; ++i) h.update(0.1, 1.0); CHECK(near(h.hold(), 0.9)); h.update(0.95, 0.01); CHECK(near(h.hold(), 0.95)); }
+  // the fall speed: 40 dB/s falls twice as fast as 20 dB/s
+  { PeakHold slow, fast; slow.configure(0.5, 20.0); fast.configure(0.5, 40.0);
+    slow.update(1.0, 0.01); fast.update(1.0, 0.01); slow.update(0.0, 0.5); fast.update(0.0, 0.5);   // the hold runs out
+    slow.update(0.0, 0.5); fast.update(0.0, 0.5);
+    const double ds = 1.0 - slow.hold(), df = 1.0 - fast.hold(); CHECK(df > ds * 1.8 && df < ds * 2.2); }
+  // nonsense settings keep the defaults
+  { PeakHold h; h.configure(std::nan(""), -4.0); CHECK(h.holdEnabled()); h.update(0.5, 0.01); h.update(0.0, 1.0); CHECK(near(h.hold(), 0.5)); }
+}
+
 } // namespace
 
 int main() {
@@ -66,6 +82,7 @@ int main() {
   test_gain_reduction_led_colours();
   test_peak_hold_holds_then_falls();
   test_peak_hold_is_nan_safe();
+  test_peak_hold_user_settings();
   std::printf(g_failed ? "FAILED (%d)\n" : "All meter math tests passed\n", g_failed);
   return g_failed ? 1 : 0;
 }

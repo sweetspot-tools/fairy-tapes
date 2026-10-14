@@ -37,16 +37,33 @@ public:
   static constexpr double kHoldSeconds = 1.5;
   static constexpr double kFallPerSecond = 20.0 / 66.0;
 
+  // User settings (METER HOLD / METER RELEASE): hold time in seconds (0 = no hold marker, >= kForeverSeconds = held until
+  // a higher peak) and the fall in dB per second of the -60..+6 range. Values that are not finite or not positive keep the
+  // defaults.
+  static constexpr double kForeverSeconds = 10.0;
+  void configure(double holdSeconds, double fallDbPerSecond) {
+    holdSeconds_ = (holdSeconds == holdSeconds && holdSeconds >= 0.0) ? holdSeconds : kHoldSeconds;
+    fallPerSecond_ = (fallDbPerSecond == fallDbPerSecond && fallDbPerSecond > 0.0) ? fallDbPerSecond / 66.0 : kFallPerSecond;
+  }
+  bool holdEnabled() const { return holdSeconds_ > 0.0; }
+
   void update(double live, double dtSeconds) {
     const double v = sanitizeNorm(live, 0.0);
     const double dt = (dtSeconds == dtSeconds && dtSeconds > 0.0 && dtSeconds < 10.0) ? dtSeconds : 0.0;
+    if (holdSeconds_ <= 0.0) {   // hold off: the marker is the live value
+      hold_ = v;
+      timeLeft_ = 0.0;
+      return;
+    }
     if (v >= hold_) {
       hold_ = v;
-      timeLeft_ = kHoldSeconds;
+      timeLeft_ = holdSeconds_;
+    } else if (holdSeconds_ >= kForeverSeconds) {
+      // held until a higher peak
     } else if (timeLeft_ > 0.0) {
       timeLeft_ -= dt;
     } else {
-      hold_ -= kFallPerSecond * dt;
+      hold_ -= fallPerSecond_ * dt;
       if (hold_ < v) hold_ = v;
     }
   }
@@ -56,6 +73,8 @@ public:
 private:
   double hold_ = 0.0;
   double timeLeft_ = 0.0;
+  double holdSeconds_ = kHoldSeconds;
+  double fallPerSecond_ = kFallPerSecond;
 };
 
 } // namespace FairyTapes::Ui

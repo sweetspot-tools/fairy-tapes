@@ -5,6 +5,7 @@
 #pragma once
 
 #include "params.h"
+#include "preferences.h"
 #include "state.h"
 #include "ui/layout.h"
 #include "ui/tape_font.h"
@@ -17,6 +18,7 @@
 #include "vstgui/lib/cvstguitimer.h"
 
 #include <array>
+#include <functional>
 #include <memory>
 #include <chrono>
 #include <string>
@@ -26,6 +28,7 @@ class CTextEdit;
 }
 
 namespace FairyTapes::Ui {
+class WearView;
 class NormalizedControl;
 class SilkscreenView;
 class MeterBar;
@@ -38,6 +41,8 @@ class Controller;
 
 namespace FairyTapes::TheStripper::Ui {
 
+class BackView;
+class FlipView;
 class ModelBrowser;
 class ModelStrip;
 class TapePieceView;
@@ -88,6 +93,11 @@ private:
   void updateMeters();
   void updateModel();      // model strip and Drive dimming from the controller's model status
   void openBrowser();
+  void applyAppearance(const Preferences& prefs);   // wear, fonts, meter settings: live, from the back panel
+  void rebuildPieces();                           // the pieces of tape of the current seed, in their place in the layers
+  void startFlip(bool toBack);
+  void finishFlip();
+  void changePreference(const std::function<void(Preferences&)>& mutate);
   void editTape(TapePieceView* piece);   // opens the text field over a piece of tape
   void closeTapeEdit();
   void refreshModules();
@@ -102,6 +112,14 @@ private:
   std::array<FairyTapes::Ui::MeterBar*, kMeterRowCount> bars_{};   // owned by the frame, in kMeterRows order
   std::array<FairyTapes::Ui::ClipLed*, kClipCount> clips_{};
   std::chrono::steady_clock::time_point lastTick_{};
+  VSTGUI::CViewContainer* front_ = nullptr;          // the front of the panel (all views of createViews), owned by the frame
+  BackView* backView_ = nullptr;                     // the back, owned by the frame (hidden until the panel is turned)
+  FlipView* flip_ = nullptr;                         // the turn in progress, owned by the frame
+  VSTGUI::CView* flipFrom_ = nullptr;
+  VSTGUI::CView* flipTo_ = nullptr;
+  std::chrono::steady_clock::time_point flipStart_{};
+  Preferences prefs_;
+  FairyTapes::Ui::WearView* wearView_ = nullptr;     // owned by front_
   FairyTapes::Ui::SilkscreenView* silk_ = nullptr;   // owned by the frame
   bool tapeValues_ = false;                // the values under the knobs are handwritten (preference)
   TapeFontId valuesFont_ = TapeFontId::Zeyada;

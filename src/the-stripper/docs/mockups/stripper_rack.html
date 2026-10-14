@@ -496,29 +496,29 @@ el('rect',{x:2,y:2,width:996,height:624,rx:13,fill:'none',stroke:'#2c2c2f','stro
 LY=layers();addWear(LY.wear,0x77,true);screws(LY.screw);
 var bTitle=txt('CREDITS',34,58,38,W,'start',900,back,true);
 txt('FAIRY TAPES',36,78,11,DIMW,'start',700);
-var PANES={credits:el('g',{},back),settings:el('g',{},back)},BOXES={credits:el('g',{},LY.box),settings:el('g',{},LY.box)},TABEL={};
+var PANES={credits:el('g',{},back),settings:el('g',{},back),buttons:el('g',{},back)},BOXES={credits:el('g',{},LY.box),settings:el('g',{},LY.box),buttons:el('g',{},LY.box)},TABEL={};
 function tabLink(label,key,x){var g=el('g',{style:'cursor:pointer'});el('rect',{x:x-84,y:66,width:86,height:18,fill:'transparent'},g);TABEL[key]=txt(label,x,78,11,DIMW,'end',700,g);g.addEventListener('click',function(){showTab(key);});}
-tabLink('SETTINGS','settings',790);tabLink('CREDITS','credits',880);
+tabLink('SETTINGS','settings',690);tabLink('BUTTONS','buttons',780);tabLink('CREDITS','credits',870);
 var bk=el('g',{style:'cursor:pointer'});el('rect',{x:896,y:66,width:76,height:18,fill:'transparent'},bk);txt('←  BACK',966,78,11,DIMW,'end',700,bk);
 bk.addEventListener('click',function(){document.getElementById('card').classList.remove('flipped');});
-function showTab(k){lsSet('st_tab',k);bTitle.textContent=k.toUpperCase();['credits','settings'].forEach(function(t){PANES[t].style.display=BOXES[t].style.display=(t===k?'':'none');TABEL[t].setAttribute('fill',t===k?W:DIMW);});}
+function showTab(k){lsSet('st_tab',k);bTitle.textContent=k.toUpperCase();['credits','settings','buttons'].forEach(function(t){PANES[t].style.display=BOXES[t].style.display=(t===k?'':'none');TABEL[t].setAttribute('fill',t===k?W:DIMW);});}
 txt('THE STRIPPER  ·  CHANNEL STRIP VST3',966,46,13,W,'end',700);
 
 /* ---- CREDITS tab ---- */
 CUR=PANES.credits;BOXOVR=BOXES.credits;
-box(24,102,952,118,'THE STRIPPER','top');
-txt('Version 1.0.0  ·  Fairy Tapes  ·  github.com/fairy-tapes',50,140,14,W,'start',700);
-txt('Free software: released under the GNU General Public License v3.0 (GPL-3.0), full text in the LICENSE file.',50,164,12,DIMW,'start',700);
-txt('The plugin includes GPL-3.0 components, so the combined work is distributed under the same license.',50,184,12,DIMW,'start',700);
-txt('Source code and build instructions are available in the project repository.',50,204,12,DIMW,'start',700);
-box(24,246,952,252,'COMPONENTS AND LICENSES','top');
-var CRD=[['4K-EQ · Multi-Comp','Dusk Audio','GPL-3.0'],['Airwindows','Chris Johnson','MIT'],['Neural Amp Modeler Core','Steven Atkinson','MIT'],['Eigen','Eigen contributors','MPL-2.0'],['nlohmann/json','Niels Lohmann','MIT'],['VST 3 SDK','Steinberg Media Technologies','MIT'],['VSTGUI','Steinberg Media Technologies','VSTGUI license (BSD)']];
-CRD.forEach(function(c,i){var y=284+i*30;txt(c[0],50,y,14,W,'start',800);txt(c[1],350,y,13,DIMW,'start',700);txt(c[2],950,y,13,AMBL,'end',700);
-  if(i<CRD.length-1)el('path',{d:'M50 '+(y+12)+' H950',stroke:DIMW,'stroke-width':1,opacity:.25});});
-box(24,522,952,88,'NOTICES','top');
+box(24,102,952,100,'THE STRIPPER','top');
+txt('Version 1.0.0  ·  Fairy Tapes  ·  github.com/fairy-tapes',50,136,14,W,'start',700);
+txt('Free software: released under the GNU General Public License v3.0 (GPL-3.0), full text in the LICENSE file.',50,158,12,DIMW,'start',700);
+txt('The plugin includes GPL-3.0 components, so the combined work is distributed under the same license.',50,176,12,DIMW,'start',700);
+txt('Source code and build instructions are available in the project repository.',50,194,12,DIMW,'start',700);
+box(24,220,952,292,'COMPONENTS AND LICENSES','top');
+var CRD=[['4K-EQ · Multi-Comp','Dusk Audio','GPL-3.0'],['Airwindows (BlockParty, DeNoise)','Chris Johnson','MIT'],['Neural Amp Modeler Core','Steven Atkinson','MIT'],['AudioDSPTools','Steven Atkinson','MIT'],['Eigen','Eigen contributors','MPL-2.0'],['nlohmann/json','Niels Lohmann','MIT'],['VST 3 SDK','Steinberg Media Technologies','MIT'],['VSTGUI','Steinberg Media Technologies','BSD-3-Clause'],['Zeyada (tape font)','Kimberly Geswein','OFL-1.1'],['Rock Salt (tape font)','Font Diner','Apache-2.0'],['Homemade Apple (tape font)','Font Diner','Apache-2.0']];
+CRD.forEach(function(c,i){var y=254+i*22;txt(c[0],50,y,13,W,'start',800);txt(c[1],350,y,12,DIMW,'start',700);txt(c[2],950,y,12,AMBL,'end',700);
+  if(i<CRD.length-1)el('path',{d:'M50 '+(y+7)+' H950',stroke:DIMW,'stroke-width':1,opacity:.25});});
+box(24,530,952,80,'NOTICES','top');
 txt('VST is a trademark of Steinberg Media Technologies GmbH, registered in Europe and other countries.',50,556,12,DIMW,'start',700);
-txt('.nam models belong to their authors and each carries its own license.',50,578,12,DIMW,'start',700);
-txt('Third-party names are cited for attribution only.',50,598,12,DIMW,'start',700);
+txt('.nam models belong to their authors and each carries its own license.',50,574,12,DIMW,'start',700);
+txt('Third-party names are cited for attribution only.',50,592,12,DIMW,'start',700);
 
 /* ---- SETTINGS tab: appearance (saved for the user, all projects) and behaviour (saved with the project) ---- */
 CUR=PANES.settings;BOXOVR=BOXES.settings;
@@ -554,6 +554,11 @@ txt('Appearance settings belong to you: they are kept in your preferences and ap
 txt('Behaviour settings change how the plugin works: they are saved in the project, together with the parameters.',50,544,12,DIMW,'start',700);
 txt('The wear layout (scratches, tape, screws) is generated once per instance from a saved seed and never changes by itself.',50,566,12,DIMW,'start',700);
 txt('Double-click on a knob returns it to its neutral default.',50,588,12,DIMW,'start',700);
+/* ---- BUTTONS tab: what the buttons that impose settings do (generated from the layout table in the plug-in) ---- */
+CUR=PANES.buttons;BOXOVR=BOXES.buttons;
+box(24,102,952,508,'WHAT THE BUTTONS DO','top');
+(function(){var E=[["BYPASS", ["Bypasses the whole plug-in."], ["The output equals the input: every module is out, the gain reduction meters are at zero and only the IN and OUT", "clip LEDs stay on. No parameter value is changed; the modules and their IN buttons dim."]], ["CHAN / BUS", ["Chooses the processing: a channel strip (CHAN) or a mix bus (BUS)."], ["CHAN: EQ \"Black\" (G series), compressor character selectable (VOICE, DRUMS, CLASSIC), 4K saturation of the G", "series. BUS: EQ \"Brown\" (E series), 4K saturation of the E series, compressor fixed to the Bus compressor, VOICE", "/ DRUMS / CLASSIC hidden and the Bell buttons out of use. No knob value is changed."]], ["VOICE / DRUMS / CLASSIC", ["Chooses the character of the compressor (CHAN only)."], ["VOICE: OPTO compressor (smooth, program dependent). DRUMS: FET compressor (fast, punchy). CLASSIC: VCA", "compressor (soft knee, all round). Amount and Mix keep their values. In BUS the Bus compressor is always used."]], ["NAM / 4K", ["Chooses what drives the Drive stage."], ["NAM: the loaded .nam model, with the Drive knob as its amount; without a model the signal passes through", "unchanged. 4K: the 4K console saturation, with its own amount on the same knob. Each engine keeps its own knob", "value; the paper strip reads \"4K Saturate\" while 4K is on."]], ["IN", ["Puts a module in or out of the signal path: FILTERS, EQUALISER, COMPRESSION, DRIVE, LIMITER, GATE."], ["Lit: the module is in (its bypass parameter is 0). Off: the module is bypassed (parameter 1) and its controls", "dim. FILTERS has one button for High Pass and Low Pass together. Knob values are not changed."]], ["BELL", ["Chooses the shape of the LF and HF bands of the equaliser."], ["Lit: bell (peak) filter. Off: shelf filter. Only the CHAN equaliser has the bell; in BUS the buttons are out of", "use. The band's frequency and gain are not changed."]], ["NO MODEL", ["Unloads the NAM model (button of the model picker)."], ["The model path is cleared and saved empty. With NAM selected the Drive passes the signal through unchanged. The", "Drive knob value is not changed."]], ["MODEL STRIP", ["The paper strip in the Drive box: click it to pick a .nam model (NAM only)."], ["LOAD loads the chosen file on a separate thread (the audio never stops) and saves its path with the project. A", "file that cannot be loaded shows its error on the strip and the Drive passes the signal through."]]],y=142;
+  E.forEach(function(e){txt(e[0],50,y,13,AMBL,'start',800);var ly=y;e[1].forEach(function(l){txt(l,270,ly,12,W,'start',800);ly+=14;});e[2].forEach(function(l){txt(l,270,ly,11,DIMW,'start',700);ly+=13;});y=Math.max(ly,y+16)+12;});})();
 CUR=null;BOXOVR=null;showTab(lsGet('st_tab','settings'));
 ROOT=svg;
 

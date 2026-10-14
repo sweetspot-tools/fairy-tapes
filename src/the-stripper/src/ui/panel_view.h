@@ -10,6 +10,9 @@ class Skin;
 
 namespace FairyTapes::TheStripper::Ui {
 
+// The panel itself without any text: tint, grain tile (when the skin has it), soft light, edge. Shared by the front and the back.
+void drawPanelBase(VSTGUI::CDrawContext* context, const VSTGUI::CRect& rect, const FairyTapes::Ui::Skin* skin);
+
 class PanelView : public VSTGUI::CView {
 public:
   PanelView(const VSTGUI::CRect& size, const FairyTapes::Ui::Skin* skin);

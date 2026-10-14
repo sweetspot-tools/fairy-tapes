@@ -23,6 +23,8 @@ public:
   void setLevel(double norm, double dtSeconds);
   double level() const { return level_; }
   double hold() const { return peak_.hold(); }
+  // User settings of the peak-hold marker: hold seconds (0 = off, 10 or more = until a higher peak) and fall in dB/s.
+  void setHoldSettings(double holdSeconds, double fallDbPerSecond);
   // Dims the whole bar (a bypassed section).
   void setDimmed(bool dimmed);
 

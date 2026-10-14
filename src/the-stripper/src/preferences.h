@@ -28,6 +28,7 @@ using WearLevel = FairyTapes::Ui::WearLevel;   // shared with the other plug-ins
 enum class NotesLevel { Hide, Show };
 enum class TapeFont { Zeyada, RockSalt, HomemadeApple };
 enum class ValuesFont { Standard, Tape };
+enum class BackTab { Settings, Credits, Buttons };   // the tab of the back panel the user looked at last
 
 constexpr double kMaxMeterHoldSeconds = 10.0;
 constexpr double kMinMeterReleaseDbPerSec = 5.0;
@@ -43,6 +44,7 @@ struct Preferences {
   double meterReleaseDbPerSec = 20.0;   // fall of the level meters
   TapeFont tapeFont = TapeFont::Zeyada;
   ValuesFont valuesFont = ValuesFont::Tape;
+  BackTab backTab = BackTab::Settings;   // the back panel opens on the last tab used
   // false = the user never touched the folder list (the editor proposes its defaults); true = `modelFolders` is the
   // user's list, even when empty.
   bool modelFoldersConfigured = false;
@@ -71,6 +73,7 @@ inline const char* name(WearLevel v) { return v == WearLevel::Off ? "Off" : v ==
 inline const char* name(NotesLevel v) { return v == NotesLevel::Hide ? "Hide" : "Show"; }
 inline const char* name(TapeFont v) { return v == TapeFont::RockSalt ? "RockSalt" : v == TapeFont::HomemadeApple ? "HomemadeApple" : "Zeyada"; }
 inline const char* name(ValuesFont v) { return v == ValuesFont::Standard ? "Standard" : "Tape"; }
+inline const char* name(BackTab v) { return v == BackTab::Credits ? "Credits" : v == BackTab::Buttons ? "Buttons" : "Settings"; }
 
 inline bool usableFolder(const std::string& f) {
   return !f.empty() && f.size() <= kMaxFolderBytes && f.find_first_of(std::string("\n\r\0", 3)) == std::string::npos;
@@ -104,6 +107,10 @@ inline Preferences parsePreferences(const std::string& text) {
     } else if (key == "valuesFont") {
       if (value == "Standard") p.valuesFont = ValuesFont::Standard;
       else if (value == "Tape") p.valuesFont = ValuesFont::Tape;
+    } else if (key == "backTab") {
+      if (value == "Settings") p.backTab = BackTab::Settings;
+      else if (value == "Credits") p.backTab = BackTab::Credits;
+      else if (value == "Buttons") p.backTab = BackTab::Buttons;
     } else if (key == "meterHoldSeconds") {
       if (parseDouble(value, d)) p.meterHoldSeconds = std::clamp(d, 0.0, kMaxMeterHoldSeconds);
     } else if (key == "meterReleaseDbPerSec") {
@@ -128,6 +135,7 @@ inline std::string serializePreferences(const Preferences& p) {
   out << "meterReleaseDbPerSec=" << std::clamp(p.meterReleaseDbPerSec, kMinMeterReleaseDbPerSec, kMaxMeterReleaseDbPerSec) << "\n";
   out << "tapeFont=" << name(p.tapeFont) << "\n";
   out << "valuesFont=" << name(p.valuesFont) << "\n";
+  out << "backTab=" << name(p.backTab) << "\n";
   if (p.modelFoldersConfigured) {
     out << "modelFolders=set\n";
     std::size_t n = 0;

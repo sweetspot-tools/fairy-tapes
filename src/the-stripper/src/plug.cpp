@@ -13,7 +13,8 @@
 #include "pluginterfaces/vst/ivsteditcontroller.h"
 
 #define stringPluginName "The Stripper"
-#define stringVersion "1.0.0"
+#include "version.h"
+#define stringVersion FairyTapes::TheStripper::kPluginVersion
 
 namespace {
 Steinberg::FUnknown* createProcessor(void*) {

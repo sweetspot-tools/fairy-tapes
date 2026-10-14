@@ -16,6 +16,7 @@ public:
   TapePieceView(const TapePiece& piece, int index, TapeFontId font, std::uint32_t seed);
 
   void setText(const std::string& displayed);
+  void setFont(TapeFontId font);
   const std::string& text() const { return text_; }
   int index() const { return index_; }
   // The rectangle of the (unrotated) tape in the view's parent coordinates: where the text field goes.

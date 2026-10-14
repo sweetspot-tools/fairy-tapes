@@ -37,6 +37,12 @@ void TapePieceView::setText(const std::string& displayed) {
   invalid();
 }
 
+void TapePieceView::setFont(TapeFontId font) {
+  if (font_ == font) return;
+  font_ = font;
+  invalid();
+}
+
 CRect TapePieceView::tapeRect() const { return CRect(piece_.x, piece_.y, piece_.x + piece_.w, piece_.y + piece_.h); }
 
 void TapePieceView::draw(CDrawContext* ctx) {

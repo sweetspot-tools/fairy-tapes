@@ -2,6 +2,9 @@
 #include "ui/editor.h"
 
 #include "controller.h"
+#include "ui/back_view.h"
+#include "ui/back_widgets.h"
+#include "ui/flip_view.h"
 #include "ui/model_browser.h"
 #include "ui/model_source.h"
 #include "ui/model_strip.h"
@@ -23,6 +26,7 @@
 
 #include "public.sdk/source/vst/utility/stringconvert.h"
 #include "vstgui/lib/cframe.h"
+#include "vstgui/lib/coffscreencontext.h"
 #include "vstgui/lib/controls/ctextedit.h"
 
 #if SMTG_OS_LINUX
@@ -144,7 +148,24 @@ bool PLUGIN_API Editor::open(void* parent, const PlatformType& platformType) {
 
   frame = new CFrame(CRect(0, 0, kWidth, kHeight), this);
   frame->setBackgroundColor(kFrameBackground);
-  createViews(frame);
+  front_ = new CViewContainer(CRect(0, 0, kWidth, kHeight));
+  createViews(front_);
+  frame->addView(front_);
+  {
+    BackView::Callbacks cb;
+    cb.back = [this] { startFlip(false); };
+    cb.changePreference = [this](const std::function<void(Preferences&)>& mutate) { changePreference(mutate); };
+    cb.reroll = [this] {
+      ctl_->rerollWear();   // a new seed: new wear, dirt and writing
+      rebuildPieces();
+      applyAppearance(prefs_);
+    };
+    cb.manageFolders = [this] { openBrowser(); };
+    backView_ = new BackView(CRect(0, 0, kWidth, kHeight), &skin_, prefs_, std::move(cb));
+    backView_->setVisible(false);
+    frame->addView(backView_);
+    applyAppearance(prefs_);   // the back's wear
+  }
   if (scale_ != 1.0) frame->setZoom(scale_);   // VSTGUIEditor::attached then reports the scaled size
   if (!frame->open(parent, platformType, config)) {
     close();
@@ -171,6 +192,11 @@ void PLUGIN_API Editor::close() {
     frame = nullptr;
   }
   controls_.fill(nullptr);
+  front_ = nullptr;
+  backView_ = nullptr;
+  flip_ = nullptr;
+  flipFrom_ = flipTo_ = nullptr;
+  wearView_ = nullptr;
   silk_ = nullptr;
   pieces_.fill(nullptr);
   tapeEdit_ = nullptr;
@@ -190,9 +216,7 @@ void Editor::createViews(CViewContainer* parent) {
   parent->addView(silk_);
   // The wear: seeded marks over the silkscreen, below the controls. Level from the user preferences (Off adds nothing).
   // The seed is made when the instance is created and saved with the project (controller state), so the wear is always the same.
-  const std::uint32_t seed = ctl_->wearSeed();
   const Preferences prefs = loadPreferences(preferencesPath("TheStripper"));
-  const WearLevel wearLevel = prefs.wear;
   tapeValues_ = prefs.valuesFont == ValuesFont::Tape;
   valuesFont_ = tapeFontIdOf(prefs.tapeFont);
   valuesSeed_ = ctl_->wearSeed();
@@ -207,19 +231,11 @@ void Editor::createViews(CViewContainer* parent) {
                  FairyTapes::Ui::kAmber, valuesSeed_ + static_cast<std::uint32_t>(control) * 131u, 0.5, TapeAlign::Center);
     return true;
   });
-  if (wearLevel != WearLevel::Off) parent->addView(new WearView(CRect(0, 0, kWidth, kHeight), generateWear(seed, wearLevel)));
-  // Pieces of writable tape: part of the wear layer (over the silkscreen, below the controls); a click writes on them.
-  {
-    const auto pieces = generateTapePieces(seed);
-    const int shown = piecesShown(wearLevel, seed);
-    for (int i = 0; i < shown && i < static_cast<int>(pieces_.size()); ++i) {
-      auto* view = new TapePieceView(pieces[static_cast<std::size_t>(i)], i, tapeFontIdOf(prefs.tapeFont), seed);
-      view->setText(displayedTapeText(pieces[static_cast<std::size_t>(i)], ctl_->tapeText(i)));
-      view->onClick = [this](TapePieceView* p) { editTape(p); };
-      parent->addView(view);
-      pieces_[static_cast<std::size_t>(i)] = view;
-    }
-  }
+  front_ = parent;
+  prefs_ = prefs;
+  wearView_ = new WearView(CRect(0, 0, kWidth, kHeight), {});   // the marks come from applyAppearance
+  parent->addView(wearView_);
+  rebuildPieces();   // pieces of writable tape: part of the wear layer, a click writes on them
 
   for (const auto& spec : kControls) {
     if (spec.sharesView) continue;   // its parameter is shown by another entry's view
@@ -243,14 +259,6 @@ void Editor::createViews(CViewContainer* parent) {
       control = new RackChoice(rect, this, tag, n, led, &skin_);
       break;
     }
-    }
-    // wear of the control (cap or face), from a per-control seed; the same level as the panel
-    {
-      const std::uint32_t cseed = seed ^ static_cast<std::uint32_t>(spec.id * 2654435761u);
-      const double amount = wearAmount(wearLevel);
-      if (auto* k = dynamic_cast<RackKnob*>(control)) k->setWear(cseed, amount);
-      else if (auto* t = dynamic_cast<RackToggle*>(control)) t->setWear(cseed, amount);
-      else if (auto* c = dynamic_cast<RackChoice*>(control)) c->setWear(cseed, amount);
     }
     control->setDefaultValue(static_cast<float>(uiValue(spec.inverted, defaultNorm(ctl_, spec.id))));
     parent->addView(control);
@@ -277,9 +285,133 @@ void Editor::createViews(CViewContainer* parent) {
     };
     parent->addView(clips_[i]);
   }
+
+  // The way to the back of the panel: a small text at the right of the header, like the other silkscreen.
+  auto* back = new TextLink(CRect(kWidth - 34 - 90, 62, kWidth - 34, 84), "BACK  \xE2\x86\x92");
+  back->onClick = [this] { startFlip(true); };
+  parent->addView(back);
+
+  applyAppearance(prefs);   // wear of the panel and the controls, fonts, meter settings
+}
+
+// Wear, fonts and meter settings from the user preferences: applied when the editor opens and live from the back panel.
+void Editor::applyAppearance(const Preferences& prefs) {
+  prefs_ = prefs;
+  const std::uint32_t seed = ctl_->wearSeed();
+  const WearLevel level = prefs.wear;
+  tapeValues_ = prefs.valuesFont == ValuesFont::Tape;
+  valuesFont_ = tapeFontIdOf(prefs.tapeFont);
+  valuesSeed_ = seed;
+  if (silk_) silk_->invalid();
+  if (strip_) strip_->setFont(valuesFont_);
+  if (wearView_) wearView_->setMarks(generateWear(seed, level));
+  if (backView_) backView_->setWear(generateWear(seed ^ 0x77u, level));
+
+  // wear of the controls (caps and faces), from a per-control seed; same level as the panel
+  for (const auto& spec : kControls) {
+    if (spec.sharesView) continue;
+    NormalizedControl* control = controls_[spec.id];
+    if (!control) continue;
+    const std::uint32_t cseed = seed ^ static_cast<std::uint32_t>(spec.id * 2654435761u);
+    const double amount = wearAmount(level);
+    if (auto* k = dynamic_cast<RackKnob*>(control)) k->setWear(cseed, amount);
+    else if (auto* t = dynamic_cast<RackToggle*>(control)) t->setWear(cseed, amount);
+    else if (auto* c = dynamic_cast<RackChoice*>(control)) c->setWear(cseed, amount);
+  }
+
+  // pieces of tape: the level decides how many show
+  const int shown = piecesShown(level, seed);
+  for (std::size_t i = 0; i < pieces_.size(); ++i) {
+    if (!pieces_[i]) continue;
+    pieces_[i]->setVisible(static_cast<int>(i) < shown);
+    pieces_[i]->setFont(valuesFont_);
+    pieces_[i]->invalid();
+  }
+
+  // peak-hold marker of the level meters
+  for (auto* bar : bars_)
+    if (bar) bar->setHoldSettings(prefs.meterHoldSeconds, prefs.meterReleaseDbPerSec);
+  if (frame) frame->invalid();
+}
+
+// The pieces of tape for the current seed (also after a re-roll): between the wear and the controls.
+void Editor::rebuildPieces() {
+  if (!front_) return;
+  for (auto*& p : pieces_) {
+    if (p) front_->removeView(p, true);
+    p = nullptr;
+  }
+  const std::uint32_t seed = ctl_->wearSeed();
+  const auto pieces = generateTapePieces(seed);
+  CView* before = nullptr;   // the pieces go below the first control
+  for (const auto& spec : kControls)
+    if (!spec.sharesView && controls_[spec.id]) { before = controls_[spec.id]; break; }
+  for (int i = 0; i < kTapePieceCount && i < static_cast<int>(pieces_.size()); ++i) {
+    auto* view = new TapePieceView(pieces[static_cast<std::size_t>(i)], i, valuesFont_, seed);
+    view->setText(displayedTapeText(pieces[static_cast<std::size_t>(i)], ctl_->tapeText(i)));
+    view->onClick = [this](TapePieceView* p) { editTape(p); };
+    front_->addView(view, before);
+    pieces_[static_cast<std::size_t>(i)] = view;
+  }
+}
+
+void Editor::changePreference(const std::function<void(Preferences&)>& mutate) {
+  const auto file = preferencesPath("TheStripper");
+  Preferences p = loadPreferences(file);   // the other settings (for instance the folders) stay as they are on disk
+  mutate(p);
+  savePreferences(file, p);
+  applyAppearance(p);
+  if (backView_) backView_->setPreferences(p);
+}
+
+// Turns the panel: snapshots both sides, hides them and shows the turn (flip_) until it is done.
+void Editor::startFlip(bool toBack) {
+  if (!frame || !front_ || !backView_ || flip_) return;
+  closeTapeEdit();
+  if (browser_) browserClosing_ = true;
+  CView* from = toBack ? static_cast<CView*>(front_) : static_cast<CView*>(backView_);
+  CView* to = toBack ? static_cast<CView*>(backView_) : static_cast<CView*>(front_);
+  auto snap = [&](CView* v) -> SharedPointer<CBitmap> {
+    auto off = COffscreenContext::create(CPoint(kWidth, kHeight), 1.0);
+    if (!off) return nullptr;
+    off->beginDraw();
+    v->draw(off);
+    off->endDraw();
+    return SharedPointer<CBitmap>(off->getBitmap());
+  };
+  SharedPointer<CBitmap> a = snap(from), b = snap(to);
+  if (!a || !b) {   // no offscreen drawing: swap the sides without the turn
+    from->setVisible(false);
+    to->setVisible(true);
+    frame->invalid();
+    return;
+  }
+  from->setVisible(false);
+  to->setVisible(false);
+  flipFrom_ = from;
+  flipTo_ = to;
+  flip_ = new FlipView(CRect(0, 0, kWidth, kHeight), a, b);
+  flipStart_ = std::chrono::steady_clock::now();
+  frame->addView(flip_);
+}
+
+void Editor::finishFlip() {
+  if (!flip_) return;
+  if (frame) frame->removeView(flip_, true);
+  flip_ = nullptr;
+  if (flipTo_) flipTo_->setVisible(true);
+  if (flipFrom_) flipFrom_->setVisible(false);
+  flipFrom_ = flipTo_ = nullptr;
+  if (frame) frame->invalid();
 }
 
 void Editor::onTimer() {
+  if (flip_) {   // the turn of the panel
+    const double t = std::chrono::duration<double>(std::chrono::steady_clock::now() - flipStart_).count() / kFlipSeconds;
+    if (t >= 1.0) finishFlip();
+    else flip_->setProgress(t);
+    return;
+  }
   if (browserClosing_) {   // the popup asked to close from inside its own mouse handler: remove it now
     browserClosing_ = false;
     if (browser_ && frame) frame->removeView(browser_, true);
