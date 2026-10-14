@@ -34,7 +34,7 @@
 - `kStateVersion` passa da 7 a 8 (aggiunge il percorso del modello); lo stato v7 resta caricabile.
 - GUI: 1000 × 628 (layout e stile come `src/the-stripper/docs/mockups/stripper_rack.html`), vettoriale, nessun asset 2x; ogni controllo ha un `ParamID`; gli asset PNG manuali sono opzionali. I pulsanti IN dei moduli invertono solo nell'interfaccia i parametri `kBypass*` (ID e polarità invariati); default di `kEqHPFOn`/`kEqLPFOn` = 1.
 - Texture: una sola tessera di grana finissima (spec §4, Sfondo), da `src/the-stripper/tools/gen_panel_grain.py` in `src/the-stripper/assets/panel_grain.png`; nessuna variante nello stato.
-- Licenza GPL-3.0; nessun nome o branding delle fonti nella UI.
+- Licenza GPL-3.0; nessun nome o branding delle fonti nella UI, salvo le sigle serigrafate dei blocchi (spec §11, 2026-10-14: `4K-G`/`4K-E`, `OPTO-2A`, `FET-76`, `VCA-160`, `NAM`, `B-PARTY`, `D-NOISE`).
 
 ## Review Focus
 
@@ -298,6 +298,8 @@ Compiti nati dopo le preview; ciascuno ha la propria spec nel §4 e §6 del docu
 - Test: file mancante → default; file corrotto → default senza crash; scrittura e rilettura.
 
 ### Task 11: Livelli e usura
+
+- Include le sigle serigrafate dei blocchi (spec §11) e il LED giallo dei selettori; Bell attenuato in modalità Bus e scritta BUS al posto dei preset del compressore (proposti, da confermare).
 
 - Livelli dell'editor nell'ordine dello spec §4 (grana, bordi, serigrafia e valori, usura, viti, controlli) con bitmap generata una sola volta dal seme e rilasciata alla chiusura dell'editor.
 - Generatore dell'usura a partire dal seme (graffi, aloni, macchie, residui, croste a pennello); usura dei controlli (alluminio tornito: grana, bordi consumati, sporco alla base, puntini bruni e grigi, tacchetta) al 25% di opacità.
