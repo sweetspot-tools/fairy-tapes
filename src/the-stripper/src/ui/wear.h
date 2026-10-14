@@ -11,6 +11,8 @@
 
 #include "preferences.h"
 
+#include "fairy_ui/wear_rng.h"
+
 #include <cmath>
 #include <cstdint>
 #include <vector>
@@ -36,23 +38,7 @@ struct WearMark {
   std::vector<double> dashes;  // Bristle: dash pattern, empty = solid
 };
 
-// mulberry32, as in the preview (the same sequence for the same seed).
-class WearRng {
-public:
-  explicit WearRng(std::uint32_t seed) : a_(seed) {}
-  double next() {
-    a_ += 0x6D2B79F5u;
-    std::uint32_t t = a_;
-    t = (t ^ (t >> 15)) * (t | 1u);
-    t ^= t + (t ^ (t >> 7)) * (t | 61u);
-    return static_cast<double>((t ^ (t >> 14))) / 4294967296.0;
-  }
-  double range(double lo, double hi) { return lo + next() * (hi - lo); }
-  std::size_t pick(std::size_t n) { return static_cast<std::size_t>(next() * static_cast<double>(n)) % n; }
-
-private:
-  std::uint32_t a_;
-};
+using FairyTapes::Ui::WearRng;   // mulberry32, as in the preview (shared with the control wear)
 
 // How much wear each level gives (multiplies the mark counts).
 inline double wearAmount(WearLevel level) { return level == WearLevel::Off ? 0.0 : level == WearLevel::Heavy ? 2.2 : 1.0; }

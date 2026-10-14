@@ -183,6 +183,7 @@ add_test(NAME the_stripper_preferences_tests COMMAND the_stripper_preferences_te
 # Panel wear generator (header-only, no VSTGUI).
 add_executable(the_stripper_wear_tests tests/test_wear.cpp)
 target_include_directories(the_stripper_wear_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(the_stripper_wear_tests PRIVATE fairy_ui)
 add_test(NAME the_stripper_wear_tests COMMAND the_stripper_wear_tests)
 
 # Developer tool: draws the editor offscreen into a PNG (no host needed). Not built by default.

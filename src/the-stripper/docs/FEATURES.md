@@ -119,7 +119,6 @@ Suggested search queries (GitHub, search engines) to find alternative open-sourc
 | SSL       | **4K-EQ** (Dusk Audio, formerly Luna Co. Software) | GPL-3.0 | https://github.com/dusk-audio/dusk-audio-plugins | 4 parametric + HPF/LPF | SSL 4000 style. Brown (E-series, wide/glue) / Black (G-series, tighter). Saturation (transformers, NE5534). **Used in both Channel and Mix bus modes** (type auto-derived from strip mode). Repo moved from luna-co-software/plugins. | **Adopted — both modes** |
 | Pultec    | **EQP-WDF-1A** (ABSounds) | check repo | https://github.com/ABSounds/EQP-WDF-1A | Pultec EQP-1A (boost/cut) | WDF, "Pultec trick". Previously considered for Mix bus; **removed from project** — 4K-EQ used in both modes instead. | **Removed** |
 | Other     | **Luftikus** (apresta) | check repo | https://github.com/apresta/luftikus | Fixed bands + shelves | Analog-flavor, simple. Good for air/sparkle. | **Candidate — optional** |
-| Other     | **ZL Equalizer** (ZL-Audio) | check repo | https://github.com/ZL-Audio/ZLEqualizer | 16 bands, various | Linear-phase option, surgical/transparent. Less "character", more precision. | **Alternative (transparent)** |
 
 When a new candidate is found: add a row with URL, license, band topology, and set Status accordingly. After listening tests, update Status to "Adopted" / "Rejected (reason)" and document in this file or in DISCUSSION_RESUME.
 
@@ -128,19 +127,18 @@ When a new candidate is found: add a row with URL, license, band topology, and s
 - **Neve:** No open-source plugin that credibly imitates a Neve EQ was found; 1073-pre-eq-plugin remains unvalidated and is not chosen as primary.
 - **Pultec (EQP-WDF-1A):** **Removed from project.** Previously considered for Mix bus only; ruled out as it is a colour/presence box (Pultec trick), not a full channel EQ. 4K-EQ is now used in both modes (Brown/E-series for Mix bus, Black/G-series for Channel).
 - **Target:** We want **one analog EQ** for the channel strip: proper bands (shelves + mids), analog character, usable as the main EQ on the bus/channel.
-- **Primary candidate:** **4K-EQ** (SSL 4000 style) — analog character, saturation, 4 parametric + HPF/LPF, used in **both** Channel and Mix bus modes. EQ type (Brown/Black) auto-derived from strip mode. **ZL Equalizer** remains the alternative if we need a more transparent / surgical option (less "character").
+- **Primary candidate:** **4K-EQ** (SSL 4000 style) — analog character, saturation, 4 parametric + HPF/LPF, used in **both** Channel and Mix bus modes. EQ type (Brown/Black) auto-derived from strip mode.
 
 **Quick reference for evaluation (mix bus / strip use):**
 
 | Candidate    | Best for (strip context) | Character | Decision |
 |--------------|---------------------------|-----------|----------|
 | **4K-EQ**    | Both modes (Channel = Black/G-series; Mix bus = Brown/E-series) | SSL 4000, 4 parametric + HPF/LPF; type auto from strip mode | **Adopted — both modes** |
-| **ZL Equalizer** | Precise corrections, mastering | Transparent, linear-phase; less "character" | **Alternative (transparent)** |
 | **EQP-WDF-1A** | *(removed)* | Pultec EQP-1A, vintage, "Pultec trick" | **Removed** |
 | **Luftikus** | Quick tonal shaping, air  | Simple, analog-flavor | Optional |
 | **1073-pre-eq-plugin** | Neve-style colour         | 1073, 3 bands | Not adopted (no viable Neve open-source) |
 
-**Decision:** **4K-EQ** is used in **both** modes (4 parametric + HPF/LPF). EQ type is **automatic** (derived from strip mode): **Channel** = **Black** (G-series, tighter Q), **Mix bus** = **Brown** (E-series, wider curves). No user-facing EQ type selector (kEqType parameter removed). LP/HP active in both modes. ZL Equalizer remains optional for transparent/surgical use if needed.
+**Decision:** **4K-EQ** is used in **both** modes (4 parametric + HPF/LPF). EQ type is **automatic** (derived from strip mode): **Channel** = **Black** (G-series, tighter Q), **Mix bus** = **Brown** (E-series, wider curves). No user-facing EQ type selector (kEqType parameter removed). LP/HP active in both modes.
 
 ### 1.2c.1 Strip modes: Channel vs Mix bus (two buttons)
 
@@ -180,7 +178,6 @@ Reference for “marchi importanti open-source e quali modelli ispirati offrono�
 | **4K-EQ** (Dusk Audio, formerly Luna Co. Software) | GPL-3.0 | **SSL 4000**–style: 4 parametric + HPF/LPF, Brown/Black, saturation. Repo: https://github.com/dusk-audio/dusk-audio-plugins. Vedi shortlist §1.2c. |
 | **EQP-WDF-1A** (ABSounds) | check repo | **Pultec EQP-1A** (WDF). Vintage, "Pultec trick". **Removed from project** — 4K-EQ used in both modes. |
 | **Luftikus** (apresta) | check repo | Analog-flavor, bande fisse + shelf. Semplice, air/sparkle. Vedi shortlist §1.2c. |
-| **ZL Equalizer** (ZL-Audio) | check repo | 16 bande, linear-phase. Più trasparente/chirurgico. Vedi shortlist §1.2c. |
 
 **Takeaway:** **Channel** = 4K-EQ Black/G-series (bande + HP/LP) + Multi-Comp (usage modes) + gain staging (not implemented). **Mix bus** = 4K-EQ Brown/E-series + Multi-Comp Bus only; no gain staging. EQ type automatic (derived from strip mode). §3.3.1.
 

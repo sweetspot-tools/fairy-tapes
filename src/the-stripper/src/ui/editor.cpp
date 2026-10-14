@@ -178,8 +178,8 @@ void Editor::createViews(CViewContainer* parent) {
   parent->addView(silk_);
   // The wear: seeded marks over the silkscreen, below the controls. Level from the user preferences (Off adds nothing).
   // TODO(Task 14): the seed will be stored in the plug-in state; until then every instance gets the same wear.
-  const WearLevel wear = loadPreferences(preferencesPath("TheStripper")).wear;
-  if (wear != WearLevel::Off) parent->addView(new WearView(CRect(0, 0, kWidth, kHeight), generateWear(kDefaultWearSeed, wear)));
+  const WearLevel wearLevel = loadPreferences(preferencesPath("TheStripper")).wear;
+  if (wearLevel != WearLevel::Off) parent->addView(new WearView(CRect(0, 0, kWidth, kHeight), generateWear(kDefaultWearSeed, wearLevel)));
 
   for (const auto& spec : kControls) {
     if (spec.sharesView) continue;   // its parameter is shown by another entry's view
@@ -203,6 +203,14 @@ void Editor::createViews(CViewContainer* parent) {
       control = new RackChoice(rect, this, tag, n, led, &skin_);
       break;
     }
+    }
+    // wear of the control (cap or face), from a per-control seed; the same level as the panel
+    {
+      const std::uint32_t seed = kDefaultWearSeed ^ static_cast<std::uint32_t>(spec.id * 2654435761u);
+      const double amount = wearAmount(wearLevel);
+      if (auto* k = dynamic_cast<RackKnob*>(control)) k->setWear(seed, amount);
+      else if (auto* t = dynamic_cast<RackToggle*>(control)) t->setWear(seed, amount);
+      else if (auto* c = dynamic_cast<RackChoice*>(control)) c->setWear(seed, amount);
     }
     control->setDefaultValue(static_cast<float>(uiValue(spec.inverted, defaultNorm(ctl_, spec.id))));
     parent->addView(control);

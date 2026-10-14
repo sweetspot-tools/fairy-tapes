@@ -25,6 +25,10 @@ add_executable(fairy_ui_rack_geometry_tests tests/test_rack_geometry.cpp)
 target_link_libraries(fairy_ui_rack_geometry_tests PRIVATE fairy_ui)
 add_test(NAME fairy_ui_rack_geometry_tests COMMAND fairy_ui_rack_geometry_tests)
 
+add_executable(fairy_ui_control_wear_tests tests/test_control_wear.cpp)
+target_link_libraries(fairy_ui_control_wear_tests PRIVATE fairy_ui)
+add_test(NAME fairy_ui_control_wear_tests COMMAND fairy_ui_control_wear_tests)
+
 add_executable(fairy_ui_sanitize_tests tests/test_sanitize.cpp)
 target_link_libraries(fairy_ui_sanitize_tests PRIVATE fairy_ui)
 add_test(NAME fairy_ui_sanitize_tests COMMAND fairy_ui_sanitize_tests)
