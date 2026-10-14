@@ -173,4 +173,13 @@ if(NOT WIN32)
   add_test(NAME pillow_talk_factory_test COMMAND pillow_talk_factory_test)
   set_tests_properties(pillow_talk_factory_test PROPERTIES SKIP_RETURN_CODE 77)
 
+  # LEVEL display parameters and the clip clear request on the real module (mock host queues); skipped when absent.
+  add_executable(pillow_talk_processor_level_test tests/test_processor_levels.cpp
+    ${VST3_SDK_PATH}/public.sdk/source/vst/vstinitiids.cpp)
+  target_include_directories(pillow_talk_processor_level_test PRIVATE ${VST3_SDK_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_compile_definitions(pillow_talk_processor_level_test PRIVATE
+    PILLOW_TALK_MODULE="${PILLOW_TALK_MODULE_PATH}")
+  target_link_libraries(pillow_talk_processor_level_test PRIVATE pluginterfaces ${CMAKE_DL_LIBS})
+  add_test(NAME pillow_talk_processor_level_test COMMAND pillow_talk_processor_level_test)
+  set_tests_properties(pillow_talk_processor_level_test PROPERTIES SKIP_RETURN_CODE 77)
 endif()
