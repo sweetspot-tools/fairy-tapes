@@ -377,7 +377,7 @@ var INK={},OUTK={},TGK={},RGK={},BRK={},DSK=null,CPK={},TONEK={};
 /* read-only silkscreen value: panel layer (under the wear), dims with its module or with the bypass, refreshed from the MODES table */
 function silk(){var lg=el('g',{transform:'translate(0,'+OFFY+')'},LY.scale);lg.style.transition='opacity .15s';if(CUR){(CUR._x=CUR._x||[]).push(lg);}else gbtn(lg);return lg;}
 function ro(x,y,sz,col,anchor,fn){var t=txt('',x,y,sz,col,anchor,700,silk());if(col===AMBL)HWTXT.push([t,sz]);RO.push(function(){t.textContent=fn();});return t;}
-function refreshRO(){RO.forEach(function(f){f();});}
+function refreshRO(){RO.forEach(function(f){f();});refreshTags();}
 function lab(s,x,y,sz,col,anchor){return txt(s,x,y,sz,col||W,anchor||'middle',800,silk());}
 /* module box: titled box + group of controls + its IN button */
 function modBox(x,y,w,h,title,build){box(x,y,w,h,title,'bottom');var g=grp(),o=OFFY;g.setAttribute('transform','translate(0,-12)');OFFY=-12;build();OFFY=o;endGrp();return byp(x+w-24,y+38,g);}
@@ -452,11 +452,10 @@ var mRd=modBox(230,238,190,174,'RIDER',function(){
 var mBr=modBox(426,238,364,174,'BREATH',function(){
   knob(484,322,'AMOUNT',0.5,'0','12','',{def:0.5,fmt:brf,api:BRK});
   knob(560,322,'SENSITIVITY',0.5,'0','1','',{def:0.5,fmt:pct,api:{}});
-  lab('DETECTOR',690,304,11,DIMW);
-  ro(690,324,15,AMBL,'middle',function(){return MODES.detector[MODE];});
+  boxTag(442,272,function(){return MODES.detector[MODE];});
   brLed=el('circle',{cx:664,cy:350,r:5,fill:OFFL2,stroke:'#000','stroke-width':.6});
   lab('BREATH',674,354,10,W,'start');
-  btn(758,364,'LISTEN',false,function(b){toggle(b);});
+  btn(766,364,'LISTEN',false,function(b){toggle(b);});
 });
 var mCl=modBox(796,238,180,174,'CLEAN',function(){
   lab('HPF',840,332,13,W);ro(840,360,20,AMBL,'middle',function(){return MODES.hpf[MODE]+' Hz';});
