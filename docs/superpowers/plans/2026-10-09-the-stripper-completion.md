@@ -321,7 +321,7 @@ Compiti nati dopo le preview; ciascuno ha la propria spec nel §4 e §6 del docu
 
 Decisione del 2026-10-14 (spec §11). Dopo i Task 10-14, o prima se serve.
 
-- Nuovo parametro `kDriveNamOn` (ID 35, in coda, default 1) con tabella bloccata e stato v9 (stati più vecchi: default, più migrazione per i progetti con Saturate > 0, da decidere).
-- DSP: `SSLSaturation` esce da `FourKEQ` e diventa una fase del Drive dopo l'EQ; NAM acceso → NAM, spento → Saturate; il bypass del Drive vale per entrambi; l'EQ non ha più saturazione né dipende dal suo bypass.
+- Nuovo parametro `kDriveNamOn` (ID 35, in coda, default 1) con tabella bloccata e stato v9 (stati più vecchi: valore di default, nessuna migrazione: non esistono progetti da proteggere).
+- DSP: `SSLSaturation` esce da `FourKEQ` e diventa una fase del Drive dopo l'EQ; NAM acceso → NAM (senza modello: passthrough), spento → Saturate; il bypass del Drive vale per entrambi; l'EQ non ha più saturazione né dipende dal suo bypass.
 - Editor: pulsante NAM nel riquadro Drive; una sola manopola DRIVE che si lega a `kDriveAmount` o `kEqSaturation` secondo l'interruttore; Saturate sparisce dal riquadro Equaliser (restano 10 manopole); striscia del modello attenuata a NAM spento.
 - Test: tabella bloccata, stato v8 → v9, scelta del motore (uscita diversa con NAM spento e Saturate > 0), EQ senza saturazione, layout (nessuna sovrapposizione, manopola Drive unica).
