@@ -4,7 +4,7 @@ Regole visive condivise da tutti i plugin della suite. Materiale dei controlli e
 
 ## Pannello
 
-- Stile pannello rack, orizzontale; riquadri con bordo bianco e titolo sul bordo (il bordo è tracciato con un'interruzione per il titolo, mai coperto da un rettangolo); LED senza alone; nessun gradiente lucido. **Colore dei LED dei pulsanti:** i pulsanti IN hanno il LED rosso; i **selettori di modo** (Chan/Bus, Voice/Drums/Classic, NAM) lo hanno **giallo** (deciso 2026-10-14).
+- Stile pannello rack, orizzontale; riquadri con bordo bianco e titolo sul bordo (il bordo è tracciato con un'interruzione per il titolo, mai coperto da un rettangolo); LED senza alone; nessun gradiente lucido. **Colore dei LED dei pulsanti:** i pulsanti **accendi/spegni** (IN, Bypass, Sync, Sidechain) hanno il LED **rosso**; i **selettori di valore o di modo** (Chan/Bus, Voice/Drums/Classic, NAM, note 1/16-1/2) lo hanno **giallo** (deciso 2026-10-14; regola estesa a Sync e Sidechain di Pillow Talk).
 - Testo visibile **in inglese**; nessun testo selezionabile con il mouse, salvo i due campi modificabili (valore sotto una manopola, scritta sul nastro).
 - Nessun nome o marchio delle fonti d'ispirazione nella UI.
 - Doppio clic su una manopola: valore predefinito del parametro, come modifica unica annullabile.
