@@ -474,10 +474,10 @@ var mDs=modBox(24,424,270,180,'DE-ESS',function(){
 var mCp=modBox(300,424,400,180,'COMP',function(){
   knob(352,522,'AMOUNT',0.5,'-6','-30','',{def:0.5,fmt:cmf,api:CPK});
   knob(436,522,'MIX',1,'0','100','',{def:1,fmt:pct,api:{}});
-  lab('RATIO',538,506,11,DIMW);ro(538,522,10,AMBL,'middle',function(){return RIX?RATIOS[RIX]:'AUTO '+MODES.ratio[MODE]+':1';});
-  btn(538,556,'',false,function(){RIX=(RIX+1)%RATIOS.length;refreshRO();},YEL);
-  lab('DIST',636,506,11,DIMW);ro(636,522,10,AMBL,'middle',function(){return DIX?DISTS[DIX]:'AUTO '+MODES.dist[MODE];});
-  btn(636,556,'',false,function(){DIX=(DIX+1)%DISTS.length;refreshRO();},YEL);
+  ro(538,583,10,AMBL,'middle',function(){return RIX?RATIOS[RIX]:'AUTO '+MODES.ratio[MODE]+':1';});
+  btn(538,544,'RATIO',false,function(){RIX=(RIX+1)%RATIOS.length;refreshRO();},YEL);
+  ro(636,583,10,AMBL,'middle',function(){return DIX?DISTS[DIX]:'AUTO '+MODES.dist[MODE];});
+  btn(636,544,'DIST',false,function(){DIX=(DIX+1)%DISTS.length;refreshRO();},YEL);
   lab('threshold set by AMOUNT  ·  gain reduction: see LEVEL',500,594,9,DIMW);
 });
 var mTn=modBox(706,424,270,180,'TONE',function(){
