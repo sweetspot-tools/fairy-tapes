@@ -40,7 +40,7 @@ add_library(pillow_talk MODULE
   src/ui/duck_scope.cpp
   src/ui/editor.cpp
   src/ui/panel_view.cpp
-  src/ui/wear.cpp
+  src/ui/decor.cpp
 )
 
 target_include_directories(pillow_talk PRIVATE
@@ -112,13 +112,14 @@ target_include_directories(pillow_talk_tests PRIVATE
 target_link_libraries(pillow_talk_tests PRIVATE fairy_ui)
 add_test(NAME pillow_talk_tests COMMAND pillow_talk_tests)
 
-# Wear generation (pure C++, no VSTGUI): own executable, also reused by the wear dump tool.
-add_executable(pillow_talk_wear_tests
-  tests/test_wear.cpp
-  src/ui/wear.cpp
+# Tape and screw placement from the seed (pure C++, no VSTGUI). The wear marks are shared (fairy_ui/wear.h).
+add_executable(pillow_talk_decor_tests
+  tests/test_decor.cpp
+  src/ui/decor.cpp
 )
-target_include_directories(pillow_talk_wear_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-add_test(NAME pillow_talk_wear_tests COMMAND pillow_talk_wear_tests)
+target_include_directories(pillow_talk_decor_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(pillow_talk_decor_tests PRIVATE fairy_ui)
+add_test(NAME pillow_talk_decor_tests COMMAND pillow_talk_decor_tests)
 
 # Module/factory lifecycle smoke test: dlopens the built bundle from dist/ (exit 77 = skipped
 # when the plugin has not been built). Links only the pluginterfaces IIDs, not the plugin.
