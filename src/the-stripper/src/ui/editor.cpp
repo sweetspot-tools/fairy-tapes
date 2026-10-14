@@ -5,16 +5,19 @@
 #include "ui/model_browser.h"
 #include "ui/model_source.h"
 #include "ui/model_strip.h"
-#include "ui/silkscreen_view.h"
+#include "ui/silkscreen_items.h"
+#include "ui/tape_text.h"
 #include "ui/tape_piece_view.h"
-#include "ui/wear_view.h"
 #include "preferences.h"
 #include "ui/tape_font.h"
 #include "ui/panel_view.h"
 
 #include "fairy_ui/controls.h"
 #include "fairy_ui/editor_size.h"
+#include "fairy_ui/draw_util.h"
 #include "fairy_ui/meters.h"
+#include "fairy_ui/silkscreen_view.h"
+#include "fairy_ui/wear_view.h"
 #include "fairy_ui/rack_controls.h"
 #include "fairy_ui/sanitize.h"
 
@@ -46,6 +49,9 @@ using FairyTapes::Ui::RackChoice;
 using FairyTapes::Ui::RackKnob;
 using FairyTapes::Ui::RackLed;
 using FairyTapes::Ui::RackToggle;
+using FairyTapes::Ui::generateWear;
+using FairyTapes::Ui::WearView;
+using FairyTapes::Ui::wearAmount;
 using FairyTapes::Ui::NormalizedControl;
 using FairyTapes::Ui::ToggleButton;
 using Steinberg::Vst::ParamID;
@@ -180,15 +186,27 @@ void PLUGIN_API Editor::close() {
 
 void Editor::createViews(CViewContainer* parent) {
   parent->addView(new PanelView(CRect(0, 0, kWidth, kHeight), &skin_));
-  silk_ = new SilkscreenView(CRect(0, 0, kWidth, kHeight));   // the printed parts, below the wear and the controls
+  silk_ = new FairyTapes::Ui::SilkscreenView(CRect(0, 0, kWidth, kHeight), silkscreenItems(), silkscreenTags());   // the printed parts, below the wear and the controls
   parent->addView(silk_);
   // The wear: seeded marks over the silkscreen, below the controls. Level from the user preferences (Off adds nothing).
   // The seed is made when the instance is created and saved with the project (controller state), so the wear is always the same.
   const std::uint32_t seed = ctl_->wearSeed();
   const Preferences prefs = loadPreferences(preferencesPath("TheStripper"));
   const WearLevel wearLevel = prefs.wear;
-  silk_->setSeed(ctl_->wearSeed());
-  silk_->setValuesFont(prefs.valuesFont == ValuesFont::Tape, tapeFontIdOf(prefs.tapeFont));
+  tapeValues_ = prefs.valuesFont == ValuesFont::Tape;
+  valuesFont_ = tapeFontIdOf(prefs.tapeFont);
+  valuesSeed_ = ctl_->wearSeed();
+  // The values under the knobs: standard text, or handwriting in the tape font (preference VALUES FONT).
+  silk_->setValueDrawer([this](CDrawContext* ctx, const FairyTapes::Ui::PrintText& t, const CPoint& origin, std::size_t item) {
+    if (!tapeValues_) return false;
+    std::size_t control = 0;   // the variation follows the control (its place in the layout table), not the item
+    const int id = silk_->model().item(item).id;
+    for (std::size_t i = 0; i < std::size(kControls); ++i)
+      if (static_cast<int>(kControls[i].id) == id) { control = i; break; }
+    drawTapeText(ctx, valuesFont_, t.text, CPoint(origin.x + t.x, origin.y + t.y), normalizedFontSize(valuesFont_, 10.0),
+                 FairyTapes::Ui::kAmber, valuesSeed_ + static_cast<std::uint32_t>(control) * 131u, 0.5, TapeAlign::Center);
+    return true;
+  });
   if (wearLevel != WearLevel::Off) parent->addView(new WearView(CRect(0, 0, kWidth, kHeight), generateWear(seed, wearLevel)));
   // Pieces of writable tape: part of the wear layer (over the silkscreen, below the controls); a click writes on them.
   {
@@ -368,7 +386,7 @@ void Editor::syncFromController(bool force) {
 void Editor::showValue(const ControlSpec& spec, double paramNorm) {
   if (!silk_ || spec.kind != Kind::Knob) return;
   const ParamID id = spec.id == kEqSaturation ? kDriveAmount : spec.id;   // the shared Drive knob has one printed value
-  silk_->setValueText(id, paramString(ctl_, spec.id, paramNorm));
+  silk_->setValueText(static_cast<int>(id), paramString(ctl_, spec.id, paramNorm));
 }
 
 void Editor::syncDriveKnob() {
@@ -401,8 +419,8 @@ void Editor::refreshModules() {
   if (silk_) {
     const double comp = std::isnan(seen_[kCompressorMode]) ? 0.0 : seen_[kCompressorMode];
     for (const Module m : kModules) {
-      silk_->setTag(m, blockTag(m, channelMode_, comp, namOn_));
-      silk_->setTagDimmed(m, moduleDimmed(m, state));
+      silk_->setTag(static_cast<int>(m), blockTag(m, channelMode_, comp, namOn_));
+      silk_->setTagDimmed(static_cast<int>(m), moduleDimmed(m, state));
     }
   }
 
@@ -413,9 +431,9 @@ void Editor::refreshModules() {
     if (spec.module != Module::None) dim = spec.isIn ? state.globalBypass : moduleDimmed(spec.module, state);
     if (spec.id == kDriveAmount && driveKnobDimmed(namOn_, modelState_ == 2)) dim = true;   // NAM without a model passes through
     control->setDimmed(dim);
-    if (silk_) silk_->setDimmed(spec.id, dim);
+    if (silk_) silk_->setDimmed(static_cast<int>(spec.id), dim);
     const bool visible = visibleInMode(spec.id, channelMode_);
-    if (silk_) silk_->setHidden(spec.id, !visible);
+    if (silk_) silk_->setHidden(static_cast<int>(spec.id), !visible);
     if (control->isVisible() != visible) {
       control->setVisible(visible);
       if (frame) frame->invalidRect(control->getViewSize());

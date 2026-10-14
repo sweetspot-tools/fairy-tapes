@@ -2,7 +2,7 @@
 // (src/the-stripper/docs/mockups/stripper_rack.html).
 #include "ui/panel_view.h"
 
-#include "ui/draw_util.h"
+#include "fairy_ui/draw_util.h"
 #include "ui/layout.h"
 
 #include "fairy_ui/skin.h"
@@ -17,6 +17,11 @@
 #include <string>
 
 namespace FairyTapes::TheStripper::Ui {
+
+using FairyTapes::Ui::drawTitledBox;
+using FairyTapes::Ui::kAmber;
+using FairyTapes::Ui::kDimWhite;
+using FairyTapes::Ui::kWhite;
 
 using namespace VSTGUI;
 

@@ -13,7 +13,7 @@
 #include "preferences.h"
 #include "ui/model_source.h"
 #include "ui/tape_glyphs.h"
-#include "ui/wear.h"
+#include "fairy_ui/wear.h"
 
 #include <cmath>
 #include <cstdint>
@@ -21,6 +21,8 @@
 #include <vector>
 
 namespace FairyTapes::TheStripper::Ui {
+
+using FairyTapes::Ui::WearRng;
 
 enum class TapeFontId { Zeyada, RockSalt, HomemadeApple };
 using TapeGlyph = tape_glyphs::Glyph;

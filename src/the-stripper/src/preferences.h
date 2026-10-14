@@ -10,6 +10,8 @@
 
 #pragma once
 
+#include "fairy_ui/wear.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -22,7 +24,7 @@
 
 namespace FairyTapes::TheStripper {
 
-enum class WearLevel { Off, Light, Heavy };
+using WearLevel = FairyTapes::Ui::WearLevel;   // shared with the other plug-ins (fairy_ui/wear.h): Off, Light, Heavy
 enum class NotesLevel { Hide, Show };
 enum class TapeFont { Zeyada, RockSalt, HomemadeApple };
 enum class ValuesFont { Standard, Tape };

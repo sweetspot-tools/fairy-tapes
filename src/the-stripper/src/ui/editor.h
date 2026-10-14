@@ -7,6 +7,7 @@
 #include "params.h"
 #include "state.h"
 #include "ui/layout.h"
+#include "ui/tape_font.h"
 
 #include "fairy_ui/skin.h"
 
@@ -26,6 +27,7 @@ class CTextEdit;
 
 namespace FairyTapes::Ui {
 class NormalizedControl;
+class SilkscreenView;
 class MeterBar;
 class ClipLed;
 }
@@ -39,7 +41,6 @@ namespace FairyTapes::TheStripper::Ui {
 class ModelBrowser;
 class ModelStrip;
 class TapePieceView;
-class SilkscreenView;
 
 class Editor : public Steinberg::Vst::VSTGUIEditor,
                public Steinberg::IPlugViewContentScaleSupport,
@@ -101,7 +102,10 @@ private:
   std::array<FairyTapes::Ui::MeterBar*, kMeterRowCount> bars_{};   // owned by the frame, in kMeterRows order
   std::array<FairyTapes::Ui::ClipLed*, kClipCount> clips_{};
   std::chrono::steady_clock::time_point lastTick_{};
-  SilkscreenView* silk_ = nullptr;         // owned by the frame
+  FairyTapes::Ui::SilkscreenView* silk_ = nullptr;   // owned by the frame
+  bool tapeValues_ = false;                // the values under the knobs are handwritten (preference)
+  TapeFontId valuesFont_ = TapeFontId::Zeyada;
+  std::uint32_t valuesSeed_ = 0;
   std::array<TapePieceView*, kMaxTapePieces> pieces_{};   // owned by the frame
   VSTGUI::CTextEdit* tapeEdit_ = nullptr;                // the open text field, owned by the frame
   int tapeEditIndex_ = -1;

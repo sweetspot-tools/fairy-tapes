@@ -8,13 +8,17 @@
 
 #include "state.h"
 #include "ui/model_source.h"
-#include "ui/wear.h"
+#include "fairy_ui/wear.h"
 
 #include <cmath>
 #include <string>
 #include <vector>
 
 namespace FairyTapes::TheStripper::Ui {
+
+using FairyTapes::Ui::WearLevel;
+using FairyTapes::Ui::WearPt;
+using FairyTapes::Ui::WearRng;
 
 constexpr int kTapePieceCount = 3;          // pieces of tape the seed gives the panel (a level may show fewer)
 constexpr int kTapeTextCharacters = 14;

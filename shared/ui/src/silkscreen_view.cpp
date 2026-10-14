@@ -51,6 +51,7 @@ void SilkscreenView::draw(CDrawContext* ctx) {
       }
     }
     for (const PrintText& t : parts.texts) {
+      if (t.role == TextRole::Value && valueDrawer_ && valueDrawer_(ctx, t, o, i)) continue;
       switch (t.role) {
       case TextRole::EndValue: ctx->setFont(endFont_); break;
       case TextRole::Name: ctx->setFont(nameFont_); break;
