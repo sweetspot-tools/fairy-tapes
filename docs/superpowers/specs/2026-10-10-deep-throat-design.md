@@ -56,7 +56,7 @@ Valori numerici da tarare con registrazioni reali (vedi "Decisioni aperte").
 
 ## 6. Parametri esposti
 
-Bypass, Mode (Speak/Sing/Puke), Input, Rider Target, Rider Range, Breath Amount, De-esser Amount, De-ess Listen, Comp Amount, Tone, Output (11). Il resto è interno per modalità.
+Bypass, Mode (Speak/Sing/Puke), Input, Rider Target, Rider Range, Breath Amount, De-esser Amount, De-ess Listen, Comp Amount, Tone, Output, più un pulsante **IN** per ogni modulo (Rider In, Breath In, Clean In, De-ess In, Comp In, Tone In; default acceso): 17 parametri. A IN spento il modulo lascia passare il segnale (latenza invariata). Il modulo Clean (EQ correttivo) non ha altri controlli oltre a IN. Il resto è interno per modalità.
 
 ## 7. Struttura
 
@@ -72,4 +72,15 @@ Ogni blocco ha un test che prima fallisce: Rider (guadagno verso il Target, ness
 - Registrazioni di riferimento per tarare le soglie, soprattutto in Puke (growl e scream).
 - Dati etichettati per il livello 2 (rete RTNeural).
 - Riuso di drive/saturazione esistenti per il Distressor.
-- Interfaccia grafica: ora da definire; mockup di riferimento `stripper_rack.html`.
+- Interfaccia grafica: layout in anteprima in `src/deep-throat/docs/mockups/deep_throat_rack.html` (vedi §10); implementazione in un piano a parte.
+- Il modulo Clean non ha manopole: valutare un parametro Clean Amount.
+
+## 10. Grafica
+
+Segue `docs/DESIGN_SYSTEM.md` (rack orizzontale, materiali e grana di The Stripper, livelli, usura con seme, viti, nastro, retro). Specifico di Deep Throat:
+
+- Intestazione con titolo, Bypass globale (LED rosso) e BACK.
+- Riquadro MODE con selettore Speak / Sing / Puke (LED giallo).
+- Fascia meter (ingresso, uscita, riduzione del compressore) con manopole Input e Output.
+- Sei moduli, ciascuno con IN: RIDER (Target, Range e scope con la banda dei respiri), BREATH (Amount, LED di rilevamento, nome del rilevatore), CLEAN (solo valori di sola lettura che seguono la modalità), DE-ESS (Amount, pulsante Listen), COMP (Amount, rapporto e Dist di sola lettura), TONE (una manopola).
+- Retro: schede SETTINGS, CREDITS e **MODES**; MODES elenca i valori imposti da ciascuna modalità ed è generata dalla stessa tabella dei preset usata dal codice.
