@@ -97,13 +97,15 @@
 - Produces: `layout.h` con la tabella dati dei controlli alle posizioni della preview (riquadri DUCKING 24,92 / LEVEL / OUTPUT / DELAY / AUTO DUCK, manopole e Sync/note) con test su: ogni parametro persistente ha esattamente un controllo, nessun rettangolo esce dal pannello 1000 × 628 né si sovrappone ad un altro; `panel_art.h`: disegno del pannello da codice (sfondo `#161617`, tile di grana riusata da `shared/ui` se pubblicata dallo Stripper, altrimenti tile piccola generata da script, riquadri con bordo bianco e titoli con `drawTitledBox` di `fairy_ui/draw_util.h`); serigrafia con `FairyTapes::Ui::SilkscreenView` (la tabella di `layout.h` fornisce gli elementi stampati: id, tipo, centro, raggio, nome, valori di fondo scala o etichette); usura con `FairyTapes::Ui::WearView` e `generateWear(seme, livello)` di `fairy_ui/wear.h` (sopra la serigrafia, sotto i controlli).
 - L'editor passa a 1000 × 628; `DuckScope` si ridimensiona al riquadro (376 × 130); LEVEL usa `MeterBar`/`ClipLed`; Sync/note con dimming come oggi; Bypass in alto a destra del riquadro OUTPUT.
 
-- [ ] **Step 1: Test** per `layout.h`.
-- [ ] **Step 2: Eseguire, verificare il fallimento.**
-- [ ] **Step 3: Implementare** layout, disegno del pannello, serigrafia e usura comuni (tinta unita `#161617` se la tile manca; segni rigenerati solo se cambiano seme o livello) e la nuova `Editor`; aggiornare `checkSizeConstraint`/HiDPI alla nuova dimensione.
-- [ ] **Step 4: Build e test.**
+- [x] **Step 1: Test** per `layout.h` (`tests/test_layout.cpp`, target `pillow_talk_layout_tests`, 14 test: un controllo per parametro, tipi e LED secondo la regola, riquadri dentro il pannello e disgiunti, ogni elemento dentro il suo riquadro, nessuna sovrapposizione nello stesso riquadro, posizioni della preview, meter e LED di clip sui parametri di display, riga DUCK = 1 - mandata, attenuazione, elementi della serigrafia, testi e righe, nastri e viti). Aggiornato a 1000 × 628 anche il test della dimensione in `test_pillow_talk.cpp` e in `test_factory.cpp`.
+- [x] **Step 2: Eseguire, verificare il fallimento** (`ui/layout.h` assente; dimensione 480 × 560 nei due test della dimensione).
+- [x] **Step 3: Implementare** layout, disegno del pannello, serigrafia e usura comuni (tinta unita `#161617` se la tile manca; segni rigenerati solo se cambiano seme o livello) e la nuova `Editor`; aggiornare `checkSizeConstraint`/HiDPI alla nuova dimensione.
+  - Esito (2026-10-15): `panel_art.{h,cpp}` non è stato creato: il disegno del pannello sta in `PanelView` (`ui/panel_view.{h,cpp}`), che legge riquadri, testi fissi e righe da `layout.h`. La tile di grana è una copia di quella dello Stripper in `shared/ui/assets/panel_grain.png`, copiata nel bundle (`Contents/Resources`) da un `POST_BUILD`. Usura: seme fisso `kDefaultWearSeed` e livello Light finché non arrivano stato v2 e preferenze (Task 5). `editor_size.h` usa l'helper comune `fairy_ui/editor_size.h`.
+  - In più: test del processor sul modulo vero (`tests/test_processor_levels.cpp`, target `pillow_talk_processor_level_test`, host finto come lo Stripper): picchi di ingresso in norma del meter, clip mantenuto, `kClearClips` = 1 azzera e riceve la conferma 0 nello stesso blocco, un valore sotto 0,5 è ignorato. Strumento di render offscreen `pillow_talk_render` (`tools/render_editor.cpp`, fuori dai target di default).
+- [x] **Step 4: Build e test.**
   Run: `cmake --build <scratch> --target pillow_talk pillow_talk_tests pillow_talk_factory_test -j2 && ctest --test-dir <scratch> -R pillow_talk --output-on-failure`
-  Expected: PASS, 0 simboli `Steinberg::*` indefiniti.
-- [ ] **Step 5: Commit** `feat(pillow-talk): landscape rack editor with code-drawn panel`.
+  Expected: PASS, 0 simboli `Steinberg::*` indefiniti. Esito: `ctest -R "pillow_talk|fairy_ui"` 14/14, `the_stripper_tests` verde, 0 simboli `Steinberg::*` indefiniti.
+- [x] **Step 5: Commit** `feat(pillow-talk): landscape rack editor with code-drawn panel`.
 
 ---
 
