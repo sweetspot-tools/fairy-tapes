@@ -27,9 +27,9 @@ body{margin:0;padding:16px;background:#e9e8e4;font-family:system-ui,sans-serif;c
   <label>Zoom <select id="zoom"><option value="fit">Fit window</option><option value="1">100%</option><option value="1.5">150%</option><option value="2">200%</option><option value="2.5">250%</option></select></label>
   <button id="reroll" title="New random layout (new instance)">Re-roll</button>
   <label>Signal <input type="range" id="lvl" min="0" max="100" value="55" style="width:120px"></label>
-  <span style="color:#555">Rack-style panel preview (1000 × 628, landscape). Knobs: drag vertically, Shift = fine, double-click = default. Click a clip LED to clear it. Mode buttons change the read-only values, the AUTO values of COMP RATIO and DIST (click them to cycle) and the scope. When a module IN button is off (all on by default) its controls dim; the BYPASS button in the Output box dims everything and puts the plugin in bypass.</span>
+  <span style="color:#555">Rack-style panel preview (1000 × 614, landscape). Knobs: drag vertically, Shift = fine, double-click = default. Click a clip LED to clear it. Mode buttons change the read-only values, the AUTO values of COMP RATIO and DIST (click them to cycle) and the scope. When a module IN button is off (all on by default) its controls dim; the BYPASS button in the Output box dims everything and puts the plugin in bypass.</span>
 </div>
-<div class="stage"><div class="scene"><div class="card" id="card"><svg id="ui" viewBox="0 0 1000 628" role="img" aria-label="Deep Throat editor, rack-style panel"></svg><svg id="back" viewBox="0 0 1000 628" role="img" aria-label="Deep Throat settings, modes and credits"></svg></div></div></div>
+<div class="stage"><div class="scene"><div class="card" id="card"><svg id="ui" viewBox="0 0 1000 614" role="img" aria-label="Deep Throat editor, rack-style panel"></svg><svg id="back" viewBox="0 0 1000 614" role="img" aria-label="Deep Throat settings, modes and credits"></svg></div></div></div>
 <script>
 var NS='http://www.w3.org/2000/svg',svg=document.getElementById('ui');
 function el(n,a,p){var e=document.createElementNS(NS,n);for(var k in a)e.setAttribute(k,a[k]);(p||CUR||ROOT).appendChild(e);return e;}
@@ -57,7 +57,7 @@ texFilter('tfine','0.9 0.9',3,1.3,58,0.07,4);
 texFilter('twrink','0.1 0.14',3,2.6,46,0.047,9);
 var gl=el('linearGradient',{id:'glow',x1:0,y1:0,x2:0,y2:1},defs);[[0,'#fff',.07],[.35,'#fff',0],[.75,'#000',0],[1,'#000',.35]].forEach(function(t){el('stop',{offset:t[0],'stop-color':t[1],'stop-opacity':t[2]},gl);});
 var TEX=[],LIT=[];
-function texLayer(){var t=el('rect',{width:1000,height:628,rx:14,fill:'#fff',filter:'url(#tfine)'});var l=el('rect',{width:1000,height:628,rx:14,fill:'url(#glow)'});TEX.push(t);LIT.push(l);}
+function texLayer(){var t=el('rect',{width:1000,height:614,rx:14,fill:'#fff',filter:'url(#tfine)'});var l=el('rect',{width:1000,height:614,rx:14,fill:'url(#glow)'});TEX.push(t);LIT.push(l);}
 document.addEventListener('DOMContentLoaded',function(){});
 
 /* ===== wear: everything random derives from one seed that the plugin saves in its state, so the layout is built once per instance ===== */
@@ -160,7 +160,7 @@ function grimeRect(g,x,y,w,h,idx){
 function addWear(L,off,face){var w={L:L,off:off,face:face};WEARL.push(w);drawWear(w);}
 function drawWear(w){while(w.L.firstChild)w.L.removeChild(w.L.firstChild);wear(w.L,mulberry32((SEED^w.off)>>>0),A,w.face);}
 /* screws: slot or Phillips, random resting angle, drag to turn (angles saved); rarely one is missing and only the hole is left */
-var SCREWPOS=[[18,18],[982,18],[18,610],[982,610]],SCREWEL=[[],[],[],[]],SCRA=(function(){try{var v=JSON.parse(lsGet('dt_screws','null'));if(v&&v.length===4)return v;}catch(e){}return null;})();
+var SCREWPOS=[[18,18],[982,18],[18,596],[982,596]],SCREWEL=[[],[],[],[]],SCRA=(function(){try{var v=JSON.parse(lsGet('dt_screws','null'));if(v&&v.length===4)return v;}catch(e){}return null;})();
 var SCRTYPE=[],SCRINIT=[],SCRMISS=[false,false,false,false];
 function initScrews(keepAngles){SCRTYPE=[];SCRINIT=[];SCRMISS=[false,false,false,false];var R=mulberry32(SEED^0xA5);for(var i=0;i<4;i++){SCRTYPE.push(R()<.5?'slot':'cross');SCRINIT.push(Math.round(rnd(R,0,180)));}
   if(R()<.06)SCRMISS[Math.floor(R()*4)]=true;if(!SCRA||!keepAngles)SCRA=SCRINIT.slice();}
@@ -283,7 +283,7 @@ function grad(id,type,attrs,stops){var g=el(type,Object.assign({id:id},attrs),de
 grad('gk','radialGradient',{cx:'35%',cy:'30%',r:'80%'},[[0,'#4a4a4e'],[0.55,'#161617'],[1,'#050505']]);
 grad('gb','linearGradient',{x1:0,y1:0,x2:0,y2:1},[[0,'#e6e6e6'],[1,'#8f8f92']]);
 grad('gp','linearGradient',{x1:0,y1:0,x2:0,y2:1},[[0,'#1b1b1d'],[0.5,'#0b0b0c'],[1,'#121213']]);
-el('rect',{width:1000,height:628,rx:14,fill:'#161617'});texLayer();
+el('rect',{width:1000,height:614,rx:14,fill:'#161617'});texLayer();
 el('rect',{x:2,y:2,width:996,height:624,rx:13,fill:'none',stroke:'#2c2c2f','stroke-width':2});
 LY=layers();addWear(LY.wear,0x51,false);screws(LY.screw);
 
@@ -435,7 +435,7 @@ var bypBtn=btn(946,130,'BYPASS',false,function(b){toggle(b);GB=b._on;MODS.forEac
 /* ============ ROW 2 : MODE, RIDER, BREATH, CLEAN ============ */
 box(24,238,200,174,'MODE','bottom');
 ['SPEAK','SING','PUKE'].forEach(function(n,i){
-  var b=gbtn(btn(68+i*56,312,n,i===0,function(){setMode(i);},YEL));modeBtns.push(b);});
+  var b=gbtn(btn(68+i*56,322,n,i===0,function(){setMode(i);},YEL));modeBtns.push(b);});
 boxTag(40,260,function(){return MODES.info[MODE].toUpperCase();});
 var tgf=withNum(function(v){return (-30+v*20).toFixed(1)+' dBFS';},function(v){return -30+v*20;});
 var brf=withNum(function(v){return (v*12).toFixed(1)+' dB';},function(v){return v*12;});
@@ -465,13 +465,13 @@ var mCl=modBox(796,238,180,174,'CLEAN',function(){
 });
 
 /* ============ ROW 3 : DE-ESS, COMP, TONE ============ */
-var mDs=modBox(24,424,270,180,'DE-ESS',function(){
+var mDs=modBox(24,424,270,166,'DE-ESS',function(){
   DSK=knob(74,522,'AMOUNT',0.5,'0','1','',{def:0.5,fmt:pct,api:{}});
   knob(156,522,'FREQ',0.53,'4','10','',{def:0.53,fmt:dsf,api:{}});
   btn(236,530,'LISTEN',false,function(b){toggle(b);});
   boxTag(40,458,function(){return MODE===2?'MOSTLY OFF IN PUKE (X0.15)':'';});
 });
-var mCp=modBox(300,424,400,180,'COMP',function(){
+var mCp=modBox(300,424,400,166,'COMP',function(){
   knob(352,522,'AMOUNT',0.5,'-6','-30','',{def:0.5,fmt:cmf,api:CPK});
   knob(436,522,'MIX',1,'0','100','',{def:1,fmt:pct,api:{}});
   ro(538,583,10,AMBL,'middle',function(){return RIX?RATIOS[RIX]:'AUTO '+MODES.ratio[MODE]+':1';});
@@ -480,7 +480,7 @@ var mCp=modBox(300,424,400,180,'COMP',function(){
   btn(636,544,'DIST',false,function(){DIX=(DIX+1)%DISTS.length;refreshRO();},YEL);
   boxTag(316,458,function(){return 'THRESHOLD SET BY AMOUNT \u00b7 GAIN REDUCTION: SEE LEVEL';});
 });
-var mTn=modBox(706,424,270,180,'TONE',function(){
+var mTn=modBox(706,424,270,166,'TONE',function(){
   knob(768,522,'TONE',0.5,'-100','+100','',{def:0.5,fmt:tonef,r:30,api:TONEK,onchange:function(){refreshRO();}});
   [['MUD','250 Hz'],['PRESENCE','3.5 kHz'],['AIR','12 kHz']].forEach(function(b,i){var y=512+i*32;
     lab(b[0],832,y,12,W,'start');lab(b[1],832,y+12,9,DIMW,'start');
@@ -494,7 +494,7 @@ setMode(0);
 
 /* ============ BACK: settings, modes, credits ============ */
 var back=document.getElementById('back');ROOT=back;CUR=null;
-el('rect',{width:1000,height:628,rx:14,fill:'#161617'});texLayer();
+el('rect',{width:1000,height:614,rx:14,fill:'#161617'});texLayer();
 el('rect',{x:2,y:2,width:996,height:624,rx:13,fill:'none',stroke:'#2c2c2f','stroke-width':2});
 LY=layers();addWear(LY.wear,0x77,true);screws(LY.screw);
 var bTitle=txt('CREDITS',34,58,38,W,'start',900,back,true);
@@ -548,19 +548,19 @@ box(SC,102,462,420,'NOTES','top');
 
 /* ---- MODES tab: what the mode buttons force (generated from the MODES table above) ---- */
 CUR=PANES.modes;BOXOVR=BOXES.modes;
-box(24,102,952,502,'WHAT THE MODE BUTTONS DO','top');
+box(24,102,952,488,'WHAT THE MODE BUTTONS DO','top');
 txt('SPEAK, SING and PUKE set the internal values below for the whole chain. The knobs keep their values.',50,142,12,W,'start',800);
 txt('The same table drives the read-only values on the front; the active mode is highlighted.',50,160,11,DIMW,'start',700);
 var MCX=[570,730,890];
 MODES.names.forEach(function(n,j){MODEHEAD.push(txt(n,MCX[j],200,15,W,'middle',900));});
 el('path',{d:'M50 212 H950',stroke:W,'stroke-width':1.5,opacity:.6});
-MROWS.forEach(function(r,i){var y=242+i*34;txt(r[0],50,y,13,W,'start',800);
+MROWS.forEach(function(r,i){var y=242+i*30;txt(r[0],50,y,13,W,'start',800);
   for(var j=0;j<3;j++)MODECELLS[j].push(txt(r[1](j),MCX[j],y,13,W,'middle',700));
   if(i<MROWS.length-1)el('path',{d:'M50 '+(y+12)+' H950',stroke:DIMW,'stroke-width':1,opacity:.25});});
-txt('RATIO AUTO and DIST AUTO use the values above; the other choices ignore the mode.',50,540,11,DIMW,'start',700);
-txt('De-ess x0.15: the DE-ESS amount is multiplied by 0.15 in PUKE, so the stage is almost off.',50,560,11,DIMW,'start',700);
-txt('Breath detector: SPECTRAL tells breaths from voice by spectrum; LEVEL (PUKE) uses the level only, because growls and screams are noisy.',50,578,11,DIMW,'start',700);
-txt('Rider max range is the full travel of the RANGE knob; the rider never moves faster than the speed shown.',50,596,11,DIMW,'start',700);
+txt('RATIO AUTO and DIST AUTO use the values above; the other choices ignore the mode.',50,510,11,DIMW,'start',700);
+txt('De-ess x0.15: the DE-ESS amount is multiplied by 0.15 in PUKE, so the stage is almost off.',50,528,11,DIMW,'start',700);
+txt('Breath detector: SPECTRAL tells breaths from voice by spectrum; LEVEL (PUKE) uses the level only, because growls and screams are noisy.',50,546,11,DIMW,'start',700);
+txt('Rider max range is the full travel of the RANGE knob; the rider never moves faster than the speed shown.',50,564,11,DIMW,'start',700);
 CUR=null;BOXOVR=null;showTab(lsGet('dt_tab','settings'));
 ROOT=svg;
 setMode(MODE);
