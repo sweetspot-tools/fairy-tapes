@@ -59,11 +59,11 @@ endif()
 # (smtg_target_make_plugin_package), written straight into dist/ (suite root).
 # Output directories use a generator expression so multi-config generators
 # (Visual Studio, Xcode, Ninja Multi-Config) do not append a /<Config> subfolder.
-set(PILLOW_TALK_BUNDLE "${SUITE_DIST_DIR}/Pillow Talk.vst3")
-set_target_properties(pillow_talk PROPERTIES OUTPUT_NAME "Pillow Talk" PREFIX "")
+set(PILLOW_TALK_BUNDLE "${SUITE_DIST_DIR}/PillowTalk.vst3")
+set_target_properties(pillow_talk PROPERTIES OUTPUT_NAME "PillowTalk" PREFIX "")
 if(APPLE)
   # CMake creates "<OUTPUT_NAME>.<BUNDLE_EXTENSION>" INSIDE LIBRARY_OUTPUT_DIRECTORY:
-  # dist/Pillow Talk.vst3/Contents/{MacOS/Pillow Talk, Info.plist}.
+  # dist/PillowTalk.vst3/Contents/{MacOS/PillowTalk, Info.plist}.
   set_target_properties(pillow_talk PROPERTIES
     BUNDLE TRUE
     BUNDLE_EXTENSION "vst3"
@@ -71,14 +71,14 @@ if(APPLE)
     LIBRARY_OUTPUT_DIRECTORY "$<1:${SUITE_DIST_DIR}>"
   )
 elseif(WIN32)
-  # dist/Pillow Talk.vst3/Contents/x86_64-win/Pillow Talk.vst3 (the DLL renamed .vst3).
+  # dist/PillowTalk.vst3/Contents/x86_64-win/PillowTalk.vst3 (the DLL renamed .vst3).
   set_target_properties(pillow_talk PROPERTIES
     SUFFIX ".vst3"
     LIBRARY_OUTPUT_DIRECTORY "$<1:${PILLOW_TALK_BUNDLE}/Contents/x86_64-win>"
     PDB_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/WIN_PDB64"
   )
 else()
-  # dist/Pillow Talk.vst3/Contents/x86_64-linux/Pillow Talk.so
+  # dist/PillowTalk.vst3/Contents/x86_64-linux/PillowTalk.so
   set_target_properties(pillow_talk PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "$<1:${PILLOW_TALK_BUNDLE}/Contents/x86_64-linux>"
   )
@@ -124,9 +124,9 @@ add_test(NAME pillow_talk_wear_tests COMMAND pillow_talk_wear_tests)
 # when the plugin has not been built). Links only the pluginterfaces IIDs, not the plugin.
 if(NOT WIN32)
   if(APPLE)
-    set(PILLOW_TALK_MODULE_PATH "${SUITE_DIST_DIR}/Pillow Talk.vst3/Contents/MacOS/Pillow Talk")
+    set(PILLOW_TALK_MODULE_PATH "${SUITE_DIST_DIR}/PillowTalk.vst3/Contents/MacOS/PillowTalk")
   else()
-    set(PILLOW_TALK_MODULE_PATH "${SUITE_DIST_DIR}/Pillow Talk.vst3/Contents/x86_64-linux/Pillow Talk.so")
+    set(PILLOW_TALK_MODULE_PATH "${SUITE_DIST_DIR}/PillowTalk.vst3/Contents/x86_64-linux/PillowTalk.so")
   endif()
   add_executable(pillow_talk_factory_test tests/test_factory.cpp)
   target_include_directories(pillow_talk_factory_test PRIVATE ${VST3_SDK_PATH})

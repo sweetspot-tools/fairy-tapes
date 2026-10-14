@@ -20,7 +20,7 @@ cmake ..
 cmake --build .   # runs tests first, then builds the_stripper
 ```
 
-**Output:** `dist/The Stripper.vst3/` (from repo root; folder containing the plugin). The build writes the bundle directly to `dist/`.
+**Output:** `dist/TheStripper.vst3/` (from repo root; folder containing the plugin). The build writes the bundle directly to `dist/`.
 
 ---
 
@@ -32,7 +32,7 @@ cmake --build .   # runs tests first, then builds the_stripper
 
 2. Copy the **entire** bundle:
    ```bash
-   cp -r dist/The\ Stripper.vst3 ~/.vst3/
+   cp -r dist/TheStripper.vst3 ~/.vst3/
    ```
 
 3. In Reaper: **Options → Preferences → Plug-ins → VST** → (re)scan or add path if needed.

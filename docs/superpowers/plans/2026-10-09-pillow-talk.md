@@ -15,7 +15,7 @@
 - Namespace `FairyTapes::PillowTalk`; DSP in `FairyTapes::PillowTalk::DSP`.
 - DSP senza JUCE; solo VST3 SDK e libreria standard. Nessun codice condiviso con altri plugin (niente include da `the-stripper`).
 - Licenza GPL-3.0, come il resto della suite. Il riferimento `vendors/dusk-audio-plugins/plugins/tape-echo` si consulta ma non si include.
-- Bundle di output `Pillow Talk.vst3` in `dist/` (stesso schema per piattaforma di The Stripper).
+- Bundle di output `PillowTalk.vst3` in `dist/` (stesso schema per piattaforma di The Stripper).
 - Ingresso principale stereo + sidechain stereo opzionale; uscita stereo.
 - Default BPM 120 se l'host non lo fornisce.
 - Feedback massimo 0.95. Saturazione con `tanh`, oversampling 2x solo su quello stadio.
@@ -125,7 +125,7 @@ git commit -m "feat(pillow-talk): add tape echo with wow/flutter and saturated f
 **Files:**
 - Create: `src/pillow-talk/src/processor.{h,cpp}`, `src/pillow-talk/src/controller.{h,cpp}`, `src/pillow-talk/src/plug.cpp`, `src/pillow-talk/src/Info.plist`
 - Create: `src/pillow-talk/README.md`, `src/pillow-talk/docs/CONTROLS.md`
-- Modify: `src/pillow-talk/CMakeLists.txt` (target `pillow_talk` SHARED, output `Pillow Talk.vst3` in `dist/`, come The Stripper), `README.md` radice (terzo plugin), `src/pillow-talk/tests/test_pillow_talk.cpp`
+- Modify: `src/pillow-talk/CMakeLists.txt` (target `pillow_talk` SHARED, output `PillowTalk.vst3` in `dist/`, come The Stripper), `README.md` radice (terzo plugin), `src/pillow-talk/tests/test_pillow_talk.cpp`
 
 **Interfaces:**
 - Consumes: `params.h` (Task 1), `Ducker` (Task 2), `TapeEcho` (Task 3).
@@ -137,7 +137,7 @@ git commit -m "feat(pillow-talk): add tape echo with wow/flutter and saturated f
 - [x] **Step 4: Implementare `Controller`** con `StringListParameter` per `kTimeNote`/`kHoldNote` (1/16, 1/8, 1/4, 1/2), parametri a due stati per Sync/Sidechain/Bypass, e `getParamStringByValue` con unità (ms, dB, %). Nessuna GUI custom, come The Stripper.
 - [x] **Step 5: Completare `CMakeLists.txt` e scrivere `README.md` e `docs/CONTROLS.md`** (ogni parametro con range e default; nota su Reaper: sidechain sui canali 3/4; su Cubase: attivare il sidechain dal plugin). Aggiornare il `README.md` radice.
 - [x] **Step 6: Build completa e test**
-  Run: `cmake --build build --target pillow_talk pillow_talk_tests && ctest --test-dir build -R pillow_talk --output-on-failure && ls "dist/Pillow Talk.vst3"`
+  Run: `cmake --build build --target pillow_talk pillow_talk_tests && ctest --test-dir build -R pillow_talk --output-on-failure && ls "dist/PillowTalk.vst3"`
   Expected: build senza errori, test PASS, bundle presente.
 - [ ] **Step 7: Verifica manuale in Reaper e Cubase** (a cura dell'utente): inserire come insert sulla voce, poi su un bus di ritorno con sidechain dalla voce; controllare che il delay si abbassi cantando e si apra nelle pause.
 - [x] **Step 8: Commit**

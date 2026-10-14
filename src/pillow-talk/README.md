@@ -27,7 +27,7 @@ cmake --build build --target pillow_talk pillow_talk_tests
 ctest --test-dir build -R pillow_talk --output-on-failure
 ```
 
-Output: `dist/Pillow Talk.vst3`. Copy it into your host's VST3 folder.
+Output: `dist/PillowTalk.vst3`. Copy it into your host's VST3 folder.
 
 ## Editor
 

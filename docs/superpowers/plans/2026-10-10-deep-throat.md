@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Namespace `FairyTapes::DeepThroat` (DSP in `...::DSP`). Bundle `Deep Throat.vst3` in `dist/`; ingresso e uscita stereo.
+- Namespace `FairyTapes::DeepThroat` (DSP in `...::DSP`). Bundle `DeepThroat.vst3` in `dist/`; ingresso e uscita stereo.
 - Catena fissa: Rider → Breath control → EQ correttivo → De-esser → Compressore → Tone, poi Output.
 - Modalità `Speak / Sing / Puke` (parametro `Mode`, 3 scelte).
 - Il Breath control non chiude mai del tutto: riduzione massima 12 dB.

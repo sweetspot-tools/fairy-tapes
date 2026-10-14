@@ -31,6 +31,7 @@ Più chat sullo stesso checkout si rovinano a vicenda (cambi di branch sotto i p
 
 - Il disco `/srv/http` è piccolo: **costruisci in una cartella scratch fuori dal repo** (es. `/tmp/.../build`), non dentro la copia di lavoro.
 - Configura con `-DCMAKE_BUILD_TYPE=Release -DGPU_NAM_DISABLE_CUDA=ON`, usa `-j2` e compila **solo i target che servono** (`the_stripper`, `the_stripper_tests`, …): una build di tutto è stata uccisa per memoria. CUDA si verifica a parte, su una macchina con driver NVIDIA.
+- Il bundle di ogni plugin è in PascalCase senza spazi (`TheStripper.vst3`, `PillowTalk.vst3`, `DeepThroat.vst3`): vale per `OUTPUT_NAME`, per i percorsi in `dist/` e per la CI. Il nome mostrato nell'host non cambia.
 - I test devono restare verdi prima e dopo ogni modifica. Il nuovo codice nasce con un test che prima fallisce.
 
 ## 5. Submodule

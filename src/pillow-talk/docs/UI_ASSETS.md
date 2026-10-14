@@ -4,9 +4,9 @@ L'editor (480 x 560) disegna tutto da codice. Le immagini sono **opzionali**: se
 
 ## Cartella
 
-`Contents/Resources` del bundle (`Pillow Talk.vst3/Contents/Resources/`). VSTGUI cerca i file lì, per nome, tramite `Skin` (`shared/ui`).
+`Contents/Resources` del bundle (`PillowTalk.vst3/Contents/Resources/`). VSTGUI cerca i file lì, per nome, tramite `Skin` (`shared/ui`).
 
-**Stato della build:** il CMake di Pillow Talk **non copia ancora nessun asset** nel bundle e non crea la cartella `Resources`. Per provare un'immagine oggi si copia a mano il file in `dist/Pillow Talk.vst3/Contents/Resources/`. Il passo di copia dalla sorgente degli asset verso il bundle va aggiunto al CMake quando arrivano le grafiche definitive (posto previsto: una cartella di sorgenti degli asset in `src/pillow-talk/`, copiata in `Contents/Resources` dopo la build). Il bundle viene riscritto a ogni build: i file copiati a mano possono andare persi.
+**Stato della build:** il CMake di Pillow Talk **non copia ancora nessun asset** nel bundle e non crea la cartella `Resources`. Per provare un'immagine oggi si copia a mano il file in `dist/PillowTalk.vst3/Contents/Resources/`. Il passo di copia dalla sorgente degli asset verso il bundle va aggiunto al CMake quando arrivano le grafiche definitive (posto previsto: una cartella di sorgenti degli asset in `src/pillow-talk/`, copiata in `Contents/Resources` dopo la build). Il bundle viene riscritto a ogni build: i file copiati a mano possono andare persi.
 
 ## File riconosciuti oggi
 

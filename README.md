@@ -15,7 +15,7 @@ Suite of VST3 audio plugins: real, analog-style tone via NAM (Neural Amp Modeler
 - **`shared/`** — Libraries shared by the plugins: `gpu_nam` (NAM on GPU) and `ui` (`fairy_ui`, `fairy_ui_widgets`: code-drawn VSTGUI controls and optional bitmap skin).
 - **`src/`** — Source code of Fairy Tapes plugins (e.g. `src/the-stripper/`, `src/pillow-talk/`; `src/doggystyle/` is still to be implemented).
 - **`build/`** — CMake output (cache, object files, test binaries). **Not in the repo** (gitignored). Regenerated when you run `./build.sh` or `cmake --build build`.
-- **`dist/`** — **Only** the built plugin bundles (e.g. `The Stripper.vst3`, `Pillow Talk.vst3`). CMake is configured so that each plugin target writes its `.vst3` directly here when you build; no copy step. **Not in the repo** (gitignored). Use this folder to upload to your store or pay-what-you-want page.
+- **`dist/`** — **Only** the built plugin bundles (e.g. `TheStripper.vst3`, `PillowTalk.vst3`). CMake is configured so that each plugin target writes its `.vst3` directly here when you build; no copy step. **Not in the repo** (gitignored). Use this folder to upload to your store or pay-what-you-want page.
 
 Shared conventions and build setup; no cross-plugin code coupling. **Default branch:** `master` (CI and merges target this branch).
 
@@ -113,7 +113,7 @@ Source code here is free and open source (GPL-3.0); the optional payment is for 
    `./build.sh` runs the test suite **before** building the plugin(s); if tests fail, the build stops. Tests are in `src/the-stripper/tests/` (parameter helpers). From `build/` you can run only tests with `ctest --output-on-failure`.
 
 4. **Install (local use)**  
-   The built bundle is written directly to **`dist/The Stripper.vst3`**. Copy it into your host’s VST3 folder (see your DAW/host documentation).
+   The built bundle is written directly to **`dist/TheStripper.vst3`**. Copy it into your host’s VST3 folder (see your DAW/host documentation).
 
 ## CI (GitHub Actions)
 
@@ -127,7 +127,7 @@ With submodules, the SDK is fetched at checkout. Build is typically **2–6 min 
 
 **GitHub free tier:** 2000 minutes/month. Linux counts 1×, Windows 2×, macOS 10× per minute. A full three-OS run is well within the free tier.
 
-**Using the builds:** In the Actions run, open the **Summary** → **Artifacts** and download e.g. `the-stripper-windows` or `pillow-talk-windows` for your Windows DAW, or the `-linux` / `-macos` artifacts for the other systems. Unzip if needed and place the `The Stripper.vst3` folder in your host’s VST3 path.
+**Using the builds:** In the Actions run, open the **Summary** → **Artifacts** and download e.g. `the-stripper-windows` or `pillow-talk-windows` for your Windows DAW, or the `-linux` / `-macos` artifacts for the other systems. Unzip if needed and place the `TheStripper.vst3` folder in your host’s VST3 path.
 
 ## Branch strategy
 

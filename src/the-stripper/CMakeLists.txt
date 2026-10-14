@@ -82,11 +82,11 @@ endif()
 
 # Output as VST3 bundle directly into dist/ (suite root). No pack step; each build writes the final bundle there.
 # Generator expressions ("$<1:...>") stop multi-config generators (Visual Studio, Xcode) from appending /<CONFIG>.
-set(THE_STRIPPER_BUNDLE "${SUITE_DIST_DIR}/The Stripper.vst3")
-set_target_properties(the_stripper PROPERTIES OUTPUT_NAME "The Stripper" PREFIX "")
+set(THE_STRIPPER_BUNDLE "${SUITE_DIST_DIR}/TheStripper.vst3")
+set_target_properties(the_stripper PROPERTIES OUTPUT_NAME "TheStripper" PREFIX "")
 if(APPLE)
   # CMake creates "<OUTPUT_NAME>.<BUNDLE_EXTENSION>" INSIDE LIBRARY_OUTPUT_DIRECTORY:
-  # dist/The Stripper.vst3/Contents/{MacOS/The Stripper, Info.plist}.
+  # dist/TheStripper.vst3/Contents/{MacOS/TheStripper, Info.plist}.
   set_target_properties(the_stripper PROPERTIES
     BUNDLE TRUE
     BUNDLE_EXTENSION "vst3"
@@ -94,7 +94,7 @@ if(APPLE)
     LIBRARY_OUTPUT_DIRECTORY "$<1:${SUITE_DIST_DIR}>"
   )
 elseif(WIN32)
-  # dist/The Stripper.vst3/Contents/x86_64-win/The Stripper.vst3 (the DLL renamed .vst3).
+  # dist/TheStripper.vst3/Contents/x86_64-win/TheStripper.vst3 (the DLL renamed .vst3).
   set_target_properties(the_stripper PROPERTIES
     SUFFIX ".vst3"
     LIBRARY_OUTPUT_DIRECTORY "$<1:${THE_STRIPPER_BUNDLE}/Contents/x86_64-win>"
@@ -102,7 +102,7 @@ elseif(WIN32)
     PDB_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/WIN_PDB64"
   )
 else()
-  # dist/The Stripper.vst3/Contents/x86_64-linux/The Stripper.so
+  # dist/TheStripper.vst3/Contents/x86_64-linux/TheStripper.so
   set_target_properties(the_stripper PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "$<1:${THE_STRIPPER_BUNDLE}/Contents/x86_64-linux>"
   )
@@ -191,9 +191,9 @@ add_test(NAME the_stripper_message_tests COMMAND the_stripper_message_tests)
 # when the plugin has not been built). Links only the pluginterfaces IIDs, not the plugin.
 if(NOT WIN32)
   if(APPLE)
-    set(THE_STRIPPER_MODULE_PATH "${SUITE_DIST_DIR}/The Stripper.vst3/Contents/MacOS/The Stripper")
+    set(THE_STRIPPER_MODULE_PATH "${SUITE_DIST_DIR}/TheStripper.vst3/Contents/MacOS/TheStripper")
   else()
-    set(THE_STRIPPER_MODULE_PATH "${SUITE_DIST_DIR}/The Stripper.vst3/Contents/x86_64-linux/The Stripper.so")
+    set(THE_STRIPPER_MODULE_PATH "${SUITE_DIST_DIR}/TheStripper.vst3/Contents/x86_64-linux/TheStripper.so")
   endif()
   add_executable(the_stripper_factory_test tests/test_factory.cpp)
   target_include_directories(the_stripper_factory_test PRIVATE ${VST3_SDK_PATH})

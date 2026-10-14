@@ -257,7 +257,7 @@ git commit -m "feat(the-stripper): add VSTGUI4 integration and code-drawn contro
 - [ ] **Step 3: Nastro con il nome del modello NAM** (in basso a destra nel riquadro Drive, striscia fissa cliccabile, niente pulsante né riquadro di input; nome senza `.nam`, nel font del nastro, troncato per larghezza misurata con puntino di sospensione) che apre il popup di scelta modello (spec §3.1, preview `stripper_model_browser.html`): scheda LOCAL con `LocalFolderSource` (scansione ricorsiva delle cartelle, ricerca, NO MODEL) e chiama `Controller::requestModelLoad`; mostra `modelName()` oppure `modelError()` in rosso, con icona a chip grigia per la GPU. Senza modello: passthrough e controllo Drive attenuato. Aggiungere anche la schermata CREDITS con flip (spec §4).
 - [ ] **Step 4: Sfondo.** Tinta `#161617`, tessera di grana ripetuta sopra, gradiente di luce disegnato dal codice; se il PNG manca, solo tinta e gradiente. Bordi dei riquadri tracciati con un'interruzione per il titolo (nessun rettangolo di mascheratura), così la grana passa anche dietro i titoli.
 - [ ] **Step 5: Verifica build e test.**
-  Run: `cmake --build build --target the_stripper the_stripper_tests && ctest --test-dir build -R the_stripper --output-on-failure && ls "dist/The Stripper.vst3"`
+  Run: `cmake --build build --target the_stripper the_stripper_tests && ctest --test-dir build -R the_stripper --output-on-failure && ls "dist/TheStripper.vst3"`
   Expected: build senza errori, test PASS, bundle presente.
 - [ ] **Step 6: Verifica manuale in Reaper e Cubase** (a cura dell'utente): aprire e chiudere l'editor 50 volte; automazione dei parametri; cambio di Strip Mode; caricamento di un `.nam` valido, di un file inesistente e di un file di testo.
 - [ ] **Step 7: Commit**

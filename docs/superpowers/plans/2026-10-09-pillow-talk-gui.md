@@ -156,7 +156,7 @@ git commit -m "feat(pillow-talk): add ducking scope view"
 - [x] **Step 2: Sync.** Time Sync e Hold Sync attenuano la manopola in millisecondi (`setDimmed`) e attivano le note, e viceversa, a ogni cambio del parametro (anche da automazione).
 - [x] **Step 3: Soglia sul display:** `setThreshold` aggiornato quando cambia `kThreshold`.
 - [x] **Step 4: Build e controllo dei simboli.**
-  Run: `cmake --build build --target pillow_talk pillow_talk_tests pillow_talk_factory_test -j2 && ctest --test-dir build -R pillow_talk --output-on-failure && nm -D --undefined-only "dist/Pillow Talk.vst3/Contents/x86_64-linux/Pillow Talk.so" | c++filt | grep -ci steinberg`
+  Run: `cmake --build build --target pillow_talk pillow_talk_tests pillow_talk_factory_test -j2 && ctest --test-dir build -R pillow_talk --output-on-failure && nm -D --undefined-only "dist/PillowTalk.vst3/Contents/x86_64-linux/PillowTalk.so" | c++filt | grep -ci steinberg`
   Expected: build senza errori, test PASS, 0 simboli `Steinberg::*` indefiniti.
 - [ ] **Step 5: Verifica manuale in Reaper e Cubase** (a cura dell'utente): aprire e chiudere l'editor 50 volte; muovere ogni controllo e controllare l'automazione e l'annullamento; Sync acceso e spento; display con voce reale e con sidechain; finestra su schermo ad alta densità.
 - [x] **Step 6: Commit**

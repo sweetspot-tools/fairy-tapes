@@ -23,7 +23,7 @@ Il nome (Pillow Talk) richiama il sussurro dopo la fine dell'"atto": il delay pa
 - `dsp/` — DSP senza JUCE (solo VST3 SDK e C++ standard)
 - `tests/`, `docs/`, `CMakeLists.txt`
 
-Aggiunto a `CMakeLists.txt` di suite con `add_subdirectory(src/pillow-talk)`. Produce `Pillow Talk.vst3` in `dist/`.
+Aggiunto a `CMakeLists.txt` di suite con `add_subdirectory(src/pillow-talk)`. Produce `PillowTalk.vst3` in `dist/`.
 
 Riferimento DSP: `vendors/dusk-audio-plugins/plugins/tape-echo` (GPL-3, `TapeEcho.h`, `WowFlutter.h`, `TapeSaturation.h`). Dipende da JUCE, quindi il DSP è riscritto senza JUCE seguendone la struttura, non incluso. Licenza invariata (GPL-3.0).
 

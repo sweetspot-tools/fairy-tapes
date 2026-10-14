@@ -29,7 +29,7 @@ cmake .. -DVST3_SDK_PATH=/absolute/path/to/fairy-tapes/vendors/vst3sdk
 cmake --build .
 ```
 
-Output: `The Stripper.vst3` (bundle). Copy it into your host’s VST3 folder to use.
+Output: `TheStripper.vst3` (bundle). Copy it into your host’s VST3 folder to use.
 
 ## Status
 
