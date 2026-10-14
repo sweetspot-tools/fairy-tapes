@@ -1,5 +1,5 @@
 // Developer tool: draws the editor offscreen into a PNG, no host or window needed.
-//   the_stripper_render out.png [bypass] [bus] [eq-off] [nam-off] [meters] [model=<file>] [model-error=<text>] [browser]
+//   the_stripper_render out.png [bypass] [bus] [eq-off] [nam-off] [meters] [seed=<n>] [model=<file>] [model-error=<text>] [browser]
 // Used to check the look of the code-drawn GUI on a machine without a plugin host.
 #include "controller.h"
 #include "ui/editor.h"
@@ -26,6 +26,8 @@ void* moduleHandle = nullptr;   // normally set by the platform module entry poi
 namespace FairyTapes::TheStripper::Ui {
 
 struct EditorPreview {
+  static void setSeed(Controller& ctl, std::uint32_t seed) { ctl.wearSeed_ = seed; }
+
   static void setModel(Controller& ctl, int state, const char* name, const char* error) {
     ctl.modelStatus_.state = state;
     ctl.modelStatus_.name = name;
@@ -77,6 +79,7 @@ int main(int argc, char** argv) {
     else if (!std::strcmp(argv[i], "nam-off")) { ctl.setParamNormalized(kDriveNamOn, 0.0); ctl.setParamNormalized(kEqSaturation, 0.4); }
     else if (!std::strcmp(argv[i], "eq-off")) ctl.setParamNormalized(kBypassEQ, 1.0);
     else if (!std::strcmp(argv[i], "browser")) browser = true;
+    else if (!std::strncmp(argv[i], "seed=", 5)) Ui::EditorPreview::setSeed(ctl, static_cast<std::uint32_t>(std::strtoul(argv[i] + 5, nullptr, 0)));
     else if (!std::strncmp(argv[i], "model=", 6)) Ui::EditorPreview::setModel(ctl, 2, argv[i] + 6, "");
     else if (!std::strncmp(argv[i], "model-error=", 12)) Ui::EditorPreview::setModel(ctl, 3, "", argv[i] + 12);
     else if (!std::strcmp(argv[i], "meters")) {
