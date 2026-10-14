@@ -27,7 +27,7 @@ body{margin:0;padding:16px;background:#e9e8e4;font-family:system-ui,sans-serif;c
   <label>Zoom <select id="zoom"><option value="1">100%</option><option value="1.5">150%</option><option value="2">200%</option><option value="2.5">250%</option></select></label>
   <button id="reroll" title="New random layout (new instance)">Re-roll</button>
   <label>Signal <input type="range" id="lvl" min="0" max="100" value="55" style="width:120px"></label>
-  <span style="color:#555">Rack-style panel preview (1000 × 628, landscape). Knobs: drag vertically, Shift = fine, double-click = default. Click a clip LED to clear it. Mode buttons change the read-only values and the scope. When a module IN button is off (all on by default) its controls dim; the BYPASS button at the top right dims everything and puts the plugin in bypass.</span>
+  <span style="color:#555">Rack-style panel preview (1000 × 628, landscape). Knobs: drag vertically, Shift = fine, double-click = default. Click a clip LED to clear it. Mode buttons change the read-only values and the scope. When a module IN button is off (all on by default) its controls dim; the BYPASS button in the Output box dims everything and puts the plugin in bypass.</span>
 </div>
 <div class="stage"><div class="scene"><div class="card" id="card"><svg id="ui" viewBox="0 0 1000 628" role="img" aria-label="Deep Throat editor, rack-style panel"></svg><svg id="back" viewBox="0 0 1000 628" role="img" aria-label="Deep Throat settings, modes and credits"></svg></div></div></div>
 <script>
@@ -391,7 +391,7 @@ box(280,96,110,130,'INPUT','bottom');
 reg(grp(),false);knob(335,150,'GAIN',0.5,'-12','+12','',{def:0.5,fmt:db(12),r:22,api:INK});endGrp();
 
 /* meters */
-box(396,96,464,130,'LEVEL','bottom');
+box(396,96,424,130,'LEVEL','bottom');
 var LX=480,STEP=18,N=15,OFFL2='#3a1010';
 function ledRow(y,label,colFn,n){
   txt(label,LX-12,y+4,11,W,'end',800);
@@ -421,9 +421,9 @@ function paintClips(){clips.forEach(function(d,i){d.setAttribute('fill',clipOn[i
 function setLeds(r,n){r.a.forEach(function(c,i){c.setAttribute('fill',i<n?r.col(i):OFFL);});}
 function dbN(d){return Math.max(0,Math.min(N,Math.round((d+60)/(66/(N-1))+0.5)));}
 
-box(866,96,110,130,'OUTPUT','bottom');
-reg(grp(),false);knob(921,150,'GAIN',0.5,'-12','+12','',{def:0.5,fmt:db(12),r:22,api:OUTK});endGrp();
-var bypBtn=btn(940,36,'BYPASS',false,function(b){toggle(b);GB=b._on;MODS.forEach(paint);GBTN.forEach(function(x){x.style.opacity=GB?DIM:1;if(x._lg)x._lg.style.opacity=GB?DIM:1;});});
+box(826,96,150,130,'OUTPUT','bottom');
+reg(grp(),false);knob(868,150,'GAIN',0.5,'-12','+12','',{def:0.5,fmt:db(12),r:22,api:OUTK});endGrp();
+var bypBtn=btn(944,150,'BYPASS',false,function(b){toggle(b);GB=b._on;MODS.forEach(paint);GBTN.forEach(function(x){x.style.opacity=GB?DIM:1;if(x._lg)x._lg.style.opacity=GB?DIM:1;});});
 
 /* ============ ROW 2 : RIDER, BREATH, CLEAN ============ */
 var tgf=withNum(function(v){return (-30+v*20).toFixed(1)+' dBFS';},function(v){return -30+v*20;});
