@@ -149,8 +149,10 @@ void test_drive_knob_is_shared_by_the_two_engines() {
   CHECK(!nam->sharesView && sat->sharesView);           // one view, two parameters
   CHECK(nam->rect.x == sat->rect.x && nam->rect.y == sat->rect.y);
   CHECK(std::string(nam->label) == std::string(sat->label));   // same label: the swap is not visible
-  CHECK(sw->kind == Kind::Toggle && sw->module == Module::Drive && !sw->isIn && !sw->inverted);
-  CHECK(std::string(sw->label) == "NAM");
+  // two exclusive buttons NAM / 4K, like Voice/Drums/Classic; the parameter is 1 for the NAM, so the choice is inverted
+  CHECK(sw->kind == Kind::Choice && sw->module == Module::Drive && !sw->isIn && sw->inverted);
+  CHECK(std::string(sw->choices[0]) == "NAM" && std::string(sw->choices[1]) == "4K" && sw->choices[2] == nullptr);
+  CHECK(uiValue(sw->inverted, 1.0) == 0.0 && uiValue(sw->inverted, 0.0) == 1.0);   // NAM = first button = index 0
   CHECK(driveEngineParam(true) == kDriveAmount && driveEngineParam(false) == kEqSaturation);
   CHECK(driveKnobDimmed(true, false) && !driveKnobDimmed(true, true));   // NAM without a model: dimmed
   CHECK(!driveKnobDimmed(false, false) && !driveKnobDimmed(false, true)); // Saturate never needs a model

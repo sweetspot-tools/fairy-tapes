@@ -102,7 +102,8 @@ constexpr ControlSpec kControls[] = {
     {kDriveAmount, Kind::Knob, Module::Drive, knob(458, 520), "DRIVE", false, false, {}},
     // The same knob shows the 4K saturation amount when the NAM switch is off (the swap is not visible).
     {kEqSaturation, Kind::Knob, Module::Drive, knob(458, 520), "DRIVE", false, false, {}, true},
-    {kDriveNamOn, Kind::Toggle, Module::Drive, button(624, 490, 34), "NAM", false, false, {}},
+    // Two exclusive buttons like the other presets: NAM (left) / 4K (right). Parameter 1 = NAM, hence inverted.
+    {kDriveNamOn, Kind::Choice, Module::Drive, button(606, 490, 84), nullptr, false, true, {"NAM", "4K"}},
     {kBypassDrive, Kind::Toggle, Module::Drive, button(666, 490), "IN", true, true, {}},
     {kLimiterPound, Kind::Knob, Module::Limiter, knob(766, 520), "POUND", false, false, {}},
     {kBypassLimiter, Kind::Toggle, Module::Limiter, button(811, 490), "IN", true, true, {}},

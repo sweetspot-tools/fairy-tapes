@@ -461,16 +461,20 @@ function fitName(){var t=window.NAMT,fam="'"+TAPEFONT+"',cursive",k=NORM[TAPEFON
   var base=MODELNAME.replace(/\.nam$/i,''),txtv=base;t.textContent=txtv;
   if(t.getComputedTextLength()>NAMMAX){var n=base.length;while(n>1){txtv=base.slice(0,n).replace(/[\s_\-.]+$/,'')+'\u2026';t.textContent=txtv;if(t.getComputedTextLength()<=NAMMAX)break;n--;}}
   nam.querySelector('title').textContent=MODELNAME+' · click to choose a NAM model';}
-/* NAM switch: lit = the NAM drives the stage, off = the 4K saturation (same DRIVE knob, each engine keeps its own value) */
-var namBtn=btn(628,522,'NAM',true,function(b){toggle(b);DV[namOn?'nam':'sat']=DRVK.get();namOn=b._on;DRVK.set(DV[namOn?'nam':'sat']);
-  nam.style.pointerEvents=namOn?'auto':'none';nam.style.cursor=namOn?'pointer':'default';fitName();},YEL);
+/* engine selectors NAM / 4K: two exclusive buttons like the other presets (lit = engine in use; same DRIVE knob, each engine keeps its own value) */
+var engBtns=[];
+function setEngine(on){DV[namOn?'nam':'sat']=DRVK.get();namOn=on;DRVK.set(DV[namOn?'nam':'sat']);
+  engBtns[0]._on=on;engBtns[1]._on=!on;engBtns.forEach(function(b){b._paint(b._on);});
+  nam.style.pointerEvents=namOn?'auto':'none';nam.style.cursor=namOn?'pointer':'default';fitName();}
+var namBtn=btn(586,522,'NAM',true,function(){if(!namOn)setEngine(true);},YEL);
+var satBtn=btn(626,522,'4K',false,function(){if(namOn)setEngine(false);},YEL);engBtns=[namBtn,satBtn];
 /* GPU chip inside the NAM button: shown only while the plug-in runs the model on the GPU */
-(function(){var c=el('g',{transform:'translate(618.2 512.2) scale(.7)'},namBtn);el('title',{},c).textContent='NAM runs on the GPU';var C='#68686c',i;
+(function(){var c=el('g',{transform:'translate(576.2 512.2) scale(.7)'},namBtn);el('title',{},c).textContent='NAM runs on the GPU';var C='#68686c',i;
   for(i=0;i<3;i++){el('rect',{x:9+i*4,y:5,width:1.4,height:2.6,fill:C},c);el('rect',{x:9+i*4,y:20.4,width:1.4,height:2.6,fill:C},c);el('rect',{x:5,y:10+i*3.6,width:2.6,height:1.4,fill:C},c);el('rect',{x:20.4,y:10+i*3.6,width:2.6,height:1.4,fill:C},c);}
   el('rect',{x:7.6,y:7.8,width:12.8,height:12.4,rx:1.3,fill:'none',stroke:C,'stroke-width':1.3},c);el('rect',{x:11.5,y:11.8,width:5,height:4.5,fill:C},c);
   window.GPUCHIP=c;
   /* the button face sinks 1.5 px when lit: the chip follows it so it stays centred on the face */
-  var op=namBtn._paint;namBtn._paint=function(o){op(o);c.setAttribute('transform','translate(618 '+(512+(o?1.5:0))+') scale(.7)');};namBtn._paint(namBtn._on);})();
+  var op=namBtn._paint;namBtn._paint=function(o){op(o);c.setAttribute('transform','translate(576 '+(512+(o?1.5:0))+') scale(.7)');};namBtn._paint(namBtn._on);})();
 endGrp();byp(666,522,gDr);
 box(708,484,132,146,'LIMITER','bottom');
 var gLi=grp();knob(766,552,'POUND',0.4,'0','10','',{def:0.5,fmt:num});endGrp();byp(811,522,gLi);
