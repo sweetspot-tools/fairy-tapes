@@ -399,24 +399,23 @@ function ledRow(y,label,colFn,n){
   return {a:a,col:colFn};
 }
 function dbCol(i){var d=-60+i*(66/(N-1));return d>=0?RED:(d>=-9?YEL:(d>=-18?'#9fe03a':GRN));}
-var rIL=ledRow(114,'L',dbCol),rIR=ledRow(128,'R',dbCol),rOL=ledRow(160,'L',dbCol),rOR=ledRow(174,'R',dbCol);
-txt('IN',LX-34,124,11,YEL,'middle',800);txt('OUT',LX-34,170,11,YEL,'middle',800);
+var rIL=ledRow(110,'L',dbCol),rIR=ledRow(122,'R',dbCol),rOL=ledRow(148,'L',dbCol),rOR=ledRow(160,'R',dbCol);
+txt('IN',LX-34,120,11,YEL,'middle',800);txt('OUT',LX-34,158,11,YEL,'middle',800);
 [-60,-48,-36,-24,-18,-12,-6,0].forEach(function(d,i){
-  var idx=Math.round((d+60)/(66/(N-1)));txt((d>0?'+':'')+d,LX+idx*STEP,146,9,DIMW,'middle',700);});
+  var idx=Math.round((d+60)/(66/(N-1)));txt((d>0?'+':'')+d,LX+idx*STEP,138,9,DIMW,'middle',700);});
 var gGR=grp();gbtn(gGR);
-var rGR=ledRow(204,'',function(i){return i>10?RED:AMBL;},N);
-txt('GR',LX-34,208,11,YEL,'middle',800);
-[0,6,12,18].forEach(function(d){txt(d?'-'+d:'0',LX+Math.round(d/1.5)*STEP,192,9,DIMW,'middle',700);});
+var rGR=ledRow(184,'',function(i){return i>10?RED:AMBL;},N);
+txt('GR',LX-34,188,11,YEL,'middle',800);
+[0,6,12,18].forEach(function(d){txt(d?'-'+d:'0',LX+Math.round(d/1.5)*STEP,174,9,DIMW,'middle',700);});
 endGrp();
-var clips=[],clipOn=[0,0];
-['IN','OUT'].forEach(function(n,i){
-  var y=120+i*46,g=el('g',{style:'cursor:pointer'});
-  var d=el('circle',{cx:756,cy:y,r:3.4,fill:OFFL,stroke:'#000','stroke-width':.6},g);
-  txt(n,765,y+4,10,W,'start',800,g);
+var clipNames=['IN','OUT'],clips=[],clipOn=[0,0];
+clipNames.forEach(function(n,i){
+  var x=LX+4+i*44,g=el('g',{style:'cursor:pointer'});
+  var d=el('circle',{cx:x,cy:210,r:3.4,fill:OFFL,stroke:'#000','stroke-width':.6},g);
+  txt(n,x+9,214,10,W,'start',800,g);
   g.addEventListener('click',function(){clipOn=[0,0];paintClips();});clips.push(d);
-  if(i===1)gbtn(g);
 });
-txt('CLIP',776,108,11,YEL,'middle',800);
+txt('CLIP',LX-34,214,11,YEL,'middle',800);
 function paintClips(){clips.forEach(function(d,i){d.setAttribute('fill',clipOn[i]>0?RED:OFFL);});}
 function setLeds(r,n){r.a.forEach(function(c,i){c.setAttribute('fill',i<n?r.col(i):OFFL);});}
 function dbN(d){return Math.max(0,Math.min(N,Math.round((d+60)/(66/(N-1))+0.5)));}
