@@ -100,7 +100,7 @@ Servono per vedere a colpo d'occhio dove il segnale si sporca e quanto lavorano 
 - **segni di richiamo**: i valori normalizzati dei parametri all'ultimo caricamento o "Mark now", più un flag di validità;
 - impostazioni di comportamento: inferenza NAM (Auto/GPU/CPU) e modalità dei segni di richiamo (Auto/Manual).
 
-**Preferenze dell'utente** (file nella cartella delle preferenze, valide per ogni progetto e istanza, **non** nello stato): livello di usura (Off/Light/Heavy), livello note (Hide/Show), mantenimento e rilascio dei meter, font del nastro, font dei valori, cartelle dei modelli. Le chiavi sono nomi stabili; un file mancante o illeggibile significa valori di default.
+**Preferenze dell'utente** (file nella cartella delle preferenze, valide per ogni progetto e istanza, **non** nello stato): livello di usura (Off/Light/Heavy), livello note (Hide/Show), mantenimento e rilascio dei meter, font del nastro, font dei valori, cartelle dei modelli. File `FairyTapes/TheStripper.prefs` (testo `chiave=valore`, scrittura atomica; chiavi: `wear`, `notes`, `meterHoldSeconds`, `meterReleaseDbPerSec`, `tapeFont`, `valuesFont`, `modelFolders`/`modelFolder`; default: usura Light, note Show, hold 1,5 s, rilascio 20 dB/s, font del nastro Zeyada, valori Tape). Le chiavi sono nomi stabili; un file mancante o illeggibile significa valori di default.
 
 ## 7. Test
 

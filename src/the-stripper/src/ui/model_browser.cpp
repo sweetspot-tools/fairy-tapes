@@ -2,6 +2,7 @@
 #include "ui/model_browser.h"
 
 #include "ui/browser_widgets.h"
+#include "preferences.h"
 #include "ui/draw_util.h"
 
 #include "vstgui/lib/cdrawcontext.h"
@@ -33,21 +34,36 @@ constexpr CColor kPopupEdge(0x2c, 0x2c, 0x2f);
 constexpr CColor kFieldBack(0x05, 0x05, 0x05);
 constexpr CColor kFieldLine(0x58, 0x58, 0x5c);
 
-// Folders the picker starts with (until the user preferences exist, Task 10): the ones that exist from a short list.
-// Shared by every editor instance of the process.
+// The model folders are a user preference (spec 6): read from the preferences file on first use, saved on every change.
+// Until the user touches the list, the picker proposes the existing ones of a short list. Shared by every editor
+// instance of the process.
+std::vector<std::string> defaultFolders() {
+  std::vector<std::string> out;
+  if (const char* home = std::getenv("HOME")) {
+    for (const char* sub : {"NAM", "Documents/NAM", "Documents/Tone3000"}) {
+      const std::string p = std::string(home) + "/" + sub;
+      std::error_code ec;
+      if (std::filesystem::is_directory(fromUtf8(p), ec)) out.push_back(p);
+    }
+  }
+  return out;
+}
+
 std::vector<std::string>& sharedFolders() {
   static std::vector<std::string> folders = [] {
-    std::vector<std::string> out;
-    if (const char* home = std::getenv("HOME")) {
-      for (const char* sub : {"NAM", "Documents/NAM", "Documents/Tone3000"}) {
-        const std::string p = std::string(home) + "/" + sub;
-        std::error_code ec;
-        if (std::filesystem::is_directory(fromUtf8(p), ec)) out.push_back(p);
-      }
-    }
-    return out;
+    const Preferences prefs = loadPreferences(preferencesPath("TheStripper"));
+    return prefs.modelFoldersConfigured ? prefs.modelFolders : defaultFolders();
   }();
   return folders;
+}
+
+void saveSharedFolders(const std::vector<std::string>& folders) {
+  sharedFolders() = folders;
+  const auto file = preferencesPath("TheStripper");
+  Preferences prefs = loadPreferences(file);   // keep the other preferences as they are
+  prefs.modelFoldersConfigured = true;
+  prefs.modelFolders = folders;
+  savePreferences(file, prefs);
 }
 
 std::string sizeText(std::uint64_t bytes) {
@@ -276,7 +292,7 @@ void ModelBrowser::addFolder() {
       const std::string folder = dir;
       if (std::find(folders_.begin(), folders_.end(), folder) == folders_.end()) {
         folders_.push_back(folder);
-        sharedFolders() = folders_;
+        saveSharedFolders(folders_);
         rescan();
       }
     }
@@ -287,7 +303,7 @@ void ModelBrowser::addFolder() {
 void ModelBrowser::removeFolder() {
   if (folderIndex_ <= 0 || folderIndex_ > static_cast<int>(folders_.size())) return;
   folders_.erase(folders_.begin() + (folderIndex_ - 1));
-  sharedFolders() = folders_;
+  saveSharedFolders(folders_);
   folderIndex_ = 0;
   rescan();
 }

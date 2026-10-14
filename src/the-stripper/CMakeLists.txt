@@ -173,6 +173,11 @@ add_executable(the_stripper_model_source_tests tests/test_model_source.cpp)
 target_include_directories(the_stripper_model_source_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 add_test(NAME the_stripper_model_source_tests COMMAND the_stripper_model_source_tests)
 
+# User preferences file (header-only, no SDK).
+add_executable(the_stripper_preferences_tests tests/test_preferences.cpp)
+target_include_directories(the_stripper_preferences_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+add_test(NAME the_stripper_preferences_tests COMMAND the_stripper_preferences_tests)
+
 # Developer tool: draws the editor offscreen into a PNG (no host needed). Not built by default.
 add_executable(the_stripper_render EXCLUDE_FROM_ALL tools/render_editor.cpp ${VST3_SDK_PUBLIC}/source/main/moduleinit.cpp ${VST3_SDK_PUBLIC}/source/main/pluginfactory.cpp src/controller.cpp src/ui/editor.cpp src/ui/panel_view.cpp
   src/ui/draw_util.cpp
