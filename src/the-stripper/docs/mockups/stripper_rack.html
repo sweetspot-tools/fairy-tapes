@@ -296,7 +296,7 @@ function frontLink(label,tab,x,tip){var g=el('g',{style:'cursor:pointer'});el('t
   el('rect',{x:x-84,y:66,width:86,height:18,fill:'transparent'},g);txt(label,x,78,11,DIMW,'end',700,g);
   g.addEventListener('click',function(){showTab(lsGet('st_tab',tab));document.getElementById('card').classList.add('flipped');});}
 frontLink('BACK  →',lsGet('st_tab','settings'),966,'Turn the panel around: settings and credits');
-txt('CHANNEL STRIP  ·  4-BAND EQ  ·  COMPRESSOR  ·  NAM DRIVE  ·  LIMITER  ·  GATE',966,46,13,W,'end',700);
+txt('CHANNEL STRIP  ·  4-BAND EQ  ·  COMPRESSOR  ·  DRIVE  ·  LIMITER  ·  GATE',966,46,13,W,'end',700);
 
 /* section box: title on top or bottom border */
 function box(x,y,w,h,title,where){
@@ -438,7 +438,7 @@ knob(170,552,'MIX',1,'DRY','WET','',{def:1,fmt:pct});
 ['VOICE','DRUMS','CLASSIC'].forEach(function(n,i){
   var b=btn(264+i*48,588,n,i===0,function(){modeBtns.forEach(function(m,j){m._on=(j===i);m._paint(m._on);});},YEL);modeBtns.push(b);});
 endGrp();byp(360,522,gCm);
-box(402,484,300,146,'DRIVE · NAM','bottom');var gDr=grp();
+box(402,484,300,146,'DRIVE','bottom');var gDr=grp();
 var DRVK={},namOn=true,DV={nam:0.3,sat:0.2};
 knob(458,552,'DRIVE',0.3,'0','10','',{def:0,fmt:num,r:21,api:DRVK});
 /* model name: a fixed strip of tape written in the tape font; the name is cut by measured width (never by character count) and ends with an ellipsis */

@@ -42,7 +42,7 @@ constexpr BoxSpec kBoxes[] = {
     {{790, 92, 186, 170}, "OUTPUT", false, Module::Output},
     {{24, 282, 952, 150}, "EQUALISER", true, Module::Eq},
     {{24, 452, 372, 146}, "COMPRESSION", false, Module::Comp},
-    {{402, 452, 300, 146}, "DRIVE \xC2\xB7 NAM", false, Module::Drive},
+    {{402, 452, 300, 146}, "DRIVE", false, Module::Drive},
     {{708, 452, 132, 146}, "LIMITER", false, Module::Limiter},
     {{846, 452, 130, 146}, "GATE", false, Module::Gate},
 };

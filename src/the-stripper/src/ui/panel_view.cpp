@@ -76,7 +76,7 @@ void PanelView::draw(CDrawContext* ctx) {
   ctx->drawString("FAIRY TAPES", o + CPoint(36, 78));
   ctx->setFont(taglineFont_);
   ctx->setFontColor(kWhite);
-  const char* tagline = "CHANNEL STRIP  \xC2\xB7  4-BAND EQ  \xC2\xB7  COMPRESSOR  \xC2\xB7  NAM DRIVE  \xC2\xB7  LIMITER  \xC2\xB7  GATE";
+  const char* tagline = "CHANNEL STRIP  \xC2\xB7  4-BAND EQ  \xC2\xB7  COMPRESSOR  \xC2\xB7  DRIVE  \xC2\xB7  LIMITER  \xC2\xB7  GATE";
   ctx->drawString(tagline, o + CPoint(966 - ctx->getStringWidth(tagline), 46));
 
   // Section boxes: white border with a gap for the title.
