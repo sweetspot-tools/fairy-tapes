@@ -13,13 +13,14 @@
 
 #include "params.h"
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <string>
 #include <vector>
 
 namespace FairyTapes::TheStripper {
 
-constexpr int kStateVersion = 10;
+constexpr int kStateVersion = 11;
 constexpr std::int32_t kMaxModelPathBytes = 4096;
 constexpr int kMaxTapePieces = 4;            // pieces of tape whose writing is saved
 constexpr std::int32_t kMaxTapeTextBytes = 64;   // 14 characters, UTF-8, with room to spare
@@ -36,6 +37,13 @@ struct PluginState {
   std::string modelPath;
   std::uint32_t wearSeed = 0;          // 0 = none yet (the controller creates one); v10
   std::vector<TapeText> tapeTexts;     // v10
+  // v11: the four screws of the panel (angle in degrees, 0 <= a < 360), the recall marks (the parameter values at the last
+  // load or "Mark now") and how the marks are set (0 = Auto: at every load, 1 = Manual: only with "Mark now").
+  bool hasScrewAngles = false;
+  double screwAngles[4] = {0, 0, 0, 0};
+  bool recallValid = false;
+  double recall[kNumParams] = {};
+  int recallMode = 0;
 };
 
 /// Default value of every parameter (the table the frozen-parameter test pins down).
@@ -174,6 +182,39 @@ bool readState(S& s, PluginState& out) {
         out.tapeTexts.push_back(std::move(t));
       }
     }
+    if (version >= 11) {
+      std::int32_t screws = 0;
+      if (!s.readInt32(screws) || (screws != 0 && screws != 4))
+        return false;
+      if (screws == 4) {
+        out.hasScrewAngles = true;
+        for (int i = 0; i < 4; ++i) {
+          double a = 0;
+          if (!s.readDouble(a))
+            return false;
+          if (!std::isfinite(a))
+            a = 0.0;
+          a = std::fmod(a, 360.0);
+          out.screwAngles[i] = a < 0.0 ? a + 360.0 : a;
+        }
+      }
+      std::int32_t recallFlag = 0;
+      if (!s.readInt32(recallFlag) || (recallFlag != 0 && recallFlag != 1))
+        return false;
+      if (recallFlag == 1) {
+        out.recallValid = true;
+        for (int i = 0; i < kNumParams; ++i) {
+          double v = 0;
+          if (!s.readDouble(v))
+            return false;
+          out.recall[i] = std::isfinite(v) ? std::min(1.0, std::max(0.0, v)) : 0.0;
+        }
+      }
+      std::int32_t mode = 0;
+      if (!s.readInt32(mode) || (mode != 0 && mode != 1))
+        return false;
+      out.recallMode = mode;
+    }
   } else {
     // v1..v3: read what is available, then fill the rest with defaults
     const int n = (version == 1) ? 3 : (version == 2) ? kV2 : kV3;
@@ -240,7 +281,7 @@ bool readState(S& s, PluginState& out) {
   return true;
 }
 
-/// Writes the current version (10).
+/// Writes the current version (11).
 template <class S>
 bool writeState(S& s, const PluginState& in) {
   if (!s.writeInt32(kStateVersion))
@@ -266,7 +307,19 @@ bool writeState(S& s, const PluginState& in) {
     if (n > 0 && s.writeRaw(t.text.data(), n) != n)
       return false;
   }
-  return true;
+  if (!s.writeInt32(in.hasScrewAngles ? 4 : 0))
+    return false;
+  if (in.hasScrewAngles)
+    for (int i = 0; i < 4; ++i)
+      if (!s.writeDouble(in.screwAngles[i]))
+        return false;
+  if (!s.writeInt32(in.recallValid ? 1 : 0))
+    return false;
+  if (in.recallValid)
+    for (int i = 0; i < kNumParams; ++i)
+      if (!s.writeDouble(in.recall[i]))
+        return false;
+  return s.writeInt32(in.recallMode == 1 ? 1 : 0);
 }
 
 } // namespace FairyTapes::TheStripper

@@ -11,6 +11,7 @@
 #include "pluginterfaces/vst/ivstunits.h"
 #include "pluginterfaces/vst/vsttypes.h"
 #include "base/source/fstreamer.h"
+#include <cmath>
 #include <cstring>
 #include <random>
 #include <cstdio>
@@ -70,6 +71,16 @@ Steinberg::tresult Controller::applyState(Steinberg::IBStream* state, bool withE
     if (st.wearSeed != 0)
       wearSeed_ = st.wearSeed;   // a state without a seed (older project) keeps the one made for this instance
     tapeTexts_ = st.tapeTexts;
+    hasScrews_ = st.hasScrewAngles;
+    for (int i = 0; i < 4; ++i) screws_[i] = st.screwAngles[i];
+    recallMode_ = st.recallMode;
+    if (recallMode_ == 0) {   // Auto: the marks are the values that were just loaded
+      recallValid_ = true;
+      for (int i = 0; i < kNumParams; ++i) recall_[i] = st.params[i];
+    } else {                  // Manual: the marks stay as they were saved
+      recallValid_ = st.recallValid;
+      for (int i = 0; i < kNumParams; ++i) recall_[i] = st.recall[i];
+    }
   }
   return Steinberg::kResultOk;
 }
@@ -86,6 +97,11 @@ Steinberg::tresult PLUGIN_API Controller::getState(Steinberg::IBStream* state) {
     std::lock_guard<std::mutex> lk(uiMutex_);
     st.wearSeed = wearSeed_;
     st.tapeTexts = tapeTexts_;
+    st.hasScrewAngles = hasScrews_;
+    for (int i = 0; i < 4; ++i) st.screwAngles[i] = screws_[i];
+    st.recallValid = recallValid_;
+    for (int i = 0; i < kNumParams; ++i) st.recall[i] = recall_[i];
+    st.recallMode = recallMode_;
   }
   return writeState(s, st) ? Steinberg::kResultOk : Steinberg::kResultFalse;
 }
@@ -102,12 +118,55 @@ TapeText Controller::tapeText(int index) const {
   return tapeTexts_[static_cast<std::size_t>(index)];
 }
 
+bool Controller::screwAngles(double out[4]) const {
+  std::lock_guard<std::mutex> lk(uiMutex_);
+  if (!hasScrews_) return false;
+  for (int i = 0; i < 4; ++i) out[i] = screws_[i];
+  return true;
+}
+
+void Controller::setScrewAngles(const double in[4]) {
+  std::lock_guard<std::mutex> lk(uiMutex_);
+  hasScrews_ = true;
+  for (int i = 0; i < 4; ++i) {
+    const double a = std::isfinite(in[i]) ? std::fmod(in[i], 360.0) : 0.0;
+    screws_[i] = a < 0.0 ? a + 360.0 : a;
+  }
+}
+
+bool Controller::recallValid() const {
+  std::lock_guard<std::mutex> lk(uiMutex_);
+  return recallValid_;
+}
+
+double Controller::recallValue(Steinberg::Vst::ParamID id) const {
+  std::lock_guard<std::mutex> lk(uiMutex_);
+  return (recallValid_ && id < kNumParams) ? recall_[id] : 0.0;
+}
+
+void Controller::markRecallNow() {
+  std::lock_guard<std::mutex> lk(uiMutex_);
+  recallValid_ = true;
+  for (int i = 0; i < kNumParams; ++i) recall_[i] = param_value_[i];
+}
+
+int Controller::recallMode() const {
+  std::lock_guard<std::mutex> lk(uiMutex_);
+  return recallMode_;
+}
+
+void Controller::setRecallMode(int mode) {
+  std::lock_guard<std::mutex> lk(uiMutex_);
+  recallMode_ = mode == 1 ? 1 : 0;
+}
+
 void Controller::rerollWear() {
   std::random_device rd;
   std::lock_guard<std::mutex> lk(uiMutex_);
   const std::uint32_t old = wearSeed_;
   do wearSeed_ = rd(); while (wearSeed_ == 0 || wearSeed_ == old);
   tapeTexts_.clear();
+  hasScrews_ = false;   // the screws turn up at new angles, from the new seed
 }
 
 void Controller::setTapeText(int index, const std::string& text) {

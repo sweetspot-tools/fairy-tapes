@@ -55,6 +55,8 @@ add_library(the_stripper MODULE
   src/ui/back_widgets.cpp
   src/ui/back_view.cpp
   src/ui/flip_view.cpp
+  src/ui/screw_view.cpp
+  src/ui/recall_marks_view.cpp
   src/dsp/compression_stub.cpp
   src/dsp/multicomp_engines.cpp
   src/dsp/fourk_eq.cpp
@@ -212,11 +214,28 @@ add_executable(the_stripper_flip_tests tests/test_flip.cpp)
 target_include_directories(the_stripper_flip_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 add_test(NAME the_stripper_flip_tests COMMAND the_stripper_flip_tests)
 
+# The four screws of the panel (header-only, no VSTGUI).
+add_executable(the_stripper_screws_tests tests/test_screws.cpp)
+target_include_directories(the_stripper_screws_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(the_stripper_screws_tests PRIVATE fairy_ui)
+add_test(NAME the_stripper_screws_tests COMMAND the_stripper_screws_tests)
+
+# Typed values: parsing and the inverse of the display (header-only, no VSTGUI).
+add_executable(the_stripper_value_text_tests tests/test_value_text.cpp)
+target_include_directories(the_stripper_value_text_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+add_test(NAME the_stripper_value_text_tests COMMAND the_stripper_value_text_tests)
+
+# Recall marks (header-only, no VSTGUI).
+add_executable(the_stripper_recall_marks_tests tests/test_recall_marks.cpp)
+target_include_directories(the_stripper_recall_marks_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${VST3_SDK_PATH} ${VST3_SDK_PLUGINTERFACES}/base)
+target_link_libraries(the_stripper_recall_marks_tests PRIVATE fairy_ui)
+add_test(NAME the_stripper_recall_marks_tests COMMAND the_stripper_recall_marks_tests)
+
 # Developer tool: draws the editor offscreen into a PNG (no host needed). Not built by default.
 add_executable(the_stripper_render EXCLUDE_FROM_ALL tools/render_editor.cpp ${VST3_SDK_PUBLIC}/source/main/moduleinit.cpp ${VST3_SDK_PUBLIC}/source/main/pluginfactory.cpp src/controller.cpp src/ui/editor.cpp src/ui/panel_view.cpp
   src/ui/browser_widgets.cpp
   src/ui/model_browser.cpp
-  src/ui/model_strip.cpp src/ui/tape_text.cpp src/ui/tape_piece_view.cpp src/ui/back_widgets.cpp src/ui/back_view.cpp src/ui/flip_view.cpp)
+  src/ui/model_strip.cpp src/ui/tape_text.cpp src/ui/tape_piece_view.cpp src/ui/back_widgets.cpp src/ui/back_view.cpp src/ui/flip_view.cpp src/ui/screw_view.cpp src/ui/recall_marks_view.cpp)
 target_include_directories(the_stripper_render PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${VST3_SDK_PATH} ${VST3_SDK_BASE}/source ${VST3_SDK_PLUGINTERFACES}/base ${VST3_SDK_PLUGINTERFACES}/vst ${VST3_SDK_PUBLIC}/source ${VST3_SDK_PUBLIC}/source/vst)
 target_link_libraries(the_stripper_render PRIVATE sdk pluginterfaces fairy_ui fairy_ui_widgets)
 

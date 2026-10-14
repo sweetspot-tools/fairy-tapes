@@ -72,6 +72,15 @@ public:
   std::uint32_t wearSeed() const;
   TapeText tapeText(int index) const;                       // `set` false when never written (or out of range)
   void setTapeText(int index, const std::string& text);     // UTF-8, cut to kMaxTapeTextBytes
+  // The four screws of the panel (angles in degrees). Until the user turns one, the angles come from the seed (no saved angles).
+  bool screwAngles(double out[4]) const;                    // false when none are saved
+  void setScrewAngles(const double in[4]);
+  // Recall marks: the parameter values at the last load (Auto) or at the last "Mark now" (Manual), shown as pen marks.
+  bool recallValid() const;
+  double recallValue(Steinberg::Vst::ParamID id) const;     // 0..1; 0 when there are no marks
+  void markRecallNow();                                     // sets the marks to the current values
+  int recallMode() const;                                   // 0 = Auto, 1 = Manual
+  void setRecallMode(int mode);
   void rerollWear();                                        // RE-ROLL: a new seed (new wear, dirt, tape) and the writing erased
 
   /** Ask the processor to load a .nam model (UTF-8 path); empty = no model. The editor shows the outcome via the getters below. */
@@ -90,6 +99,11 @@ private:
   Steinberg::Vst::ParamValue meter_value_[kNumMeters] = {};   // written by the processor, read by the editor
   std::uint32_t wearSeed_ = 0;                 // editor data (v10 state); 0 until initialize() or setState() gives one
   std::vector<TapeText> tapeTexts_;
+  bool hasScrews_ = false;
+  double screws_[4] = {0, 0, 0, 0};
+  bool recallValid_ = false;
+  double recall_[kNumParams] = {};
+  int recallMode_ = 0;
   mutable std::mutex uiMutex_;
   std::string modelPath_;
   mutable std::mutex modelMutex_;   // notify() may arrive on a worker thread

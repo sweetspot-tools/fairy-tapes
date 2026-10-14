@@ -32,12 +32,15 @@ public:
     std::function<void(const std::function<void(Preferences&)>& mutate)> changePreference;       // the editor saves and applies
     std::function<void()> reroll;                                                                // RE-ROLL
     std::function<void()> manageFolders;                                                         // MODEL FOLDERS
+    std::function<void(int mode)> recallModeChanged;                                             // RECALL MARKS: 0 = Auto, 1 = Manual
+    std::function<void()> markNow;                                                               // MARK NOW
   };
 
   BackView(const VSTGUI::CRect& size, const FairyTapes::Ui::Skin* skin, const Preferences& prefs, Callbacks callbacks);
 
   void setPreferences(const Preferences& prefs);   // refreshes the widgets
   void setWear(std::vector<FairyTapes::Ui::WearMark> marks);
+  void setRecallMode(int mode);
   void setTab(BackTab tab);
   BackTab tab() const { return tab_; }
 
@@ -62,6 +65,7 @@ private:
   std::vector<VSTGUI::CView*> settingsViews_;
   SegmentRow *wearRow_ = nullptr, *notesRow_ = nullptr, *valuesRow_ = nullptr, *holdRow_ = nullptr, *releaseRow_ = nullptr;
   FontStepper* fontStepper_ = nullptr;
+  SegmentRow* recallRow_ = nullptr;
 };
 
 } // namespace FairyTapes::TheStripper::Ui

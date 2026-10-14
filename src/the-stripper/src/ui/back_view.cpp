@@ -100,11 +100,11 @@ void BackView::build(const Preferences& prefs) {
   auto* inference = new SegmentRow(box(690, 146, 252, 24), {"AUTO", "GPU", "CPU"}, 0);
   inference->setEnabled(false);
   add(inference);
-  auto* marks = new SegmentRow(box(690, 194, 168, 24), {"AUTO", "MANUAL"}, 0);
-  marks->setEnabled(false);
-  add(marks);
+  recallRow_ = new SegmentRow(box(690, 194, 168, 24), {"AUTO", "MANUAL"}, 0);
+  recallRow_->onSelect = [this](int i) { if (cb_.recallModeChanged) cb_.recallModeChanged(i); };
+  add(recallRow_);
   auto* markNow = new PushButton(box(690, 242, 120, 24), "MARK NOW");
-  markNow->setEnabled(false);
+  markNow->onClick = [this] { if (cb_.markNow) cb_.markNow(); };
   add(markNow);
   auto* folders = new PushButton(box(690, 290, 120, 24), "MANAGE...");
   folders->onClick = [this] { if (cb_.manageFolders) cb_.manageFolders(); };
@@ -126,6 +126,8 @@ void BackView::setPreferences(const Preferences& prefs) {
   holdRow_->setSelected(holdIndex(prefs));
   releaseRow_->setSelected(releaseIndex(prefs));
 }
+
+void BackView::setRecallMode(int mode) { recallRow_->setSelected(mode == 1 ? 1 : 0); }
 
 void BackView::setWear(std::vector<FairyTapes::Ui::WearMark> marks) { wear_->setMarks(std::move(marks)); }
 
@@ -179,7 +181,7 @@ void BackView::drawSettings(CDrawContext* ctx) {
   drawTitledBox(ctx, box(514, 102, 462, 364), "BEHAVIOUR", true);
   text(ctx, "saved with the project", 745, 130, 10, kDimWhite, kCenterText);
   row("NAM INFERENCE", 146, "needs the GPU build", 540);
-  row("RECALL MARKS", 194, "where the pen marks sit", 540);
+  row("RECALL MARKS", 194, "auto: set at every load", 540);
   row("MARK NOW", 242, "set the marks to the current values", 540);
   row("MODEL FOLDERS", 290, "where the picker looks for models", 540);
   row("TONE3000", 338, "", 540);

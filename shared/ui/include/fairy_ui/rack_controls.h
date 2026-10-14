@@ -9,6 +9,7 @@
 #include "fairy_ui/rack_geometry.h"
 
 #include <cstdint>
+#include <functional>
 #include <vector>
 
 namespace FairyTapes::Ui {
@@ -25,7 +26,13 @@ public:
   // Wear of the cap (0 = none, 1 = light, 2.2 = heavy) from a per-control seed; drawn at 25 %.
   void setWear(std::uint32_t seed, double amount);
 
+  // A click on the printed value under the knob (the silkscreen draws it) calls this instead of starting a drag: the plug-in
+  // opens a text field there. Nothing happens when it is not set.
+  std::function<void()> onValueClick;
+  VSTGUI::CRect valueArea() const;   // where the value is printed, in the view's coordinates
+
   void draw(VSTGUI::CDrawContext* context) override;
+  VSTGUI::CMouseEventResult onMouseDown(VSTGUI::CPoint& where, const VSTGUI::CButtonState& buttons) override;
   CLASS_METHODS_NOCOPY(RackKnob, AnalogKnob)
 
 private:

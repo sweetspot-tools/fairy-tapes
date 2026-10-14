@@ -188,6 +188,21 @@ void RackKnob::setWear(std::uint32_t seed, double amount) {
   invalid();
 }
 
+CRect RackKnob::valueArea() const {
+  const CRect& r = getViewSize();
+  const double cx = r.left + r.getWidth() / 2, cy = r.top + AnalogKnob::kCenterOffsetY;
+  const double baseline = Rack::valueBaseline(cy, capRadius_);
+  return CRect(cx - 34, baseline - 12, cx + 34, baseline + 5);
+}
+
+CMouseEventResult RackKnob::onMouseDown(CPoint& where, const CButtonState& buttons) {
+  if (onValueClick && buttons.isLeftButton() && valueArea().pointInside(where)) {
+    onValueClick();
+    return kMouseDownEventHandledButDontNeedMovedOrUpEvents;
+  }
+  return AnalogKnob::onMouseDown(where, buttons);
+}
+
 void RackKnob::draw(CDrawContext* ctx) {
   begin(ctx, dimmed_);
   const double v = sanitizeNorm(getValue(), getDefaultValue());

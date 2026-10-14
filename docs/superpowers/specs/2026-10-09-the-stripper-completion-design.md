@@ -136,6 +136,7 @@ Esito della ricerca del 2026-10-10 (pagine lette da un agente, riassunti non ver
 
 ## 11. Decisioni aperte (2026-10-10)
 
+- **Segni di richiamo, scelte provvisorie (2026-10-15):** realizzati come tratto di penna blu sulla scala nella posizione richiamata, visibile quando la manopola si è mossa di almeno il **2%** (`kRecallThreshold`); strato note (preferenza Notes: Hide li nasconde). Da confermare o cambiare: soglia, aspetto, scotch sui valori (non fatto), Alt + doppio clic (sotto).
 - **Richiamo da doppio clic:** il doppio clic riporta al valore neutro; resta da decidere se **Alt + doppio clic** (o Ctrl) riporta al valore di richiamo (il segno di biro).
 - **Segni di biro e scotch sui valori:** il concetto è approvato; restano da definire il disegno, la soglia "valore cambiato" e il comportamento con molte manopole mosse.
 - **Macchie da pennello asciutto:** la versione attuale (setole) è provvisoria; l'utente aveva in mente un'altra forma.

@@ -45,6 +45,8 @@ class BackView;
 class FlipView;
 class ModelBrowser;
 class ModelStrip;
+class RecallMarksView;
+class ScrewView;
 class TapePieceView;
 
 class Editor : public Steinberg::Vst::VSTGUIEditor,
@@ -94,10 +96,16 @@ private:
   void updateModel();      // model strip and Drive dimming from the controller's model status
   void openBrowser();
   void applyAppearance(const Preferences& prefs);   // wear, fonts, meter settings: live, from the back panel
+  void updateRecallMarks();                       // current and recalled values of the knobs, for the pen marks
+  void placeScrews(bool useSavedAngles);          // the four screws of the current seed, at their saved angles or the initial ones
+  void screwsTurned();                            // a screw was turned: save the four angles
   void rebuildPieces();                           // the pieces of tape of the current seed, in their place in the layers
   void startFlip(bool toBack);
   void finishFlip();
   void changePreference(const std::function<void(Preferences&)>& mutate);
+  void editValue(const ControlSpec& spec);   // opens the text field over the printed value of a knob
+  void closeValueEdit();
+  void commitValue(const ControlSpec& spec, double paramNorm);   // a value typed in (same path as turning the knob)
   void editTape(TapePieceView* piece);   // opens the text field over a piece of tape
   void closeTapeEdit();
   void refreshModules();
@@ -124,7 +132,11 @@ private:
   bool tapeValues_ = false;                // the values under the knobs are handwritten (preference)
   TapeFontId valuesFont_ = TapeFontId::Zeyada;
   std::uint32_t valuesSeed_ = 0;
+  RecallMarksView* marks_ = nullptr;                      // owned by front_
+  std::array<ScrewView*, 4> screws_{};                    // owned by front_
   std::array<TapePieceView*, kMaxTapePieces> pieces_{};   // owned by the frame
+  VSTGUI::CTextEdit* valueEdit_ = nullptr;               // the open value field, owned by the frame
+  const ControlSpec* valueEditSpec_ = nullptr;
   VSTGUI::CTextEdit* tapeEdit_ = nullptr;                // the open text field, owned by the frame
   int tapeEditIndex_ = -1;
   ModelStrip* strip_ = nullptr;            // owned by the frame

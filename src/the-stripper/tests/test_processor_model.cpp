@@ -246,6 +246,25 @@ void test_controller_state_keeps_seed_and_tape() {
   PluginState old; readBack(old);
   CHECK(old.wearSeed == 0xABCDEF01u);
 
+  // screws and recall marks (v11)
+  {
+    PluginState st; FairyTapes::TheStripper::fillDefaultParams(st.params);
+    st.params[FairyTapes::TheStripper::kInputGain] = 0.8;
+    st.hasScrewAngles = true; for (int i = 0; i < 4; ++i) st.screwAngles[i] = 33.0 + i;
+    st.recallValid = true; for (int i = 0; i < FairyTapes::TheStripper::kNumParams; ++i) st.recall[i] = 0.1;
+    st.recallMode = 1;   // Manual: the saved marks stay
+    { MockStream m; Writer w{m.data}; CHECK(FairyTapes::TheStripper::writeState(w, st)); CHECK(ctl->setState(&m) == kResultOk); }
+    PluginState manual; readBack(manual);
+    CHECK(manual.hasScrewAngles && manual.screwAngles[0] == 33.0 && manual.screwAngles[3] == 36.0);
+    CHECK(manual.recallMode == 1 && manual.recallValid && manual.recall[FairyTapes::TheStripper::kInputGain] == 0.1);
+    st.recallMode = 0;   // Auto: the marks are the values just loaded
+    { MockStream m; Writer w{m.data}; CHECK(FairyTapes::TheStripper::writeState(w, st)); CHECK(ctl->setState(&m) == kResultOk); }
+    PluginState autoMode; readBack(autoMode);
+    CHECK(autoMode.recallMode == 0 && autoMode.recallValid && autoMode.recall[FairyTapes::TheStripper::kInputGain] == 0.8);
+    // a state without a seed or marks (an older project) leaves this instance's seed alone
+    CHECK(autoMode.wearSeed != 0);
+  }
+
   ctl->terminate(); ctl->release(); f->release();
   auto ex = (bool (*)())dlsym(h, "ModuleExit"); if (ex) ex();
   dlclose(h);
