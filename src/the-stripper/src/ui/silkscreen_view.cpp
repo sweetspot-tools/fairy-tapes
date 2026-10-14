@@ -2,6 +2,7 @@
 #include "ui/silkscreen_view.h"
 
 #include "ui/draw_util.h"
+#include "ui/tape_text.h"
 
 #include "fairy_ui/rack_geometry.h"
 
@@ -78,6 +79,13 @@ void SilkscreenView::setDimmed(Steinberg::Vst::ParamID id, bool dimmed) {
   }
 }
 
+void SilkscreenView::setValuesFont(bool useTapeFont, TapeFontId font) {
+  if (tapeValues_ == useTapeFont && valuesFont_ == font) return;
+  tapeValues_ = useTapeFont;
+  valuesFont_ = font;
+  invalid();
+}
+
 void SilkscreenView::setHidden(Steinberg::Vst::ParamID id, bool hidden) {
   for (std::size_t i = 0; i < std::size(kControls) && i < kMaxControls; ++i) {
     if (kControls[i].id != id) continue;
@@ -132,9 +140,15 @@ void SilkscreenView::draw(CDrawContext* ctx) {
       ctx->setFont(nameFont_);
       if (c.label) centred(ctx, c.label, cx, Rack::nameBaseline(cy, R));
       if (!values_[i].empty()) {
-        ctx->setFont(valueFont_);
-        ctx->setFontColor(kAmber);
-        centred(ctx, values_[i].c_str(), cx, Rack::valueBaseline(cy, R));
+        if (tapeValues_) {   // handwriting: digits as tall as the standard text, x1.3; a light variation per letter
+          const double em = normalizedFontSize(valuesFont_, 10.0);
+          drawTapeText(ctx, valuesFont_, values_[i], CPoint(cx, Rack::valueBaseline(cy, R)), em, kAmber,
+                       seed_ + static_cast<std::uint32_t>(i) * 131u, 0.5, TapeAlign::Center);
+        } else {
+          ctx->setFont(valueFont_);
+          ctx->setFontColor(kAmber);
+          centred(ctx, values_[i].c_str(), cx, Rack::valueBaseline(cy, R));
+        }
       }
     } else if (c.kind == Kind::Toggle) {
       if (c.label && !isBellButton(c.id)) {

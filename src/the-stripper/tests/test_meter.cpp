@@ -153,7 +153,7 @@ void test_meters_not_in_state() {
   struct Count { std::size_t n = 0; bool writeInt32(std::int32_t) { n += 4; return true; } bool writeDouble(double) { n += 8; return true; } long long writeRaw(const void*, std::int32_t k) { n += static_cast<std::size_t>(k); return k; } } c;
   PluginState st; fillDefaultParams(st.params);
   CHECK(writeState(c, st));
-  CHECK(c.n == 4 + 8 * static_cast<std::size_t>(kNumParams) + 4);   // version + parameters + empty path length: no meter values
+  CHECK(c.n == 4 + 8 * static_cast<std::size_t>(kNumParams) + 4 + 4 + 4);   // version + parameters + empty path length + seed + no tape pieces: no meter values
 }
 
 void test_meter_update_rate_limit() {

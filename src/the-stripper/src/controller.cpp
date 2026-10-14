@@ -12,6 +12,7 @@
 #include "pluginterfaces/vst/vsttypes.h"
 #include "base/source/fstreamer.h"
 #include <cstring>
+#include <random>
 #include <cstdio>
 
 namespace FairyTapes::TheStripper {
@@ -45,10 +46,13 @@ Steinberg::tresult PLUGIN_API Controller::queryInterface(const Steinberg::TUID i
 }
 
 Steinberg::tresult PLUGIN_API Controller::setComponentState(Steinberg::IBStream* state) {
-  return setState(state);
+  // The processor's state: parameters and model only. The editor data (seed, tape) lives in the controller state.
+  return applyState(state, false);
 }
 
-Steinberg::tresult PLUGIN_API Controller::setState(Steinberg::IBStream* state) {
+Steinberg::tresult PLUGIN_API Controller::setState(Steinberg::IBStream* state) { return applyState(state, true); }
+
+Steinberg::tresult Controller::applyState(Steinberg::IBStream* state, bool withEditorData) {
   if (!state)
     return Steinberg::kResultFalse;
   Steinberg::IBStreamer s(state, kLittleEndian);
@@ -61,6 +65,12 @@ Steinberg::tresult PLUGIN_API Controller::setState(Steinberg::IBStream* state) {
     std::lock_guard<std::mutex> lk(modelMutex_);
     modelPath_ = st.modelPath;
   }
+  if (withEditorData) {
+    std::lock_guard<std::mutex> lk(uiMutex_);
+    if (st.wearSeed != 0)
+      wearSeed_ = st.wearSeed;   // a state without a seed (older project) keeps the one made for this instance
+    tapeTexts_ = st.tapeTexts;
+  }
   return Steinberg::kResultOk;
 }
 
@@ -72,7 +82,41 @@ Steinberg::tresult PLUGIN_API Controller::getState(Steinberg::IBStream* state) {
   for (int i = 0; i < kNumParams; ++i)
     st.params[i] = static_cast<double>(param_value_[i]);
   st.modelPath = modelPath_;
+  {
+    std::lock_guard<std::mutex> lk(uiMutex_);
+    st.wearSeed = wearSeed_;
+    st.tapeTexts = tapeTexts_;
+  }
   return writeState(s, st) ? Steinberg::kResultOk : Steinberg::kResultFalse;
+}
+
+std::uint32_t Controller::wearSeed() const {
+  std::lock_guard<std::mutex> lk(uiMutex_);
+  return wearSeed_;
+}
+
+TapeText Controller::tapeText(int index) const {
+  std::lock_guard<std::mutex> lk(uiMutex_);
+  if (index < 0 || static_cast<std::size_t>(index) >= tapeTexts_.size())
+    return {};
+  return tapeTexts_[static_cast<std::size_t>(index)];
+}
+
+void Controller::setTapeText(int index, const std::string& text) {
+  if (index < 0 || index >= kMaxTapePieces)
+    return;
+  std::string cut = text;
+  if (cut.size() > static_cast<std::size_t>(kMaxTapeTextBytes)) {
+    cut.resize(static_cast<std::size_t>(kMaxTapeTextBytes));
+    while (!cut.empty() && (static_cast<unsigned char>(cut.back()) & 0xC0) == 0x80)   // not in the middle of a UTF-8 sequence
+      cut.pop_back();
+    if (!cut.empty() && static_cast<unsigned char>(cut.back()) >= 0xC0)
+      cut.pop_back();
+  }
+  std::lock_guard<std::mutex> lk(uiMutex_);
+  if (tapeTexts_.size() <= static_cast<std::size_t>(index))
+    tapeTexts_.resize(static_cast<std::size_t>(index) + 1);
+  tapeTexts_[static_cast<std::size_t>(index)] = TapeText{true, cut};
 }
 
 Steinberg::int32 PLUGIN_API Controller::getParameterCount() {
@@ -553,6 +597,13 @@ Steinberg::IPlugView* PLUGIN_API Controller::createView(Steinberg::FIDString nam
 }
 
 Steinberg::tresult PLUGIN_API Controller::initialize(Steinberg::FUnknown* context) {
+  {
+    std::lock_guard<std::mutex> lk(uiMutex_);
+    if (wearSeed_ == 0) {   // a fresh instance gets its own wear, saved with the project from now on
+      std::random_device rd;
+      while (wearSeed_ == 0) wearSeed_ = rd();
+    }
+  }
   host_ = Steinberg::U::cast<Steinberg::Vst::IHostApplication>(context);   // needed to allocate messages
   return Steinberg::kResultOk;
 }

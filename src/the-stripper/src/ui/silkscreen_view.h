@@ -5,6 +5,7 @@
 
 #include "params.h"
 #include "ui/layout.h"
+#include "ui/tape_font.h"
 
 #include "vstgui/lib/cfont.h"
 #include "vstgui/lib/cview.h"
@@ -24,6 +25,9 @@ public:
   void setDimmed(Steinberg::Vst::ParamID id, bool dimmed);
   // Hides the printed parts of one control (a control that is not shown, e.g. the compressor modes in Mix bus).
   void setHidden(Steinberg::Vst::ParamID id, bool hidden);
+  // Values under the knobs: standard text, or handwriting in the tape font (preference VALUES FONT).
+  void setValuesFont(bool useTapeFont, TapeFontId font);
+  void setSeed(std::uint32_t seed) { seed_ = seed; }   // the variation of the handwriting
   // The small tag at the top left of a block (what is mounted on it now).
   void setTag(Module module, const std::string& text);
   void setTagDimmed(Module module, bool dimmed);
@@ -36,6 +40,9 @@ private:
   std::array<std::string, kMaxControls> values_;
   std::array<bool, kMaxControls> dimmed_{};
   std::array<bool, kMaxControls> hidden_{};
+  std::uint32_t seed_ = kDefaultWearSeed;
+  bool tapeValues_ = false;
+  TapeFontId valuesFont_ = TapeFontId::Zeyada;
   std::array<std::string, 12> tags_;
   std::array<bool, 12> tagDimmed_{};
   VSTGUI::SharedPointer<VSTGUI::CFontDesc> endFont_, nameFont_, valueFont_, labelFont_, tagFont_;

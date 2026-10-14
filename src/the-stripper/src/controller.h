@@ -9,10 +9,12 @@
 #include "params.h"
 #include "pluginterfaces/base/funknown.h"
 #include "messages.h"
+#include "state.h"
 #include "pluginterfaces/vst/ivsteditcontroller.h"
 #include "pluginterfaces/vst/ivstmessage.h"
 #include "pluginterfaces/vst/ivsthostapplication.h"
 #include <mutex>
+#include <vector>
 
 namespace FairyTapes::TheStripper {
 
@@ -66,6 +68,11 @@ public:
   void performEdit(Steinberg::Vst::ParamID tag, Steinberg::Vst::ParamValue value);
   void endEdit(Steinberg::Vst::ParamID tag);
 
+  /** Editor-only data kept with the plug-in state (controller side): the seed of the wear and the writing on the tape. */
+  std::uint32_t wearSeed() const;
+  TapeText tapeText(int index) const;                       // `set` false when never written (or out of range)
+  void setTapeText(int index, const std::string& text);     // UTF-8, cut to kMaxTapeTextBytes
+
   /** Ask the processor to load a .nam model (UTF-8 path); empty = no model. The editor shows the outcome via the getters below. */
   void requestModelLoad(const std::string& path);
   std::string modelPath() const;
@@ -76,9 +83,13 @@ public:
   DECLARE_FUNKNOWN_METHODS
 
 private:
+  Steinberg::tresult applyState(Steinberg::IBStream* state, bool withEditorData);
   friend struct Ui::EditorPreview;   // tools/render_editor.cpp sets the model status without a processor
   Steinberg::Vst::ParamValue param_value_[kNumParams];
   Steinberg::Vst::ParamValue meter_value_[kNumMeters] = {};   // written by the processor, read by the editor
+  std::uint32_t wearSeed_ = 0;                 // editor data (v10 state); 0 until initialize() or setState() gives one
+  std::vector<TapeText> tapeTexts_;
+  mutable std::mutex uiMutex_;
   std::string modelPath_;
   mutable std::mutex modelMutex_;   // notify() may arrive on a worker thread
   ModelStatus modelStatus_;

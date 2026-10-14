@@ -20,7 +20,7 @@
 namespace FairyTapes::TheStripper::Ui {
 
 constexpr double kWearWidth = 1000, kWearHeight = 628;
-constexpr std::uint32_t kDefaultWearSeed = 0x51;   // until the seed is part of the plug-in state
+constexpr std::uint32_t kDefaultWearSeed = 0x51;   // used only when an instance has no seed (the controller makes one)
 
 struct WearPt {
   double x, y;

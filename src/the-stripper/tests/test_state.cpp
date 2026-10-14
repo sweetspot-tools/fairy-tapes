@@ -105,6 +105,49 @@ void test_state_v9_keeps_the_switch() {
   CHECK(out.params[kDriveNamOn] == 0.0);
 }
 
+// ---- state v10: wear seed and the writing on the tape pieces ---------------------------------
+void test_state_v10_roundtrip_with_seed_and_tape() {
+  PluginState in; fillDefaultParams(in.params);
+  in.modelPath = "/m/amp.nam";
+  in.wearSeed = 0xDEADBEEFu;
+  in.tapeTexts = {{true, "TAKE 3"}, {false, ""}, {true, ""}, {true, "keep! \xC3\xA8"}};
+  MemStream s; CHECK(writeState(s, in));
+  PluginState out; CHECK(readState(s, out));
+  CHECK(out.modelPath == in.modelPath);
+  CHECK(out.wearSeed == 0xDEADBEEFu);
+  CHECK(out.tapeTexts.size() == 4);
+  CHECK(out.tapeTexts[0].set && out.tapeTexts[0].text == "TAKE 3");
+  CHECK(!out.tapeTexts[1].set);              // never written: the default text is shown
+  CHECK(out.tapeTexts[2].set && out.tapeTexts[2].text.empty());   // erased on purpose: stays empty, not the default
+  CHECK(out.tapeTexts[3].set && out.tapeTexts[3].text == "keep! \xC3\xA8");
+  CHECK(s.pos == s.buf.size());
+}
+
+void test_state_v9_loads_without_seed_or_tape() {
+  MemStream s;
+  s.writeInt32(9);
+  for (int i = 0; i < kNumParams; ++i) s.writeDouble(0.25);
+  s.writeInt32(0);
+  PluginState out; CHECK(readState(s, out));
+  CHECK(out.wearSeed == 0 && out.tapeTexts.empty());   // 0 = "none yet": the controller makes one
+  CHECK(s.pos == s.buf.size());
+}
+
+void test_state_v10_limits_and_corruption() {
+  PluginState in; fillDefaultParams(in.params);
+  in.tapeTexts.assign(20, {true, "x"});                                   // too many pieces: only the first kMaxTapePieces are kept
+  in.tapeTexts[0].text = std::string(500, 'a');                           // too long: cut when writing
+  MemStream s; CHECK(writeState(s, in));
+  PluginState out; CHECK(readState(s, out));
+  CHECK(out.tapeTexts.size() == static_cast<std::size_t>(kMaxTapePieces));
+  CHECK(out.tapeTexts[0].text.size() <= static_cast<std::size_t>(kMaxTapeTextBytes));
+  // a stream that claims more than the limit is rejected
+  { MemStream b; b.writeInt32(10); for (int i = 0; i < kNumParams; ++i) b.writeDouble(0.5); b.writeInt32(0); b.writeInt32(7); b.writeInt32(1000); PluginState o; CHECK(!readState(b, o)); }
+  { MemStream b; b.writeInt32(10); for (int i = 0; i < kNumParams; ++i) b.writeDouble(0.5); b.writeInt32(0); b.writeInt32(7); b.writeInt32(1); b.writeInt32(9999); PluginState o; CHECK(!readState(b, o)); }
+  { MemStream b; b.writeInt32(10); for (int i = 0; i < kNumParams; ++i) b.writeDouble(0.5); b.writeInt32(0); b.writeInt32(7); b.writeInt32(-3); PluginState o; CHECK(!readState(b, o)); }
+  { MemStream b; b.writeInt32(10); for (int i = 0; i < kNumParams; ++i) b.writeDouble(0.5); b.writeInt32(0); PluginState o; CHECK(!readState(b, o)); }   // v10 must have the seed
+}
+
 // ---- older states keep loading ----------------------------------------------------------
 void test_state_v7_loads_with_defaults() {
   MemStream s;
@@ -170,6 +213,9 @@ int main() {
   test_hpf_default_is_20_hz();
   test_state_v8_roundtrip();
   test_state_v8_empty_path();
+  test_state_v10_roundtrip_with_seed_and_tape();
+  test_state_v9_loads_without_seed_or_tape();
+  test_state_v10_limits_and_corruption();
   test_state_v8_loads_with_nam_on();
   test_state_v9_keeps_the_switch();
   test_state_v7_loads_with_defaults();

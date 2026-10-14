@@ -8,6 +8,7 @@
 #include "ui/silkscreen_view.h"
 #include "ui/wear_view.h"
 #include "preferences.h"
+#include "ui/tape_font.h"
 #include "ui/panel_view.h"
 
 #include "fairy_ui/controls.h"
@@ -177,9 +178,13 @@ void Editor::createViews(CViewContainer* parent) {
   silk_ = new SilkscreenView(CRect(0, 0, kWidth, kHeight));   // the printed parts, below the wear and the controls
   parent->addView(silk_);
   // The wear: seeded marks over the silkscreen, below the controls. Level from the user preferences (Off adds nothing).
-  // TODO(Task 14): the seed will be stored in the plug-in state; until then every instance gets the same wear.
-  const WearLevel wearLevel = loadPreferences(preferencesPath("TheStripper")).wear;
-  if (wearLevel != WearLevel::Off) parent->addView(new WearView(CRect(0, 0, kWidth, kHeight), generateWear(kDefaultWearSeed, wearLevel)));
+  // The seed is made when the instance is created and saved with the project (controller state), so the wear is always the same.
+  const std::uint32_t seed = ctl_->wearSeed();
+  const Preferences prefs = loadPreferences(preferencesPath("TheStripper"));
+  const WearLevel wearLevel = prefs.wear;
+  silk_->setSeed(ctl_->wearSeed());
+  silk_->setValuesFont(prefs.valuesFont == ValuesFont::Tape, tapeFontIdOf(prefs.tapeFont));
+  if (wearLevel != WearLevel::Off) parent->addView(new WearView(CRect(0, 0, kWidth, kHeight), generateWear(seed, wearLevel)));
 
   for (const auto& spec : kControls) {
     if (spec.sharesView) continue;   // its parameter is shown by another entry's view
@@ -206,11 +211,11 @@ void Editor::createViews(CViewContainer* parent) {
     }
     // wear of the control (cap or face), from a per-control seed; the same level as the panel
     {
-      const std::uint32_t seed = kDefaultWearSeed ^ static_cast<std::uint32_t>(spec.id * 2654435761u);
+      const std::uint32_t cseed = seed ^ static_cast<std::uint32_t>(spec.id * 2654435761u);
       const double amount = wearAmount(wearLevel);
-      if (auto* k = dynamic_cast<RackKnob*>(control)) k->setWear(seed, amount);
-      else if (auto* t = dynamic_cast<RackToggle*>(control)) t->setWear(seed, amount);
-      else if (auto* c = dynamic_cast<RackChoice*>(control)) c->setWear(seed, amount);
+      if (auto* k = dynamic_cast<RackKnob*>(control)) k->setWear(cseed, amount);
+      else if (auto* t = dynamic_cast<RackToggle*>(control)) t->setWear(cseed, amount);
+      else if (auto* c = dynamic_cast<RackChoice*>(control)) c->setWear(cseed, amount);
     }
     control->setDefaultValue(static_cast<float>(uiValue(spec.inverted, defaultNorm(ctl_, spec.id))));
     parent->addView(control);
@@ -218,6 +223,7 @@ void Editor::createViews(CViewContainer* parent) {
   }
 
   strip_ = new ModelStrip(toCRect(kModelStrip));
+  strip_->setFont(tapeFontIdOf(prefs.tapeFont));
   strip_->onClick = [this] { openBrowser(); };
   parent->addView(strip_);
 
