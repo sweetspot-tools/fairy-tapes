@@ -1,6 +1,6 @@
 # The Stripper — Controlli (parametri) modificabili da UI
 
-Elenco di **tutti i parametri** esposti al host. Il plugin ha un editor VSTGUI (1000 × 628) con un controllo per ognuno (tranne quelli inerti: gain staging e LP/HP Bypass); l’host li mostra anche nella sua lista. Ordine **per ID** (come appare nel host).
+Elenco di **tutti i parametri** esposti al host. Il plugin ha un editor VSTGUI (1000 × 628) con un controllo per ognuno (tranne quelli inerti: gain staging, `kEqHPFOn` e `kEqLPFOn`); l’host li mostra anche nella sua lista. Ordine **per ID** (come appare nel host).
 
 **Totale: 35 parametri** (ID 0…34, `kNumParams`; la tabella è bloccata in `tests/param_table_golden.h`). **Compressor Mode** (ID 14, solo Channel: Voice / Drums / Classic) è esposto; DSP Multi-Comp integrato (port C++ da Dusk Audio), vedi [COMPRESSION_MODES.md](COMPRESSION_MODES.md).
 
@@ -52,7 +52,7 @@ Elenco di **tutti i parametri** esposti al host. Il plugin ha un editor VSTGUI (
 
 - **Globali:** `kBypass`, `kStripMode`, `kInputGain`, `kOutputGain`.
 - **Gain staging (solo Channel, inerte):** `kBypassGainStaging`, `kGainStagingTrim`.
-- **LP/HP:** `kEqHPFFreq`/`kEqHPFOn`, `kEqLPFFreq`/`kEqLPFOn` (nell'editor un pulsante IN per filtro; default acceso, neutro: 20 Hz / 20 kHz). `kBypassLPHP` resta nello stato ma non ha controllo.
+- **LP/HP:** `kEqHPFFreq`, `kEqLPFFreq`; nell'editor **un solo pulsante IN** per entrambi i filtri (`kBypassLPHP`, polarità invertita). `kEqHPFOn`/`kEqLPFOn` restano a 1 (default, neutro: 20 Hz / 20 kHz) senza controllo.
 - **EQ (Channel = 4K-EQ, Mix bus = Pultec stub):** `kBypassEQ`, i parametri delle quattro bande e `kEqSaturation`.
 - **Compressione:** `kBypassCompression`, `kCompressAmount`, `kCompressMix`, `kCompressorMode` (solo Channel: Voice / Drums / Classic). Vedi [COMPRESSION_MODES.md](COMPRESSION_MODES.md).
 - **Drive (NAM):** `kBypassDrive`, `kDriveAmount`; il modello si sceglie dal popup sulla striscia di nastro (non è un parametro: il percorso sta nello stato v8).

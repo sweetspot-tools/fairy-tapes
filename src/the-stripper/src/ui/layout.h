@@ -23,21 +23,21 @@ struct Rect {
 enum class Kind { Knob, Toggle, Choice };
 
 // A module is a box of the panel; its controls dim together.
-enum class Module { None, Input, HighPass, LowPass, Level, Output, Eq, Comp, Drive, Limiter, Gate };
-constexpr Module kModules[] = {Module::Input, Module::HighPass, Module::LowPass, Module::Output, Module::Eq,
+enum class Module { None, Input, Filters, Level, Output, Eq, Comp, Drive, Limiter, Gate };
+constexpr Module kModules[] = {Module::Input, Module::Filters, Module::Output, Module::Eq,
                                Module::Comp,  Module::Drive,    Module::Limiter, Module::Gate};
-constexpr int kModuleCount = 11;   // size of ModuleState::in (indexed by Module)
+constexpr int kModuleCount = 10;   // size of ModuleState::in (indexed by Module)
 
 struct BoxSpec {
   Rect rect;
   const char* title;
   bool titleOnTop;   // the EQ box carries its title on the top border, the others on the bottom one
-  Module module;     // box that holds this module (HighPass and LowPass share FILTERS)
+  Module module;     // module held by this box
 };
 
 constexpr BoxSpec kBoxes[] = {
     {{24, 92, 150, 170}, "INPUT", false, Module::Input},
-    {{180, 92, 230, 170}, "FILTERS", false, Module::HighPass},
+    {{180, 92, 230, 170}, "FILTERS", false, Module::Filters},
     {{416, 92, 368, 170}, "LEVEL", false, Module::Level},
     {{790, 92, 186, 170}, "OUTPUT", false, Module::Output},
     {{24, 282, 952, 150}, "EQUALISER", true, Module::Eq},
@@ -48,7 +48,6 @@ constexpr BoxSpec kBoxes[] = {
 };
 
 inline const BoxSpec* boxOf(Module m) {
-  if (m == Module::LowPass) m = Module::HighPass;
   for (const auto& b : kBoxes)
     if (b.module == m) return &b;
   return nullptr;
@@ -71,28 +70,27 @@ constexpr Rect button(double cx, double cy, double w = 24, double h = 22) { retu
 
 constexpr ControlSpec kControls[] = {
     // Input / Filters / Output
-    {kInputGain, Kind::Knob, Module::Input, knob(99, 160), "GAIN", false, false, {}},
-    {kEqHPFFreq, Kind::Knob, Module::HighPass, knob(233, 160), "HIGH PASS", false, false, {}},
-    {kEqHPFOn, Kind::Toggle, Module::HighPass, button(282, 130), "IN", true, false, {}},
-    {kEqLPFFreq, Kind::Knob, Module::LowPass, knob(337, 160), "LOW PASS", false, false, {}},
-    {kEqLPFOn, Kind::Toggle, Module::LowPass, button(382, 130), "IN", true, false, {}},
-    {kOutputGain, Kind::Knob, Module::Output, knob(842, 160), "GAIN", false, false, {}},
+    {kInputGain, Kind::Knob, Module::Input, knob(99, 168), "GAIN", false, false, {}},
+    {kEqHPFFreq, Kind::Knob, Module::Filters, knob(233, 168), "HIGH PASS", false, false, {}},
+    {kEqLPFFreq, Kind::Knob, Module::Filters, knob(337, 168), "LOW PASS", false, false, {}},
+    {kBypassLPHP, Kind::Toggle, Module::Filters, button(382, 130), "IN", true, true, {}},   // one IN for both filters
+    {kOutputGain, Kind::Knob, Module::Output, knob(842, 168), "GAIN", false, false, {}},
     {kBypass, Kind::Toggle, Module::None, button(940, 130, 56), "BYPASS", false, false, {}},
-    {kStripMode, Kind::Choice, Module::Output, button(930, 206, 84), nullptr, false, false, {"CHAN", "BUS"}},
+    {kStripMode, Kind::Choice, Module::Output, button(930, 220, 84), nullptr, false, false, {"CHAN", "BUS"}},
     // Equaliser
-    {kEqLFGain, Kind::Knob, Module::Eq, knob(78, 352), "GAIN", false, false, {}},
-    {kEqLFFreq, Kind::Knob, Module::Eq, knob(160, 352), "FREQ", false, false, {}},
-    {kEqLFBell, Kind::Toggle, Module::Eq, button(181, 306, 26, 18), "BELL", false, false, {}},
-    {kEqLMGain, Kind::Knob, Module::Eq, knob(240, 352), "GAIN", false, false, {}},
-    {kEqLMFreq, Kind::Knob, Module::Eq, knob(322, 352), "FREQ", false, false, {}},
-    {kEqLMQ, Kind::Knob, Module::Eq, knob(404, 352), "Q", false, false, {}},
-    {kEqHMGain, Kind::Knob, Module::Eq, knob(484, 352), "GAIN", false, false, {}},
-    {kEqHMFreq, Kind::Knob, Module::Eq, knob(566, 352), "FREQ", false, false, {}},
-    {kEqHMQ, Kind::Knob, Module::Eq, knob(648, 352), "Q", false, false, {}},
-    {kEqHFGain, Kind::Knob, Module::Eq, knob(728, 352), "GAIN", false, false, {}},
-    {kEqHFFreq, Kind::Knob, Module::Eq, knob(810, 352), "FREQ", false, false, {}},
-    {kEqHFBell, Kind::Toggle, Module::Eq, button(831, 306, 26, 18), "BELL", false, false, {}},
-    {kEqSaturation, Kind::Knob, Module::Eq, knob(891, 352), "SATURATE", false, false, {}},
+    {kEqLFGain, Kind::Knob, Module::Eq, knob(134, 352), "GAIN", false, false, {}},
+    {kEqLFFreq, Kind::Knob, Module::Eq, knob(216, 352), "FREQ", false, false, {}},
+    {kEqLFBell, Kind::Toggle, Module::Eq, button(237, 306, 26, 18), "BELL", false, false, {}},
+    {kEqLMGain, Kind::Knob, Module::Eq, knob(296, 352), "GAIN", false, false, {}},
+    {kEqLMFreq, Kind::Knob, Module::Eq, knob(378, 352), "FREQ", false, false, {}},
+    {kEqLMQ, Kind::Knob, Module::Eq, knob(460, 352), "Q", false, false, {}},
+    {kEqHMGain, Kind::Knob, Module::Eq, knob(540, 352), "GAIN", false, false, {}},
+    {kEqHMFreq, Kind::Knob, Module::Eq, knob(622, 352), "FREQ", false, false, {}},
+    {kEqHMQ, Kind::Knob, Module::Eq, knob(704, 352), "Q", false, false, {}},
+    {kEqHFGain, Kind::Knob, Module::Eq, knob(784, 352), "GAIN", false, false, {}},
+    {kEqHFFreq, Kind::Knob, Module::Eq, knob(866, 352), "FREQ", false, false, {}},
+    {kEqHFBell, Kind::Toggle, Module::Eq, button(887, 306, 26, 18), "BELL", false, false, {}},
+    // kEqSaturation has no control until the Drive box takes it over (plan Task 15: NAM / Saturate switch).
     {kBypassEQ, Kind::Toggle, Module::Eq, button(940, 320), "IN", true, true, {}},
     // Compression
     {kCompressAmount, Kind::Knob, Module::Comp, knob(86, 520), "AMOUNT", false, false, {}},
@@ -115,7 +113,7 @@ struct EqBand {
   double left, right;
 };
 constexpr double kEqBandRuleY = 306;
-constexpr EqBand kEqBands[] = {{"LF", 42, 162}, {"LM", 204, 440}, {"HM", 448, 684}, {"HF", 692, 812}};
+constexpr EqBand kEqBands[] = {{"LF", 98, 218}, {"LM", 260, 496}, {"HM", 504, 740}, {"HF", 748, 868}};
 
 // Level box: LED rows (peak meters, then gain reduction) and the clip LEDs (spec 4.1).
 constexpr int kMeterLeds = 15;

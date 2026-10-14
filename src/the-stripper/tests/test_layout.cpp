@@ -34,8 +34,9 @@ void test_controls_are_unique_and_valid() {
 }
 
 void test_only_inert_parameters_are_unbound() {
-  // Gain staging is out of scope (inert); kBypassLPHP is replaced by the per-filter IN buttons.
-  const std::set<unsigned> allowed = {kBypassGainStaging, kGainStagingTrim, kBypassLPHP};
+  // Gain staging is out of scope (inert); the filters share one IN button (kBypassLPHP), the per-filter switches stay at 1.
+  const std::set<unsigned> allowed = {kBypassGainStaging, kGainStagingTrim, kEqHPFOn, kEqLPFOn,
+                                       kEqSaturation /* moves to the Drive box, plan Task 15 */};
   std::set<unsigned> bound;
   for (const auto& c : kControls) bound.insert(c.id);
   for (unsigned id = 0; id < kNumParams; ++id) CHECK(bound.count(id) || allowed.count(id));
@@ -69,8 +70,8 @@ void test_bottom_margin() {
 void test_in_buttons_polarity() {
   // bypass parameters are inverted (IN lit = bypass 0); the filter switches are already positive
   CHECK(inButtonOf(Module::Eq) && inButtonOf(Module::Eq)->inverted);
-  CHECK(inButtonOf(Module::HighPass) && !inButtonOf(Module::HighPass)->inverted);
-  CHECK(inButtonOf(Module::LowPass) && !inButtonOf(Module::LowPass)->inverted);
+  CHECK(inButtonOf(Module::Filters) && inButtonOf(Module::Filters)->inverted);   // one IN for both filters
+  CHECK(inButtonOf(Module::Filters)->id == kBypassLPHP);
   CHECK(inButtonOf(Module::Input) == nullptr);
   for (const auto& c : kControls) {
     if (c.kind != Kind::Toggle || !c.inverted) continue;

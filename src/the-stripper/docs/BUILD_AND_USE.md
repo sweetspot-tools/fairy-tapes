@@ -46,11 +46,11 @@ cmake --build .   # runs tests first, then builds the_stripper
 ## 3. Using it
 
 - **Strip Mode (CHAN / BUS):** Channel = 4K-EQ + Multi-Comp (Voice / Drums / Classic); Mix bus = Pultec (stub) + Multi-Comp Bus. The Voice/Drums/Classic buttons only exist in Channel mode.
-- **IN buttons:** each module (filters, EQ, compression, drive, limiter, gate) has an IN button; lit = in the signal path. BYPASS (Output box) bypasses everything.
+- **IN buttons:** each module (filters share one, EQ, compression, drive, limiter, gate) has an IN button; lit = in the signal path. BYPASS (Output box) bypasses everything.
 - **Drive:** click the paper strip in the Drive box to pick a `.nam` model (LOCAL tab: add folders, search, LOAD; NO MODEL unloads it and Drive passes the signal through). The model path is saved in the project.
 - **Meters:** Level box (input/output peaks, gain reduction, one clip LED per stage; a click on a LED clears them all).
 - **Reset:** double-click a knob to return to its default.
-- Gain staging and the LP/HP Bypass parameter are inert (no control); Gate and Limiter are Airwindows (Denoise, BlockParty).
+- Gain staging is inert (no control); Gate and Limiter are Airwindows (Denoise, BlockParty).
 
 ---
 
