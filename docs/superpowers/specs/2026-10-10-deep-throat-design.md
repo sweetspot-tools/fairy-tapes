@@ -82,8 +82,9 @@ Ogni blocco ha un test che prima fallisce: Rider (guadagno verso il Target, ness
 
 Segue `docs/DESIGN_SYSTEM.md` (rack orizzontale, materiali e grana di The Stripper, livelli, usura con seme, viti, nastro, retro). Specifico di Deep Throat:
 
-- Intestazione con titolo, Bypass globale (LED rosso) e BACK.
-- Riquadro MODE con selettore Speak / Sing / Puke (LED giallo).
-- Fascia meter (ingresso, uscita, riduzione del compressore) con manopole Input e Output.
-- Sei moduli, ciascuno con IN: RIDER (Target, Range e scope con la banda dei respiri), BREATH (Amount, Sensitivity, Listen, LED di rilevamento, nome del rilevatore), CLEAN (solo valori di sola lettura che seguono la modalità), DE-ESS (Amount, Freq, pulsante Listen), COMP (Amount, Mix, selettori Ratio e Dist con AUTO), TONE (una manopola).
+- Intestazione con titolo e BACK; il Bypass globale sta nel riquadro OUTPUT (LED rosso).
+- **Riga 1:** INPUT (Gain), **SCOPE** (grafico con voce, guadagno del rider e banda dei respiri rilevati), LEVEL (ingresso, uscita, riduzione del compressore, clip LED come ultima riga), OUTPUT (Gain e Bypass).
+- **Riga 2:** MODE (selettore Speak / Sing / Puke, LED giallo), RIDER (Target, Range), BREATH (Amount, Sensitivity, Listen, LED di rilevamento, nome del rilevatore), CLEAN (solo valori di sola lettura che seguono la modalità).
+- **Riga 3:** DE-ESS (Amount, Freq, pulsante Listen), COMP (Amount, Mix, selettori Ratio e Dist con AUTO), TONE (una manopola).
+- Ogni modulo con un controllo di segnale (RIDER, BREATH, CLEAN, DE-ESS, COMP, TONE) ha il pulsante IN; titoli dei riquadri in basso.
 - Retro: schede SETTINGS, CREDITS e **MODES**; MODES elenca i valori imposti da ciascuna modalità ed è generata dalla stessa tabella dei preset usata dal codice.

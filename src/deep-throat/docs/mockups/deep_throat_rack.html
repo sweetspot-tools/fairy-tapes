@@ -382,17 +382,25 @@ function lab(s,x,y,sz,col,anchor){return txt(s,x,y,sz,col||W,anchor||'middle',80
 /* module box: titled box + group of controls + its IN button */
 function modBox(x,y,w,h,title,build){box(x,y,w,h,title,'bottom');var g=grp(),o=OFFY;g.setAttribute('transform','translate(0,-12)');OFFY=-12;build();OFFY=o;endGrp();return byp(x+w-24,y+38,g);}
 
-/* ============ ROW 1 : MODE, INPUT, LEVEL, OUTPUT ============ */
-box(24,96,250,130,'MODE','bottom');
-['SPEAK','SING','PUKE'].forEach(function(n,i){
-  var b=gbtn(btn(74+i*75,146,n,i===0,function(){setMode(i);},YEL));modeBtns.push(b);});
-MCAP=ro(149,204,10,DIMW,'middle',function(){return MODES.info[MODE];});
-box(280,96,110,130,'INPUT','bottom');
-reg(grp(),false);knob(335,150,'GAIN',0.5,'-12','+12','',{def:0.5,fmt:db(12),r:22,api:INK});endGrp();
+/* ============ ROW 1 : INPUT, SCOPE, LEVEL, OUTPUT ============ */
+box(24,96,110,130,'INPUT','bottom');
+reg(grp(),false);knob(79,150,'GAIN',0.5,'-12','+12','',{def:0.5,fmt:db(12),r:22,api:INK});endGrp();
 
 /* meters */
-box(396,96,404,130,'LEVEL','bottom');
-var LX=480,STEP=18,N=15,OFFL2='#3a1010';
+/* scope: voice envelope, rider gain, detected breath band (dims only with the global bypass) */
+var SX=156,SY=106,SW=292,SH=84,SB=SW,bandP,envP,gainP,brLed;
+box(140,96,324,130,'SCOPE','bottom');
+reg(grp(),false);
+el('rect',{x:SX,y:SY,width:SW,height:SH,rx:3,fill:'#050505',stroke:'#4a4a4e','stroke-width':1.5});
+bandP=el('path',{d:'',fill:RED,opacity:.3});
+el('line',{x1:SX,x2:SX+SW,y1:SY+SH/2,y2:SY+SH/2,stroke:DIMW,opacity:.35,'stroke-dasharray':'3 3'});
+envP=el('polyline',{fill:'none',stroke:W,'stroke-width':1.2,opacity:.9,'stroke-linejoin':'round'});
+gainP=el('polyline',{fill:'none',stroke:AMBL,'stroke-width':1.6,'stroke-linejoin':'round'});
+txt('VOICE',SX,SY+SH+16,9,W,'start',700);txt('RIDER GAIN',SX+44,SY+SH+16,9,AMBL,'start',700);txt('BREATH',SX+118,SY+SH+16,9,RED,'start',700);
+endGrp();
+
+box(470,96,330,130,'LEVEL','bottom');
+var LX=528,STEP=18,N=15,OFFL2='#3a1010';
 function ledRow(y,label,colFn,n){
   txt(label,LX-12,y+4,11,W,'end',800);
   var a=[];for(var i=0;i<(n||N);i++)a.push(el('circle',{cx:LX+i*STEP,cy:y,r:3.4,fill:OFFL,stroke:'#000','stroke-width':.6}));
@@ -424,7 +432,11 @@ box(806,96,170,130,'OUTPUT','bottom');
 reg(grp(),false);knob(868,150,'GAIN',0.5,'-12','+12','',{def:0.5,fmt:db(12),r:22,api:OUTK});endGrp();
 var bypBtn=btn(946,130,'BYPASS',false,function(b){toggle(b);GB=b._on;MODS.forEach(paint);GBTN.forEach(function(x){x.style.opacity=GB?DIM:1;if(x._lg)x._lg.style.opacity=GB?DIM:1;});});
 
-/* ============ ROW 2 : RIDER, BREATH, CLEAN ============ */
+/* ============ ROW 2 : MODE, RIDER, BREATH, CLEAN ============ */
+box(24,238,264,174,'MODE','bottom');
+['SPEAK','SING','PUKE'].forEach(function(n,i){
+  var b=gbtn(btn(81+i*75,312,n,i===0,function(){setMode(i);},YEL));modeBtns.push(b);});
+MCAP=ro(156,372,10,DIMW,'middle',function(){return MODES.info[MODE];});
 var tgf=withNum(function(v){return (-30+v*20).toFixed(1)+' dBFS';},function(v){return -30+v*20;});
 var brf=withNum(function(v){return (v*12).toFixed(1)+' dB';},function(v){return v*12;});
 var cmf=withNum(function(v){return (-6-24*v).toFixed(1)+' dB';},function(v){return -6-24*v;});
@@ -432,18 +444,10 @@ var dsf=withNum(function(v){return (4*Math.pow(2.5,v)).toFixed(1)+' kHz';},funct
 var RATIOS=['AUTO','2:1','3:1','4:1','6:1','8:1','10:1'],DISTS=['AUTO','OFF','DIST 2','DIST 3'],RIX=0,DIX=0;
 function ratioVal(){return RIX?+RATIOS[RIX].split(':')[0]:MODES.ratio[MODE];}
 var tonef=withNum(function(v){var p=Math.round((v-0.5)*200);return (p>0?'+':'')+p+' %';},function(v){return (v-0.5)*200;});
-var SX=222,SY=262,SW=210,SH=112,SB=250,bandP,envP,gainP,brLed;
-var mRd=modBox(24,238,460,174,'RIDER',function(){
-  knob(80,322,'TARGET',0.5,'-30','-10','',{def:0.5,fmt:tgf,api:TGK});
-  knob(160,322,'RANGE',0.5,'0','1','',{def:0.5,fmt:pct,api:RGK});
-  ro(120,402,10,DIMW,'middle',function(){return 'MAX ±'+MODES.range[MODE]+' dB  ·  '+MODES.speed[MODE]+' dB/s';});
-  /* scope: voice envelope, rider gain, detected breath band */
-  el('rect',{x:SX,y:SY,width:SW,height:SH,rx:3,fill:'#050505',stroke:'#4a4a4e','stroke-width':1.5});
-  bandP=el('path',{d:'',fill:RED,opacity:.3});
-  el('line',{x1:SX,x2:SX+SW,y1:SY+SH/2,y2:SY+SH/2,stroke:DIMW,opacity:.35,'stroke-dasharray':'3 3'});
-  envP=el('polyline',{fill:'none',stroke:W,'stroke-width':1.2,opacity:.9,'stroke-linejoin':'round'});
-  gainP=el('polyline',{fill:'none',stroke:AMBL,'stroke-width':1.6,'stroke-linejoin':'round'});
-  txt('VOICE',SX,392,9,W,'start',700);txt('RIDER GAIN',SX+44,392,9,AMBL,'start',700);txt('BREATH',SX+118,392,9,RED,'start',700);
+var mRd=modBox(294,238,190,174,'RIDER',function(){
+  knob(342,322,'TARGET',0.5,'-30','-10','',{def:0.5,fmt:tgf,api:TGK});
+  knob(424,322,'RANGE',0.5,'0','1','',{def:0.5,fmt:pct,api:RGK});
+  ro(389,402,10,DIMW,'middle',function(){return 'MAX ±'+MODES.range[MODE]+' dB  ·  '+MODES.speed[MODE]+' dB/s';});
 });
 var mBr=modBox(490,238,300,174,'BREATH',function(){
   knob(540,322,'AMOUNT',0.5,'0','12','',{def:0.5,fmt:brf,api:BRK});
