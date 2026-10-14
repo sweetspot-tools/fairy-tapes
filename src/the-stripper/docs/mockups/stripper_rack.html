@@ -321,7 +321,7 @@ function btn(cx,cy,label,on,cb,ledCol){
 function toggle(g){g._on=!g._on;g._paint(g._on);}
 /* small silkscreen tag at the top left of a box: what is mounted on the block right now (updates with the selectors) */
 var TAGS=[];
-function boxTag(x,y,fn){var lg=el('g',{transform:'translate(0,'+OFFY+')'},LY.scale);lg.style.transition='opacity .15s';var t=txt('',x,y,9,DIMW,'start',800,lg);if(CUR){(CUR._x=CUR._x||[]).push(lg);}TAGS.push([t,fn]);}
+function boxTag(x,y,fn){var lg=el('g',{transform:'translate(0,'+OFFY+')'},LY.scale);lg.style.transition='opacity .15s';var t=txt('',x,y,7,DIMW,'start',700,lg);t.setAttribute('opacity','.34');   /* small and heavily faded: readable only when you look */if(CUR){(CUR._x=CUR._x||[]).push(lg);}TAGS.push([t,fn]);}
 function refreshTags(){TAGS.forEach(function(g){g[0].textContent=g[1]();});}
 function series(){return chan._on?'4K-G':'4K-E';}
 /* knob: black cap, yellow ring, tick dots, end labels, yellow pointer */
