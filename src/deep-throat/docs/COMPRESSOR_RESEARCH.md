@@ -23,7 +23,7 @@
 
 ## 4. Cosa cambia per il nostro `DistressorComp` (punti 1-5 recepiti in spec e piano, Task 8; il 6 resta una pratica di taratura)
 
-1. **Rilevatore con passa-alto** (80 Hz a default): oggi il piano non lo prevede e sulla voce serve contro il pompaggio da plosive e fiato.
+1. **Rilevatore con passa-alto** (selezionabile OFF, 80 o 150 Hz; 80 Hz a default): oggi il piano non lo prevede e sulla voce serve contro il pompaggio da plosive e fiato.
 2. **Distorsione legata alla riduzione di guadagno e all'attacco**, non a un drive fisso: Dist 2 cresce con la compressione, Dist 3 con risposta ridotta agli estremi.
 3. **Ratio:** aggiungere 20:1 alla lista (oggi: AUTO, 2, 3, 4, 6, 8, 10). Il "Nuke" e il modo Opto 10:1 sono fuori scopo per ora.
 4. **Tempi:** attacco da 0,05 a 30 ms e rilascio da 50 ms a 3,5 s, con la scala che dipende dal rapporto.
