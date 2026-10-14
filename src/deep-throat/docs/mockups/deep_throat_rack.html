@@ -27,7 +27,7 @@ body{margin:0;padding:16px;background:#e9e8e4;font-family:system-ui,sans-serif;c
   <label>Zoom <select id="zoom"><option value="1">100%</option><option value="1.5">150%</option><option value="2">200%</option><option value="2.5">250%</option></select></label>
   <button id="reroll" title="New random layout (new instance)">Re-roll</button>
   <label>Signal <input type="range" id="lvl" min="0" max="100" value="55" style="width:120px"></label>
-  <span style="color:#555">Rack-style panel preview (1000 × 628, landscape). Knobs: drag vertically, Shift = fine, double-click = default. Click a clip LED to clear it. Mode buttons change the read-only values and the scope. When a module IN button is off (all on by default) its controls dim; the BYPASS button in the Output box dims everything and puts the plugin in bypass.</span>
+  <span style="color:#555">Rack-style panel preview (1000 × 628, landscape). Knobs: drag vertically, Shift = fine, double-click = default. Click a clip LED to clear it. Mode buttons change the read-only values, the AUTO values of COMP RATIO and DIST (click them to cycle) and the scope. When a module IN button is off (all on by default) its controls dim; the BYPASS button in the Output box dims everything and puts the plugin in bypass.</span>
 </div>
 <div class="stage"><div class="scene"><div class="card" id="card"><svg id="ui" viewBox="0 0 1000 628" role="img" aria-label="Deep Throat editor, rack-style panel"></svg><svg id="back" viewBox="0 0 1000 628" role="img" aria-label="Deep Throat settings, modes and credits"></svg></div></div></div>
 <script>
@@ -428,9 +428,12 @@ var bypBtn=btn(946,130,'BYPASS',false,function(b){toggle(b);GB=b._on;MODS.forEac
 var tgf=withNum(function(v){return (-30+v*20).toFixed(1)+' dBFS';},function(v){return -30+v*20;});
 var brf=withNum(function(v){return (v*12).toFixed(1)+' dB';},function(v){return v*12;});
 var cmf=withNum(function(v){return (-6-24*v).toFixed(1)+' dB';},function(v){return -6-24*v;});
+var dsf=withNum(function(v){return (4*Math.pow(2.5,v)).toFixed(1)+' kHz';},function(v){return 4000*Math.pow(2.5,v);});
+var RATIOS=['AUTO','2:1','3:1','4:1','6:1','8:1','10:1'],DISTS=['AUTO','OFF','DIST 2','DIST 3'],RIX=0,DIX=0;
+function ratioVal(){return RIX?+RATIOS[RIX].split(':')[0]:MODES.ratio[MODE];}
 var tonef=withNum(function(v){var p=Math.round((v-0.5)*200);return (p>0?'+':'')+p+' %';},function(v){return (v-0.5)*200;});
-var SX=224,SY=262,SW=250,SH=112,SB=250,bandP,envP,gainP,brLed;
-var mRd=modBox(24,238,500,174,'RIDER',function(){
+var SX=222,SY=262,SW=210,SH=112,SB=250,bandP,envP,gainP,brLed;
+var mRd=modBox(24,238,460,174,'RIDER',function(){
   knob(80,322,'TARGET',0.5,'-30','-10','',{def:0.5,fmt:tgf,api:TGK});
   knob(160,322,'RANGE',0.5,'0','1','',{def:0.5,fmt:pct,api:RGK});
   ro(120,402,10,DIMW,'middle',function(){return 'MAX ±'+MODES.range[MODE]+' dB  ·  '+MODES.speed[MODE]+' dB/s';});
@@ -442,31 +445,37 @@ var mRd=modBox(24,238,500,174,'RIDER',function(){
   gainP=el('polyline',{fill:'none',stroke:AMBL,'stroke-width':1.6,'stroke-linejoin':'round'});
   txt('VOICE',SX,392,9,W,'start',700);txt('RIDER GAIN',SX+44,392,9,AMBL,'start',700);txt('BREATH',SX+118,392,9,RED,'start',700);
 });
-var mBr=modBox(530,238,250,174,'BREATH',function(){
-  knob(588,322,'AMOUNT',0.5,'0','12','',{def:0.5,fmt:brf,api:BRK});
-  lab('DETECTOR',692,310,11,DIMW);
-  ro(692,332,15,AMBL,'middle',function(){return MODES.detector[MODE];});
-  brLed=el('circle',{cx:692,cy:362,r:5,fill:OFFL2,stroke:'#000','stroke-width':.6});
-  lab('BREATH',692,384,10,W);
+var mBr=modBox(490,238,300,174,'BREATH',function(){
+  knob(540,322,'AMOUNT',0.5,'0','12','',{def:0.5,fmt:brf,api:BRK});
+  knob(622,322,'SENSITIVITY',0.5,'0','1','',{def:0.5,fmt:pct,api:{}});
+  lab('DETECTOR',710,304,11,DIMW);
+  ro(710,324,15,AMBL,'middle',function(){return MODES.detector[MODE];});
+  brLed=el('circle',{cx:690,cy:346,r:5,fill:OFFL2,stroke:'#000','stroke-width':.6});
+  lab('BREATH',700,350,10,W,'start');
+  btn(710,383,'LISTEN',false,function(b){toggle(b);});
 });
-var mCl=modBox(786,238,190,174,'CLEAN',function(){
-  lab('HPF',828,332,13,W);ro(828,360,20,AMBL,'middle',function(){return MODES.hpf[MODE]+' Hz';});
-  lab('MUD CUT',930,332,13,W);ro(930,360,20,AMBL,'middle',function(){return fs(MODES.mud[MODE])+' dB';});
-  lab('at 300 Hz',930,378,10,DIMW);
-  lab('read-only  ·  follows MODE',881,400,9,DIMW);
+var mCl=modBox(796,238,180,174,'CLEAN',function(){
+  lab('HPF',840,332,13,W);ro(840,360,20,AMBL,'middle',function(){return MODES.hpf[MODE]+' Hz';});
+  lab('MUD CUT',912,332,13,W);ro(912,360,20,AMBL,'middle',function(){return fs(MODES.mud[MODE])+' dB';});
+  lab('at 300 Hz',912,378,10,DIMW);
+  lab('read-only  \u00b7  follows MODE',886,400,9,DIMW);
 });
 
 /* ============ ROW 3 : DE-ESS, COMP, TONE ============ */
 var mDs=modBox(24,424,270,180,'DE-ESS',function(){
-  DSK=knob(90,522,'AMOUNT',0.5,'0','1','',{def:0.5,fmt:pct,api:{}});
-  btn(205,530,'LISTEN',false,function(b){toggle(b);});
-  DNOTE=lab('mostly off in Puke (x0.15)',205,588,9,DIMW);
+  DSK=knob(74,522,'AMOUNT',0.5,'0','1','',{def:0.5,fmt:pct,api:{}});
+  knob(156,522,'FREQ',0.53,'4','10','',{def:0.53,fmt:dsf,api:{}});
+  btn(236,530,'LISTEN',false,function(b){toggle(b);});
+  DNOTE=lab('mostly off in Puke (x0.15)',159,596,9,DIMW);
 });
 var mCp=modBox(300,424,400,180,'COMP',function(){
-  knob(360,522,'AMOUNT',0.5,'-6','-30','',{def:0.5,fmt:cmf,api:CPK});
-  lab('RATIO',490,516,12,DIMW);ro(490,546,24,AMBL,'middle',function(){return MODES.ratio[MODE]+':1';});
-  lab('DIST',605,516,12,DIMW);ro(605,546,24,AMBL,'middle',function(){return MODES.dist[MODE];});
-  lab('threshold set by AMOUNT  ·  gain reduction: see LEVEL',545,590,9,DIMW);
+  knob(352,522,'AMOUNT',0.5,'-6','-30','',{def:0.5,fmt:cmf,api:CPK});
+  knob(436,522,'MIX',1,'0','100','',{def:1,fmt:pct,api:{}});
+  lab('RATIO',538,506,11,DIMW);ro(538,530,16,AMBL,'middle',function(){return RIX?RATIOS[RIX]:'AUTO '+MODES.ratio[MODE]+':1';});
+  btn(538,556,'',false,function(){RIX=(RIX+1)%RATIOS.length;refreshRO();},YEL);
+  lab('DIST',636,506,11,DIMW);ro(636,530,16,AMBL,'middle',function(){return DIX?DISTS[DIX]:'AUTO '+MODES.dist[MODE];});
+  btn(636,556,'',false,function(){DIX=(DIX+1)%DISTS.length;refreshRO();},YEL);
+  lab('threshold set by AMOUNT  ·  gain reduction: see LEVEL',500,594,9,DIMW);
 });
 var mTn=modBox(706,424,270,180,'TONE',function(){
   knob(768,522,'TONE',0.5,'-100','+100','',{def:0.5,fmt:tonef,r:30,api:TONEK,onchange:function(){refreshRO();}});
@@ -545,6 +554,7 @@ el('path',{d:'M50 212 H950',stroke:W,'stroke-width':1.5,opacity:.6});
 MROWS.forEach(function(r,i){var y=242+i*34;txt(r[0],50,y,13,W,'start',800);
   for(var j=0;j<3;j++)MODECELLS[j].push(txt(r[1](j),MCX[j],y,13,W,'middle',700));
   if(i<MROWS.length-1)el('path',{d:'M50 '+(y+12)+' H950',stroke:DIMW,'stroke-width':1,opacity:.25});});
+txt('RATIO AUTO and DIST AUTO use the values above; the other choices ignore the mode.',50,540,11,DIMW,'start',700);
 txt('De-ess x0.15: the DE-ESS amount is multiplied by 0.15 in PUKE, so the stage is almost off.',50,560,11,DIMW,'start',700);
 txt('Breath detector: SPECTRAL tells breaths from voice by spectrum; LEVEL (PUKE) uses the level only, because growls and screams are noisy.',50,578,11,DIMW,'start',700);
 txt('Rider max range is the full travel of the RANGE knob; the rider never moves faster than the speed shown.',50,596,11,DIMW,'start',700);
@@ -587,7 +597,7 @@ function step(){
   if(GB||mRd.off){rgain+=clampv(0-rgain,-spd,spd);}
   else if(v.seg==='voice'){var R=RGK.get()*MODES.range[MODE],want=clampv(-30+20*TGK.get()-smv,-R,R);rgain+=clampv(want-rgain,-spd,spd);}
   var dbR=dbI+rgain,brT=detected?BRK.get()*12:0;brG+=(brT-brG)*.35;
-  var ratio=MODES.ratio[MODE],thr=-6-24*CPK.get(),over=Math.max(0,dbR-brG-thr),grT=(GB||mCp.off)?0:over*(1-1/ratio);
+  var ratio=ratioVal(),thr=-6-24*CPK.get(),over=Math.max(0,dbR-brG-thr),grT=(GB||mCp.off)?0:over*(1-1/ratio);
   grc+=(grT-grc)*(grT>grc?.5:.08);
   var dbO=GB?raw:dbR-brG-grc+outG,inA=[(GB?raw:dbI)+Math.sin(T*5)*1.5,(GB?raw:dbI)-1.2+Math.cos(T*4)*1.5],outA=[dbO+Math.sin(T*5)*1.5,dbO-1.2+Math.cos(T*4)*1.5];
   for(var c=0;c<2;c++){lvlI[c]=Math.max(inA[c],lvlI[c]-0.66);lvlO[c]=Math.max(outA[c],lvlO[c]-0.66);}
