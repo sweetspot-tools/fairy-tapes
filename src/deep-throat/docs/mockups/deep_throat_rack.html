@@ -376,7 +376,7 @@ var MODE=0,RO=[],modeBtns=[],MODECELLS=[[],[],[]],MODEHEAD=[],MCAP=null,DNOTE=nu
 var INK={},OUTK={},TGK={},RGK={},BRK={},DSK=null,CPK={},TONEK={};
 /* read-only silkscreen value: panel layer (under the wear), dims with its module or with the bypass, refreshed from the MODES table */
 function silk(){var lg=el('g',{transform:'translate(0,'+OFFY+')'},LY.scale);lg.style.transition='opacity .15s';if(CUR){(CUR._x=CUR._x||[]).push(lg);}else gbtn(lg);return lg;}
-function ro(x,y,sz,col,anchor,fn){var t=txt('',x,y,sz,col,anchor,700,silk());RO.push(function(){t.textContent=fn();});return t;}
+function ro(x,y,sz,col,anchor,fn){var t=txt('',x,y,sz,col,anchor,700,silk());if(col===AMBL)HWTXT.push([t,sz]);RO.push(function(){t.textContent=fn();});return t;}
 function refreshRO(){RO.forEach(function(f){f();});}
 function lab(s,x,y,sz,col,anchor){return txt(s,x,y,sz,col||W,anchor||'middle',800,silk());}
 /* module box: titled box + group of controls + its IN button */
