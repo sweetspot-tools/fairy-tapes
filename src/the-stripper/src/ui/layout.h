@@ -76,12 +76,12 @@ constexpr ControlSpec kControls[] = {
     {kEqLPFFreq, Kind::Knob, Module::Filters, knob(337, 168), "LOW PASS", false, false, {}},
     {kBypassLPHP, Kind::Toggle, Module::Filters, button(382, 130), "IN", true, true, {}},   // one IN for both filters
     {kOutputGain, Kind::Knob, Module::Output, knob(842, 168), "GAIN", false, false, {}},
-    {kBypass, Kind::Toggle, Module::None, button(940, 130, 56), "BYPASS", false, false, {}},
+    {kBypass, Kind::Toggle, Module::None, button(940, 130), "BYPASS", false, false, {}},
     {kStripMode, Kind::Choice, Module::Output, button(930, 220, 84), nullptr, false, false, {"CHAN", "BUS"}},
     // Equaliser
     {kEqLFGain, Kind::Knob, Module::Eq, knob(134, 352), "GAIN", false, false, {}},
     {kEqLFFreq, Kind::Knob, Module::Eq, knob(216, 352), "FREQ", false, false, {}},
-    {kEqLFBell, Kind::Toggle, Module::Eq, button(237, 306, 26, 18), "BELL", false, false, {}},
+    {kEqLFBell, Kind::Toggle, Module::Eq, button(237, 306, 26, 18), nullptr, false, false, {}},
     {kEqLMGain, Kind::Knob, Module::Eq, knob(296, 352), "GAIN", false, false, {}},
     {kEqLMFreq, Kind::Knob, Module::Eq, knob(378, 352), "FREQ", false, false, {}},
     {kEqLMQ, Kind::Knob, Module::Eq, knob(460, 352), "Q", false, false, {}},
@@ -90,12 +90,12 @@ constexpr ControlSpec kControls[] = {
     {kEqHMQ, Kind::Knob, Module::Eq, knob(704, 352), "Q", false, false, {}},
     {kEqHFGain, Kind::Knob, Module::Eq, knob(784, 352), "GAIN", false, false, {}},
     {kEqHFFreq, Kind::Knob, Module::Eq, knob(866, 352), "FREQ", false, false, {}},
-    {kEqHFBell, Kind::Toggle, Module::Eq, button(887, 306, 26, 18), "BELL", false, false, {}},
+    {kEqHFBell, Kind::Toggle, Module::Eq, button(887, 306, 26, 18), nullptr, false, false, {}},
     {kBypassEQ, Kind::Toggle, Module::Eq, button(940, 320), "IN", true, true, {}},
     // Compression
     {kCompressAmount, Kind::Knob, Module::Comp, knob(86, 520), "AMOUNT", false, false, {}},
     {kCompressMix, Kind::Knob, Module::Comp, knob(170, 520), "MIX", false, false, {}},
-    {kCompressorMode, Kind::Choice, Module::Comp, button(300, 556, 168), nullptr, false, false,
+    {kCompressorMode, Kind::Choice, Module::Comp, button(312, 556, 144), nullptr, false, false,
      {"VOICE", "DRUMS", "CLASSIC"}},
     {kBypassCompression, Kind::Toggle, Module::Comp, button(360, 490), "IN", true, true, {}},
     // Drive, Limiter, Gate
@@ -110,6 +110,34 @@ constexpr ControlSpec kControls[] = {
     {kGateThreshold, Kind::Knob, Module::Gate, knob(903, 520), "THRESH", false, false, {}},
     {kBypassGate, Kind::Toggle, Module::Gate, button(947, 490), "IN", true, true, {}},
 };
+
+// Printed look of the knobs (silkscreen layer): end values of the scale and cap radius (preview stripper_rack.html).
+struct KnobLook {
+  Steinberg::Vst::ParamID id;
+  const char* lo;
+  const char* hi;
+  double radius;
+};
+constexpr KnobLook kKnobLooks[] = {
+    {kInputGain, "-20", "+20", 22},      {kEqHPFFreq, "20", "500", 19},       {kEqLPFFreq, "3k", "20k", 19},
+    {kOutputGain, "-20", "+20", 22},     {kEqLFGain, "-20", "+20", 19},       {kEqLFFreq, "30", "480", 19},
+    {kEqLMGain, "-20", "+20", 19},       {kEqLMFreq, ".2k", "2.5k", 19},      {kEqLMQ, ".4", "4", 19},
+    {kEqHMGain, "-20", "+20", 19},       {kEqHMFreq, ".6k", "7k", 19},        {kEqHMQ, ".4", "4", 19},
+    {kEqHFGain, "-20", "+20", 19},       {kEqHFFreq, "1.5k", "16k", 19},      {kCompressAmount, "0", "10", 19},
+    {kCompressMix, "DRY", "WET", 19},    {kDriveAmount, "0", "10", 21},       {kEqSaturation, "0", "10", 21},
+    {kLimiterPound, "0", "10", 19},      {kGateThreshold, "-\xE2\x88\x9E", "0", 19},
+};
+inline const KnobLook* knobLookOf(Steinberg::Vst::ParamID id) {
+  for (const auto& k : kKnobLooks)
+    if (k.id == id) return &k;
+  return nullptr;
+}
+// Mode selectors (Chan/Bus, Voice/Drums/Classic, NAM/4K) have a yellow LED; every other button a red one.
+inline bool hasYellowLed(Steinberg::Vst::ParamID id) { return id == kStripMode || id == kCompressorMode || id == kDriveNamOn; }
+// The two Bell buttons show a bell icon on an amber face instead of a label and an LED.
+inline bool isBellButton(Steinberg::Vst::ParamID id) { return id == kEqLFBell || id == kEqHFBell; }
+// Height added under a button face for its LED (the view is taller than the face; the layout rect is the face).
+constexpr double kLedZone = 14;
 
 // Header of an EQ band: a rule from `left` to `right` with the band name above it (the Bell button, if any, sits at its right end).
 struct EqBand {
@@ -171,6 +199,23 @@ inline Steinberg::Vst::ParamID driveEngineParam(bool namOn) { return namOn ? kDr
 inline bool driveKnobDimmed(bool namOn, bool modelLoaded) { return namOn && !modelLoaded; }
 // With the NAM off the paper strip reads "4K Saturate" instead of the model name (and is not clickable).
 inline bool stripShowsSaturate(bool namOn) { return !namOn; }
+
+// The small tag printed at the top left of a block: what is mounted on it right now (spec 11, "Serigrafia dei blocchi").
+// `compressorMode` is the parameter value 0 / 0.5 / 1 (Voice / Drums / Classic). Blocks without a tag return "".
+inline const char* blockTag(Module m, bool channelMode, double compressorMode, bool namOn) {
+  const char* series = channelMode ? "4K-G" : "4K-E";
+  switch (m) {
+  case Module::Filters:
+  case Module::Eq: return series;
+  case Module::Comp:
+    if (!channelMode) return "4K-G";   // the Bus compressor
+    return compressorMode < 0.25 ? "OPTO-2A" : compressorMode < 0.75 ? "FET-76" : "VCA-160";
+  case Module::Drive: return namOn ? "NAM" : series;
+  case Module::Limiter: return "B-PARTY";
+  case Module::Gate: return "D-NOISE";
+  default: return "";
+  }
+}
 
 inline bool meterDimmed(bool alwaysLit, bool globalBypass) { return globalBypass && !alwaysLit; }
 

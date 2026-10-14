@@ -5,11 +5,13 @@
 #include "ui/model_browser.h"
 #include "ui/model_source.h"
 #include "ui/model_strip.h"
+#include "ui/silkscreen_view.h"
 #include "ui/panel_view.h"
 
 #include "fairy_ui/controls.h"
 #include "fairy_ui/editor_size.h"
 #include "fairy_ui/meters.h"
+#include "fairy_ui/rack_controls.h"
 #include "fairy_ui/sanitize.h"
 
 #include "public.sdk/source/vst/utility/stringconvert.h"
@@ -35,6 +37,10 @@ using FairyTapes::Ui::ChoiceButtons;
 using FairyTapes::Ui::ClipLed;
 using FairyTapes::Ui::MeterBar;
 using FairyTapes::Ui::MeterKind;
+using FairyTapes::Ui::RackChoice;
+using FairyTapes::Ui::RackKnob;
+using FairyTapes::Ui::RackLed;
+using FairyTapes::Ui::RackToggle;
 using FairyTapes::Ui::NormalizedControl;
 using FairyTapes::Ui::ToggleButton;
 using Steinberg::Vst::ParamID;
@@ -154,6 +160,7 @@ void PLUGIN_API Editor::close() {
     frame = nullptr;
   }
   controls_.fill(nullptr);
+  silk_ = nullptr;
   strip_ = nullptr;
   browser_ = nullptr;
   browserClosing_ = false;
@@ -165,30 +172,29 @@ void PLUGIN_API Editor::close() {
 
 void Editor::createViews(CViewContainer* parent) {
   parent->addView(new PanelView(CRect(0, 0, kWidth, kHeight), &skin_));
+  silk_ = new SilkscreenView(CRect(0, 0, kWidth, kHeight));   // the printed parts, below the wear and the controls
+  parent->addView(silk_);
 
   for (const auto& spec : kControls) {
     if (spec.sharesView) continue;   // its parameter is shown by another entry's view
     NormalizedControl* control = nullptr;
-    const CRect rect = toCRect(spec.rect);
+    CRect rect = toCRect(spec.rect);
     const auto tag = static_cast<int32_t>(spec.id);
+    const RackLed led = hasYellowLed(spec.id) ? RackLed::Yellow : RackLed::Red;
+    if (spec.kind != Kind::Knob && !isBellButton(spec.id)) rect.bottom += kLedZone;   // room for the LED under the face
     switch (spec.kind) {
     case Kind::Knob: {
-      auto* knob = new AnalogKnob(rect, this, tag, spec.label, &skin_);
-      Controller* ctl = ctl_;
-      const ParamID id = spec.id;
-      const bool drive = id == kDriveAmount;   // this knob also shows the saturation amount
-      knob->setValueFormatter([this, ctl, id, drive](float v) { return paramString(ctl, drive ? driveParam_ : id, v); });
-      control = knob;
+      const KnobLook* look = knobLookOf(spec.id);
+      control = new RackKnob(rect, this, tag, look ? look->radius : FairyTapes::Ui::Rack::kDefaultCapRadius, &skin_);
       break;
     }
     case Kind::Toggle:
-      control = new ToggleButton(rect, this, tag, spec.label, &skin_);
+      control = new RackToggle(rect, this, tag, led, isBellButton(spec.id), &skin_);
       break;
     case Kind::Choice: {
-      std::vector<std::string> labels;
-      for (const char* l : spec.choices)
-        if (l) labels.emplace_back(l);
-      control = new ChoiceButtons(rect, this, tag, labels, &skin_);
+      int n = 0;
+      while (n < 3 && spec.choices[n]) ++n;
+      control = new RackChoice(rect, this, tag, n, led, &skin_);
       break;
     }
     }
@@ -289,11 +295,18 @@ void Editor::syncFromController(bool force) {
       control->setValueNormalized(static_cast<float>(uiValue(spec->inverted, v)));
       control->invalid();
     }
+    if (id != kDriveAmount && id != kEqSaturation) showValue(*spec, v);   // the Drive knob is handled by syncDriveKnob
   }
   if (changed) {
     syncDriveKnob();
     refreshModules();
   }
+}
+
+void Editor::showValue(const ControlSpec& spec, double paramNorm) {
+  if (!silk_ || spec.kind != Kind::Knob) return;
+  const ParamID id = spec.id == kEqSaturation ? kDriveAmount : spec.id;   // the shared Drive knob has one printed value
+  silk_->setValueText(id, paramString(ctl_, spec.id, paramNorm));
 }
 
 void Editor::syncDriveKnob() {
@@ -307,6 +320,7 @@ void Editor::syncDriveKnob() {
   const double v = std::isnan(seen_[active]) ? defaultNorm(ctl_, active) : seen_[active];
   knob->setValueNormalized(static_cast<float>(v));
   knob->invalid();
+  if (specs_[active]) showValue(*specs_[active], v);
 }
 
 
@@ -322,6 +336,13 @@ void Editor::refreshModules() {
   channelMode_ = isChannelMode(seen_[kStripMode]);
   namOn_ = seen_[kDriveNamOn] >= 0.5 || std::isnan(seen_[kDriveNamOn]);
   if (strip_) strip_->setSaturate(stripShowsSaturate(namOn_));
+  if (silk_) {
+    const double comp = std::isnan(seen_[kCompressorMode]) ? 0.0 : seen_[kCompressorMode];
+    for (const Module m : kModules) {
+      silk_->setTag(m, blockTag(m, channelMode_, comp, namOn_));
+      silk_->setTagDimmed(m, moduleDimmed(m, state));
+    }
+  }
 
   for (const auto& spec : kControls) {
     NormalizedControl* control = controls_[spec.id];
@@ -330,7 +351,9 @@ void Editor::refreshModules() {
     if (spec.module != Module::None) dim = spec.isIn ? state.globalBypass : moduleDimmed(spec.module, state);
     if (spec.id == kDriveAmount && driveKnobDimmed(namOn_, modelState_ == 2)) dim = true;   // NAM without a model passes through
     control->setDimmed(dim);
+    if (silk_) silk_->setDimmed(spec.id, dim);
     const bool visible = visibleInMode(spec.id, channelMode_);
+    if (silk_) silk_->setHidden(spec.id, !visible);
     if (control->isVisible() != visible) {
       control->setVisible(visible);
       if (frame) frame->invalidRect(control->getViewSize());
@@ -350,6 +373,7 @@ void Editor::valueChanged(CControl* control) {
   const double v = paramValue(spec->inverted, ui);
   ctl_->performEdit(spec->id, v);
   seen_[spec->id] = ctl_->getParamNormalized(spec->id);
+  showValue(*spec, seen_[spec->id]);
   if (spec->id == kDriveNamOn) syncDriveKnob();   // the Drive knob changes engine
   refreshModules();
 }

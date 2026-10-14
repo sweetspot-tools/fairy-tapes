@@ -159,6 +159,36 @@ void test_drive_knob_is_shared_by_the_two_engines() {
   CHECK(stripShowsSaturate(false) && !stripShowsSaturate(true));
 }
 
+void test_block_tags() {
+  using std::string;
+  CHECK(string(blockTag(Module::Eq, true, 0, true)) == "4K-G");
+  CHECK(string(blockTag(Module::Eq, false, 0, true)) == "4K-E");
+  CHECK(string(blockTag(Module::Filters, true, 0, true)) == "4K-G" && string(blockTag(Module::Filters, false, 0, true)) == "4K-E");
+  CHECK(string(blockTag(Module::Comp, true, 0.0, true)) == "OPTO-2A");
+  CHECK(string(blockTag(Module::Comp, true, 0.5, true)) == "FET-76");
+  CHECK(string(blockTag(Module::Comp, true, 1.0, true)) == "VCA-160");
+  CHECK(string(blockTag(Module::Comp, false, 0.5, true)) == "4K-G");     // Mix bus: the Bus compressor
+  CHECK(string(blockTag(Module::Drive, true, 0, true)) == "NAM");
+  CHECK(string(blockTag(Module::Drive, true, 0, false)) == "4K-G");      // the saturation follows Chan/Bus
+  CHECK(string(blockTag(Module::Drive, false, 0, false)) == "4K-E");
+  CHECK(string(blockTag(Module::Limiter, true, 0, true)) == "B-PARTY");
+  CHECK(string(blockTag(Module::Gate, true, 0, true)) == "D-NOISE");
+  CHECK(string(blockTag(Module::Input, true, 0, true)).empty() && string(blockTag(Module::Output, true, 0, true)).empty());
+}
+
+void test_look_tables() {
+  // every knob has an end-value look; the shared Drive knob uses the same cap radius for both engines
+  for (const auto& c : kControls) {
+    if (c.kind != Kind::Knob) continue;
+    const KnobLook* look = knobLookOf(c.id);
+    CHECK(look != nullptr);
+    if (look) CHECK(look->radius >= 15 && look->radius <= 26 && look->lo && look->hi);
+  }
+  CHECK(knobLookOf(kDriveAmount)->radius == knobLookOf(kEqSaturation)->radius);
+  CHECK(hasYellowLed(kStripMode) && hasYellowLed(kCompressorMode) && hasYellowLed(kDriveNamOn) && !hasYellowLed(kBypassEQ));
+  CHECK(isBellButton(kEqLFBell) && isBellButton(kEqHFBell) && !isBellButton(kBypass));
+}
+
 void test_meter_dimming() {
   // global bypass dims GR and the EQ/CMP/DRV/LIM clip LEDs; the level meters and the IN/OUT LEDs stay lit
   for (const auto& row : kMeterRows) {
@@ -206,6 +236,8 @@ int main() {
   test_mode_visibility();
   test_meter_band_fits_level_box();
   test_drive_knob_is_shared_by_the_two_engines();
+  test_block_tags();
+  test_look_tables();
   test_meter_dimming();
   test_gr_bar_norm();
   test_gate_row_sits_between_gain_reduction_and_clip();

@@ -21,12 +21,16 @@ add_executable(fairy_ui_editor_size_tests tests/test_editor_size.cpp)
 target_link_libraries(fairy_ui_editor_size_tests PRIVATE fairy_ui)
 add_test(NAME fairy_ui_editor_size_tests COMMAND fairy_ui_editor_size_tests)
 
+add_executable(fairy_ui_rack_geometry_tests tests/test_rack_geometry.cpp)
+target_link_libraries(fairy_ui_rack_geometry_tests PRIVATE fairy_ui)
+add_test(NAME fairy_ui_rack_geometry_tests COMMAND fairy_ui_rack_geometry_tests)
+
 add_executable(fairy_ui_sanitize_tests tests/test_sanitize.cpp)
 target_link_libraries(fairy_ui_sanitize_tests PRIVATE fairy_ui)
 add_test(NAME fairy_ui_sanitize_tests COMMAND fairy_ui_sanitize_tests)
 
 # Code-drawn VSTGUI controls and optional bitmap skin.
-add_library(fairy_ui_widgets STATIC src/controls.cpp src/skin.cpp src/meters.cpp)
+add_library(fairy_ui_widgets STATIC src/controls.cpp src/skin.cpp src/meters.cpp src/rack_controls.cpp)
 target_include_directories(fairy_ui_widgets PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(fairy_ui_widgets PUBLIC fairy_ui vstgui_support)
 # Linked into plugin modules (shared objects).

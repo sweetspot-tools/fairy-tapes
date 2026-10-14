@@ -32,6 +32,7 @@ namespace FairyTapes::TheStripper::Ui {
 
 class ModelBrowser;
 class ModelStrip;
+class SilkscreenView;
 
 class Editor : public Steinberg::Vst::VSTGUIEditor,
                public Steinberg::IPlugViewContentScaleSupport,
@@ -74,6 +75,7 @@ private:
   void onTimer();
   // Copies controller values into the controls (all of them when `force`), then refreshes dimming and mode.
   void syncFromController(bool force);
+  void showValue(const ControlSpec& spec, double paramNorm);   // yellow value under a knob (silkscreen)
   void syncDriveKnob();    // the Drive knob shows kDriveAmount (NAM on) or kEqSaturation (NAM off)
   void updateMeters();
   void updateModel();      // model strip and Drive dimming from the controller's model status
@@ -90,6 +92,7 @@ private:
   std::array<FairyTapes::Ui::MeterBar*, kMeterRowCount> bars_{};   // owned by the frame, in kMeterRows order
   std::array<FairyTapes::Ui::ClipLed*, kClipCount> clips_{};
   std::chrono::steady_clock::time_point lastTick_{};
+  SilkscreenView* silk_ = nullptr;         // owned by the frame
   ModelStrip* strip_ = nullptr;            // owned by the frame
   ModelBrowser* browser_ = nullptr;        // owned by the frame while the popup is open
   bool browserClosing_ = false;            // set by the popup, handled on the UI timer
