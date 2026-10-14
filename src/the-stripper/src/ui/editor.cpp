@@ -6,6 +6,8 @@
 #include "ui/model_source.h"
 #include "ui/model_strip.h"
 #include "ui/silkscreen_view.h"
+#include "ui/wear_view.h"
+#include "preferences.h"
 #include "ui/panel_view.h"
 
 #include "fairy_ui/controls.h"
@@ -174,6 +176,10 @@ void Editor::createViews(CViewContainer* parent) {
   parent->addView(new PanelView(CRect(0, 0, kWidth, kHeight), &skin_));
   silk_ = new SilkscreenView(CRect(0, 0, kWidth, kHeight));   // the printed parts, below the wear and the controls
   parent->addView(silk_);
+  // The wear: seeded marks over the silkscreen, below the controls. Level from the user preferences (Off adds nothing).
+  // TODO(Task 14): the seed will be stored in the plug-in state; until then every instance gets the same wear.
+  const WearLevel wear = loadPreferences(preferencesPath("TheStripper")).wear;
+  if (wear != WearLevel::Off) parent->addView(new WearView(CRect(0, 0, kWidth, kHeight), generateWear(kDefaultWearSeed, wear)));
 
   for (const auto& spec : kControls) {
     if (spec.sharesView) continue;   // its parameter is shown by another entry's view
