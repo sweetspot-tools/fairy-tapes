@@ -325,3 +325,11 @@ Decisione del 2026-10-14 (spec §11). Dopo i Task 10-14, o prima se serve.
 - DSP: `SSLSaturation` esce da `FourKEQ` e diventa una fase del Drive dopo l'EQ; NAM acceso → NAM (senza modello: passthrough), spento → Saturate; il bypass del Drive vale per entrambi; l'EQ non ha più saturazione né dipende dal suo bypass.
 - Editor: pulsante NAM nel riquadro Drive; una sola manopola DRIVE che si lega a `kDriveAmount` o `kEqSaturation` secondo l'interruttore; Saturate sparisce dal riquadro Equaliser (restano 10 manopole); striscia del modello attenuata a NAM spento.
 - Test: tabella bloccata, stato v8 → v9, scelta del motore (uscita diversa con NAM spento e Saturate > 0), EQ senza saturazione, layout (nessuna sovrapposizione, manopola Drive unica).
+
+### Task 16: Meter del gate
+
+Decisione del 2026-10-14 (spec §11). Dopo il Task 15, o prima se serve.
+
+- `kMeterGrGate` in coda ai meter (prima di `kNumMeterIDs`; nessun ID esistente cambia), visibile e in sola lettura, codifica SSL (`grValueFromDb`); `GainReductionMeter` con rilascio veloce configurabile per il gate; il processor misura i picchi prima e dopo il gate.
+- Layout: riga "G" nel riquadro Level (righe GR e LED di clip ricompattati, tabella `kMeterRows` e test di geometria aggiornati); attenuazione col Bypass globale; FEATURES §4 e CONTROLS aggiornati (terza corsia SSL).
+- Test: gate aperto → 0; gate che chiude → riduzione positiva e discesa rapida; in bypass → 0; codifica SSL; geometria senza sovrapposizioni.
