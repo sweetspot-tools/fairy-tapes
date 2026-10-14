@@ -469,7 +469,7 @@ var mDs=modBox(24,424,270,180,'DE-ESS',function(){
   DSK=knob(74,522,'AMOUNT',0.5,'0','1','',{def:0.5,fmt:pct,api:{}});
   knob(156,522,'FREQ',0.53,'4','10','',{def:0.53,fmt:dsf,api:{}});
   btn(236,530,'LISTEN',false,function(b){toggle(b);});
-  DNOTE=lab('mostly off in Puke (x0.15)',159,596,9,DIMW);
+  boxTag(40,458,function(){return MODE===2?'MOSTLY OFF IN PUKE (X0.15)':'';});
 });
 var mCp=modBox(300,424,400,180,'COMP',function(){
   knob(352,522,'AMOUNT',0.5,'-6','-30','',{def:0.5,fmt:cmf,api:CPK});
@@ -487,7 +487,7 @@ var mTn=modBox(706,424,270,180,'TONE',function(){
     ro(950,y+6,10,AMBL,'end',function(){var g=MODES.tone[MODE][i]*((TONEK.get?TONEK.get():0.5)-0.5)*2;return (Math.abs(g)<0.05?'0.0':(g>0?'+':'')+g.toFixed(1))+' dB';});});
 });
 function setMode(i){MODE=i;modeBtns.forEach(function(b,j){b._on=(j===i);b._paint(b._on);});refreshRO();
-  var p=(i===2);if(DSK)DSK.sub.setAttribute('opacity',p?.4:1);if(DNOTE)DNOTE.parentNode.style.display=p?'':'none';
+  var p=(i===2);if(DSK)DSK.sub.setAttribute('opacity',p?.4:1);
   MODEHEAD.forEach(function(t,j){t.setAttribute('fill',j===i?YEL:W);});
   MODECELLS.forEach(function(c,j){c.forEach(function(t){t.setAttribute('fill',j===i?YEL:W);});});}
 setMode(0);
