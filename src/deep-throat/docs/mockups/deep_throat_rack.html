@@ -458,8 +458,8 @@ var mBr=modBox(470,238,320,174,'BREATH',function(){
   btn(756,364,'LISTEN',false,function(b){toggle(b);});
 },34);
 var mCl=modBox(796,238,180,174,'CLEAN',function(){
-  lab('HPF',840,332,13,W);ro(840,360,20,AMBL,'middle',function(){return MODES.hpf[MODE]+' Hz';});
-  lab('MUD CUT',912,332,13,W);ro(912,360,20,AMBL,'middle',function(){return fs(MODES.mud[MODE])+' dB';});
+  lab('HPF',840,332,13,W);ro(840,350,10,AMBL,'middle',function(){return MODES.hpf[MODE]+' Hz';});
+  lab('MUD CUT',912,332,13,W);ro(912,350,10,AMBL,'middle',function(){return fs(MODES.mud[MODE])+' dB';});
   lab('at 300 Hz',912,378,10,DIMW);
   lab('read-only  \u00b7  follows MODE',886,400,9,DIMW);
 });
@@ -474,9 +474,9 @@ var mDs=modBox(24,424,270,180,'DE-ESS',function(){
 var mCp=modBox(300,424,400,180,'COMP',function(){
   knob(352,522,'AMOUNT',0.5,'-6','-30','',{def:0.5,fmt:cmf,api:CPK});
   knob(436,522,'MIX',1,'0','100','',{def:1,fmt:pct,api:{}});
-  lab('RATIO',538,506,11,DIMW);ro(538,530,16,AMBL,'middle',function(){return RIX?RATIOS[RIX]:'AUTO '+MODES.ratio[MODE]+':1';});
+  lab('RATIO',538,506,11,DIMW);ro(538,522,10,AMBL,'middle',function(){return RIX?RATIOS[RIX]:'AUTO '+MODES.ratio[MODE]+':1';});
   btn(538,556,'',false,function(){RIX=(RIX+1)%RATIOS.length;refreshRO();},YEL);
-  lab('DIST',636,506,11,DIMW);ro(636,530,16,AMBL,'middle',function(){return DIX?DISTS[DIX]:'AUTO '+MODES.dist[MODE];});
+  lab('DIST',636,506,11,DIMW);ro(636,522,10,AMBL,'middle',function(){return DIX?DISTS[DIX]:'AUTO '+MODES.dist[MODE];});
   btn(636,556,'',false,function(){DIX=(DIX+1)%DISTS.length;refreshRO();},YEL);
   lab('threshold set by AMOUNT  ·  gain reduction: see LEVEL',500,594,9,DIMW);
 });
@@ -484,7 +484,7 @@ var mTn=modBox(706,424,270,180,'TONE',function(){
   knob(768,522,'TONE',0.5,'-100','+100','',{def:0.5,fmt:tonef,r:30,api:TONEK,onchange:function(){refreshRO();}});
   [['MUD','250 Hz'],['PRESENCE','3.5 kHz'],['AIR','12 kHz']].forEach(function(b,i){var y=512+i*32;
     lab(b[0],832,y,12,W,'start');lab(b[1],832,y+12,9,DIMW,'start');
-    ro(950,y+6,14,AMBL,'end',function(){var g=MODES.tone[MODE][i]*((TONEK.get?TONEK.get():0.5)-0.5)*2;return (Math.abs(g)<0.05?'0.0':(g>0?'+':'')+g.toFixed(1))+' dB';});});
+    ro(950,y+6,10,AMBL,'end',function(){var g=MODES.tone[MODE][i]*((TONEK.get?TONEK.get():0.5)-0.5)*2;return (Math.abs(g)<0.05?'0.0':(g>0?'+':'')+g.toFixed(1))+' dB';});});
 });
 function setMode(i){MODE=i;modeBtns.forEach(function(b,j){b._on=(j===i);b._paint(b._on);});refreshRO();
   var p=(i===2);if(DSK)DSK.sub.setAttribute('opacity',p?.4:1);if(DNOTE)DNOTE.parentNode.style.display=p?'':'none';
