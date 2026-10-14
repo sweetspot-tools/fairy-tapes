@@ -11,6 +11,9 @@ Scritta il 2026-10-14 dalla chat di Pillow Talk (branch `feat/pillow-talk`). Pil
 | `draw_util.{h,cpp}` (`kWhite`, `kDimWhite`, `kAmber`, `kPanelBlack`, `drawTitledBox`) | `include/fairy_ui/draw_util.h`, `src/draw_util.cpp` | `fairy_ui_widgets` |
 | `silkscreen_view.{h,cpp}` (`SilkscreenView`, `tagPosition`) | `include/fairy_ui/silkscreen.h` (puro) + `include/fairy_ui/silkscreen_view.h`, `src/silkscreen_view.cpp` | `fairy_ui` / `fairy_ui_widgets` |
 | `tests/test_wear.cpp` | `shared/ui/tests/test_wear.cpp` (stessi test più valori fissati per il seme `0x51`) | test `fairy_ui_wear_tests` |
+| `assets/panel_grain.png` (tessera di grana 256 × 256) | `shared/ui/assets/panel_grain.png` (copia identica byte per byte, aggiunta il 2026-10-15 per Pillow Talk) | copiata nel bundle dal CMake del plugin |
+
+**Grana del pannello:** Pillow Talk copia `shared/ui/assets/panel_grain.png` in `Contents/Resources` del suo bundle (comando `POST_BUILD` in `src/pillow-talk/CMakeLists.txt`) e la carica con lo stesso nome (`panel_grain.png`) tramite `Skin`. Lo Stripper può passare alla copia comune cambiando solo la sorgente del suo `POST_BUILD` (`${CMAKE_CURRENT_SOURCE_DIR}/../../shared/ui/assets/panel_grain.png`) e togliendo la sua `assets/panel_grain.png`; lo script `tools/gen_panel_grain.py` resta lo strumento che la rigenera (scriverla poi in `shared/ui/assets/`).
 
 Test comuni nuovi: `fairy_ui_wear_tests`, `fairy_ui_silkscreen_tests`, `fairy_ui_layer_view_tests`.
 
