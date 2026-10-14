@@ -3,17 +3,17 @@
 
 #include "ui/history.h"
 
+#include "vstgui/lib/cfont.h"
 #include "vstgui/lib/cview.h"
 
 namespace FairyTapes::PillowTalk::Ui {
 
 class DuckScope : public VSTGUI::CView {
 public:
-  static constexpr VSTGUI::CCoord kWidth = 432;
-  static constexpr VSTGUI::CCoord kHeight = 130;
   static constexpr int kPoints = 200;  // about 6 s at one point per 30 ms
 
-  explicit DuckScope(const VSTGUI::CPoint& origin);
+  // The traces fill the given rect (376 x 130 in the rack panel, ui/layout.h kScopeRect).
+  explicit DuckScope(const VSTGUI::CRect& size);
 
   // Threshold parameter, normalized 0..1 (same -60..0 dB mapping as the voice level).
   void setThreshold(float norm);
@@ -25,6 +25,7 @@ public:
 private:
   History history_{kPoints};
   float threshold_ = 0.f;
+  VSTGUI::SharedPointer<VSTGUI::CFontDesc> legendFont_, thresholdFont_;
 };
 
 } // namespace FairyTapes::PillowTalk::Ui

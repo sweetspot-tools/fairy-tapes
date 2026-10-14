@@ -14,23 +14,24 @@ using namespace VSTGUI;
 
 namespace {
 
-constexpr CColor kScopeBg(0x0f, 0x0e, 0x0d);
-constexpr CColor kScopeBorder(0x4a, 0x46, 0x3e);
-constexpr CColor kVoice(0x5b, 0x58, 0x50, 217);   // opacity .85
-constexpr CColor kEcho(0xd9, 0xa4, 0x41, 191);    // opacity .75
-constexpr CColor kEchoText(0xd9, 0xa4, 0x41);
-constexpr CColor kSend(0x5c, 0xc0, 0x6c);
-constexpr CColor kThreshold(0xc9, 0xc4, 0xb6);
-constexpr CColor kVoiceText(0x8a, 0x85, 0x7a);
+// Colours of the rack preview (docs/mockups/pillow_rack.html).
+constexpr CColor kScopeBg(0x08, 0x08, 0x0a);
+constexpr CColor kScopeBorder(0xf4, 0xf4, 0xf0, 230);   // white, opacity .9
+constexpr CColor kVoice(0x8e, 0x8e, 0x93, 140);         // opacity .55
+constexpr CColor kEcho(0xf0, 0xb4, 0x29, 204);          // opacity .8
+constexpr CColor kEchoText(0xf0, 0xb4, 0x29);
+constexpr CColor kSend(0x37, 0xd0, 0x4a);
+constexpr CColor kThreshold(0xf4, 0xf4, 0xf0, 217);     // opacity .85
+constexpr CColor kVoiceText(0xb9, 0xb9, 0xbe);
+constexpr CColor kDimText(0xc9, 0xc9, 0xc2);
 
-constexpr CCoord kRadius = 4;
-constexpr CCoord kBaselineInset = 6;   // baseline above the bottom edge
-constexpr CCoord kHeadroom = 30;       // value 1.0 reaches height - kHeadroom
-constexpr CCoord kLegendX = 8;
-constexpr CCoord kLegendCenterY = 10;  // mockup baseline y+14, 11 px text
-constexpr CCoord kLegendTextHeight = 14;
-constexpr CCoord kLegendGap = 20;
-constexpr CCoord kSendWidth = 1.5;
+constexpr CCoord kRadius = 3;
+constexpr CCoord kBaselineInset = 8;   // baseline above the bottom edge
+constexpr CCoord kHeadroom = 34;       // value 1.0 reaches height - kHeadroom
+constexpr CCoord kLegendX = 10;
+constexpr CCoord kLegendBaseline = 16;
+constexpr CCoord kLegendGap = 10;      // VOICE at +10, ECHO at +58, SEND LEVEL at +98 in the preview
+constexpr CCoord kSendWidth = 1.6;
 
 enum class Trace { Voice, Echo };
 
@@ -53,8 +54,9 @@ SharedPointer<CGraphicsPath> areaPath(CDrawContext* ctx, const History& h, Trace
 
 } // namespace
 
-DuckScope::DuckScope(const CPoint& origin)
-: CView(CRect(origin.x, origin.y, origin.x + kWidth, origin.y + kHeight)) {}
+DuckScope::DuckScope(const CRect& size)
+: CView(size), legendFont_(makeOwned<CFontDesc>("Arial", 10, kBoldFace)),
+  thresholdFont_(makeOwned<CFontDesc>("Arial", 9, kBoldFace)) {}
 
 void DuckScope::setThreshold(float norm) {
   const float v = static_cast<float>(FairyTapes::Ui::sanitizeNorm(norm, 0.0));
@@ -116,27 +118,27 @@ void DuckScope::draw(CDrawContext* ctx) {
 
   // Threshold: dashed 1 px line.
   const CCoord ty = base - threshold_ * span;
-  const CCoord dashes[] = {3, 3};
+  const CCoord dashes[] = {4, 4};
   ctx->setLineStyle(CLineStyle(CLineStyle::kLineCapButt, CLineStyle::kLineJoinMiter, 0, 2, dashes));
   ctx->setLineWidth(1);
   ctx->setFrameColor(kThreshold);
   ctx->drawLine(CPoint(r.left, ty), CPoint(r.right, ty));
   ctx->setLineStyle(kLineSolid);
 
-  // Legend, labels spaced by their measured width.
-  ctx->setFont(kNormalFontSmall);
+  // Legend: the three traces from the left, THRESHOLD at the right.
+  ctx->setFont(legendFont_);
   CCoord x = r.left + kLegendX;
   const struct { const char* text; CColor color; } legend[] = {
     {"VOICE", kVoiceText}, {"ECHO", kEchoText}, {"SEND LEVEL", kSend}};
   for (const auto& item : legend) {
-    const CCoord w = ctx->getStringWidth(item.text);
     ctx->setFontColor(item.color);
-    ctx->drawString(item.text,
-                    CRect(x, r.top + kLegendCenterY - kLegendTextHeight / 2, x + w + 2,
-                          r.top + kLegendCenterY + kLegendTextHeight / 2),
-                    kLeftText);
-    x += w + kLegendGap;
+    ctx->drawString(item.text, CPoint(x, r.top + kLegendBaseline));
+    x += ctx->getStringWidth(item.text) + kLegendGap;
   }
+  ctx->setFont(thresholdFont_);
+  ctx->setFontColor(kDimText);
+  const char* th = "THRESHOLD";
+  ctx->drawString(th, CPoint(r.right - 8 - ctx->getStringWidth(th), r.top + kLegendBaseline));
 
   ctx->restoreGlobalState();
   setDirty(false);

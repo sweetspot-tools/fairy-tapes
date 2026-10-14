@@ -1,11 +1,15 @@
-// Pillow Talk GUI: the plugin editor. Layout from the approved mockup (spec section 5).
+// Pillow Talk GUI: the plugin editor. Layout from the approved rack preview (docs/mockups/pillow_rack.html, ui/layout.h).
 #include "ui/editor.h"
 
 #include "ui/duck_scope.h"
 #include "ui/panel_view.h"
 
 #include "fairy_ui/controls.h"
+#include "fairy_ui/meters.h"
+#include "fairy_ui/rack_controls.h"
 #include "fairy_ui/sanitize.h"
+#include "fairy_ui/silkscreen_view.h"
+#include "fairy_ui/wear_view.h"
 
 #include "base/source/updatehandler.h"
 #include "public.sdk/source/vst/utility/stringconvert.h"
@@ -19,17 +23,23 @@
 #endif
 
 #include <cstring>
-#include <iterator>
 #include <string>
-#include <vector>
 
 namespace FairyTapes::PillowTalk::Ui {
 
 using namespace VSTGUI;
-using FairyTapes::Ui::AnalogKnob;
-using FairyTapes::Ui::ChoiceButtons;
+using FairyTapes::Ui::ClipLed;
+using FairyTapes::Ui::MeterBar;
+using FairyTapes::Ui::MeterKind;
 using FairyTapes::Ui::NormalizedControl;
-using FairyTapes::Ui::ToggleButton;
+using FairyTapes::Ui::RackChoice;
+using FairyTapes::Ui::RackKnob;
+using FairyTapes::Ui::RackLed;
+using FairyTapes::Ui::RackToggle;
+using FairyTapes::Ui::SilkscreenView;
+using FairyTapes::Ui::WearLevel;
+using FairyTapes::Ui::WearMark;
+using FairyTapes::Ui::WearView;
 using Steinberg::Vst::ParamID;
 
 namespace {
@@ -37,71 +47,11 @@ namespace {
 static_assert(kNumParams <= 32, "pending_ holds one bit per persistent parameter");
 
 constexpr uint32_t kTimerMs = 30;
-constexpr CColor kFrameBackground(0x2a, 0x29, 0x26);
+constexpr double kTimerSeconds = kTimerMs / 1000.0;
+constexpr CColor kFrameBackground(0x16, 0x16, 0x17);
+constexpr float kDimmedAlpha = 0.35f;   // DESIGN_SYSTEM.md: dimmed parts at 35 %
 
-// ---------------------------------------------------------------------------
-// Layout (px, editor coordinates). Every control position comes from this table.
-
-enum class Kind { Knob, Toggle, Notes };
-
-struct ControlSpec {
-  ParamID id;
-  Kind kind;
-  CRect rect;
-  const char* label;  // knob or button text; unused for Notes (labels come from the parameter)
-};
-
-constexpr CCoord kButtonHeight = 24;
-constexpr CCoord kNoteWidth = 52;
-constexpr CCoord kNoteGap = 6;
-constexpr int kNoteCount = 4;
-
-constexpr CRect knobAt(CCoord cx, CCoord cy) {
-  return CRect(cx - AnalogKnob::kPreferredWidth / 2, cy - AnalogKnob::kCenterOffsetY,
-               cx + AnalogKnob::kPreferredWidth / 2, cy - AnalogKnob::kCenterOffsetY + AnalogKnob::kPreferredHeight);
-}
-constexpr CRect buttonAt(CCoord x, CCoord y, CCoord w) { return CRect(x, y, x + w, y + kButtonHeight); }
-constexpr CRect notesAt(CCoord x, CCoord y) {
-  return buttonAt(x, y, kNoteCount * kNoteWidth + (kNoteCount - 1) * kNoteGap);
-}
-
-constexpr CPoint kScopeOrigin(24, 64);
-constexpr CCoord kColumn[] = {62, 138, 214, 290, 366, 442};  // knob centres
-constexpr CCoord kDelayKnobY = 266;
-constexpr CCoord kDuckKnobY = 436;
-constexpr CCoord kTimeRowY = 336;
-constexpr CCoord kHoldRowY = 506;
-constexpr CCoord kSyncX = 70;
-constexpr CCoord kSyncWidth = 58;
-constexpr CCoord kNotesX = 138;
-
-constexpr ControlSpec kControls[] = {
-    {kSidechain, Kind::Toggle, buttonAt(304, 18, 70), "Sidechain"},
-    {kBypass, Kind::Toggle, buttonAt(382, 18, 74), "Bypass"},
-    // Delay
-    {kTimeMs, Kind::Knob, knobAt(kColumn[0], kDelayKnobY), "Time"},
-    {kFeedback, Kind::Knob, knobAt(kColumn[1], kDelayKnobY), "Feedback"},
-    {kTone, Kind::Knob, knobAt(kColumn[2], kDelayKnobY), "Tone"},
-    {kSaturation, Kind::Knob, knobAt(kColumn[3], kDelayKnobY), "Saturation"},
-    {kWowFlutter, Kind::Knob, knobAt(kColumn[4], kDelayKnobY), "Wow/Flutter"},
-    {kMix, Kind::Knob, knobAt(kColumn[5], kDelayKnobY), "Mix"},
-    {kTimeSync, Kind::Toggle, buttonAt(kSyncX, kTimeRowY, kSyncWidth), "Sync"},
-    {kTimeNote, Kind::Notes, notesAt(kNotesX, kTimeRowY), nullptr},
-    // Auto Duck
-    {kThreshold, Kind::Knob, knobAt(kColumn[0], kDuckKnobY), "Threshold"},
-    {kDuckDepth, Kind::Knob, knobAt(kColumn[1], kDuckKnobY), "Depth"},
-    {kHoldMs, Kind::Knob, knobAt(kColumn[2], kDuckKnobY), "Hold"},
-    {kRelease, Kind::Knob, knobAt(kColumn[3], kDuckKnobY), "Release"},
-    {kHoldSync, Kind::Toggle, buttonAt(kSyncX, kHoldRowY, kSyncWidth), "Sync"},
-    {kHoldNote, Kind::Notes, notesAt(kNotesX, kHoldRowY), nullptr},
-};
-static_assert(std::size(kControls) == kNumParams, "every persistent parameter has one control");
-
-// Sync toggle -> the millisecond knob it replaces and the note buttons it enables.
-struct SyncGroup {
-  ParamID sync, ms, note;
-};
-constexpr SyncGroup kSyncGroups[] = {{kTimeSync, kTimeMs, kTimeNote}, {kHoldSync, kHoldMs, kHoldNote}};
+CRect toCRect(const Rect& r) { return CRect(r.x, r.y, r.x + r.w, r.y + r.h); }
 
 constexpr uint32_t bit(ParamID id) { return 1u << id; }
 
@@ -111,14 +61,8 @@ std::string paramString(Steinberg::Vst::EditController* ctl, ParamID id, double 
   return Steinberg::Vst::StringConvert::convert(s);
 }
 
-// Note labels as the controller formats them, one per list entry.
-std::vector<std::string> choiceLabels(Steinberg::Vst::EditController* ctl, ParamID id) {
-  std::vector<std::string> labels;
-  Steinberg::Vst::Parameter* p = ctl->getParameterObject(id);
-  const int steps = p ? p->getInfo().stepCount : 0;
-  for (int i = 0; i <= steps && steps > 0; ++i)
-    labels.push_back(paramString(ctl, id, static_cast<double>(i) / steps));
-  return labels;
+double controllerNorm(Steinberg::Vst::EditController* ctl, ParamID id, double fallback) {
+  return FairyTapes::Ui::sanitizeNorm(ctl->getParamNormalized(id), fallback);
 }
 
 } // namespace
@@ -188,7 +132,7 @@ bool PLUGIN_API Editor::open(void* parent, const PlatformType& platformType) {
 
   frame = new CFrame(CRect(0, 0, kWidth, kHeight), this);
   frame->setBackgroundColor(kFrameBackground);
-  createViews();
+  createViews(frame);
   if (scale_ != 1.0) frame->setZoom(scale_);  // VSTGUIEditor::attached then reports the scaled size
   if (!frame->open(parent, platformType, config)) {
     close();
@@ -215,38 +159,79 @@ void PLUGIN_API Editor::close() {
       frame->forget();
     frame = nullptr;
   }
-  controls_.fill(nullptr);
-  scope_ = nullptr;
+  resetViewPointers();
 }
 
-void Editor::createViews() {
-  auto* ctl = getController();
-  frame->addView(new PanelView(CRect(0, 0, kWidth, kHeight), &skin_));
-  scope_ = new DuckScope(kScopeOrigin);
-  frame->addView(scope_);
+void Editor::resetViewPointers() {
+  controls_.fill(nullptr);
+  bars_.fill(nullptr);
+  clips_.fill(nullptr);
+  scope_ = nullptr;
+  silk_ = nullptr;
+  wear_ = nullptr;
+}
 
-  for (const auto& spec : kControls) {
+const std::vector<WearMark>& Editor::wearMarks(uint32_t seed, WearLevel level) {
+  if (!marksValid_ || seed != marksSeed_ || level != marksLevel_) {
+    marks_ = FairyTapes::Ui::generateWear(seed, level, kWidth, kHeight);
+    marksSeed_ = seed;
+    marksLevel_ = level;
+    marksValid_ = true;
+  }
+  return marks_;
+}
+
+void Editor::createViews(CViewContainer* parent) {
+  auto* ctl = getController();
+  const CRect all(0, 0, kWidth, kHeight);
+
+  // 1-2: panel, grain, boxes and fixed texts. 3: silkscreen. 4: wear. Then the controls and displays.
+  parent->addView(new PanelView(all, &skin_));
+  silk_ = new SilkscreenView(all, silkscreenItems());
+  parent->addView(silk_);
+  wear_ = new WearView(all, wearMarks(kWearSeed, kWearLevel));
+  parent->addView(wear_);
+
+  scope_ = new DuckScope(toCRect(kScopeRect));
+  parent->addView(scope_);
+
+  for (const ControlSpec& spec : kControls) {
+    const CRect rect = toCRect(viewRect(spec));
+    const auto tag = static_cast<int32_t>(spec.id);
+    const RackLed led = spec.led == Led::Yellow ? RackLed::Yellow : RackLed::Red;
     NormalizedControl* control = nullptr;
     switch (spec.kind) {
-    case Kind::Knob: {
-      auto* knob = new AnalogKnob(spec.rect, this, static_cast<int32_t>(spec.id), spec.label, &skin_);
-      const ParamID id = spec.id;
-      knob->setValueFormatter([ctl, id](float v) { return paramString(ctl, id, v); });
-      control = knob;
-      break;
-    }
-    case Kind::Toggle:
-      control = new ToggleButton(spec.rect, this, static_cast<int32_t>(spec.id), spec.label, &skin_);
-      break;
-    case Kind::Notes:
-      control = new ChoiceButtons(spec.rect, this, static_cast<int32_t>(spec.id), choiceLabels(ctl, spec.id), &skin_);
-      break;
+    case Kind::Knob: control = new RackKnob(rect, this, tag, spec.capRadius, &skin_); break;
+    case Kind::Toggle: control = new RackToggle(rect, this, tag, led, false, &skin_); break;
+    case Kind::Choice: control = new RackChoice(rect, this, tag, spec.choiceCount, led, &skin_); break;
     }
     if (auto* p = ctl->getParameterObject(spec.id))
       control->setDefaultValue(static_cast<float>(p->getInfo().defaultNormalizedValue));
-    frame->addView(control);
+    parent->addView(control);
     controls_[spec.id] = control;
   }
+
+  for (int i = 0; i < kMeterRowCount; ++i) {
+    const MeterRow& row = kMeterRows[i];
+    bars_[i] = new MeterBar(toCRect(meterBarRect(row)), row.gainReduction ? MeterKind::GainReduction : MeterKind::Level,
+                            kMeterLeds);
+    parent->addView(bars_[i]);
+  }
+  for (int i = 0; i < kClipCount; ++i) {
+    clips_[i] = new ClipLed(toCRect(clipRect(kClips[i])), kClips[i].label);
+    clips_[i]->onClick = [this] { clearClips(); };
+    parent->addView(clips_[i]);
+  }
+}
+
+// One click clears both clip LEDs: the hidden writable parameter goes to the processor, which clears the flags and
+// answers with 0 (Task 1).
+void Editor::clearClips() {
+  auto* ctl = getController();
+  ctl->setParamNormalized(kClearClips, 1.0);
+  ctl->beginEdit(kClearClips);
+  ctl->performEdit(kClearClips, 1.0);
+  ctl->endEdit(kClearClips);
 }
 
 void Editor::watchParameters() {
@@ -283,21 +268,31 @@ void Editor::onTimer() {
   const uint32_t changed = pending_.exchange(0);
   for (ParamID id = 0; id < kNumParams; ++id)
     if (changed & bit(id)) syncFromController(id);
+  updateDisplays();
+}
 
-  // Display values: neutral (0 / 1 / 0) until the host forwards the processor's output.
-  if (scope_) {
-    auto* ctl = getController();
+// Display values (neutral until the host forwards the processor's output): scope, LEVEL rows, clip LEDs.
+void Editor::updateDisplays() {
+  auto* ctl = getController();
+  if (scope_)
     scope_->push(static_cast<float>(ctl->getParamNormalized(kDispVoice)),
                  static_cast<float>(ctl->getParamNormalized(kDispSend)),
                  static_cast<float>(ctl->getParamNormalized(kDispEcho)));
+  for (int i = 0; i < kMeterRowCount; ++i) {
+    if (!bars_[i]) continue;
+    const MeterRow& row = kMeterRows[i];
+    const double v = row.gainReduction ? duckMeterNorm(ctl->getParamNormalized(row.id))
+                                       : controllerNorm(ctl, row.id, 0.0);
+    bars_[i]->setLevel(v, kTimerSeconds);
   }
+  for (int i = 0; i < kClipCount; ++i)
+    if (clips_[i]) clips_[i]->setLit(controllerNorm(ctl, kClips[i].id, 0.0) >= 0.5);
 }
 
 void Editor::syncFromController(ParamID id) {
   auto* ctl = getController();
   const auto* p = ctl->getParameterObject(id);
-  const double fallback = p ? p->getInfo().defaultNormalizedValue : 0.0;
-  const double v = FairyTapes::Ui::sanitizeNorm(ctl->getParamNormalized(id), fallback);
+  const double v = controllerNorm(ctl, id, p ? p->getInfo().defaultNormalizedValue : 0.0);
   if (auto* control = controls_[id]) {
     control->setValueNormalized(static_cast<float>(v));
     control->invalid();
@@ -306,13 +301,27 @@ void Editor::syncFromController(ParamID id) {
 }
 
 void Editor::applySideEffects(ParamID id, double norm) {
-  for (const auto& g : kSyncGroups) {
-    if (id != g.sync) continue;
-    const bool sync = norm >= 0.5;
-    if (auto* ms = controls_[g.ms]) ms->setDimmed(sync);
-    if (auto* note = controls_[g.note]) note->setDimmed(!sync);
+  const ControlSpec* spec = controlOf(id);
+  if (silk_ && spec && spec->kind == Kind::Knob) silk_->setValueText(static_cast<int>(id), paramString(getController(), id, norm));
+  const bool on = norm >= 0.5;
+  if (id == kBypass || id == kTimeSync || id == kHoldSync) {
+    if (id == kBypass) dim_.bypass = on;
+    else if (id == kTimeSync) dim_.timeSync = on;
+    else dim_.holdSync = on;
+    refreshDimming();
   }
   if (id == kThreshold && scope_) scope_->setThreshold(static_cast<float>(norm));
+}
+
+void Editor::refreshDimming() {
+  for (const ControlSpec& c : kControls) {
+    const bool dimmed = controlDimmed(c.id, dim_);
+    if (auto* control = controls_[c.id]) control->setDimmed(dimmed);
+    if (silk_) silk_->setDimmed(static_cast<int>(c.id), dimmed);
+  }
+  if (scope_) scope_->setAlphaValue(dim_.bypass ? kDimmedAlpha : 1.f);
+  for (int i = 0; i < kMeterRowCount; ++i)
+    if (bars_[i]) bars_[i]->setDimmed(dim_.bypass && !kMeterRows[i].alwaysLit);
 }
 
 void Editor::valueChanged(CControl* control) {

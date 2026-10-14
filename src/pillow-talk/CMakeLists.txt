@@ -84,6 +84,15 @@ else()
   )
 endif()
 
+# Bitmap resources go to Contents/Resources of the bundle, where VSTGUI looks for them: the panel grain tile shared by
+# the suite (shared/ui/assets). Without it the panel is drawn in plain #161617.
+set(FAIRY_UI_ASSETS "${CMAKE_CURRENT_SOURCE_DIR}/../../shared/ui/assets")
+add_custom_command(TARGET pillow_talk POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E make_directory "${PILLOW_TALK_BUNDLE}/Contents/Resources"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${FAIRY_UI_ASSETS}/panel_grain.png"
+          "${PILLOW_TALK_BUNDLE}/Contents/Resources/panel_grain.png"
+  VERBATIM)
+
 target_link_libraries(pillow_talk PRIVATE sdk fairy_ui fairy_ui_widgets)
 if(APPLE)
   target_link_libraries(pillow_talk PRIVATE "-framework CoreFoundation")
@@ -130,6 +139,24 @@ target_include_directories(pillow_talk_layout_tests PRIVATE
 target_link_libraries(pillow_talk_layout_tests PRIVATE fairy_ui)
 add_test(NAME pillow_talk_layout_tests COMMAND pillow_talk_layout_tests)
 
+# Developer tool: draws the editor offscreen into a PNG (no host needed). Not built by default.
+add_executable(pillow_talk_render EXCLUDE_FROM_ALL
+  tools/render_editor.cpp
+  ${VST3_SDK_PATH}/public.sdk/source/main/moduleinit.cpp
+  ${VST3_SDK_PATH}/public.sdk/source/main/pluginfactory.cpp
+  src/controller.cpp
+  src/engine.cpp
+  src/dsp/ducker.cpp
+  src/dsp/tape_echo.cpp
+  src/ui/duck_scope.cpp
+  src/ui/editor.cpp
+  src/ui/panel_view.cpp
+)
+target_include_directories(pillow_talk_render PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${VST3_SDK_PATH})
+target_compile_definitions(pillow_talk_render PRIVATE
+  PILLOW_TALK_ASSETS="${CMAKE_CURRENT_SOURCE_DIR}/../../shared/ui/assets/")
+target_link_libraries(pillow_talk_render PRIVATE sdk pluginterfaces fairy_ui fairy_ui_widgets)
+
 # Module/factory lifecycle smoke test: dlopens the built bundle from dist/ (exit 77 = skipped
 # when the plugin has not been built). Links only the pluginterfaces IIDs, not the plugin.
 if(NOT WIN32)
@@ -145,4 +172,5 @@ if(NOT WIN32)
   target_link_libraries(pillow_talk_factory_test PRIVATE pluginterfaces ${CMAKE_DL_LIBS})
   add_test(NAME pillow_talk_factory_test COMMAND pillow_talk_factory_test)
   set_tests_properties(pillow_talk_factory_test PROPERTIES SKIP_RETURN_CODE 77)
+
 endif()

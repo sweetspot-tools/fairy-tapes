@@ -1,13 +1,16 @@
-// Pillow Talk GUI: the plugin editor (480 x 560, views built in code, no .uidesc).
-// Every persistent parameter is bound to one control. User gestures go to the controller as
-// beginEdit / performEdit / endEdit; host-side changes (automation, presets, undo) arrive as
-// Parameter dependents and are applied on the UI timer.
+// Pillow Talk GUI: the plugin editor (1000 x 628 rack panel, views built in code, no .uidesc).
+// Layers from the bottom (docs/DESIGN_SYSTEM.md): panel (PanelView) / silkscreen (SilkscreenView) / wear (WearView) /
+// controls, scope, meters and clip LEDs. Every persistent parameter is bound to one control (ui/layout.h). User gestures
+// go to the controller as beginEdit / performEdit / endEdit; host-side changes (automation, presets, undo) arrive as
+// Parameter dependents and are applied on the UI timer, which also reads the processor's display parameters.
 #pragma once
 
 #include "params.h"
 #include "ui/editor_size.h"
+#include "ui/layout.h"
 
 #include "fairy_ui/skin.h"
+#include "fairy_ui/wear.h"
 
 #include "public.sdk/source/vst/vstguieditor.h"
 #include "public.sdk/source/vst/vstparameters.h"
@@ -18,14 +21,24 @@
 #include <array>
 #include <atomic>
 #include <cstdint>
+#include <vector>
+
+namespace VSTGUI {
+class CViewContainer;
+}
 
 namespace FairyTapes::Ui {
 class NormalizedControl;
+class MeterBar;
+class ClipLed;
+class SilkscreenView;
+class WearView;
 }
 
 namespace FairyTapes::PillowTalk::Ui {
 
 class DuckScope;
+struct EditorPreview;   // offscreen render tool (tools/render_editor.cpp)
 
 class Editor : public Steinberg::Vst::VSTGUIEditor,
                public Steinberg::IPlugViewContentScaleSupport,
@@ -34,6 +47,10 @@ public:
   // Logical size; the window is this times the host's content scale factor.
   static constexpr int kWidth = kEditorWidth;
   static constexpr int kHeight = kEditorHeight;
+
+  // Wear until the seed and the preference exist (Task 5: state v2 and user preferences).
+  static constexpr uint32_t kWearSeed = FairyTapes::Ui::kDefaultWearSeed;
+  static constexpr FairyTapes::Ui::WearLevel kWearLevel = FairyTapes::Ui::WearLevel::Light;
 
   explicit Editor(Steinberg::Vst::EditController* controller);
   ~Editor() override;
@@ -67,18 +84,37 @@ public:
   void PLUGIN_API update(Steinberg::FUnknown* changedUnknown, Steinberg::int32 message) override;
 
 private:
-  void createViews();
+  friend struct EditorPreview;
+
+  void createViews(VSTGUI::CViewContainer* parent);
   void watchParameters();
   void unwatchParameters();
   void onTimer();
-  // Copies the controller value into the control and applies the side effects (Sync, scope).
+  void updateDisplays();
+  void clearClips();
+  // Copies the controller value into the control and applies the side effects (value text, dimming, scope).
   void syncFromController(Steinberg::Vst::ParamID id);
   void applySideEffects(Steinberg::Vst::ParamID id, double norm);
+  void refreshDimming();
+  // Marks for a seed and level, regenerated only when one of them changes.
+  const std::vector<FairyTapes::Ui::WearMark>& wearMarks(uint32_t seed, FairyTapes::Ui::WearLevel level);
+  void resetViewPointers();
 
   double scale_ = 1.0;  // sanitized content scale factor
   FairyTapes::Ui::Skin skin_;
-  std::array<FairyTapes::Ui::NormalizedControl*, kNumParams> controls_{};  // owned by the frame
-  DuckScope* scope_ = nullptr;                                              // owned by the frame
+  std::array<FairyTapes::Ui::NormalizedControl*, kNumParams> controls_{};  // views are owned by the frame
+  DuckScope* scope_ = nullptr;
+  FairyTapes::Ui::SilkscreenView* silk_ = nullptr;
+  FairyTapes::Ui::WearView* wear_ = nullptr;
+  std::array<FairyTapes::Ui::MeterBar*, kMeterRowCount> bars_{};
+  std::array<FairyTapes::Ui::ClipLed*, kClipCount> clips_{};
+  DimState dim_{};
+
+  std::vector<FairyTapes::Ui::WearMark> marks_;
+  uint32_t marksSeed_ = 0;
+  FairyTapes::Ui::WearLevel marksLevel_ = FairyTapes::Ui::WearLevel::Off;
+  bool marksValid_ = false;
+
   std::array<Steinberg::IPtr<Steinberg::Vst::Parameter>, kNumParams> watched_{};
   std::atomic<uint32_t> pending_{0};  // one bit per ParamID changed by the host
   VSTGUI::SharedPointer<VSTGUI::CVSTGUITimer> timer_;
