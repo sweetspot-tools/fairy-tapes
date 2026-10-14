@@ -555,7 +555,7 @@ setMode(MODE);
 
 
 document.getElementById('wear').value=WEAR;
-var ZSEL=document.getElementById('zoom');ZSEL.value=lsGet('dt_zoom','1.5');
+var ZSEL=document.getElementById('zoom');ZSEL.value=lsGet('dt_zoom','1');
 /* zoom by widening the stage (the SVG scales natively): CSS zoom shifts pointer coordinates, so clicks missed their targets */
 function applyZoom(){var st=document.querySelector('.stage');st.style.maxWidth='none';st.style.width=Math.round(1040*ZSEL.value)+'px';lsSet('dt_zoom',ZSEL.value);}
 ZSEL.onchange=applyZoom;applyZoom();
