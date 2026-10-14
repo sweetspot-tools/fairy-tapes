@@ -21,7 +21,7 @@
 - Thistressor (23DSP) descrive un'architettura parallela con distorsione asimmetrica a diodi, pre-distorsione e post-distorsione scalata dal rapporto attorno allo stadio di compressione. Non ha sorgente pubblico (vedi spec §2).
 - Non ho trovato alcuna fonte su come si modella in DSP il VCA dell'hardware originale. Cercarla su KVR (sezione DSP) o nelle liste Music-DSP.
 
-## 4. Cosa cambia per il nostro `DistressorComp` (proposte, non ancora in spec)
+## 4. Cosa cambia per il nostro `DistressorComp` (punti 1-5 recepiti in spec e piano, Task 8; il 6 resta una pratica di taratura)
 
 1. **Rilevatore con passa-alto** (80 Hz a default): oggi il piano non lo prevede e sulla voce serve contro il pompaggio da plosive e fiato.
 2. **Distorsione legata alla riduzione di guadagno e all'attacco**, non a un drive fisso: Dist 2 cresce con la compressione, Dist 3 con risposta ridotta agli estremi.

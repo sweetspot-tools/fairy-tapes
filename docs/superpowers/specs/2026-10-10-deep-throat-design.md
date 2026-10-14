@@ -33,7 +33,7 @@ Successo: su una voce grezza, scelta la modalità, si arriva a un suono uniforme
 3. **Breath control:** abbassa i respiri di una quantità (Amount), con look-ahead e isteresi; non chiude mai del tutto. La sensibilità del rilevatore è regolabile (Sensitivity) e un pulsante Listen fa ascoltare i soli respiri tolti.
 4. **EQ correttivo:** passa-alto, taglio del fango (200-400 Hz), notch dinamico per risonanze. Parametri interni dipendenti dalla modalità.
 5. **De-esser:** a banda separata, frequenza regolabile (Freq, 4-10 kHz, default 6,5 kHz), con ascolto del solo segnale tagliato.
-6. **Compressore stile Distressor:** Ratio selezionabile (AUTO, 2, 3, 4, 6, 8, 10:1), Dist selezionabile (AUTO, OFF, Dist 2, Dist 3: armoniche pari/dispari), tempi programma-dipendenti, Mix parallelo. AUTO usa il valore della modalità. Scritto da noi (vedi §2).
+6. **Compressore stile Distressor:** Ratio selezionabile (AUTO, 2, 3, 4, 6, 8, 10, 20:1), Dist selezionabile (AUTO, OFF, Dist 2, Dist 3: armoniche pari/dispari), topologia feedforward con rilevatore in scala logaritmica e passa-alto sul solo rilevamento (80 Hz), tempi programma-dipendenti legati al rapporto, distorsione che cresce con la riduzione di guadagno e con l'attacco, Mix parallelo. Dettagli e fonti in `src/deep-throat/docs/COMPRESSOR_RESEARCH.md`. AUTO usa il valore della modalità. Scritto da noi (vedi §2).
 7. **Tone:** una manopola che muove insieme taglio del fango, presenza e aria lungo una curva preimpostata per modalità.
 8. **Output**.
 

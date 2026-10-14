@@ -441,7 +441,7 @@ var tgf=withNum(function(v){return (-30+v*20).toFixed(1)+' dBFS';},function(v){r
 var brf=withNum(function(v){return (v*12).toFixed(1)+' dB';},function(v){return v*12;});
 var cmf=withNum(function(v){return (-6-24*v).toFixed(1)+' dB';},function(v){return -6-24*v;});
 var dsf=withNum(function(v){return (4*Math.pow(2.5,v)).toFixed(1)+' kHz';},function(v){return 4000*Math.pow(2.5,v);});
-var RATIOS=['AUTO','2:1','3:1','4:1','6:1','8:1','10:1'],DISTS=['AUTO','OFF','DIST 2','DIST 3'],RIX=0,DIX=0;
+var RATIOS=['AUTO','2:1','3:1','4:1','6:1','8:1','10:1','20:1'],DISTS=['AUTO','OFF','DIST 2','DIST 3'],RIX=0,DIX=0;
 function ratioVal(){return RIX?+RATIOS[RIX].split(':')[0]:MODES.ratio[MODE];}
 var tonef=withNum(function(v){var p=Math.round((v-0.5)*200);return (p>0?'+':'')+p+' %';},function(v){return (v-0.5)*200;});
 var mRd=modBox(230,238,190,174,'RIDER',function(){
