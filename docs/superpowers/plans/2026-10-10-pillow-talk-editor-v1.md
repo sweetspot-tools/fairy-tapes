@@ -69,13 +69,15 @@
 
 ### Task 3: Controlli in alluminio in `shared/ui`
 
+**Esito (2026-10-14): chiuso per riuso, nessun codice nuovo.** La chat dello Stripper ha già messo in `shared/ui` (commit `c161a3b`, non ancora pubblicato su `origin/pre-release`) `RackKnob`, `RackToggle`, `RackChoice` (con `RackLed::Red/Yellow`, che copre la regola rosso = accendi/spegni, giallo = selettore) e `rack_geometry.h` con i test. Pillow Talk li usa così come sono. `SilkscreenView` (serigrafia: scale, valori, etichette) sta invece in `src/the-stripper/src/ui/` e non è condivisa: il Task 4 deve chiedere di spostarla in `shared/ui` oppure ricrearne una equivalente per Pillow Talk, senza modificare file dello Stripper. Il push di questo lavoro aspetta che lo Stripper pubblichi `c161a3b`.
+
 **Files:**
 - Modify (se serve): `shared/ui/include/fairy_ui/controls.h`, `shared/ui/src/controls.cpp`, `shared/ui/tests/`
 
 **Interfaces:**
 - Produces: manopole e pulsanti con l'aspetto in alluminio nero della preview (corpo `#232427`, anello, indice crema `#d4d1c5`, pulsanti grigi `#9a9ca1`), usabili dai due plugin; usura dei controlli seguita dal livello Wear.
 
-- [ ] **Step 1: Verificare cosa c'è già** in `origin/pre-release` (`git log --oneline -- shared/ui`, e leggere `controls.cpp`): se la chat dello Stripper ha già pubblicato l'aspetto in alluminio, riusarlo e chiudere il task annotandolo nel registro; altrimenti continuare.
+- [x] **Step 1: Verificare cosa c'è già** in `origin/pre-release` (`git log --oneline -- shared/ui`, e leggere `controls.cpp`): se la chat dello Stripper ha già pubblicato l'aspetto in alluminio, riusarlo e chiudere il task annotandolo nel registro; altrimenti continuare.
 - [ ] **Step 2: Test** dei soli calcoli puri (angoli, raggi, colori dall'usura) in `shared/ui/tests`.
 - [ ] **Step 3: Eseguire, verificare il fallimento; implementare** il disegno in alluminio in `AnalogKnob`/`ToggleButton` mantenendo l'API (nessun cambio per The Stripper).
 - [ ] **Step 4: Eseguire i test di `shared/ui` e `pillow_talk_tests`.** Expected: PASS. Controllo visivo con un render offscreen non committato.
