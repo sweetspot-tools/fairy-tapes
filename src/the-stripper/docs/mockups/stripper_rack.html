@@ -396,8 +396,8 @@ reg(grp(),false);knob(842,168,'GAIN',0.5,'-20','+20','',{def:0.5,fmt:db(20),r:22
 var chan,mix,modeBtns=[];
 function setMode(m){chan._on=m==='c';mix._on=m==='m';chan._paint(chan._on);mix._paint(mix._on);
   modeBtns.forEach(function(b){b.style.opacity=m==='c'?1:0.25;b.style.pointerEvents=m==='c'?'auto':'none';if(b._lg)b._lg._mm=(m==='c'?1:0.25);});MODS.forEach(paint);}
-chan=gbtn(btn(910,220,'CHAN',true,function(){setMode('c');},GRN));
-mix=gbtn(btn(950,220,'BUS',false,function(){setMode('m');},GRN));
+chan=gbtn(btn(910,220,'CHAN',true,function(){setMode('c');},YEL));
+mix=gbtn(btn(950,220,'BUS',false,function(){setMode('m');},YEL));
 btn(940,130,'BYPASS',false,function(b){toggle(b);GB=b._on;MODS.forEach(paint);GBTN.forEach(function(x){x.style.opacity=GB?DIM:1;if(x._lg)x._lg.style.opacity=GB?DIM:1;});});
 
 /* ============ ROW B : EQ ============ */
@@ -463,7 +463,7 @@ function fitName(){var t=window.NAMT,fam="'"+TAPEFONT+"',cursive",k=NORM[TAPEFON
   nam.querySelector('title').textContent=MODELNAME+' · click to choose a NAM model';}
 /* NAM switch: lit = the NAM drives the stage, off = the 4K saturation (same DRIVE knob, each engine keeps its own value) */
 var namBtn=btn(628,522,'NAM',true,function(b){toggle(b);DV[namOn?'nam':'sat']=DRVK.get();namOn=b._on;DRVK.set(DV[namOn?'nam':'sat']);
-  nam.style.pointerEvents=namOn?'auto':'none';nam.style.cursor=namOn?'pointer':'default';fitName();});
+  nam.style.pointerEvents=namOn?'auto':'none';nam.style.cursor=namOn?'pointer':'default';fitName();},YEL);
 /* GPU chip inside the NAM button: shown only while the plug-in runs the model on the GPU */
 (function(){var c=el('g',{transform:'translate(618.2 512.2) scale(.7)'},namBtn);el('title',{},c).textContent='NAM runs on the GPU';var C='#68686c',i;
   for(i=0;i<3;i++){el('rect',{x:9+i*4,y:5,width:1.4,height:2.6,fill:C},c);el('rect',{x:9+i*4,y:20.4,width:1.4,height:2.6,fill:C},c);el('rect',{x:5,y:10+i*3.6,width:2.6,height:1.4,fill:C},c);el('rect',{x:20.4,y:10+i*3.6,width:2.6,height:1.4,fill:C},c);}
