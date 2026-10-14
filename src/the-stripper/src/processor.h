@@ -71,6 +71,7 @@ private:
   DSP::ClipDetector clip_[6];            // Input, EQ, Compression, Drive, Limiter, Output
   DSP::GainReductionMeter grComp_;
   DSP::GainReductionMeter grLimiter_;
+  DSP::GainReductionMeter grGate_;   // fast release: shows when and how quickly the gate closes
   DSP::UpdateLimiter meterRate_;
   double meterSampleRate_ = 0.0;
   bool publishClearReset_ = false;       // tell the controller that the clear request was handled

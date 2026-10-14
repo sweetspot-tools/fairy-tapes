@@ -263,7 +263,8 @@ void Editor::updateMeters() {
   for (std::size_t i = 0; i < bars_.size(); ++i) {
     if (!bars_[i]) continue;
     double v = ctl_->meterValue(kMeterRows[i].id);
-    if (kMeterRows[i].gainReduction) v = grBarNorm(v, kMeterRows[i].id == kMeterGrComp ? kGrCompMaxDb : kGrLimiterMaxDb);
+    if (kMeterRows[i].gainReduction)
+      v = grBarNorm(v, kMeterRows[i].id == kMeterGrComp ? kGrCompMaxDb : kMeterRows[i].id == kMeterGrLimiter ? kGrLimiterMaxDb : kGrGateMaxDb);
     bars_[i]->setLevel(v, dt);
     bars_[i]->setDimmed(meterDimmed(kMeterRows[i].alwaysLit, globalBypass_));
   }

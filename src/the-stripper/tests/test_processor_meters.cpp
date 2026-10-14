@@ -145,7 +145,7 @@ void test_global_bypass_is_transparent_and_only_input_output_clip() {
   CHECK(h.last(kClipInput) == 1.0);
   CHECK(h.last(kClipOutput) == 1.0);
   CHECK(h.last(kClipEq) == 0.0 && h.last(kClipComp) == 0.0 && h.last(kClipDrive) == 0.0 && h.last(kClipLimiter) == 0.0);
-  CHECK(h.last(kMeterGrComp) == 0.0 && h.last(kMeterGrLimiter) == 0.0);
+  CHECK(h.last(kMeterGrComp) == 0.0 && h.last(kMeterGrLimiter) == 0.0 && h.last(kMeterGrGate) == 0.0);
   CHECK(std::fabs(h.last(kMeterInL) - h.last(kMeterOutL)) < 1e-9);   // output equals input
   for (int i = 0; i < 64; ++i) CHECK(h.outL[i] == h.inL[i]);
   h.close();
@@ -190,6 +190,25 @@ void test_saturation_belongs_to_the_drive_not_the_eq() {
   CHECK(maxDiff(outputWith(0.0, 0.0), outputWith(1.0, 0.0)) < 1e-6);
 }
 
+// Last gate gain-reduction value (SSL encoding) after a few quiet blocks with the given settings.
+double gateGrWith(double threshold, bool gateIn, bool globalBypass = false) {
+  Host h; CHECK(h.open());
+  MockChanges c; c.set(kGateThreshold, threshold); c.set(kBypassGate, gateIn ? 0.0 : 1.0); c.set(kBypass, globalBypass ? 1.0 : 0.0);
+  h.block(0.002f, &c);   // -54 dBFS: under DeNoise's threshold at 1.0 (about -48 dB)
+  for (int i = 0; i < 200; ++i) h.block(0.002f);
+  const double v = h.last(kMeterGrGate);
+  h.close();
+  return v;
+}
+
+void test_gate_gain_reduction_meter() {
+  CHECK(gateGrWith(1.0, true) > 0.0);                      // threshold at 0 dB: a very quiet signal is gated away
+  CHECK(gateGrWith(1.0, true) < 1.0);
+  CHECK(gateGrWith(0.0, true) == 0.0);                     // threshold at the bottom: nothing is gated
+  CHECK(gateGrWith(1.0, false) == 0.0);                    // gate out: no reduction
+  CHECK(gateGrWith(1.0, true, true) == 0.0);               // global bypass: no reduction
+}
+
 void test_clear_clips_request() {
   Host h; CHECK(h.open());
   for (int i = 0; i < 40; ++i) h.block(1.5f);
@@ -210,6 +229,7 @@ int main() {
   test_global_bypass_is_transparent_and_only_input_output_clip();
   test_compressor_gain_reduction_uses_the_ssl_encoding();
   test_saturation_belongs_to_the_drive_not_the_eq();
+  test_gate_gain_reduction_meter();
   test_clear_clips_request();
   std::printf(g_failed ? "Processor meter tests FAILED\n" : "Processor meter tests OK\n");
   return g_failed ? 1 : 0;

@@ -330,6 +330,8 @@ Decisione del 2026-10-14 (spec §11). Dopo i Task 10-14, o prima se serve.
 
 ### Task 16: Meter del gate
 
+**Fatto (2026-10-14):** `kMeterGrGate` (dopo `kClearClips`), `GainReductionMeter::setReleaseDbPerSec` (600 dB/s per il gate), riga "G" nel riquadro Level (righe GR a 192/205/218, LED di clip a 240, scala del gate 0…40 dB), parametro visibile e in sola lettura nella codifica SSL; test unit, di layout e nel modulo vero (soglia alta con segnale a −54 dBFS → riduzione > 0; gate fuori, soglia bassa e bypass globale → 0). Estensione del gate misurata con segnali di test: Denoise chiude sotto circa −48 dB alla soglia massima.
+
 Decisione del 2026-10-14 (spec §11). Dopo il Task 15, o prima se serve.
 
 - `kMeterGrGate` in coda ai meter (prima di `kNumMeterIDs`; nessun ID esistente cambia), visibile e in sola lettura, codifica SSL (`grValueFromDb`); `GainReductionMeter` con rilascio veloce configurabile per il gate; il processor misura i picchi prima e dopo il gate.

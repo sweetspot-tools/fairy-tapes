@@ -160,7 +160,7 @@ void test_drive_knob_is_shared_by_the_two_engines() {
 void test_meter_dimming() {
   // global bypass dims GR and the EQ/CMP/DRV/LIM clip LEDs; the level meters and the IN/OUT LEDs stay lit
   for (const auto& row : kMeterRows) {
-    const bool gr = row.id == kMeterGrComp || row.id == kMeterGrLimiter;
+    const bool gr = row.id == kMeterGrComp || row.id == kMeterGrLimiter || row.id == kMeterGrGate;
     CHECK(meterDimmed(row.alwaysLit, true) == !row.alwaysLit);
     CHECK(row.alwaysLit == !gr);
     CHECK(!meterDimmed(row.alwaysLit, false));
@@ -168,6 +168,20 @@ void test_meter_dimming() {
   CHECK(kClips[0].alwaysLit && kClips[5].alwaysLit);
   for (int i = 1; i < 5; ++i) CHECK(!kClips[i].alwaysLit);
 }
+void test_gate_row_sits_between_gain_reduction_and_clip() {
+  const MeterRow* limiter = nullptr; const MeterRow* gate = nullptr;
+  for (const auto& r : kMeterRows) {
+    if (r.id == kMeterGrLimiter) limiter = &r;
+    if (r.id == kMeterGrGate) gate = &r;
+  }
+  CHECK(limiter && gate);
+  if (!(limiter && gate)) return;
+  CHECK(gate->gainReduction && !gate->alwaysLit && std::string(gate->tag) == "G");
+  CHECK(gate->cy > limiter->cy);
+  CHECK(gate->cy < kClipRowY - 8);   // above the clip LEDs
+  CHECK(kGrGateMaxDb == 40.0);
+}
+
 void test_gr_bar_norm() {
   CHECK(grBarNorm(0.0, 20) == 0.0);
   CHECK(grBarNorm(std::nan(""), 20) == 0.0);
@@ -192,6 +206,7 @@ int main() {
   test_drive_knob_is_shared_by_the_two_engines();
   test_meter_dimming();
   test_gr_bar_norm();
+  test_gate_row_sits_between_gain_reduction_and_clip();
   if (g_failed) { std::fprintf(stderr, "%d check(s) failed\n", g_failed); return 1; }
   std::puts("test_layout: ok");
   return 0;

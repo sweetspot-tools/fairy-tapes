@@ -81,7 +81,7 @@ int main(int argc, char** argv) {
     else if (!std::strncmp(argv[i], "model-error=", 12)) Ui::EditorPreview::setModel(ctl, 3, "", argv[i] + 12);
     else if (!std::strcmp(argv[i], "meters")) {
       const double v[][2] = {{kMeterInL, .8}, {kMeterInR, .62}, {kMeterOutL, .7}, {kMeterOutR, .55}, {kMeterGrComp, .4},
-                             {kMeterGrLimiter, .2}, {kClipEq, 1.0}, {kClipOutput, 1.0}};
+                             {kMeterGrLimiter, .2}, {kMeterGrGate, .9}, {kClipEq, 1.0}, {kClipOutput, 1.0}};
       for (const auto& e : v) ctl.setParamNormalized(static_cast<Steinberg::Vst::ParamID>(e[0]), e[1]);
     }
   }

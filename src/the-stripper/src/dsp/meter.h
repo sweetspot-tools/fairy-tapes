@@ -128,21 +128,24 @@ public:
     float target = 0.0f;
     if (inPeak > 1e-6f)
       target = std::max(0.0f, linToDb(inPeak) - linToDb(std::max(outPeak, 1e-6f)));
-    const float fall = static_cast<float>(kReleaseDbPerSec * n / sr_);
+    const float fall = static_cast<float>(release_ * n / sr_);
     gr_ = std::max(target, gr_ - fall);
     return gr_;
   }
   /// Same smoothing, for a gain reduction (dB) the stage reports itself.
   float updateDb(float grDb, int n) {
-    const float fall = static_cast<float>(kReleaseDbPerSec * n / sr_);
+    const float fall = static_cast<float>(release_ * n / sr_);
     gr_ = std::max(std::max(0.0f, grDb), gr_ - fall);
     return gr_;
   }
+  /// How fast the read-out falls (dB/s). Default 60; the gate meter uses a much faster one. Values <= 0 keep the default.
+  void setReleaseDbPerSec(double dbPerSec) { release_ = dbPerSec > 0.0 ? dbPerSec : kDefaultReleaseDbPerSec; }
   void reset() { gr_ = 0.0f; }
   float value() const { return gr_; }
 
 private:
-  static constexpr double kReleaseDbPerSec = 60.0;
+  static constexpr double kDefaultReleaseDbPerSec = 60.0;
+  double release_{kDefaultReleaseDbPerSec};
   double sr_{48000.0};
   float gr_{0.0f};
 };

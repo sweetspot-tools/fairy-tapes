@@ -132,8 +132,10 @@ struct MeterRow {
 constexpr MeterRow kMeterRows[] = {
     {kMeterInL, 114, "L", false, true},    {kMeterInR, 128, "R", false, true},
     {kMeterOutL, 156, "L", false, true},   {kMeterOutR, 170, "R", false, true},
-    {kMeterGrComp, 194, "C", true, false}, {kMeterGrLimiter, 208, "L", true, false},
+    {kMeterGrComp, 192, "C", true, false}, {kMeterGrLimiter, 205, "L", true, false}, {kMeterGrGate, 218, "G", true, false},
 };
+constexpr int kMeterRowCount = 7;
+static_assert(sizeof(kMeterRows) / sizeof(kMeterRows[0]) == kMeterRowCount, "kMeterRowCount must match kMeterRows");
 constexpr Rect meterBarRect(const MeterRow& row) {
   return {kMeterLeft, row.cy - kMeterBarHeight / 2, kMeterPitch * kMeterLeds, kMeterBarHeight};
 }
@@ -147,7 +149,7 @@ constexpr int kClipCount = 6;
 constexpr ClipSpec kClips[kClipCount] = {{kClipInput, "IN", true}, {kClipEq, "EQ", false}, {kClipComp, "CMP", false},
                                          {kClipDrive, "DRV", false}, {kClipLimiter, "LIM", false},
                                          {kClipOutput, "OUT", true}};
-constexpr double kClipRowY = 232, kClipFirstX = 502, kClipStep = 44;   // LED centre of the first, pitch
+constexpr double kClipRowY = 240, kClipFirstX = 502, kClipStep = 44;   // LED centre of the first, pitch
 constexpr Rect clipRect(int index) { return {kClipFirstX + index * kClipStep - 4.4, kClipRowY - 8, 40, 16}; }
 
 // Section tags printed left of the rows (amber) and the dB scale under the output rows (dim white).
@@ -160,7 +162,7 @@ inline double grBarNorm(double value, double maxDb) {
   const double db = -20.0 * std::log10(1.0 - (value < 1.0 - 1e-9 ? value : 1.0 - 1e-9));
   return db >= maxDb ? 1.0 : db / maxDb;
 }
-constexpr double kGrCompMaxDb = 20.0, kGrLimiterMaxDb = 12.0;
+constexpr double kGrCompMaxDb = 20.0, kGrLimiterMaxDb = 12.0, kGrGateMaxDb = 40.0;
 
 // Drive engine: NAM on -> kDriveAmount drives the stage, off -> the 4K saturation (kEqSaturation).
 inline Steinberg::Vst::ParamID driveEngineParam(bool namOn) { return namOn ? kDriveAmount : kEqSaturation; }

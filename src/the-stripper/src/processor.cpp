@@ -132,6 +132,7 @@ void Processor::processChain(float* const* out, const float* const* in,
       clip_[i].clear();
     grComp_.reset();
     grLimiter_.reset();
+    grGate_.reset();
     if (out[0] != L) std::memcpy(out[0], L, static_cast<size_t>(numSamples) * sizeof(float));
     if (out[1] != R) std::memcpy(out[1], R, static_cast<size_t>(numSamples) * sizeof(float));
     return;
@@ -248,7 +249,11 @@ void Processor::processChain(float* const* out, const float* const* in,
   if (!bypass_gate) {
     gate_.setSampleRate(sampleRate);
     gate_.setParams(static_cast<float>(param_value_[kGateThreshold]), 0.25f, 1.0f);
+    const float gateIn = DSP::peakOf(L, R, numSamples);
     gate_.process(L, R, numSamples);
+    grGate_.update(gateIn, DSP::peakOf(L, R, numSamples), numSamples);   // DeNoise has no read-out: peak ratio
+  } else {
+    grGate_.reset();
   }
 
   // Output gain and copy to out
@@ -306,6 +311,10 @@ Steinberg::tresult PLUGIN_API Processor::process(Steinberg::Vst::ProcessData& da
   return Steinberg::kResultOk;
 }
 
+namespace {
+constexpr double kGateMeterReleaseDbPerSec = 600.0;   // the gate meter must show how fast the gate opens and closes
+}
+
 void Processor::prepareMeters(double sampleRate) {
   meterSampleRate_ = sampleRate;
   for (auto& m : peakIn_) m.prepare(sampleRate);
@@ -313,6 +322,8 @@ void Processor::prepareMeters(double sampleRate) {
   for (auto& c : clip_) c.prepare(sampleRate);
   grComp_.prepare(sampleRate);
   grLimiter_.prepare(sampleRate);
+  grGate_.prepare(sampleRate);
+  grGate_.setReleaseDbPerSec(kGateMeterReleaseDbPerSec);
   meterRate_.prepare(sampleRate, 16.0);
 }
 
@@ -334,6 +345,7 @@ void Processor::publishMeters(Steinberg::Vst::ProcessData& data) {
   put(kMeterOutR, meterNormFromDb(peakOut_[1].levelDb(), -60.0, 6.0));
   put(kMeterGrComp, DSP::grValueFromDb(grComp_.value()));   // SSL 360 Link encoding (spec 4.1)
   put(kMeterGrLimiter, DSP::grValueFromDb(grLimiter_.value()));
+  put(kMeterGrGate, DSP::grValueFromDb(grGate_.value()));
   put(kClipInput, clip_[0].lit() ? 1.0 : 0.0);
   put(kClipEq, clip_[1].lit() ? 1.0 : 0.0);
   put(kClipComp, clip_[2].lit() ? 1.0 : 0.0);

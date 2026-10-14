@@ -356,8 +356,8 @@ Sources: [SSL 360 Link – User Guide](https://support.solidstatelogic.com/hc/en
 ### 4.2 What The Stripper does
 
 - Stereo VST3 only, stable parameter IDs (frozen table), clear parameter names.
-- **`Compressor Gain Reduction` and `Limiter Gain Reduction`** are read-only, **visible** (not hidden) parameters in the encoding above, with the plug-in's own ballistics (instant attack, 60 dB/s release) already applied. The other meter parameters are hidden (the hidden flag is not needed by SSL).
-- Not done: a **gate** gain-reduction lane (Denoise exposes no read-out), and `IGainReductionInfo` (read-only parameters cover the same need with more lanes).
+- **`Compressor Gain Reduction`, `Limiter Gain Reduction` and `Gate Gain Reduction`** are read-only, **visible** (not hidden) parameters in the encoding above, with the plug-in's own ballistics (instant attack, 60 dB/s release) already applied. The other meter parameters are hidden (the hidden flag is not needed by SSL).
+- The gate lane is **estimated** from the gate's input and output peaks (Denoise exposes no read-out) with a fast release (600 dB/s) so the meter shows when and how quickly the gate closes; it is less precise with very low signals. `IGainReductionInfo` is not implemented (read-only parameters cover the same need with more lanes).
 - **To verify with the real software:** that Link lists both parameters under assignable meter data and that the dB values look right. No test against SSL 360 Link has been made.
 
 ---

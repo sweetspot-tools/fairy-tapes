@@ -68,6 +68,7 @@ enum MeterID : Steinberg::Vst::ParamID {
   kClipLimiter,
   kClipOutput,
   kClearClips,
+  kMeterGrGate,             // gate gain reduction (estimated from the in/out peaks, fast release), SSL encoding; visible, read-only
   kNumMeterIDs
 };
 constexpr int kNumMeters = static_cast<int>(kNumMeterIDs - kMeterBase);

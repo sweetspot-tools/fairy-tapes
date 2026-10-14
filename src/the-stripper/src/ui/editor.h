@@ -87,7 +87,7 @@ private:
   std::array<FairyTapes::Ui::NormalizedControl*, kNumParams> controls_{};   // owned by the frame
   std::array<const ControlSpec*, kNumParams> specs_{};
   std::array<double, kNumParams> seen_{};   // controller value last copied into the control
-  std::array<FairyTapes::Ui::MeterBar*, 6> bars_{};   // owned by the frame, in kMeterRows order
+  std::array<FairyTapes::Ui::MeterBar*, kMeterRowCount> bars_{};   // owned by the frame, in kMeterRows order
   std::array<FairyTapes::Ui::ClipLed*, kClipCount> clips_{};
   std::chrono::steady_clock::time_point lastTick_{};
   ModelStrip* strip_ = nullptr;            // owned by the frame

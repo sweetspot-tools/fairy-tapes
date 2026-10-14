@@ -107,7 +107,7 @@ void PanelView::draw(CDrawContext* ctx) {
     const char* text;
     double y;
   };
-  for (const Tag& t : {Tag{"IN", 124}, Tag{"OUT", 166}, Tag{"GR", 204}, Tag{"CLIP", 236}}) {
+  for (const Tag& t : {Tag{"IN", 124}, Tag{"OUT", 166}, Tag{"GR", 209}, Tag{"CLIP", 244}}) {
     const double w = ctx->getStringWidth(t.text);
     ctx->drawString(t.text, o + CPoint(464 - w / 2, t.y));
   }

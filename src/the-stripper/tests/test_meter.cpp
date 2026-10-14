@@ -94,6 +94,19 @@ void test_ssl_gain_reduction_encoding() {
   CHECK_NEAR(grDbFromValue(std::nan("")), 0.0, 1e-12);
 }
 
+void test_gate_gain_reduction_releases_fast() {
+  GainReductionMeter slow, fast; slow.prepare(kSr); fast.prepare(kSr);
+  fast.setReleaseDbPerSec(600.0);
+  slow.update(0.5f, 0.005f, kBlock); fast.update(0.5f, 0.005f, kBlock);   // gate closed: 40 dB of reduction
+  CHECK_NEAR(fast.value(), 40.0, 0.1);
+  for (int i = 0; i < 20; ++i) { slow.update(0.5f, 0.5f, kBlock); fast.update(0.5f, 0.5f, kBlock); }   // gate open again
+  CHECK(fast.value() < slow.value());                      // the gate meter follows the opening quickly
+  CHECK_NEAR(fast.value(), 40.0 - 600.0 * 20 * kBlock / kSr, 0.5);
+  fast.setReleaseDbPerSec(-5.0);                           // nonsense falls back to something finite and positive
+  fast.update(0.5f, 0.005f, kBlock); fast.update(0.5f, 0.5f, kBlock);
+  CHECK(fast.value() <= 40.0 && fast.value() >= 0.0);
+}
+
 void test_gain_reduction_math() {
   GainReductionMeter g; g.prepare(kSr);
   CHECK_NEAR(g.update(0.5f, 0.5f, kBlock), 0.0, 1e-6);     // nothing removed
@@ -132,7 +145,7 @@ void test_gr_zero_when_not_compressing_and_positive_when_compressing() {
 
 void test_meter_ids_do_not_collide_with_params() {
   CHECK(kMeterBase >= kNumParams);
-  CHECK(kNumMeterIDs - kMeterBase == 13);
+  CHECK(kNumMeterIDs - kMeterBase == 14);
   CHECK(kClearClips == kMeterBase + 12);
 }
 
@@ -168,6 +181,7 @@ int run_meter_tests() {
   test_clip_detects_at_exactly_one();
   test_clip_hold_2s_and_clear();
   test_ssl_gain_reduction_encoding();
+  test_gate_gain_reduction_releases_fast();
   test_gain_reduction_math();
   test_gr_zero_when_not_compressing_and_positive_when_compressing();
   test_meter_ids_do_not_collide_with_params();
