@@ -45,6 +45,8 @@ enum ParamID : Steinberg::Vst::ParamID {
   // Added after state v7 (appended at the end so existing IDs never change):
   kLimiterPound,  // Limiter (BlockParty) pound amount, 0..1
   kGateThreshold, // Gate (DeNoise) threshold, 0..1
+  // Added in state v9:
+  kDriveNamOn,    // Drive engine: 1 = NAM, 0 = the 4K saturation (kEqSaturation is then the Drive amount)
   kNumParams
 };
 
@@ -69,6 +71,9 @@ enum MeterID : Steinberg::Vst::ParamID {
   kNumMeterIDs
 };
 constexpr int kNumMeters = static_cast<int>(kNumMeterIDs - kMeterBase);
+
+// Parameter count of state v8 (everything up to and including kGateThreshold).
+constexpr int kNumParamsV8 = static_cast<int>(kGateThreshold) + 1;
 
 // Parameter count of state v7 (everything up to and including kDriveAmount).
 constexpr int kNumParamsV7 = static_cast<int>(kDriveAmount) + 1;
@@ -114,6 +119,7 @@ constexpr Steinberg::Vst::ParamValue kDefaultDriveAmount = 0.0;   // unity (colo
 // Limiter / Gate defaults (match the values that were hard-coded in the processor before they became parameters)
 constexpr Steinberg::Vst::ParamValue kDefaultLimiterPound = 0.5;
 constexpr Steinberg::Vst::ParamValue kDefaultGateThreshold = 0.0;
+constexpr Steinberg::Vst::ParamValue kDefaultDriveNamOn = 1.0;   // NAM drives the stage, as before the switch existed
 
 // Gain range in dB for display; normalized 0 = -20 dB, 1 = +20 dB
 constexpr double kGainMinDb = -20.0;

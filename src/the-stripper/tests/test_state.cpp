@@ -38,9 +38,11 @@ GOLDEN_PARAMS(X)
 #undef X
 
 void test_new_params_appended_at_end() {
-  CHECK(kLimiterPound == kNumParams - 2);
-  CHECK(kGateThreshold == kNumParams - 1);
-  CHECK(kDriveAmount == kNumParams - 3);
+  CHECK(kLimiterPound == kNumParams - 3);
+  CHECK(kGateThreshold == kNumParams - 2);
+  CHECK(kDriveNamOn == kNumParams - 1);
+  CHECK(kNumParamsV8 == kGateThreshold + 1);
+  CHECK(kDriveAmount == kNumParams - 4);
   CHECK(kNumParamsV7 == kDriveAmount + 1);
 }
 
@@ -81,6 +83,26 @@ void test_state_v8_empty_path() {
   MemStream s; CHECK(writeState(s, in));
   PluginState out; CHECK(readState(s, out));
   CHECK(out.modelPath.empty());
+}
+
+// ---- state v9: the NAM / Saturate switch ------------------------------------------------
+void test_state_v8_loads_with_nam_on() {
+  MemStream s;
+  s.writeInt32(8);
+  for (int i = 0; i < kNumParamsV8; ++i) s.writeDouble(0.01 * (i + 1));
+  s.writeInt32(0);   // empty model path
+  PluginState out; CHECK(readState(s, out));
+  for (int i = 0; i < kNumParamsV8; ++i) CHECK(out.params[i] == 0.01 * (i + 1));
+  CHECK(out.params[kDriveNamOn] == 1.0);   // NAM on, as before the switch existed
+  CHECK(s.pos == s.buf.size());
+}
+
+void test_state_v9_keeps_the_switch() {
+  PluginState in; fillDefaultParams(in.params);
+  in.params[kDriveNamOn] = 0.0;
+  MemStream s; CHECK(writeState(s, in));
+  PluginState out; CHECK(readState(s, out));
+  CHECK(out.params[kDriveNamOn] == 0.0);
 }
 
 // ---- older states keep loading ----------------------------------------------------------
@@ -127,8 +149,8 @@ void test_state_unknown_or_truncated_rejected() {
   { MemStream s; s.writeInt32(99); PluginState o; CHECK(!readState(s, o)); }
   { MemStream s; s.writeInt32(0);  PluginState o; CHECK(!readState(s, o)); }
   { MemStream s; s.writeInt32(8); s.writeDouble(0.5); PluginState o; CHECK(!readState(s, o)); }                 // truncated params
-  { MemStream s; s.writeInt32(8); for (int i = 0; i < kNumParams; ++i) s.writeDouble(0.5); s.writeInt32(100); PluginState o; CHECK(!readState(s, o)); }   // path length beyond the data
-  { MemStream s; s.writeInt32(8); for (int i = 0; i < kNumParams; ++i) s.writeDouble(0.5); s.writeInt32(-5); PluginState o; CHECK(!readState(s, o)); }
+  { MemStream s; s.writeInt32(9); for (int i = 0; i < kNumParams; ++i) s.writeDouble(0.5); s.writeInt32(100); PluginState o; CHECK(!readState(s, o)); }   // path length beyond the data
+  { MemStream s; s.writeInt32(9); for (int i = 0; i < kNumParams; ++i) s.writeDouble(0.5); s.writeInt32(-5); PluginState o; CHECK(!readState(s, o)); }
   { MemStream s; PluginState o; CHECK(!readState(s, o)); }                                                       // empty stream
 }
 
@@ -148,6 +170,8 @@ int main() {
   test_hpf_default_is_20_hz();
   test_state_v8_roundtrip();
   test_state_v8_empty_path();
+  test_state_v8_loads_with_nam_on();
+  test_state_v9_keeps_the_switch();
   test_state_v7_loads_with_defaults();
   test_state_v6_skips_drive_output_and_mix();
   test_state_v5_gets_default_drive();

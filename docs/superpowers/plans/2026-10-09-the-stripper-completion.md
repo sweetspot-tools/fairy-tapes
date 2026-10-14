@@ -319,9 +319,11 @@ Compiti nati dopo le preview; ciascuno ha la propria spec nel §4 e §6 del docu
 
 ### Task 15: Drive con interruttore NAM / Saturate
 
+**Fatto (2026-10-14), tranne l'icona GPU nel pulsante NAM** (serve un campo GPU in `ModelStatus`, ancora da fare): `kDriveNamOn` (ID 35, stato v9), `SSLSaturation` spostata nel processor come motore alternativo del Drive e tolta dal 4K-EQ, pulsante NAM + manopola DRIVE condivisa + striscia "4K Saturate" nell'editor; test: tabella bloccata, stato v8→v9, layout, e nel modulo vero (la quantità di Saturate non cambia più l'EQ; con NAM spento è udibile).
+
 Decisione del 2026-10-14 (spec §11). Dopo i Task 10-14, o prima se serve.
 
-- Nuovo parametro `kDriveNamOn` (ID 35, in coda, default 1) con tabella bloccata e stato v9 (stati più vecchi: valore di default, nessuna migrazione: non esistono progetti da proteggere).
+- [x] Nuovo parametro `kDriveNamOn` (ID 35, in coda, default 1) con tabella bloccata e stato v9 (stati più vecchi: valore di default, nessuna migrazione: non esistono progetti da proteggere).
 - DSP: `SSLSaturation` esce da `FourKEQ` e diventa una fase del Drive dopo l'EQ; NAM acceso → NAM (senza modello: passthrough), spento → Saturate; il bypass del Drive vale per entrambi; l'EQ non ha più saturazione né dipende dal suo bypass.
 - Editor: pulsante NAM nel riquadro Drive; una sola manopola DRIVE che si lega a `kDriveAmount` o `kEqSaturation` secondo l'interruttore; Saturate sparisce dal riquadro Equaliser (restano 10 manopole); striscia del modello che a NAM spento mostra "4K Saturate" al posto del nome (non cliccabile a NAM spento: il popup si apre solo con il NAM acceso).
 - Test: tabella bloccata, stato v8 → v9, testo della striscia per motore, scelta del motore (uscita diversa con NAM spento e Saturate > 0), EQ senza saturazione, layout (nessuna sovrapposizione, manopola Drive unica).

@@ -15,6 +15,7 @@
 #include "dsp/blockparty.h"
 #include "dsp/denoise.h"
 #include "dsp/meter.h"
+#include "dsp/ssl_saturation.h"
 #include "nam_drive.h"
 #include <mutex>
 #include <string>
@@ -52,6 +53,8 @@ private:
   DSP::CompressionStub compressionStub_;
   DSP::FourKEQ fourkEq_;
   Shared::DSP::NamDrive namDrive_;
+  DSP::SSLSaturation driveSaturation_;   // the Drive engine when the NAM switch is off (moved here from the EQ)
+  double saturationRate_ = 0.0;
   DSP::BlockParty limiter_;
   DSP::DeNoise gate_;
 

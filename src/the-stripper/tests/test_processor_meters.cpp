@@ -14,6 +14,7 @@
 #include "pluginterfaces/vst/ivstparameterchanges.h"
 #include "pluginterfaces/vst/ivstprocesscontext.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -163,6 +164,32 @@ void test_compressor_gain_reduction_uses_the_ssl_encoding() {
   h.close();
 }
 
+// Output of a fresh plug-in after a few blocks, with the given parameter values set once.
+std::vector<float> outputWith(double namOn, double saturation) {
+  Host h; CHECK(h.open());
+  MockChanges c; c.set(kDriveNamOn, namOn); c.set(kEqSaturation, saturation);
+  h.block(0.5f, &c);
+  for (int i = 0; i < 30; ++i) h.block(0.5f);
+  std::vector<float> out(h.outL.begin(), h.outL.end());
+  h.close();
+  return out;
+}
+
+double maxDiff(const std::vector<float>& a, const std::vector<float>& b) {
+  double d = 0;
+  for (std::size_t i = 0; i < a.size() && i < b.size(); ++i) d = std::max(d, std::fabs((double)a[i] - b[i]));
+  return d;
+}
+
+void test_saturation_belongs_to_the_drive_not_the_eq() {
+  // NAM on (no model: passthrough): the saturation amount must not change the sound any more
+  CHECK(maxDiff(outputWith(1.0, 0.0), outputWith(1.0, 1.0)) < 1e-6);
+  // NAM off: the 4K saturation is the Drive engine and its amount is audible
+  CHECK(maxDiff(outputWith(0.0, 0.0), outputWith(0.0, 1.0)) > 1e-3);
+  // NAM off with amount 0 is transparent, like the NAM without a model
+  CHECK(maxDiff(outputWith(0.0, 0.0), outputWith(1.0, 0.0)) < 1e-6);
+}
+
 void test_clear_clips_request() {
   Host h; CHECK(h.open());
   for (int i = 0; i < 40; ++i) h.block(1.5f);
@@ -182,6 +209,7 @@ int main() {
   test_meters_are_published_at_most_every_16ms();
   test_global_bypass_is_transparent_and_only_input_output_clip();
   test_compressor_gain_reduction_uses_the_ssl_encoding();
+  test_saturation_belongs_to_the_drive_not_the_eq();
   test_clear_clips_request();
   std::printf(g_failed ? "Processor meter tests FAILED\n" : "Processor meter tests OK\n");
   return g_failed ? 1 : 0;

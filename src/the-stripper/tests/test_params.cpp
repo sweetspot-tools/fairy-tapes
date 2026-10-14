@@ -169,8 +169,9 @@ void test_eqTypeFromStripMode() {
 // ---------------------------------------------------------------------------
 
 void test_kNumParams_count() {
-  // 33 up to kDriveAmount (state v7), plus kLimiterPound and kGateThreshold appended after it
-  ASSERT_TRUE(kNumParams == 35);
+  // 33 up to kDriveAmount (state v7), plus kLimiterPound and kGateThreshold (v8) and kDriveNamOn (v9) appended after it
+  ASSERT_TRUE(kNumParams == 36);
+  ASSERT_TRUE(kNumParamsV8 == 35);
   ASSERT_TRUE(kNumParamsV7 == 33);
   ASSERT_TRUE(kDriveAmount == 32);
   ASSERT_TRUE(kEqSaturation == 31);
@@ -188,7 +189,7 @@ void test_param_enum_ordering() {
   ASSERT_TRUE(kCompressorMode == 14);
   ASSERT_TRUE(kEqHPFFreq == 15);
   ASSERT_TRUE(kEqSaturation == 31);
-  ASSERT_TRUE(kDriveAmount == kNumParams - 3);   // kLimiterPound and kGateThreshold come after it
+  ASSERT_TRUE(kDriveAmount == kNumParams - 4);   // kLimiterPound, kGateThreshold and kDriveNamOn come after it
 }
 
 // ---------------------------------------------------------------------------
@@ -231,7 +232,6 @@ void test_fourkeq_passthrough_flat() {
   p.lmGain = 0.0f;
   p.hmGain = 0.0f;
   p.hfGain = 0.0f;
-  p.saturation = 0.0f;
   p.eqTypeBlack = false;
 
   constexpr int N = 512;
@@ -262,7 +262,6 @@ void test_fourkeq_brown_vs_black_differ() {
   p.lmQ = 1.0f;
   p.hmGain = 0.0f;
   p.hfGain = 0.0f;
-  p.saturation = 0.0f;
 
   constexpr int N = 256;
   std::vector<float> brownL(N, 0.0f), brownR(N, 0.0f);
@@ -301,7 +300,6 @@ void test_fourkeq_hpf_attenuates_dc() {
   p.lmGain = 0.0f;
   p.hmGain = 0.0f;
   p.hfGain = 0.0f;
-  p.saturation = 0.0f;
   p.eqTypeBlack = false;
 
   constexpr int N = 512;

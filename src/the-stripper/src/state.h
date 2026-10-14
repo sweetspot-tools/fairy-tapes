@@ -17,7 +17,7 @@
 
 namespace FairyTapes::TheStripper {
 
-constexpr int kStateVersion = 8;
+constexpr int kStateVersion = 9;
 constexpr std::int32_t kMaxModelPathBytes = 4096;
 
 struct PluginState {
@@ -64,6 +64,7 @@ inline void fillDefaultParams(double* p) {
   p[kDriveAmount] = kDefaultDriveAmount;
   p[kLimiterPound] = kDefaultLimiterPound;
   p[kGateThreshold] = kDefaultGateThreshold;
+  p[kDriveNamOn] = kDefaultDriveNamOn;
 }
 
 namespace state_detail {
@@ -86,7 +87,7 @@ bool readDoubles(S& s, double* buf, int n) {
 }
 } // namespace state_detail
 
-/// Reads any state version (1..8). Returns false for an unknown version or a truncated stream; `out` is then unspecified.
+/// Reads any state version (1..9). Returns false for an unknown version or a truncated stream; `out` is then unspecified.
 template <class S>
 bool readState(S& s, PluginState& out) {
   using namespace state_detail;
@@ -130,8 +131,8 @@ bool readState(S& s, PluginState& out) {
   } else if (version == 7) {
     if (!readDoubles(s, P, kNumParamsV7))
       return false;
-  } else if (version == 8) {
-    if (!readDoubles(s, P, kNumParams))
+  } else if (version == 8 || version == 9) {
+    if (!readDoubles(s, P, version == 8 ? kNumParamsV8 : kNumParams))
       return false;
     std::int32_t len = 0;
     if (!s.readInt32(len) || len < 0 || len > kMaxModelPathBytes)
@@ -202,10 +203,12 @@ bool readState(S& s, PluginState& out) {
     P[kLimiterPound] = kDefaultLimiterPound;
     P[kGateThreshold] = kDefaultGateThreshold;
   }
+  if (version < 9)
+    P[kDriveNamOn] = kDefaultDriveNamOn;
   return true;
 }
 
-/// Writes the current version (8).
+/// Writes the current version (9).
 template <class S>
 bool writeState(S& s, const PluginState& in) {
   if (!s.writeInt32(kStateVersion))

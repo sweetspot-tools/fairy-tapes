@@ -62,6 +62,7 @@ struct ControlSpec {
   bool isIn;                // the module's IN button
   bool inverted;            // the parameter is a bypass: the control shows the opposite
   const char* choices[3];   // Choice only
+  bool sharesView = false;  // no view of its own: another entry's view shows this parameter at times
 };
 
 // Cell of a knob: AnalogKnob::kPreferredWidth x kPreferredHeight, centre kCenterOffsetY below the top.
@@ -90,7 +91,6 @@ constexpr ControlSpec kControls[] = {
     {kEqHFGain, Kind::Knob, Module::Eq, knob(784, 352), "GAIN", false, false, {}},
     {kEqHFFreq, Kind::Knob, Module::Eq, knob(866, 352), "FREQ", false, false, {}},
     {kEqHFBell, Kind::Toggle, Module::Eq, button(887, 306, 26, 18), "BELL", false, false, {}},
-    // kEqSaturation has no control until the Drive box takes it over (plan Task 15: NAM / Saturate switch).
     {kBypassEQ, Kind::Toggle, Module::Eq, button(940, 320), "IN", true, true, {}},
     // Compression
     {kCompressAmount, Kind::Knob, Module::Comp, knob(86, 520), "AMOUNT", false, false, {}},
@@ -100,6 +100,9 @@ constexpr ControlSpec kControls[] = {
     {kBypassCompression, Kind::Toggle, Module::Comp, button(360, 490), "IN", true, true, {}},
     // Drive, Limiter, Gate
     {kDriveAmount, Kind::Knob, Module::Drive, knob(458, 520), "DRIVE", false, false, {}},
+    // The same knob shows the 4K saturation amount when the NAM switch is off (the swap is not visible).
+    {kEqSaturation, Kind::Knob, Module::Drive, knob(458, 520), "DRIVE", false, false, {}, true},
+    {kDriveNamOn, Kind::Toggle, Module::Drive, button(624, 490, 34), "NAM", false, false, {}},
     {kBypassDrive, Kind::Toggle, Module::Drive, button(666, 490), "IN", true, true, {}},
     {kLimiterPound, Kind::Knob, Module::Limiter, knob(766, 520), "POUND", false, false, {}},
     {kBypassLimiter, Kind::Toggle, Module::Limiter, button(811, 490), "IN", true, true, {}},
@@ -158,6 +161,13 @@ inline double grBarNorm(double value, double maxDb) {
   return db >= maxDb ? 1.0 : db / maxDb;
 }
 constexpr double kGrCompMaxDb = 20.0, kGrLimiterMaxDb = 12.0;
+
+// Drive engine: NAM on -> kDriveAmount drives the stage, off -> the 4K saturation (kEqSaturation).
+inline Steinberg::Vst::ParamID driveEngineParam(bool namOn) { return namOn ? kDriveAmount : kEqSaturation; }
+// The NAM without a model passes the signal through, so its knob is dimmed; the saturation never needs a model.
+inline bool driveKnobDimmed(bool namOn, bool modelLoaded) { return namOn && !modelLoaded; }
+// With the NAM off the paper strip reads "4K Saturate" instead of the model name (and is not clickable).
+inline bool stripShowsSaturate(bool namOn) { return !namOn; }
 
 inline bool meterDimmed(bool alwaysLit, bool globalBypass) { return globalBypass && !alwaysLit; }
 

@@ -53,7 +53,6 @@ void FourKEQ::reset() {
   hmFilter_.reset();
   hfFilter_.reset();
   phaseShift_.reset();
-  sslSaturation_.reset();
 }
 
 void FourKEQ::prepare(double sampleRate, int maxBlockSize) {
@@ -62,8 +61,6 @@ void FourKEQ::prepare(double sampleRate, int maxBlockSize) {
   sampleRate_ = clamp(sampleRate, 8000.0, 384000.0);
   maxBlockSize_ = maxBlockSize;
 
-  sslSaturation_.setSampleRate(sampleRate_);
-  sslSaturation_.reset();
   setPhaseShiftFreq(sampleRate_, 200.0f);
 }
 
@@ -261,8 +258,6 @@ void FourKEQ::updateHFBand(float gain, float freq, bool isBlack, bool isBell) {
 }
 
 void FourKEQ::updateFilters(const FourKEQParams& p) {
-  sslSaturation_.setConsoleType(p.eqTypeBlack ? SSLSaturation::ConsoleType::GSeries
-                                              : SSLSaturation::ConsoleType::ESeries);
   updateHPF(p.hpfFreq);
   updateLPF(p.lpfFreq, p.eqTypeBlack);
   updateLFBand(p.lfGain, p.lfFreq, p.eqTypeBlack, p.lfBell);
@@ -296,8 +291,6 @@ void FourKEQ::process(float* left, float* right, int numSamples, const FourKEQPa
     lpf_.reset();
   lastLpfEnabled_ = p.lpfEnabled;
 
-  float satAmount = clamp(p.saturation, 0.0f, 1.0f);
-
   for (int i = 0; i < numSamples; ++i) {
     float l = left[i];
     float r = right[i];
@@ -321,10 +314,6 @@ void FourKEQ::process(float* left, float* right, int numSamples, const FourKEQPa
     if (!p.eqTypeBlack) {
       l = phaseShift_.processL(l);
       r = phaseShift_.processR(r);
-    }
-    if (satAmount > 0.001f) {
-      l = sslSaturation_.processSample(l, satAmount, true);
-      r = sslSaturation_.processSample(r, satAmount, false);
     }
 
     left[i] = l;

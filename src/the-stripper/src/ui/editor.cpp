@@ -167,6 +167,7 @@ void Editor::createViews(CViewContainer* parent) {
   parent->addView(new PanelView(CRect(0, 0, kWidth, kHeight), &skin_));
 
   for (const auto& spec : kControls) {
+    if (spec.sharesView) continue;   // its parameter is shown by another entry's view
     NormalizedControl* control = nullptr;
     const CRect rect = toCRect(spec.rect);
     const auto tag = static_cast<int32_t>(spec.id);
@@ -175,7 +176,8 @@ void Editor::createViews(CViewContainer* parent) {
       auto* knob = new AnalogKnob(rect, this, tag, spec.label, &skin_);
       Controller* ctl = ctl_;
       const ParamID id = spec.id;
-      knob->setValueFormatter([ctl, id](float v) { return paramString(ctl, id, v); });
+      const bool drive = id == kDriveAmount;   // this knob also shows the saturation amount
+      knob->setValueFormatter([this, ctl, id, drive](float v) { return paramString(ctl, drive ? driveParam_ : id, v); });
       control = knob;
       break;
     }
@@ -277,15 +279,33 @@ void Editor::syncFromController(bool force) {
   for (ParamID id = 0; id < kNumParams; ++id) {
     const ControlSpec* spec = specs_[id];
     NormalizedControl* control = controls_[id];
-    if (!spec || !control) continue;
+    if (!spec) continue;   // (a shared parameter has a spec but no view of its own)
     const double v = FairyTapes::Ui::sanitizeNorm(ctl_->getParamNormalized(id), defaultNorm(ctl_, id));
     if (!force && v == seen_[id]) continue;
     seen_[id] = v;
     changed = true;
-    control->setValueNormalized(static_cast<float>(uiValue(spec->inverted, v)));
-    control->invalid();
+    if (control) {
+      control->setValueNormalized(static_cast<float>(uiValue(spec->inverted, v)));
+      control->invalid();
+    }
   }
-  if (changed) refreshModules();
+  if (changed) {
+    syncDriveKnob();
+    refreshModules();
+  }
+}
+
+void Editor::syncDriveKnob() {
+  NormalizedControl* knob = controls_[kDriveAmount];
+  if (!knob) return;
+  const bool namOn = seen_[kDriveNamOn] >= 0.5 || std::isnan(seen_[kDriveNamOn]);
+  const Steinberg::Vst::ParamID active = driveEngineParam(namOn);
+  driveParam_ = active;
+  knob->setTag(static_cast<int32_t>(active));
+  knob->setDefaultValue(static_cast<float>(defaultNorm(ctl_, active)));
+  const double v = std::isnan(seen_[active]) ? defaultNorm(ctl_, active) : seen_[active];
+  knob->setValueNormalized(static_cast<float>(v));
+  knob->invalid();
 }
 
 
@@ -299,13 +319,15 @@ void Editor::refreshModules() {
     if (in && !std::isnan(seen_[in->id])) state.in[static_cast<int>(m)] = uiValue(in->inverted, seen_[in->id]) >= 0.5;
   }
   channelMode_ = isChannelMode(seen_[kStripMode]);
+  namOn_ = seen_[kDriveNamOn] >= 0.5 || std::isnan(seen_[kDriveNamOn]);
+  if (strip_) strip_->setSaturate(stripShowsSaturate(namOn_));
 
   for (const auto& spec : kControls) {
     NormalizedControl* control = controls_[spec.id];
-    if (!control) continue;
+    if (!control || spec.sharesView) continue;
     bool dim = false;
     if (spec.module != Module::None) dim = spec.isIn ? state.globalBypass : moduleDimmed(spec.module, state);
-    if (spec.id == kDriveAmount && modelState_ != 2) dim = true;   // no model: Drive passes the signal through
+    if (spec.id == kDriveAmount && driveKnobDimmed(namOn_, modelState_ == 2)) dim = true;   // NAM without a model passes through
     control->setDimmed(dim);
     const bool visible = visibleInMode(spec.id, channelMode_);
     if (control->isVisible() != visible) {
@@ -327,6 +349,7 @@ void Editor::valueChanged(CControl* control) {
   const double v = paramValue(spec->inverted, ui);
   ctl_->performEdit(spec->id, v);
   seen_[spec->id] = ctl_->getParamNormalized(spec->id);
+  if (spec->id == kDriveNamOn) syncDriveKnob();   // the Drive knob changes engine
   refreshModules();
 }
 

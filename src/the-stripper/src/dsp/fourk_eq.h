@@ -7,7 +7,6 @@
 #pragma once
 
 #include "biquad.h"
-#include "ssl_saturation.h"
 
 namespace FairyTapes::TheStripper::DSP {
 
@@ -23,7 +22,6 @@ struct FourKEQParams {
   float hfGain = 0.0f, hfFreq = 8000.0f;
   bool hfBell = false;
   bool eqTypeBlack = false;  // false = Brown (E), true = Black (G)
-  float saturation = 0.0f;   // 0..1
 };
 
 class FourKEQ {
@@ -88,7 +86,6 @@ private:
   FilterBand lpf_;
   FilterBand lfFilter_, lmFilter_, hmFilter_, hfFilter_;
   AllPassBand phaseShift_;
-  SSLSaturation sslSaturation_;
 
   FourKEQParams lastParams_;
   bool lastHpfEnabled_ = false;

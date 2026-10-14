@@ -37,6 +37,12 @@ void ModelStrip::setModel(Kind kind, std::string text) {
   invalid();
 }
 
+void ModelStrip::setSaturate(bool saturate) {
+  if (saturate_ == saturate) return;
+  saturate_ = saturate;
+  invalid();
+}
+
 void ModelStrip::setDimmed(bool dimmed) {
   if (dimmed_ == dimmed) return;
   dimmed_ = dimmed;
@@ -73,8 +79,8 @@ void ModelStrip::draw(CDrawContext* ctx) {
 
   static const SharedPointer<CFontDesc> font = makeOwned<CFontDesc>("Arial", 13, kBoldFace | kItalicFace);
   ctx->setFont(font);
-  ctx->setFontColor(kind_ == Kind::Error ? kErrorInk : kInk);
-  std::string text = kind_ == Kind::NoModel ? "No model" : kind_ == Kind::Loading ? "Loading..." : text_;
+  ctx->setFontColor(!saturate_ && kind_ == Kind::Error ? kErrorInk : kInk);
+  std::string text = saturate_ ? "4K Saturate" : kind_ == Kind::NoModel ? "No model" : kind_ == Kind::Loading ? "Loading..." : text_;
   text = truncateToWidth(text, w - 2 * kTextInset, [ctx](const std::string& s) { return ctx->getStringWidth(s.c_str()); });
   ctx->drawString(text.c_str(), CRect(r.left + kTextInset, r.top, r.right, r.bottom), kLeftText);
   ctx->restoreGlobalState();
@@ -82,7 +88,7 @@ void ModelStrip::draw(CDrawContext* ctx) {
 }
 
 CMouseEventResult ModelStrip::onMouseDown(CPoint&, const CButtonState& buttons) {
-  if (!buttons.isLeftButton()) return kMouseEventNotHandled;
+  if (!buttons.isLeftButton() || saturate_) return kMouseEventNotHandled;   // not clickable while the NAM is off
   if (onClick) onClick();
   return kMouseEventHandled;
 }

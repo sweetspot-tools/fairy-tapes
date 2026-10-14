@@ -24,7 +24,7 @@ Da FEATURES.md: layout della strip, stage bypassabili, due modalità (Channel / 
 
 ## 2. Parametri attuali (implementati)
 
-Fonte: `params.h` + `controller.cpp` + uso in `processor.cpp`. Totale: **35** parametri (`kNumParams`), più i parametri di meter da `kMeterBase = 1000` (vedi [CONTROLS.md](CONTROLS.md)).
+Fonte: `params.h` + `controller.cpp` + uso in `processor.cpp`. Totale: **36** parametri (`kNumParams`), più i parametri di meter da `kMeterBase = 1000` (vedi [CONTROLS.md](CONTROLS.md)).
 
 | ID (nome interno) | Titolo (host) | Unità | Plugin/stage |
 |-------------------|---------------|-------|--------------|
@@ -50,10 +50,11 @@ Fonte: `params.h` + `controller.cpp` + uso in `processor.cpp`. Totale: **35** pa
 | kEqLMGain, kEqLMFreq, kEqLMQ | EQ LM Gain/Freq/Q | dB, Hz, — | 4K-EQ Mid Low |
 | kEqHMGain, kEqHMFreq, kEqHMQ | EQ HM Gain/Freq/Q | dB, Hz, — | 4K-EQ Mid High |
 | kEqHFGain, kEqHFFreq, kEqHFBell | EQ HF Gain/Freq/Bell | dB, Hz, — | 4K-EQ High |
-| kEqSaturation | EQ Saturation | % | 4K-EQ |
+| kEqSaturation | EQ Saturation | % | Saturazione 4K, ora motore alternativo del Drive |
 | kDriveAmount | Drive Amount | — | Drive (NAM) |
 | kLimiterPound | Limiter Pound | — | Limiter (BlockParty) |
 | kGateThreshold | Gate Threshold | — | Gate (Denoise) |
+| kDriveNamOn | Drive NAM | — | Drive: NAM (1) o saturazione 4K (0, quantità `kEqSaturation`) |
 
 Solo/Mute per banda non previsti. `kEqType` è stato rimosso (il tipo deriva da Strip Mode).
 

@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstdio>
 #include <set>
+#include <string>
 
 using namespace FairyTapes::TheStripper;
 using namespace FairyTapes::TheStripper::Ui;
@@ -35,8 +36,7 @@ void test_controls_are_unique_and_valid() {
 
 void test_only_inert_parameters_are_unbound() {
   // Gain staging is out of scope (inert); the filters share one IN button (kBypassLPHP), the per-filter switches stay at 1.
-  const std::set<unsigned> allowed = {kBypassGainStaging, kGainStagingTrim, kEqHPFOn, kEqLPFOn,
-                                       kEqSaturation /* moves to the Drive box, plan Task 15 */};
+  const std::set<unsigned> allowed = {kBypassGainStaging, kGainStagingTrim, kEqHPFOn, kEqLPFOn};
   std::set<unsigned> bound;
   for (const auto& c : kControls) bound.insert(c.id);
   for (unsigned id = 0; id < kNumParams; ++id) CHECK(bound.count(id) || allowed.count(id));
@@ -58,7 +58,10 @@ void test_controls_fit_window_and_their_box() {
 void test_controls_do_not_overlap() {
   const int n = static_cast<int>(sizeof(kControls) / sizeof(kControls[0]));
   for (int i = 0; i < n; ++i)
-    for (int j = i + 1; j < n; ++j) CHECK(!overlaps(kControls[i].rect, kControls[j].rect));
+    for (int j = i + 1; j < n; ++j) {
+      if (kControls[i].sharesView || kControls[j].sharesView) continue;   // the Saturate knob is the Drive knob
+      CHECK(!overlaps(kControls[i].rect, kControls[j].rect));
+    }
 }
 
 void test_bottom_margin() {
@@ -134,6 +137,26 @@ void test_meter_band_fits_level_box() {
   }
 }
 
+void test_drive_knob_is_shared_by_the_two_engines() {
+  const ControlSpec* nam = nullptr; const ControlSpec* sat = nullptr; const ControlSpec* sw = nullptr;
+  for (const auto& c : kControls) {
+    if (c.id == kDriveAmount) nam = &c;
+    if (c.id == kEqSaturation) sat = &c;
+    if (c.id == kDriveNamOn) sw = &c;
+  }
+  CHECK(nam && sat && sw);
+  if (!(nam && sat && sw)) return;
+  CHECK(!nam->sharesView && sat->sharesView);           // one view, two parameters
+  CHECK(nam->rect.x == sat->rect.x && nam->rect.y == sat->rect.y);
+  CHECK(std::string(nam->label) == std::string(sat->label));   // same label: the swap is not visible
+  CHECK(sw->kind == Kind::Toggle && sw->module == Module::Drive && !sw->isIn && !sw->inverted);
+  CHECK(std::string(sw->label) == "NAM");
+  CHECK(driveEngineParam(true) == kDriveAmount && driveEngineParam(false) == kEqSaturation);
+  CHECK(driveKnobDimmed(true, false) && !driveKnobDimmed(true, true));   // NAM without a model: dimmed
+  CHECK(!driveKnobDimmed(false, false) && !driveKnobDimmed(false, true)); // Saturate never needs a model
+  CHECK(stripShowsSaturate(false) && !stripShowsSaturate(true));
+}
+
 void test_meter_dimming() {
   // global bypass dims GR and the EQ/CMP/DRV/LIM clip LEDs; the level meters and the IN/OUT LEDs stay lit
   for (const auto& row : kMeterRows) {
@@ -166,6 +189,7 @@ int main() {
   test_module_dimming();
   test_mode_visibility();
   test_meter_band_fits_level_box();
+  test_drive_knob_is_shared_by_the_two_engines();
   test_meter_dimming();
   test_gr_bar_norm();
   if (g_failed) { std::fprintf(stderr, "%d check(s) failed\n", g_failed); return 1; }

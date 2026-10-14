@@ -74,6 +74,7 @@ private:
   void onTimer();
   // Copies controller values into the controls (all of them when `force`), then refreshes dimming and mode.
   void syncFromController(bool force);
+  void syncDriveKnob();    // the Drive knob shows kDriveAmount (NAM on) or kEqSaturation (NAM off)
   void updateMeters();
   void updateModel();      // model strip and Drive dimming from the controller's model status
   void openBrowser();
@@ -95,6 +96,8 @@ private:
   int modelState_ = -1;                    // last controller status shown (0 idle, 1 loading, 2 loaded, 3 failed)
   std::string modelName_, modelError_;
   bool globalBypass_ = false;
+  Steinberg::Vst::ParamID driveParam_ = kDriveAmount;   // parameter the Drive knob is bound to now
+  bool namOn_ = true;
   bool channelMode_ = true;
   VSTGUI::SharedPointer<VSTGUI::CVSTGUITimer> timer_;
 };

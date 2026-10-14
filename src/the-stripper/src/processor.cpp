@@ -176,7 +176,6 @@ void Processor::processChain(float* const* out, const float* const* in,
     eqp.hfFreq = static_cast<float>(eqNormToHFFreq(param_value_[kEqHFFreq]));
     eqp.hfBell = param_value_[kEqHFBell] >= 0.5;
     eqp.eqTypeBlack = channel_mode; // Channel = Black (G), Mix bus = Brown (E)
-    eqp.saturation = static_cast<float>(param_value_[kEqSaturation]);
     fourkEq_.process(L, R, numSamples, eqp);
     clip_[1].process(L, R, numSamples);
   } else {
@@ -206,9 +205,25 @@ void Processor::processChain(float* const* out, const float* const* in,
   // Drive: NAM (CPU inference; GPU path planned). Auto-compensated output; always 100% wet.
   const bool bypass_drive = isBypassStage(param_value_[kBypassDrive]);
   if (!bypass_drive) {
-    namDrive_.setSampleRate(sampleRate);
-    namDrive_.setDrive(static_cast<float>(param_value_[kDriveAmount]));
-    namDrive_.process(L, R, numSamples);
+    if (param_value_[kDriveNamOn] >= 0.5) {
+      namDrive_.setSampleRate(sampleRate);
+      namDrive_.setDrive(static_cast<float>(param_value_[kDriveAmount]));
+      namDrive_.process(L, R, numSamples);   // no model loaded: passes the signal through
+    } else {
+      // The 4K saturation as the Drive engine; its amount is kEqSaturation (shown on the same knob).
+      if (sampleRate != saturationRate_) {
+        driveSaturation_.setSampleRate(sampleRate);
+        driveSaturation_.reset();
+        saturationRate_ = sampleRate;
+      }
+      driveSaturation_.setConsoleType(isChannelMode(param_value_[kStripMode]) ? DSP::SSLSaturation::ConsoleType::GSeries
+                                                                              : DSP::SSLSaturation::ConsoleType::ESeries);
+      const float amount = static_cast<float>(std::clamp(param_value_[kEqSaturation], 0.0, 1.0));
+      for (int i = 0; i < numSamples; ++i) {
+        L[i] = driveSaturation_.processSample(L[i], amount, true);
+        R[i] = driveSaturation_.processSample(R[i], amount, false);
+      }
+    }
     clip_[3].process(L, R, numSamples);
   } else {
     clip_[3].clear();

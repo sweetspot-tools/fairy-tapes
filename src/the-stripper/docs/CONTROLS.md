@@ -1,8 +1,8 @@
 # The Stripper — Controlli (parametri) modificabili da UI
 
-Elenco di **tutti i parametri** esposti al host. Il plugin ha un editor VSTGUI (1000 × 628) con un controllo per ognuno (tranne quelli inerti: gain staging, `kEqHPFOn` e `kEqLPFOn`); l’host li mostra anche nella sua lista. Ordine **per ID** (come appare nel host).
+Elenco di **tutti i parametri** esposti al host. Il plugin ha un editor VSTGUI (1000 × 628) con un controllo per ognuno (tranne quelli inerti: gain staging, `kEqHPFOn` e `kEqLPFOn`; `kDriveAmount` e `kEqSaturation` condividono la manopola DRIVE); l’host li mostra anche nella sua lista. Ordine **per ID** (come appare nel host).
 
-**Totale: 35 parametri** (ID 0…34, `kNumParams`; la tabella è bloccata in `tests/param_table_golden.h`). **Compressor Mode** (ID 14, solo Channel: Voice / Drums / Classic) è esposto; DSP Multi-Comp integrato (port C++ da Dusk Audio), vedi [COMPRESSION_MODES.md](COMPRESSION_MODES.md).
+**Totale: 36 parametri** (ID 0…35, `kNumParams`; la tabella è bloccata in `tests/param_table_golden.h`). **Compressor Mode** (ID 14, solo Channel: Voice / Drums / Classic) è esposto; DSP Multi-Comp integrato (port C++ da Dusk Audio), vedi [COMPRESSION_MODES.md](COMPRESSION_MODES.md).
 
 ---
 
@@ -41,10 +41,11 @@ Elenco di **tutti i parametri** esposti al host. Il plugin ha un editor VSTGUI (
 | 28 | `kEqHFGain` | EQ HF Gain | dB | Gain banda HF (−20…+20 dB). **Channel.** |
 | 29 | `kEqHFFreq` | EQ HF Freq | Hz | Frequenza banda HF (1.5k…16k Hz). **Channel.** |
 | 30 | `kEqHFBell` | EQ HF Bell | Shelf/Bell | 0 = shelf, 1 = bell (solo Black). **Channel.** |
-| 31 | `kEqSaturation` | EQ Saturation | % | Saturazione SSL 4K-EQ (0…100%). **Channel.** |
-| 32 | `kDriveAmount` | Drive Amount | 0…1 | Unico parametro del Drive: 0 = unità (solo la colorazione del modello), 1 = +20 dB nel modello; uscita compensata. Senza modello il Drive è in passthrough. |
+| 31 | `kEqSaturation` | EQ Saturation | % | Quantità della saturazione SSL 4K (0…100%), motore **alternativo del Drive** quando `kDriveNamOn` è 0 (non è più nell'EQ). |
+| 32 | `kDriveAmount` | Drive Amount | 0…1 | Quantità del Drive con il NAM acceso: 0 = unità (solo la colorazione del modello), 1 = +20 dB nel modello; uscita compensata. Senza modello il Drive è in passthrough. |
 | 33 | `kLimiterPound` | Limiter Pound | 0…1 | Quantità del limiter (BlockParty "pound"). Default 0.5. |
 | 34 | `kGateThreshold` | Gate Threshold | 0…1 | Soglia del gate (Denoise). Default 0.0. |
+| 35 | `kDriveNamOn` | Drive NAM | NAM / Saturate | Motore del Drive: 1 = NAM, 0 = saturazione 4K (la sua quantità è `kEqSaturation`). Default 1. |
 
 ---
 
@@ -53,9 +54,9 @@ Elenco di **tutti i parametri** esposti al host. Il plugin ha un editor VSTGUI (
 - **Globali:** `kBypass`, `kStripMode`, `kInputGain`, `kOutputGain`.
 - **Gain staging (solo Channel, inerte):** `kBypassGainStaging`, `kGainStagingTrim`.
 - **LP/HP:** `kEqHPFFreq`, `kEqLPFFreq`; nell'editor **un solo pulsante IN** per entrambi i filtri (`kBypassLPHP`, polarità invertita). `kEqHPFOn`/`kEqLPFOn` restano a 1 (default, neutro: 20 Hz / 20 kHz) senza controllo.
-- **EQ (Channel = 4K-EQ, Mix bus = Pultec stub):** `kBypassEQ`, i parametri delle quattro bande e `kEqSaturation`.
+- **EQ (Channel = 4K-EQ, Mix bus = Pultec stub):** `kBypassEQ` e i parametri delle quattro bande.
 - **Compressione:** `kBypassCompression`, `kCompressAmount`, `kCompressMix`, `kCompressorMode` (solo Channel: Voice / Drums / Classic). Vedi [COMPRESSION_MODES.md](COMPRESSION_MODES.md).
-- **Drive (NAM):** `kBypassDrive`, `kDriveAmount`; il modello si sceglie dal popup sulla striscia di nastro (non è un parametro: il percorso sta nello stato v8).
+- **Drive:** `kBypassDrive`, `kDriveNamOn` (pulsante NAM), `kDriveAmount` (NAM) e `kEqSaturation` (saturazione 4K, sulla stessa manopola DRIVE; ognuno tiene il suo valore); il modello si sceglie dal popup sulla striscia di nastro (non è un parametro: il percorso sta nello stato v8).
 - **Limiter / Gate:** `kBypassLimiter`/`kLimiterPound`, `kBypassGate`/`kGateThreshold`.
 
 Nell'editor i pulsanti **IN** mostrano l'inverso dei `kBypass*` (acceso = modulo inserito); gli ID e i valori dei parametri non cambiano.

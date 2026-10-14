@@ -82,7 +82,8 @@ Stereo in (L, R)
 
 ## 5. State version
 
-- **v8** (current): adds `kLimiterPound`, `kGateThreshold` (`kNumParams` = 35) and the model path (UTF-8 string with length, empty = no model); the model is restored on load. `state.h` reads v1…v8.
+- **v9** (current): adds `kDriveNamOn` (`kNumParams` = 36); v8 loads with the NAM on. The Drive is either the NAM (`kDriveAmount`) or the 4K saturation moved here from the EQ (`kEqSaturation`), chosen by this switch; the NAM without a model passes the signal through.
+- **v8**: adds `kLimiterPound`, `kGateThreshold` (`kNumParams` = 35) and the model path (UTF-8 string with length, empty = no model); the model is restored on load. `state.h` reads v1…v8.
 - **v7**: `kDriveAmount` is the only Drive parameter. `kNumParams` = 33.
 - **v6** (previous): Had `kDriveAmount`, `kDriveOutput`, `kDriveMix` (35 params). Migration: positions 33 and 34 are skipped when loading v6 states.
 - **v5** and earlier: No Drive params. `kDriveAmount` defaults to 0.0 on migration.

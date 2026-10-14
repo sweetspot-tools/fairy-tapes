@@ -326,6 +326,13 @@ Steinberg::tresult PLUGIN_API Controller::getParameterInfo(Steinberg::int32 inde
     asciiToStr128("Pound", info.shortTitle);
     asciiToStr128("", info.units);
     break;
+  case kDriveNamOn:
+    info.stepCount = 1;
+    info.defaultNormalizedValue = kDefaultDriveNamOn;
+    asciiToStr128("Drive NAM", info.title);
+    asciiToStr128("NAM", info.shortTitle);
+    asciiToStr128("", info.units);
+    break;
   case kGateThreshold:
     info.defaultNormalizedValue = kDefaultGateThreshold;
     asciiToStr128("Gate Threshold", info.title);
@@ -445,6 +452,9 @@ Steinberg::tresult PLUGIN_API Controller::getParamStringByValue(Steinberg::Vst::
   case kLimiterPound:
     snprintf(buf, sizeof(buf), "%.1f", valueNormalized * 10.0);
     asciiToStr128(buf, string);
+    return Steinberg::kResultOk;
+  case kDriveNamOn:
+    asciiToStr128(valueNormalized >= 0.5 ? "NAM" : "Saturate", string);
     return Steinberg::kResultOk;
   case kGateThreshold:
     snprintf(buf, sizeof(buf), "%.0f dB", -72.0 + valueNormalized * 72.0);
