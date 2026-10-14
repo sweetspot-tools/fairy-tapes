@@ -33,6 +33,10 @@ add_executable(fairy_ui_sanitize_tests tests/test_sanitize.cpp)
 target_link_libraries(fairy_ui_sanitize_tests PRIVATE fairy_ui)
 add_test(NAME fairy_ui_sanitize_tests COMMAND fairy_ui_sanitize_tests)
 
+add_executable(fairy_ui_wear_tests tests/test_wear.cpp)
+target_link_libraries(fairy_ui_wear_tests PRIVATE fairy_ui)
+add_test(NAME fairy_ui_wear_tests COMMAND fairy_ui_wear_tests)
+
 # Code-drawn VSTGUI controls and optional bitmap skin.
 add_library(fairy_ui_widgets STATIC src/controls.cpp src/skin.cpp src/meters.cpp src/rack_controls.cpp)
 target_include_directories(fairy_ui_widgets PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
