@@ -24,7 +24,7 @@ body{margin:0;padding:16px;background:#e9e8e4;font-family:system-ui,sans-serif;c
   <label>Texture <select id="tex"><option value="fine" selected>Fine grain</option><option value="wrinkle">Wrinkle (other plugins)</option><option value="none">None</option></select></label>
   <label><input type="checkbox" id="lit" checked> Light</label>
   <label>Wear <select id="wear"><option value="off">Off</option><option value="light">Light</option><option value="heavy">Heavy</option></select></label>
-  <label>Zoom <select id="zoom"><option value="1">100%</option><option value="1.5">150%</option><option value="2">200%</option><option value="2.5">250%</option></select></label>
+  <label>Zoom <select id="zoom"><option value="fit">Fit window</option><option value="1">100%</option><option value="1.5">150%</option><option value="2">200%</option><option value="2.5">250%</option></select></label>
   <button id="reroll" title="New random layout (new instance)">Re-roll</button>
   <label>Signal <input type="range" id="lvl" min="0" max="100" value="55" style="width:120px"></label>
   <span style="color:#555">Rack-style panel preview (1000 × 628, landscape). Knobs: drag vertically, Shift = fine, double-click = default. Click a clip LED to clear it. Mode buttons change the read-only values, the AUTO values of COMP RATIO and DIST (click them to cycle) and the scope. When a module IN button is off (all on by default) its controls dim; the BYPASS button in the Output box dims everything and puts the plugin in bypass.</span>
@@ -567,9 +567,10 @@ setMode(MODE);
 
 
 document.getElementById('wear').value=WEAR;
-var ZSEL=document.getElementById('zoom');ZSEL.value=lsGet('dt_zoom','1');
+var ZSEL=document.getElementById('zoom');ZSEL.value=lsGet('dt_zoom','fit');if(!ZSEL.value)ZSEL.value='fit';
 /* zoom by widening the stage (the SVG scales natively): CSS zoom shifts pointer coordinates, so clicks missed their targets */
-function applyZoom(){var st=document.querySelector('.stage');st.style.maxWidth='none';st.style.width=Math.round(1040*ZSEL.value)+'px';lsSet('dt_zoom',ZSEL.value);}
+function applyZoom(){var st=document.querySelector('.stage');st.style.maxWidth='none';st.style.width=(ZSEL.value==='fit'?Math.max(520,Math.min(window.innerWidth-34,Math.round((window.innerHeight-90)*1040/660))):Math.round(1040*ZSEL.value))+'px';lsSet('dt_zoom',ZSEL.value);}
+window.addEventListener('resize',function(){if(ZSEL.value==='fit')applyZoom();});
 ZSEL.onchange=applyZoom;applyZoom();
 function redrawWear(){WEARL.forEach(drawWear);GRIME.forEach(function(f){f();});}
 document.getElementById('wear').onchange=function(){WEAR=this.value;A={off:0,light:1,heavy:2.2}[WEAR];lsSet('dt_wear',WEAR);redrawWear();};
