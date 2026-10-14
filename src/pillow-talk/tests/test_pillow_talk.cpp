@@ -878,13 +878,13 @@ void test_display_echo_follows_mix() {
 void test_editor_size_scales_and_rounds() {
   using namespace FairyTapes::PillowTalk::Ui;
   auto is = [](PixelSize p, int w, int h) { return p.width == w && p.height == h; };
-  ASSERT_TRUE(is(scaledEditorSize(1.0), 480, 560));
-  ASSERT_TRUE(is(scaledEditorSize(2.0), 960, 1120));
-  ASSERT_TRUE(is(scaledEditorSize(1.5), 720, 840));
-  ASSERT_TRUE(is(scaledEditorSize(1.25), 600, 700));
-  ASSERT_TRUE(is(scaledEditorSize(1.75), 840, 980));
-  ASSERT_TRUE(is(scaledEditorSize(1.1), 528, 616));
-  ASSERT_TRUE(is(scaledEditorSize(1.0 / 3.0), 160, 187));  // 186.67 rounds up
+  ASSERT_TRUE(is(scaledEditorSize(1.0), 1000, 628));
+  ASSERT_TRUE(is(scaledEditorSize(2.0), 2000, 1256));
+  ASSERT_TRUE(is(scaledEditorSize(1.5), 1500, 942));
+  ASSERT_TRUE(is(scaledEditorSize(1.25), 1250, 785));
+  ASSERT_TRUE(is(scaledEditorSize(1.75), 1750, 1099));
+  ASSERT_TRUE(is(scaledEditorSize(1.1), 1100, 691));        // 690.8 rounds up
+  ASSERT_TRUE(is(scaledEditorSize(1.0 / 3.0), 333, 209));   // 333.33 and 209.33 round down
 }
 
 void test_editor_size_sanitizes_factor() {
@@ -897,7 +897,7 @@ void test_editor_size_sanitizes_factor() {
   ASSERT_APPROX(sanitizeContentScale(inf), 1.0);
   ASSERT_APPROX(sanitizeContentScale(1e9), kMaxContentScale);
   ASSERT_APPROX(sanitizeContentScale(2.0), 2.0);
-  ASSERT_TRUE(scaledEditorSize(nan).width == 480 && scaledEditorSize(-1.0).height == 560);
+  ASSERT_TRUE(scaledEditorSize(nan).width == 1000 && scaledEditorSize(-1.0).height == 628);
 }
 
 void test_display_ids_do_not_collide() {

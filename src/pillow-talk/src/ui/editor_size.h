@@ -1,30 +1,22 @@
-// Pillow Talk GUI: editor size math (no SDK or VSTGUI dependency, unit tested).
-// The editor is laid out at a fixed logical size; the host's content scale factor
-// (IPlugViewContentScaleSupport) zooms the frame and scales the window in pixels.
+// Pillow Talk GUI: editor size (no SDK or VSTGUI dependency, unit tested).
+// The editor is laid out at a fixed logical size (the rack panel of docs/mockups/pillow_rack.html); the host's content
+// scale factor (IPlugViewContentScaleSupport) zooms the frame and scales the window in pixels (fairy_ui/editor_size.h).
 #pragma once
 
-#include <cmath>
+#include "fairy_ui/editor_size.h"
 
 namespace FairyTapes::PillowTalk::Ui {
 
-constexpr int kEditorWidth = 480;   // logical px
-constexpr int kEditorHeight = 560;
-constexpr double kMaxContentScale = 8.0;
+constexpr int kEditorWidth = 1000;   // logical px
+constexpr int kEditorHeight = 628;
 
-// Non-finite or <= 0 -> 1; values above kMaxContentScale are clamped.
-inline double sanitizeContentScale(double factor) {
-  if (!std::isfinite(factor) || factor <= 0.0) return 1.0;
-  return factor > kMaxContentScale ? kMaxContentScale : factor;
-}
+using FairyTapes::Ui::kMaxContentScale;
+using FairyTapes::Ui::PixelSize;
+using FairyTapes::Ui::sanitizeContentScale;
 
-struct PixelSize {
-  int width, height;
-};
-
-// Window size in pixels for a (sanitized) content scale factor.
+// Window size in pixels for a (not yet sanitized) content scale factor.
 inline PixelSize scaledEditorSize(double factor) {
-  const double f = sanitizeContentScale(factor);
-  return {static_cast<int>(std::lround(kEditorWidth * f)), static_cast<int>(std::lround(kEditorHeight * f))};
+  return FairyTapes::Ui::scaledSize(kEditorWidth, kEditorHeight, factor);
 }
 
 } // namespace FairyTapes::PillowTalk::Ui

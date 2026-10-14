@@ -117,9 +117,18 @@ add_executable(pillow_talk_decor_tests
   tests/test_decor.cpp
   src/ui/decor.cpp
 )
-target_include_directories(pillow_talk_decor_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_include_directories(pillow_talk_decor_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${VST3_SDK_PATH})
 target_link_libraries(pillow_talk_decor_tests PRIVATE fairy_ui)
 add_test(NAME pillow_talk_decor_tests COMMAND pillow_talk_decor_tests)
+
+# Editor layout table (pure data, no VSTGUI): one control per parameter, no overlaps, LED colours.
+add_executable(pillow_talk_layout_tests tests/test_layout.cpp)
+target_include_directories(pillow_talk_layout_tests PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/src
+  ${VST3_SDK_PATH}
+)
+target_link_libraries(pillow_talk_layout_tests PRIVATE fairy_ui)
+add_test(NAME pillow_talk_layout_tests COMMAND pillow_talk_layout_tests)
 
 # Module/factory lifecycle smoke test: dlopens the built bundle from dist/ (exit 77 = skipped
 # when the plugin has not been built). Links only the pluginterfaces IIDs, not the plugin.
