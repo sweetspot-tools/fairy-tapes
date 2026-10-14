@@ -380,7 +380,7 @@ function ro(x,y,sz,col,anchor,fn){var t=txt('',x,y,sz,col,anchor,700,silk());RO.
 function refreshRO(){RO.forEach(function(f){f();});}
 function lab(s,x,y,sz,col,anchor){return txt(s,x,y,sz,col||W,anchor||'middle',800,silk());}
 /* module box: titled box + group of controls + its IN button */
-function modBox(x,y,w,h,title,build){box(x,y,w,h,title,'bottom');var g=grp(),o=OFFY;g.setAttribute('transform','translate(0,-12)');OFFY=-12;build();OFFY=o;endGrp();return byp(x+w-24,y+26,g);}
+function modBox(x,y,w,h,title,build){box(x,y,w,h,title,'bottom');var g=grp(),o=OFFY;g.setAttribute('transform','translate(0,-12)');OFFY=-12;build();OFFY=o;endGrp();return byp(x+w-24,y+38,g);}
 
 /* ============ ROW 1 : MODE, INPUT, LEVEL, OUTPUT ============ */
 box(24,96,250,130,'MODE','bottom');
@@ -450,10 +450,10 @@ var mBr=modBox(530,238,250,174,'BREATH',function(){
   lab('BREATH',692,384,10,W);
 });
 var mCl=modBox(786,238,190,174,'CLEAN',function(){
-  lab('HPF',828,318,13,W);ro(828,346,20,AMBL,'middle',function(){return MODES.hpf[MODE]+' Hz';});
-  lab('MUD CUT',930,318,13,W);ro(930,346,20,AMBL,'middle',function(){return fs(MODES.mud[MODE])+' dB';});
-  lab('at 300 Hz',930,364,10,DIMW);
-  lab('read-only  ·  follows MODE',881,396,9,DIMW);
+  lab('HPF',828,332,13,W);ro(828,360,20,AMBL,'middle',function(){return MODES.hpf[MODE]+' Hz';});
+  lab('MUD CUT',930,332,13,W);ro(930,360,20,AMBL,'middle',function(){return fs(MODES.mud[MODE])+' dB';});
+  lab('at 300 Hz',930,378,10,DIMW);
+  lab('read-only  ·  follows MODE',881,400,9,DIMW);
 });
 
 /* ============ ROW 3 : DE-ESS, COMP, TONE ============ */
