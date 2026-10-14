@@ -5,6 +5,7 @@
 #pragma once
 
 #include "params.h"
+#include "state.h"
 #include "ui/layout.h"
 
 #include "fairy_ui/skin.h"
@@ -15,8 +16,13 @@
 #include "vstgui/lib/cvstguitimer.h"
 
 #include <array>
+#include <memory>
 #include <chrono>
 #include <string>
+
+namespace VSTGUI {
+class CTextEdit;
+}
 
 namespace FairyTapes::Ui {
 class NormalizedControl;
@@ -32,6 +38,7 @@ namespace FairyTapes::TheStripper::Ui {
 
 class ModelBrowser;
 class ModelStrip;
+class TapePieceView;
 class SilkscreenView;
 
 class Editor : public Steinberg::Vst::VSTGUIEditor,
@@ -80,6 +87,8 @@ private:
   void updateMeters();
   void updateModel();      // model strip and Drive dimming from the controller's model status
   void openBrowser();
+  void editTape(TapePieceView* piece);   // opens the text field over a piece of tape
+  void closeTapeEdit();
   void refreshModules();
   const ControlSpec* specOf(VSTGUI::CControl* control) const;
 
@@ -93,6 +102,9 @@ private:
   std::array<FairyTapes::Ui::ClipLed*, kClipCount> clips_{};
   std::chrono::steady_clock::time_point lastTick_{};
   SilkscreenView* silk_ = nullptr;         // owned by the frame
+  std::array<TapePieceView*, kMaxTapePieces> pieces_{};   // owned by the frame
+  VSTGUI::CTextEdit* tapeEdit_ = nullptr;                // the open text field, owned by the frame
+  int tapeEditIndex_ = -1;
   ModelStrip* strip_ = nullptr;            // owned by the frame
   ModelBrowser* browser_ = nullptr;        // owned by the frame while the popup is open
   bool browserClosing_ = false;            // set by the popup, handled on the UI timer

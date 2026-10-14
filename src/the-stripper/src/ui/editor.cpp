@@ -6,6 +6,7 @@
 #include "ui/model_source.h"
 #include "ui/model_strip.h"
 #include "ui/silkscreen_view.h"
+#include "ui/tape_piece_view.h"
 #include "ui/wear_view.h"
 #include "preferences.h"
 #include "ui/tape_font.h"
@@ -19,6 +20,7 @@
 
 #include "public.sdk/source/vst/utility/stringconvert.h"
 #include "vstgui/lib/cframe.h"
+#include "vstgui/lib/controls/ctextedit.h"
 
 #if SMTG_OS_LINUX
 #include "public.sdk/source/vst/vstgui_linux_runloop_support.h"
@@ -164,6 +166,9 @@ void PLUGIN_API Editor::close() {
   }
   controls_.fill(nullptr);
   silk_ = nullptr;
+  pieces_.fill(nullptr);
+  tapeEdit_ = nullptr;
+  tapeEditIndex_ = -1;
   strip_ = nullptr;
   browser_ = nullptr;
   browserClosing_ = false;
@@ -185,6 +190,18 @@ void Editor::createViews(CViewContainer* parent) {
   silk_->setSeed(ctl_->wearSeed());
   silk_->setValuesFont(prefs.valuesFont == ValuesFont::Tape, tapeFontIdOf(prefs.tapeFont));
   if (wearLevel != WearLevel::Off) parent->addView(new WearView(CRect(0, 0, kWidth, kHeight), generateWear(seed, wearLevel)));
+  // Pieces of writable tape: part of the wear layer (over the silkscreen, below the controls); a click writes on them.
+  {
+    const auto pieces = generateTapePieces(seed);
+    const int shown = piecesShown(wearLevel, seed);
+    for (int i = 0; i < shown && i < static_cast<int>(pieces_.size()); ++i) {
+      auto* view = new TapePieceView(pieces[static_cast<std::size_t>(i)], i, tapeFontIdOf(prefs.tapeFont), seed);
+      view->setText(displayedTapeText(pieces[static_cast<std::size_t>(i)], ctl_->tapeText(i)));
+      view->onClick = [this](TapePieceView* p) { editTape(p); };
+      parent->addView(view);
+      pieces_[static_cast<std::size_t>(i)] = view;
+    }
+  }
 
   for (const auto& spec : kControls) {
     if (spec.sharesView) continue;   // its parameter is shown by another entry's view
@@ -250,6 +267,7 @@ void Editor::onTimer() {
     if (browser_ && frame) frame->removeView(browser_, true);
     browser_ = nullptr;
   }
+  if (tapeEdit_ && frame && frame->getFocusView() != tapeEdit_) closeTapeEdit();   // the field lost the focus: done
   syncFromController(false);
   updateMeters();
   updateModel();
@@ -271,6 +289,30 @@ void Editor::updateModel() {
     else strip_->setModel(Kind::NoModel, {});
   }
   refreshModules();
+}
+
+void Editor::editTape(TapePieceView* piece) {
+  if (!frame || !piece || tapeEdit_) return;
+  const CRect t = piece->tapeRect();
+  CRect box(t);
+  box.inset(-4, -3);
+  tapeEdit_ = new CTextEdit(box, this, 9000 + piece->index(), piece->text().c_str());
+  tapeEditIndex_ = piece->index();
+  tapeEdit_->setFont(makeOwned<CFontDesc>("Arial", 13, kBoldFace));
+  tapeEdit_->setFontColor(CColor(0x2b, 0x26, 0x20));
+  tapeEdit_->setBackColor(CColor(0xd9, 0xcf, 0xa6));
+  tapeEdit_->setFrameColor(CColor(0x8f, 0x85, 0x60));
+  tapeEdit_->setHoriAlign(kCenterText);
+  tapeEdit_->setImmediateTextChange(true);
+  frame->addView(tapeEdit_);
+  frame->setFocusView(tapeEdit_);   // starts the editing
+}
+
+void Editor::closeTapeEdit() {
+  if (!tapeEdit_) return;
+  if (frame) frame->removeView(tapeEdit_, true);
+  tapeEdit_ = nullptr;
+  tapeEditIndex_ = -1;
 }
 
 void Editor::openBrowser() {
@@ -387,6 +429,15 @@ const ControlSpec* Editor::specOf(CControl* control) const {
 }
 
 void Editor::valueChanged(CControl* control) {
+  if (control == tapeEdit_) {   // the writing on a piece of tape: at most 14 characters, saved with the project
+    const std::string typed = tapeEdit_->getText().getString();
+    const std::string clamped = clampTapeText(typed);
+    if (clamped != typed) tapeEdit_->setText(clamped.c_str());
+    ctl_->setTapeText(tapeEditIndex_, clamped);
+    if (tapeEditIndex_ >= 0 && tapeEditIndex_ < static_cast<int>(pieces_.size()) && pieces_[static_cast<std::size_t>(tapeEditIndex_)])
+      pieces_[static_cast<std::size_t>(tapeEditIndex_)]->setText(clamped);
+    return;
+  }
   const ControlSpec* spec = specOf(control);
   if (!spec) return;
   const double ui = FairyTapes::Ui::sanitizeNorm(control->getValueNormalized(), control->getDefaultValue());

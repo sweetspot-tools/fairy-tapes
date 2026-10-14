@@ -93,7 +93,7 @@ Servono per vedere a colpo d'occhio dove il segnale si sporca e quanto lavorano 
 
 ## 6. Stato e preferenze
 
-**Stato del progetto** (nello stato del plugin, per istanza). `kStateVersion` passa da 7 a **8**. Aggiunte, in coda e tutte opzionali alla lettura (uno stato v7 resta caricabile con i valori di default indicati):
+**Stato del progetto** (nello stato del plugin, per istanza). `kStateVersion` passa da 7 a **8** (oggi **10**: v9 interruttore NAM/4K, v10 seme dell'usura e testi dei pezzi di nastro, nello stato del controller). Aggiunte, in coda e tutte opzionali alla lettura (uno stato v7 resta caricabile con i valori di default indicati):
 - percorso del modello NAM (stringa UTF-8 con lunghezza; vuota se assente);
 - **seme dell'usura** (intero a 32 bit, generato alla creazione dell'istanza; se assente se ne genera uno e si salva);
 - angoli delle 4 viti (4 reali) e testi scritti sul nastro (elenco di stringhe brevi, fino a 14 caratteri);
