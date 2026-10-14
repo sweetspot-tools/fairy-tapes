@@ -34,7 +34,8 @@ target_link_libraries(fairy_ui_wear_tests PRIVATE fairy_ui)
 add_test(NAME fairy_ui_wear_tests COMMAND fairy_ui_wear_tests)
 
 # Code-drawn VSTGUI controls and optional bitmap skin.
-add_library(fairy_ui_widgets STATIC src/controls.cpp src/skin.cpp src/meters.cpp src/rack_controls.cpp)
+add_library(fairy_ui_widgets STATIC src/controls.cpp src/skin.cpp src/meters.cpp src/rack_controls.cpp
+  src/draw_util.cpp src/wear_view.cpp)
 target_include_directories(fairy_ui_widgets PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(fairy_ui_widgets PUBLIC fairy_ui vstgui_support)
 # Linked into plugin modules (shared objects).
@@ -46,3 +47,8 @@ target_compile_options(fairy_ui_widgets PUBLIC $<$<CXX_COMPILER_ID:GNU,Clang,App
 add_executable(fairy_ui_meter_control_tests tests/test_meter_controls.cpp)
 target_link_libraries(fairy_ui_meter_control_tests PRIVATE fairy_ui_widgets)
 add_test(NAME fairy_ui_meter_control_tests COMMAND fairy_ui_meter_control_tests)
+
+# Panel layers (wear, silkscreen) that do not need a window: construction, state, click-through.
+add_executable(fairy_ui_layer_view_tests tests/test_layer_views.cpp)
+target_link_libraries(fairy_ui_layer_view_tests PRIVATE fairy_ui_widgets)
+add_test(NAME fairy_ui_layer_view_tests COMMAND fairy_ui_layer_view_tests)

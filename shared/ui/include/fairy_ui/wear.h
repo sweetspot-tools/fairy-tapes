@@ -62,6 +62,23 @@ private:
   std::uint32_t a_;
 };
 
+// Box that holds everything a mark can paint (its points, padded by the line width plus 2): used to skip marks
+// outside the area being redrawn. For curves the control point is included, so the box is never too small.
+struct WearBox {
+  double left, top, right, bottom;
+};
+inline WearBox wearMarkBounds(const WearMark& m) {
+  double x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  for (const auto& p : m.pts) {
+    x0 = std::min(x0, p.x);
+    y0 = std::min(y0, p.y);
+    x1 = std::max(x1, p.x);
+    y1 = std::max(y1, p.y);
+  }
+  const double pad = m.width + 2;
+  return {x0 - pad, y0 - pad, x1 + pad, y1 + pad};
+}
+
 // How much wear each level gives (multiplies the mark counts).
 inline double wearAmount(WearLevel level) { return level == WearLevel::Off ? 0.0 : level == WearLevel::Heavy ? 2.2 : 1.0; }
 

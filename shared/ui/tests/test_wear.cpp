@@ -126,6 +126,19 @@ void test_panel_size_scales_positions_only() {
     if (m.kind == WearMark::Kind::Scratch) CHECK(m.pts[0].x >= 0 && m.pts[0].x <= 480 && m.pts[0].y >= 0 && m.pts[0].y <= 560);
   }
 }
+void test_bounds_hold_every_point_with_padding() {
+  for (const auto& m : generateWear(31, WearLevel::Heavy)) {
+    const WearBox b = wearMarkBounds(m);
+    for (const auto& p : m.pts)
+      CHECK(p.x - b.left >= m.width + 2 - 1e-9 && b.right - p.x >= m.width + 2 - 1e-9 && p.y - b.top >= m.width + 2 - 1e-9 &&
+            b.bottom - p.y >= m.width + 2 - 1e-9);
+  }
+  WearMark speck;
+  speck.pts = {{10, 20}};
+  speck.width = 1;
+  const WearBox b = wearMarkBounds(speck);
+  CHECK(b.left == 7 && b.top == 17 && b.right == 13 && b.bottom == 23);
+}
 } // namespace
 
 int main() {
@@ -137,6 +150,7 @@ int main() {
   test_amounts();
   test_pinned_output_matches_the_stripper();
   test_panel_size_scales_positions_only();
+  test_bounds_hold_every_point_with_padding();
   if (g_failed) { std::fprintf(stderr, "%d check(s) failed\n", g_failed); return 1; }
   std::puts("fairy_ui_wear_tests: ok");
   return 0;
