@@ -88,6 +88,7 @@ public:
   std::string modelPath() const;
   std::string modelName() const;    // file name of the loaded model, empty when none
   std::string modelError() const;   // why the last load failed, empty otherwise
+  bool modelGpu() const;            // the loaded model runs on the GPU
   int modelState() const;           // 0 idle, 1 loading, 2 loaded, 3 failed
 
   DECLARE_FUNKNOWN_METHODS

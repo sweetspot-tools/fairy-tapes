@@ -70,6 +70,22 @@ void test_status_message_roundtrip() {
   CHECK(out.state == 3 && out.name.empty() && out.error == "File not found");
 }
 
+void test_status_message_carries_gpu_flag() {
+  ModelStatus out;
+  FakeMessage on; encodeStatusMessage(&on, ModelStatus{2, "A.nam", "", true});
+  CHECK(decodeStatusMessage(&on, out) && out.gpu);
+  FakeMessage off; encodeStatusMessage(&off, ModelStatus{2, "A.nam", "", false});
+  out.gpu = true;
+  CHECK(decodeStatusMessage(&off, out) && !out.gpu);
+  FakeMessage old;   // a sender that predates the flag: no "gpu" attribute means CPU
+  old.setMessageID(kMsgModelStatus);
+  messages_detail::setString(&old, "state", "2");
+  messages_detail::setString(&old, "name", "A.nam");
+  messages_detail::setString(&old, "error", "");
+  out.gpu = true;
+  CHECK(decodeStatusMessage(&old, out) && !out.gpu);
+}
+
 void test_status_message_rejects_wrong_or_incomplete() {
   ModelStatus out;
   { FakeMessage m; m.setMessageID("Nope"); CHECK(!decodeStatusMessage(&m, out)); }
@@ -83,6 +99,7 @@ int main() {
   test_load_message_empty_path_means_unload();
   test_load_message_rejects_wrong_or_incomplete();
   test_status_message_roundtrip();
+  test_status_message_carries_gpu_flag();
   test_status_message_rejects_wrong_or_incomplete();
   std::printf(g_failed ? "FAILED (%d)\n" : "All message tests passed\n", g_failed);
   return g_failed ? 1 : 0;

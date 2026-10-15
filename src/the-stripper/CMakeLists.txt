@@ -57,6 +57,7 @@ add_library(the_stripper MODULE
   src/ui/flip_view.cpp
   src/ui/screw_view.cpp
   src/ui/recall_marks_view.cpp
+  src/ui/gpu_chip_view.cpp
   src/dsp/compression_stub.cpp
   src/dsp/multicomp_engines.cpp
   src/dsp/fourk_eq.cpp
@@ -235,7 +236,7 @@ add_test(NAME the_stripper_recall_marks_tests COMMAND the_stripper_recall_marks_
 add_executable(the_stripper_render EXCLUDE_FROM_ALL tools/render_editor.cpp ${VST3_SDK_PUBLIC}/source/main/moduleinit.cpp ${VST3_SDK_PUBLIC}/source/main/pluginfactory.cpp src/controller.cpp src/ui/editor.cpp src/ui/panel_view.cpp
   src/ui/browser_widgets.cpp
   src/ui/model_browser.cpp
-  src/ui/model_strip.cpp src/ui/tape_text.cpp src/ui/tape_piece_view.cpp src/ui/back_widgets.cpp src/ui/back_view.cpp src/ui/flip_view.cpp src/ui/screw_view.cpp src/ui/recall_marks_view.cpp)
+  src/ui/model_strip.cpp src/ui/tape_text.cpp src/ui/tape_piece_view.cpp src/ui/back_widgets.cpp src/ui/back_view.cpp src/ui/flip_view.cpp src/ui/screw_view.cpp src/ui/recall_marks_view.cpp src/ui/gpu_chip_view.cpp)
 target_include_directories(the_stripper_render PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${VST3_SDK_PATH} ${VST3_SDK_BASE}/source ${VST3_SDK_PLUGINTERFACES}/base ${VST3_SDK_PLUGINTERFACES}/vst ${VST3_SDK_PUBLIC}/source ${VST3_SDK_PUBLIC}/source/vst)
 target_link_libraries(the_stripper_render PRIVATE sdk pluginterfaces fairy_ui fairy_ui_widgets)
 

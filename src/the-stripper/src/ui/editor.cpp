@@ -11,6 +11,7 @@
 #include "ui/silkscreen_items.h"
 #include "ui/tape_text.h"
 #include "ui/recall_marks.h"
+#include "ui/gpu_chip_view.h"
 #include "ui/recall_marks_view.h"
 #include "ui/screw_view.h"
 #include "ui/tape_piece_view.h"
@@ -231,6 +232,8 @@ void PLUGIN_API Editor::close() {
   valueEdit_ = nullptr;
   valueEditSpec_ = nullptr;
   strip_ = nullptr;
+  gpuChip_ = nullptr;
+  modelGpu_ = false;
   browser_ = nullptr;
   browserClosing_ = false;
   modelState_ = -1;
@@ -304,6 +307,13 @@ void Editor::createViews(CViewContainer* parent) {
   strip_->setFont(tapeFontIdOf(prefs.tapeFont));
   strip_->onClick = [this] { openBrowser(); };
   parent->addView(strip_);
+
+  if (const ControlSpec* nam = specs_[kDriveNamOn]) {   // the chip sits on the face of the NAM button (left slot), which sinks 1.5 px when lit
+    const double cx = nam->rect.x + nam->rect.w / 4, cy = nam->rect.y + FairyTapes::Ui::Rack::kFaceHeight / 2 + FairyTapes::Ui::Rack::kPressDepth;
+    gpuChip_ = new GpuChipView(CRect(cx - 10, cy - 10, cx + 10, cy + 10));
+    gpuChip_->setVisible(false);
+    parent->addView(gpuChip_);
+  }
 
   for (std::size_t i = 0; i < bars_.size(); ++i) {
     const MeterRow& row = kMeterRows[i];
@@ -503,7 +513,9 @@ void Editor::onTimer() {
 void Editor::updateModel() {
   const int state = ctl_->modelState();
   const std::string name = ctl_->modelName(), error = ctl_->modelError();
-  if (state == modelState_ && name == modelName_ && error == modelError_) return;
+  const bool gpu = ctl_->modelGpu();
+  if (state == modelState_ && name == modelName_ && error == modelError_ && gpu == modelGpu_) return;
+  modelGpu_ = gpu;
   modelState_ = state;
   modelName_ = name;
   modelError_ = error;
@@ -675,6 +687,13 @@ void Editor::refreshModules() {
       silk_->setTag(static_cast<int>(m), blockTag(m, channelMode_, comp, namOn_));
       silk_->setTagDimmed(static_cast<int>(m), moduleDimmed(m, state));
     }
+  }
+
+  if (gpuChip_) {
+    const bool show = modelGpu_ && namOn_;
+    gpuChip_->setDimmed(moduleDimmed(Module::Drive, state));
+    if (gpuChip_->isVisible() != show) gpuChip_->setVisible(show);
+    gpuChip_->invalid();
   }
 
   for (const auto& spec : kControls) {

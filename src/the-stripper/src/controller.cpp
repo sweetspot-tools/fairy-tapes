@@ -705,6 +705,7 @@ void Controller::requestModelLoad(const std::string& path) {
     std::lock_guard<std::mutex> lk(modelMutex_);
     modelPath_ = path;
     modelStatus_.state = path.empty() ? 0 : 1;   // "loading" until the processor answers
+    modelStatus_.gpu = false;
     modelStatus_.error.clear();
     if (path.empty())
       modelStatus_.name.clear();
@@ -721,6 +722,7 @@ void Controller::requestModelLoad(const std::string& path) {
 std::string Controller::modelPath() const { std::lock_guard<std::mutex> lk(modelMutex_); return modelPath_; }
 std::string Controller::modelName() const { std::lock_guard<std::mutex> lk(modelMutex_); return modelStatus_.name; }
 std::string Controller::modelError() const { std::lock_guard<std::mutex> lk(modelMutex_); return modelStatus_.error; }
+bool Controller::modelGpu() const { std::lock_guard<std::mutex> lk(modelMutex_); return modelStatus_.state == 2 && modelStatus_.gpu; }
 int Controller::modelState() const { std::lock_guard<std::mutex> lk(modelMutex_); return modelStatus_.state; }
 
 } // namespace FairyTapes::TheStripper
