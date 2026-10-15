@@ -12,11 +12,14 @@
  * delayed sample entered the engine (a window of D + 1 values). Both detectors drop their output as
  * soon as the phrase reaches their newest input sample, so with this window the reduction holds
  * to the last sample of the breath in the delayed audio and the reducer's 30 ms release starts at
- * the breath end (measured at 48 kHz: >= 9 dB in every 5 ms of the last 20 ms of a breath, < 1 dB
+ * the breath end (measured at 48 kHz: >= 11 dB in every 5 ms of the last 20 ms of a breath, < 1 dB
  * on average over the 30-130 ms after it; about 4 dB is still left 25 ms after the end).
  * Known onset limit (look-ahead minus the detectors' own confirmation time): in Speak/Sing the
  * reduction starts ~25 ms before the breath onset (full at the onset); in Puke the level
  * detector's 80 ms minimum duration makes it start ~25-30 ms after the onset (full ~50 ms in).
+ * The Puke level detector needs voice context only to enter a breath, so breaths longer than its
+ * 300 ms context are held to their end (>= 11 dB over the last 50 ms of a 500 ms breath); a quiet
+ * passage is treated as a breath for at most 1.5 s.
  * A mode switch that changes detector resets the new one: it needs a few hundred ms of phrase
  * context (its phrase-level tracker) before it detects breaths again.
  *

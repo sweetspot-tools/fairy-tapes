@@ -575,6 +575,62 @@ void test_puke_sensitivity() {
   }
 }
 
+float minIn(const std::vector<float>& p, double sr, double t0, double t1) {
+  const size_t a = (size_t)std::max(0.0, t0 * sr);
+  const size_t b = std::min(p.size(), (size_t)(t1 * sr));
+  float m = 1.0f;
+  for (size_t i = a; i < b; ++i) m = std::min(m, p[i]);
+  return m;
+}
+
+// Long breaths (longer than contextMs): the voice context is needed to enter a breath, not to
+// stay in one, so the probability holds to the last breath sample and drops right after it.
+// Fails if the context check runs on every sample (released ~300 ms into the breath).
+void test_puke_long_breath_held_to_end() {
+  for (double len : {0.5, 0.6}) {
+    for (double sr : kRates) {
+      SignalBuilder s(sr);
+      s.wideNoise(-10.0, 1.0);
+      s.wideNoise(-35.0, len);
+      s.wideNoise(-10.0, 1.0);
+      DSP::LevelBreathDetector d;
+      d.prepare(sr);
+      const auto p = runDetector(d, s.x);
+      const double b1 = 1.0 + len;
+      ASSERT_TRUE(minIn(p, sr, 1.15, b1) > 0.6f);
+      ASSERT_TRUE(maxIn(p, sr, 0.0, 1.0) < 0.1f);
+      ASSERT_TRUE(maxIn(p, sr, b1 + 0.003, b1 + 1.0) < 0.05f);
+    }
+  }
+}
+
+// A quiet passage after a scream is a breath for at most maxDurationMs (1.5 s); it does not
+// re-enter on the same passage, and the next real breath after voice is detected again.
+// The passage is 40 dB under the scream so the phrase-tracker decay alone would hold it ~1.7 s.
+// After ~2 s the decayed phrase level is within 15 dB of the passage (it counts as "voice" for
+// the context); the passage then drops a further 13 dB, which would re-enter a breath if the
+// tracker decay could unlock the detector.
+void test_puke_breath_duration_cap() {
+  for (double sr : kRates) {
+    SignalBuilder s(sr);
+    s.wideNoise(-5.0, 1.0);
+    s.wideNoise(-45.0, 2.2);   // 1.0 .. 3.2 s
+    s.wideNoise(-58.0, 0.8);   // 3.2 .. 4.0 s: still the same quiet passage
+    s.wideNoise(-5.0, 1.0);    // 4.0 .. 5.0 s
+    s.wideNoise(-30.0, 0.3);   // 5.0 .. 5.3 s: a normal breath
+    s.wideNoise(-5.0, 1.0);
+    DSP::LevelBreathDetector d;
+    d.prepare(sr);
+    ASSERT_TRUE(d.tuning().maxDurationMs == 1500.0f);
+    const auto p = runDetector(d, s.x);
+    ASSERT_TRUE(minIn(p, sr, 1.15, 2.45) > 0.6f);
+    // The cap counts from the start of the candidate run (~45 ms after the drop: level meter).
+    ASSERT_TRUE(maxIn(p, sr, 2.56, 4.0) < 0.05f);
+    ASSERT_TRUE(maxIn(p, sr, 4.0, 5.0) < 0.05f);
+    ASSERT_TRUE(minIn(p, sr, 5.16, 5.3) > 0.6f);
+  }
+}
+
 // ---- Corrective EQ ----------------------------------------------------------------------
 
 // Runs one channel of the EQ over x and returns the output.
@@ -1213,6 +1269,24 @@ void test_comp_unity_below_threshold() {
     for (Mode m : {Mode::Speak, Mode::Sing}) {
       const auto r = runCompSine({m, 0.5f}, sr, 1000.0, amp);
       ASSERT_NEAR(compGainDb(r, sr), 0.0, 0.5);
+    }
+  }
+}
+
+// Puke AUTO (Dist 3) with no reduction: the wet path is flat, because only the added distortion
+// products are band-limited (30 Hz .. 12 kHz), not the signal. Amount 0 -> threshold -6 dBFS,
+// makeup max(0, GR_ref - 2) = 0, so a -40 dBFS sine sees unity gain; at Mix 0.5 a filtered wet
+// path would also comb against the dry one. Fails with the old LP12k(HP30(x) + ...) structure
+// (16 kHz about -10 dB, 40 Hz about -1.5 dB).
+void test_comp_puke_no_reduction_is_flat() {
+  const double amp = std::pow(10.0, -40.0 / 20.0);
+  for (double sr : kRates) {
+    for (float mix : {1.0f, 0.5f}) {
+      for (double hz : {40.0, 1000.0, 16000.0}) {
+        const auto r = runCompSine({Mode::Puke, 0.0f, mix}, sr, hz, amp);
+        ASSERT_TRUE(r.meanGr == 0.0);
+        ASSERT_NEAR(compGainDb(r, sr), 0.0, 0.5);
+      }
     }
   }
 }
@@ -1972,9 +2046,6 @@ void test_engine_breath_edges_covered() {
     auto cut = [&](double t0, double t1) {
       return outRmsDb(y0.l, sr, L, t0, t1) - outRmsDb(y1.l, sr, L, t0, t1);
     };
-    if (std::getenv("DT_PROBE"))
-      for (double t = b0 - 0.08; t < b1 + 0.2; t += 0.01)
-        std::fprintf(stderr, "  mode %d t=%.3f cut %.2f dB\n", (int)m, t, cut(t, t + 0.01));
     // Every 5 ms of the last 20 ms of the breath is cut by at least 11 dB (full cut: 12 dB).
     double tail = 1e9;
     for (int k = 0; k < 4; ++k) tail = std::min(tail, cut(b1 - 0.02 + 0.005 * k, b1 - 0.015 + 0.005 * k));
@@ -1985,6 +2056,27 @@ void test_engine_breath_edges_covered() {
     }
   }
   ASSERT_TRUE(bad == 0);
+}
+
+// Puke, a 500 ms breath (longer than the level detector's 300 ms voice context): the end of the
+// breath is still fully reduced. Fails if the detector releases the breath mid-way.
+void test_engine_puke_long_breath_cut_to_end() {
+  const double sr = 48000.0, b0 = 1.0, b1 = 1.5;
+  SignalBuilder b(sr);
+  b.wideNoise(-10.0, b0);
+  b.wideNoise(-35.0, b1 - b0);
+  b.wideNoise(-10.0, 1.0);
+  Settings s = engineDefaults();
+  s.mode = Mode::Puke;
+  s.breathAmount = 0.0f;
+  Engine e;
+  e.prepare(sr);
+  const int L = e.latencySamples();
+  const Stereo y0 = runEngine(e, s, b.x);
+  s.breathAmount = 1.0f;
+  const Stereo y1 = runFresh(sr, s, b.x);
+  const double cut = outRmsDb(y0.l, sr, L, b1 - 0.05, b1) - outRmsDb(y1.l, sr, L, b1 - 0.05, b1);
+  ASSERT_TRUE(cut >= 11.0 && cut <= 13.0);
 }
 
 void test_engine_mode_switch_no_blowup() {
@@ -2412,12 +2504,10 @@ void test_engine_no_alloc_in_process() {
   ASSERT_TRUE(g_allocs == 0);
 }
 
-} // namespace
-
 // ---- BreathReducer ----
 
 void test_reducer_amount_zero_is_unity() {
-  FairyTapes::DeepThroat::DSP::BreathReducer r;
+  DSP::BreathReducer r;
   r.prepare(48000.0);
   r.setAmount(0.0f);
   for (int i = 0; i < 48000; ++i) ASSERT_TRUE(r.process(1.0f) == 1.0f);
@@ -2426,7 +2516,7 @@ void test_reducer_amount_zero_is_unity() {
 }
 
 void test_reducer_full_amount_is_minus_12_db() {
-  FairyTapes::DeepThroat::DSP::BreathReducer r;
+  DSP::BreathReducer r;
   r.prepare(48000.0);
   r.setAmount(1.0f);
   const double target = std::pow(10.0, -12.0 / 20.0);
@@ -2439,7 +2529,7 @@ void test_reducer_full_amount_is_minus_12_db() {
 }
 
 void test_reducer_scales_with_prob() {
-  FairyTapes::DeepThroat::DSP::BreathReducer r;
+  DSP::BreathReducer r;
   r.prepare(48000.0);
   r.setAmount(1.0f);
   float g = 1.0f;
@@ -2448,7 +2538,7 @@ void test_reducer_scales_with_prob() {
 }
 
 void test_reducer_smooth() {
-  FairyTapes::DeepThroat::DSP::BreathReducer r;
+  DSP::BreathReducer r;
   r.prepare(48000.0);
   r.setAmount(1.0f);
   float prev = r.process(0.0f);
@@ -2467,7 +2557,7 @@ void test_reducer_smooth() {
 }
 
 void test_reducer_nan_prob_safe() {
-  FairyTapes::DeepThroat::DSP::BreathReducer r;
+  DSP::BreathReducer r;
   r.prepare(44100.0);
   r.setAmount(1.0f);
   for (int i = 0; i < 1000; ++i) r.process(1.0f);
@@ -2479,6 +2569,8 @@ void test_reducer_nan_prob_safe() {
   for (int i = 0; i < 100000; ++i) r.process(nan);
   ASSERT_NEAR(r.process(nan), 1.0, 1e-6);
 }
+
+} // namespace
 
 int main() {
   RUN_TEST(test_param_enum_count);
@@ -2508,6 +2600,8 @@ int main() {
   RUN_TEST(test_puke_loud_gasp_not_cut);
   RUN_TEST(test_puke_silence_is_zero);
   RUN_TEST(test_puke_sensitivity);
+  RUN_TEST(test_puke_long_breath_held_to_end);
+  RUN_TEST(test_puke_breath_duration_cap);
   RUN_TEST(test_reducer_amount_zero_is_unity);
   RUN_TEST(test_reducer_full_amount_is_minus_12_db);
   RUN_TEST(test_reducer_scales_with_prob);
@@ -2545,6 +2639,7 @@ int main() {
   RUN_TEST(test_comp_detector_hpf);
   RUN_TEST(test_comp_detector_hpf_choices);
   RUN_TEST(test_comp_unity_below_threshold);
+  RUN_TEST(test_comp_puke_no_reduction_is_flat);
   RUN_TEST(test_comp_level_compensation);
   RUN_TEST(test_comp_dist2_adds_even_harmonics);
   RUN_TEST(test_comp_dist3_adds_odd_harmonics);
@@ -2578,6 +2673,7 @@ int main() {
   RUN_TEST(test_engine_puke_scream_intact);
   RUN_TEST(test_engine_puke_uses_level_detector);
   RUN_TEST(test_engine_breath_edges_covered);
+  RUN_TEST(test_engine_puke_long_breath_cut_to_end);
   RUN_TEST(test_engine_mode_switch_no_blowup);
   RUN_TEST(test_engine_sample_rates);
   RUN_TEST(test_engine_all_in_off_is_passthrough);

@@ -184,10 +184,10 @@ void DistressorComp::processFrame(float* samples) {
     c.dcY = e - c.dcX + dcCoeff_ * c.dcY;
     c.dcX = e;
     if (std::fabs(c.dcY) < 1e-30) c.dcY = 0.0;
-    // Dist 3: band-limited odd shaper.
-    const double v = std::clamp((double)c.hp3.process((float)x), -kShaperLimit, kShaperLimit);
-    const double d3 = c.lp3.process((float)(v + k3 * v * v * v));
-    const double shaped = x + w2_ * c.dcY + w3_ * (d3 - x);
+    // Dist 3: odd term; only the added distortion product is band-limited (30 Hz .. 12 kHz),
+    // so with no reduction the signal itself stays flat.
+    const double d3 = c.lp3.process(c.hp3.process((float)(k3 * xs * xs * xs)));
+    const double shaped = x + w2_ * c.dcY + w3_ * d3;
     const double wet = safetyClip(shaped * gain);
     samples[i] = (float)(x * (1.0 - mix) + wet * mix);
   }

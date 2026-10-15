@@ -1,7 +1,11 @@
 // Fairy Tapes · Deep Throat — level-based breath detector (Puke mode).
 // Growl and scream are noisy and pitchless, so there is no spectral analysis: a breath is a
 // segment well below the running phrase level that is surrounded by voice. A loud inhalation
-// (close to the phrase level) and continuous loud noise are never breaths. No VST3 SDK dependency.
+// (close to the phrase level) and continuous loud noise are never breaths. Voice context is
+// needed to ENTER a breath, not to stay in one, so long breaths are held to their end; an active
+// breath is capped at maxDurationMs, after which the same quiet passage cannot re-enter until the
+// level comes back within voiceWithinDb of the phrase level seen when the breath began (the
+// phrase tracker's decay does not count as voice). No VST3 SDK dependency.
 #pragma once
 
 #include "dsp/breath_detector.h"
@@ -11,7 +15,8 @@ namespace FairyTapes::DeepThroat::DSP {
 
 struct LevelTuning {
   float belowPhraseDb = 20.f;     // overwritten by setSensitivity(): lerp(26, 14, s)
-  float contextMs = 300.f;        // voice must have been present within this time
+  float contextMs = 300.f;        // voice must have been present within this time to ENTER
+  float maxDurationMs = 1500.f;   // an active breath ends after this long (no re-entry until voice)
   float minDurationMs = 80.f;     // the candidate must last this long before the output rises
   float silenceDb = -60.f;        // below this is silence, never breath
   // Tuning added on top of the brief's values (see the task report).
@@ -44,7 +49,10 @@ private:
   long runSamples_ = 0;         // consecutive samples of breath candidate
   long contextSamples_ = 0;
   long minDurationSamples_ = 0;
+  long maxDurationSamples_ = 0;
   bool active_ = false;
+  bool locked_ = false;         // capped: no re-entry until real voice is seen again
+  float entryPhraseDb_ = -120.f;  // phrase level when the current candidate run began
   float prob_ = 0.f;
   float attackCoef_ = 0.f;
 };

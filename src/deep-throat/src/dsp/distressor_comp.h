@@ -15,7 +15,8 @@
 // blended coefficient always lies between two stable coefficients.
 //
 // Wet path: shaper (on the input, before the gain) -> gain -> makeup. Dist 2: x + k2 g x^2 (even,
-// asymmetric; the x^2 term is DC-blocked). Dist 3: LP12k(s(HP30(x))), s(v) = v + k3 g v^3.
+// asymmetric; the x^2 term is DC-blocked). Dist 3: x + LP12k(HP30(k3 g x^3)): only the added
+// odd product is band-limited, the signal itself is never filtered (flat with no reduction).
 // g = clamp(GR / 12, 0, 1) * (1 + 0.5 * attackFactor), attackFactor 1 at <= 0.5 ms attack, 0 at
 // >= 10 ms, linear in log(time) between. The three variants (clean, Dist 2, Dist 3) always run
 // and are crossfaded (20 ms) so a Dist change does not click.
@@ -52,7 +53,7 @@ public:
 private:
   struct Channel {
     Biquad det;        // detector high-pass
-    Biquad hp3, lp3;   // Dist 3 band limits
+    Biquad hp3, lp3;   // Dist 3 band limits (distortion product only)
     double dcX = 0.0, dcY = 0.0;  // Dist 2 DC blocker state
   };
 
