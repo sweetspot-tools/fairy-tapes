@@ -231,6 +231,6 @@
 
 ## Self-review
 
-- **Copertura della spec:** §2-3 catena e scelte → Task 2-10; §4 rilevamento → Task 3-4; §5 tabella modalità → Task 2 (rider), 6 (EQ), 7 (de-esser), 8 (comp), 9 (tone); §6 parametri → Task 1 e 10 (con `De-ess Listen` e i sei IN); §7 struttura → Task 1; §8 test → in ogni task; §9 decisioni aperte → restano aperte: registrazioni di riferimento per tarare Puke, dati per il livello 2, GUI.
+- **Copertura della spec:** §2-3 catena e scelte → Task 2-10; §4 rilevamento → Task 3-4; §5 tabella modalità → Task 2 (rider), 6 (EQ), 7 (de-esser), 8 (comp), 9 (tone); §6 parametri (24) → Task 1 e 10 (con i sei IN, Breath Sensitivity e Listen, De-ess Freq e Listen, Comp Mix, Ratio, Dist e SC HPF); §10 grafica → fuori da questo piano (piano a parte); §7 struttura → Task 1; §8 test → in ogni task; §9 decisioni aperte → restano aperte: registrazioni di riferimento per tarare Puke, dati per il livello 2, Clean Amount.
 - **Coerenza dei tipi:** `Mode`, `Biquad`, `BreathDetector`, `LevelMeter` definiti nei Task 1, 6, 3, 2 e usati dopo con le stesse firme.
 - **Soglie:** tutti i numeri sono valori iniziali scelti per i test sintetici; vanno ritarati con voci reali (growl e scream inclusi).
