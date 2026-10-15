@@ -95,6 +95,7 @@ add_executable(deep_throat_tests
   src/dsp/rider.cpp
   src/dsp/spectral_breath_detector.cpp
   src/dsp/level_breath_detector.cpp
+  src/dsp/breath_reducer.cpp
 )
 target_include_directories(deep_throat_tests PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src

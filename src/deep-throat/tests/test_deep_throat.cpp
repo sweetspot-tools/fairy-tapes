@@ -9,6 +9,7 @@
 #include "dsp/fft.h"
 #include "dsp/spectral_breath_detector.h"
 #include "dsp/level_breath_detector.h"
+#include "dsp/breath_reducer.h"
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -538,6 +539,72 @@ void test_puke_sensitivity() {
 
 } // namespace
 
+// ---- BreathReducer ----
+
+void test_reducer_amount_zero_is_unity() {
+  FairyTapes::DeepThroat::DSP::BreathReducer r;
+  r.prepare(48000.0);
+  r.setAmount(0.0f);
+  for (int i = 0; i < 48000; ++i) ASSERT_TRUE(r.process(1.0f) == 1.0f);
+  r.setAmount(std::numeric_limits<float>::quiet_NaN());
+  for (int i = 0; i < 100; ++i) ASSERT_TRUE(r.process(1.0f) == 1.0f);
+}
+
+void test_reducer_full_amount_is_minus_12_db() {
+  FairyTapes::DeepThroat::DSP::BreathReducer r;
+  r.prepare(48000.0);
+  r.setAmount(1.0f);
+  const double target = std::pow(10.0, -12.0 / 20.0);
+  float g = 1.0f;
+  for (int i = 0; i < 48000; ++i) {
+    g = r.process(1.0f);
+    ASSERT_TRUE(g >= target * 0.999);  // never below -12 dB
+  }
+  ASSERT_NEAR(20.0 * std::log10(g), -12.0, 0.3);
+}
+
+void test_reducer_scales_with_prob() {
+  FairyTapes::DeepThroat::DSP::BreathReducer r;
+  r.prepare(48000.0);
+  r.setAmount(1.0f);
+  float g = 1.0f;
+  for (int i = 0; i < 48000; ++i) g = r.process(0.5f);
+  ASSERT_NEAR(20.0 * std::log10(g), -6.0, 1.0);
+}
+
+void test_reducer_smooth() {
+  FairyTapes::DeepThroat::DSP::BreathReducer r;
+  r.prepare(48000.0);
+  r.setAmount(1.0f);
+  float prev = r.process(0.0f);
+  for (int i = 0; i < 2000; ++i) {
+    const float g = r.process(1.0f);
+    ASSERT_TRUE(std::fabs(g - prev) <= 0.2f);
+    prev = g;
+  }
+  ASSERT_TRUE(prev < 0.3f);
+  for (int i = 0; i < 12000; ++i) {
+    const float g = r.process(0.0f);
+    ASSERT_TRUE(std::fabs(g - prev) <= 0.2f);
+    prev = g;
+  }
+  ASSERT_NEAR(prev, 1.0, 1e-3);
+}
+
+void test_reducer_nan_prob_safe() {
+  FairyTapes::DeepThroat::DSP::BreathReducer r;
+  r.prepare(44100.0);
+  r.setAmount(1.0f);
+  for (int i = 0; i < 1000; ++i) r.process(1.0f);
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  for (int i = 0; i < 100000; ++i) {
+    const float g = r.process(i % 2 ? nan : 7.0f);
+    ASSERT_TRUE(std::isfinite(g) && g > 0.0f && g <= 1.0f);
+  }
+  for (int i = 0; i < 100000; ++i) r.process(nan);
+  ASSERT_NEAR(r.process(nan), 1.0, 1e-6);
+}
+
 int main() {
   RUN_TEST(test_param_enum_count);
   RUN_TEST(test_deess_freq_range);
@@ -565,6 +632,11 @@ int main() {
   RUN_TEST(test_puke_loud_gasp_not_cut);
   RUN_TEST(test_puke_silence_is_zero);
   RUN_TEST(test_puke_sensitivity);
+  RUN_TEST(test_reducer_amount_zero_is_unity);
+  RUN_TEST(test_reducer_full_amount_is_minus_12_db);
+  RUN_TEST(test_reducer_scales_with_prob);
+  RUN_TEST(test_reducer_smooth);
+  RUN_TEST(test_reducer_nan_prob_safe);
 
   std::fprintf(stdout, "\n%d passed, %d failed.\n", g_passed, g_failed);
   if (g_failed > 0) {
