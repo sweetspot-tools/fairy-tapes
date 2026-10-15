@@ -13,6 +13,7 @@
 #include "dsp/biquad.h"
 #include "dsp/corrective_eq.h"
 #include "dsp/deesser.h"
+#include "dsp/distressor_comp.h"
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -993,6 +994,367 @@ void test_deesser_freq_change_is_smooth() {
   ASSERT_TRUE(moving < 0.02);
 }
 
+// ---- Compressor (distressor-style) ------------------------------------------------------------
+
+struct CompCfg {
+  Mode mode = Mode::Speak;
+  float amount = 1.0f;
+  float mix = 1.0f;
+  int ratio = 0;  // AUTO
+  int dist = 0;   // AUTO
+  int hpf = 1;    // 80 Hz
+};
+
+void setupComp(DSP::DistressorComp& c, const CompCfg& k, double sr) {
+  c.prepare(sr, 2);
+  c.setMode(k.mode);
+  c.setAmount(k.amount);
+  c.setMix(k.mix);
+  c.setRatioChoice(k.ratio);
+  c.setDistChoice(k.dist);
+  c.setDetectorHpf(k.hpf);
+  c.reset();  // start from the settled parameter values
+}
+
+struct CompRun {
+  std::vector<float> in, out;
+  double meanGr = 0.0;  // mean lastGainReductionDb() over the last 0.2 s
+};
+
+// Stereo sine (both channels identical) of the given peak amplitude through the compressor.
+CompRun runCompSine(const CompCfg& k, double sr, double hz, double peak, double sec = 1.0) {
+  DSP::DistressorComp c;
+  setupComp(c, k, sr);
+  CompRun r;
+  r.in = sineVec(sr, hz, peak, sec);
+  r.out.resize(r.in.size());
+  const size_t tail = (size_t)(0.2 * sr);
+  double grSum = 0.0;
+  for (size_t i = 0; i < r.in.size(); ++i) {
+    float f[2] = {r.in[i], r.in[i]};
+    c.processFrame(f);
+    r.out[i] = f[0];
+    if (i >= r.in.size() - tail) grSum += c.lastGainReductionDb();
+  }
+  r.meanGr = grSum / (double)tail;
+  return r;
+}
+
+// Level of the n-th harmonic re the fundamental, in dB, over 0.5..0.9 s (whole cycles of 1 kHz).
+double harmDb(const CompRun& r, double sr, double hz, int n) {
+  const size_t a = (size_t)(0.5 * sr), b = (size_t)(0.9 * sr);
+  return 20.0 * std::log10(std::max(toneMag(r.out, a, b, n * hz, sr), 1e-30) /
+                           toneMag(r.out, a, b, hz, sr));
+}
+
+// Output/input RMS ratio in dB over 0.5..0.9 s.
+double compGainDb(const CompRun& r, double sr) {
+  const size_t a = (size_t)(0.5 * sr), b = (size_t)(0.9 * sr);
+  return 20.0 * std::log10(rmsRange(r.out, a, b) / rmsRange(r.in, a, b));
+}
+
+constexpr double kMinus6 = 0.501187;    // -6 dBFS peak
+constexpr double kMinus12 = 0.251189;   // -12 dBFS peak
+
+void test_comp_reduces_peaks() {
+  // -6 dBFS against a -30 dBFS threshold at 2:1: static reduction 12 dB.
+  for (double sr : kRates) {
+    const double gr = runCompSine({Mode::Speak, 1.0f}, sr, 1000.0, kMinus6).meanGr;
+    ASSERT_TRUE(gr > 6.0);
+    ASSERT_NEAR(gr, 12.0, 1.0);
+  }
+}
+
+void test_comp_ratio_per_mode() {
+  // Static: Speak 2:1 -> 12 dB, Sing 3:1 -> 16 dB, Puke 8:1 -> 21 dB.
+  for (double sr : kRates) {
+    const double sp = runCompSine({Mode::Speak, 1.0f}, sr, 1000.0, kMinus6).meanGr;
+    const double si = runCompSine({Mode::Sing, 1.0f}, sr, 1000.0, kMinus6).meanGr;
+    const double pu = runCompSine({Mode::Puke, 1.0f}, sr, 1000.0, kMinus6).meanGr;
+    ASSERT_TRUE(pu > si + 2.0);
+    ASSERT_TRUE(si > sp + 2.0);
+    ASSERT_NEAR(si, 16.0, 1.0);
+    ASSERT_NEAR(pu, 21.0, 1.0);
+  }
+}
+
+void test_comp_ratio_choice_overrides_mode() {
+  for (double sr : kRates) {
+    const double autoGr = runCompSine({Mode::Speak, 1.0f}, sr, 1000.0, kMinus6).meanGr;
+    const double tenGr = runCompSine({Mode::Speak, 1.0f, 1.0f, 6}, sr, 1000.0, kMinus6).meanGr;
+    ASSERT_TRUE(tenGr > autoGr + 5.0);
+    ASSERT_NEAR(tenGr, 21.6, 1.0);
+  }
+}
+
+void test_comp_auto_equals_mode_ratio() {
+  for (double sr : kRates) {
+    const double a = runCompSine({Mode::Sing, 1.0f}, sr, 1000.0, kMinus6).meanGr;
+    const double c = runCompSine({Mode::Sing, 1.0f, 1.0f, 2}, sr, 1000.0, kMinus6).meanGr;
+    ASSERT_NEAR(a, c, 0.1);
+  }
+  // The other modes too: Speak AUTO = 2:1, Puke AUTO = 8:1.
+  const double sa = runCompSine({Mode::Speak, 1.0f}, 48000.0, 1000.0, kMinus6).meanGr;
+  const double sc = runCompSine({Mode::Speak, 1.0f, 1.0f, 1}, 48000.0, 1000.0, kMinus6).meanGr;
+  ASSERT_NEAR(sa, sc, 0.1);
+  const double pa = runCompSine({Mode::Puke, 1.0f}, 48000.0, 1000.0, kMinus6).meanGr;
+  const double pc = runCompSine({Mode::Puke, 1.0f, 1.0f, 5}, 48000.0, 1000.0, kMinus6).meanGr;
+  ASSERT_NEAR(pa, pc, 0.1);
+}
+
+void test_comp_ratio_20() {
+  // Static: 10:1 -> 21.6 dB, 20:1 -> 22.8 dB.
+  for (double sr : kRates) {
+    const double ten = runCompSine({Mode::Speak, 1.0f, 1.0f, 6}, sr, 1000.0, kMinus6).meanGr;
+    const double twenty = runCompSine({Mode::Speak, 1.0f, 1.0f, 7}, sr, 1000.0, kMinus6).meanGr;
+    ASSERT_TRUE(twenty > ten + 0.5);
+    ASSERT_NEAR(twenty, 22.8, 1.0);
+  }
+}
+
+// DC step (detector HPF OFF so the detector sees a constant level): 0.5 for 0.5 s, then silence
+// for 4 s. attackMs = time for the reduction to reach 63 % of its settled value; releaseMs = time
+// from the start of the silence until it falls to 37 % of the value it had there.
+void measureCompTimes(double sr, int ratioChoice, double& attackMs, double& releaseMs) {
+  DSP::DistressorComp c;
+  setupComp(c, {Mode::Speak, 1.0f, 1.0f, ratioChoice, 1, 0}, sr);
+  const long on = (long)(0.5 * sr), off = (long)(4.0 * sr);
+  std::vector<double> gr((size_t)(on + off));
+  for (long i = 0; i < on + off; ++i) {
+    float f[2];
+    f[0] = f[1] = i < on ? 0.5f : 0.0f;
+    c.processFrame(f);
+    gr[(size_t)i] = c.lastGainReductionDb();
+  }
+  const double settled = gr[(size_t)on - 1];
+  attackMs = releaseMs = -1.0;
+  for (long i = 0; i < on; ++i)
+    if (gr[(size_t)i] >= 0.632 * settled) { attackMs = 1000.0 * (i + 1) / sr; break; }
+  for (long i = on; i < on + off; ++i)
+    if (gr[(size_t)i] <= 0.368 * settled) { releaseMs = 1000.0 * (i - on + 1) / sr; break; }
+}
+
+void test_comp_times_scale_with_ratio() {
+  // Attack 6/r ms: 2:1 -> 3 ms, 20:1 -> 0.3 ms. Sustained release: 2:1 -> 200 ms, 20:1 -> 2 s.
+  for (double sr : kRates) {
+    double a2, r2, a20, r20;
+    measureCompTimes(sr, 1, a2, r2);
+    measureCompTimes(sr, 7, a20, r20);
+    ASSERT_TRUE(a20 > 0.0 && a20 < a2);
+    ASSERT_TRUE(r20 > r2 && r2 > 0.0);
+    ASSERT_NEAR(a2, 3.0, 0.5);
+    ASSERT_NEAR(a20, 0.3, 0.12);
+    ASSERT_NEAR(r2, 200.0, 40.0);
+    ASSERT_NEAR(r20, 2000.0, 300.0);
+  }
+}
+
+void test_comp_detector_hpf() {
+  // 80 Hz 2nd-order Butterworth: 40 Hz is ~12.3 dB down in the detector -> about half the
+  // reduction of 1 kHz (24 dB over -> 11.7 dB over). A steeper filter would give ~0.
+  for (double sr : kRates) {
+    const double lo = runCompSine({Mode::Speak, 1.0f}, sr, 40.0, kMinus6).meanGr;
+    const double hi = runCompSine({Mode::Speak, 1.0f}, sr, 1000.0, kMinus6).meanGr;
+    ASSERT_TRUE(lo < 0.5 * hi);
+    ASSERT_TRUE(lo > 0.3 * hi);
+  }
+}
+
+void test_comp_detector_hpf_choices() {
+  // 100 Hz at -6 dBFS, 2:1: OFF -> 12 dB, 80 Hz (-1.5 dB) -> 11.25 dB, 150 Hz (-7.8 dB) -> 8.1 dB.
+  for (double sr : kRates) {
+    const double off = runCompSine({Mode::Speak, 1.0f, 1.0f, 0, 0, 0}, sr, 100.0, kMinus6).meanGr;
+    const double h80 = runCompSine({Mode::Speak, 1.0f, 1.0f, 0, 0, 1}, sr, 100.0, kMinus6).meanGr;
+    const double h150 = runCompSine({Mode::Speak, 1.0f, 1.0f, 0, 0, 2}, sr, 100.0, kMinus6).meanGr;
+    ASSERT_TRUE(h150 < h80 - 1.5);
+    ASSERT_TRUE(h80 < off - 0.3);
+    ASSERT_NEAR(off, 12.0, 1.0);
+  }
+}
+
+void test_comp_unity_below_threshold() {
+  // -50 dBFS against a -18 dBFS threshold (Amount 0.5): no reduction, no makeup.
+  const double amp = std::pow(10.0, -50.0 / 20.0);
+  for (double sr : kRates) {
+    for (Mode m : {Mode::Speak, Mode::Sing}) {
+      const auto r = runCompSine({m, 0.5f}, sr, 1000.0, amp);
+      ASSERT_NEAR(compGainDb(r, sr), 0.0, 0.5);
+    }
+  }
+}
+
+void test_comp_level_compensation() {
+  // -18 dBFS RMS sine (-15 dBFS peak): output within +-3 dB of the input for any Amount.
+  const double peak = std::pow(10.0, -18.0 / 20.0) * std::sqrt(2.0);
+  for (double sr : kRates) {
+    for (Mode m : {Mode::Speak, Mode::Sing, Mode::Puke}) {
+      for (float amount : {0.0f, 0.5f, 1.0f}) {
+        for (int ratio : {0, 7}) {
+          const auto r = runCompSine({m, amount, 1.0f, ratio}, sr, 1000.0, peak);
+          ASSERT_NEAR(compGainDb(r, sr), 0.0, 3.0);
+        }
+      }
+    }
+  }
+}
+
+void test_comp_dist2_adds_even_harmonics() {
+  for (double sr : kRates) {
+    const auto on = runCompSine({Mode::Sing, 1.0f}, sr, 1000.0, kMinus12);
+    const auto off = runCompSine({Mode::Sing, 1.0f, 1.0f, 0, 1}, sr, 1000.0, kMinus12);
+    ASSERT_TRUE(harmDb(on, sr, 1000.0, 2) > harmDb(on, sr, 1000.0, 3) + 6.0);
+    ASSERT_TRUE(harmDb(on, sr, 1000.0, 2) > harmDb(off, sr, 1000.0, 2) + 20.0);
+  }
+}
+
+void test_comp_dist3_adds_odd_harmonics() {
+  for (double sr : kRates) {
+    const auto on = runCompSine({Mode::Puke, 1.0f}, sr, 1000.0, kMinus12);
+    const auto off = runCompSine({Mode::Puke, 1.0f, 1.0f, 0, 1}, sr, 1000.0, kMinus12);
+    ASSERT_TRUE(harmDb(on, sr, 1000.0, 3) > harmDb(on, sr, 1000.0, 2) + 6.0);
+    ASSERT_TRUE(harmDb(on, sr, 1000.0, 3) > harmDb(off, sr, 1000.0, 3) + 10.0);
+  }
+}
+
+void test_comp_dist_choice_overrides_mode() {
+  // Speak AUTO has no distortion; choice Dist 3 adds it.
+  for (double sr : kRates) {
+    const auto d3 = runCompSine({Mode::Speak, 1.0f, 1.0f, 0, 3}, sr, 1000.0, kMinus12);
+    const auto au = runCompSine({Mode::Speak, 1.0f}, sr, 1000.0, kMinus12);
+    ASSERT_TRUE(harmDb(d3, sr, 1000.0, 3) > harmDb(d3, sr, 1000.0, 2) + 6.0);
+    ASSERT_TRUE(harmDb(d3, sr, 1000.0, 3) > harmDb(au, sr, 1000.0, 3) + 10.0);
+  }
+}
+
+void test_comp_dist2_level() {
+  // Sing 3:1, -12 dBFS against -30 dBFS: 12 dB of reduction -> about 3 % second harmonic.
+  for (double sr : kRates) {
+    const auto r = runCompSine({Mode::Sing, 1.0f, 1.0f, 0, 2}, sr, 1000.0, kMinus12);
+    ASSERT_NEAR(r.meanGr, 12.0, 1.0);
+    const double h2 = harmDb(r, sr, 1000.0, 2);
+    ASSERT_TRUE(h2 >= -40.0 && h2 <= -26.0);
+  }
+}
+
+void test_comp_distortion_grows_with_gr() {
+  // Same -12 dBFS input; Amount 1 (12 dB) vs Amount 0.29 (threshold -12.96, in the knee: <1 dB).
+  for (double sr : kRates) {
+    const auto hi = runCompSine({Mode::Sing, 1.0f, 1.0f, 0, 2}, sr, 1000.0, kMinus12);
+    const auto lo = runCompSine({Mode::Sing, 0.29f, 1.0f, 0, 2}, sr, 1000.0, kMinus12);
+    ASSERT_NEAR(hi.meanGr, 12.0, 1.0);
+    ASSERT_TRUE(lo.meanGr <= 1.0 && lo.meanGr >= 0.3);
+    ASSERT_TRUE(harmDb(hi, sr, 1000.0, 2) >= harmDb(lo, sr, 1000.0, 2) + 20.0);
+  }
+}
+
+void test_comp_mix_zero_is_dry() {
+  for (double sr : kRates) {
+    const auto dry = runCompSine({Mode::Puke, 1.0f, 0.0f}, sr, 1000.0, kMinus6);
+    const auto wet = runCompSine({Mode::Puke, 1.0f, 1.0f}, sr, 1000.0, kMinus6);
+    double maxErr = 0.0, maxWet = 0.0;
+    for (size_t i = 0; i < dry.in.size(); ++i) {
+      maxErr = std::max(maxErr, (double)std::fabs(dry.out[i] - dry.in[i]));
+      maxWet = std::max(maxWet, (double)std::fabs(wet.out[i] - wet.in[i]));
+    }
+    ASSERT_TRUE(maxWet > 0.05);  // the wet path really differs
+    ASSERT_TRUE(maxErr <= 1e-6);
+  }
+}
+
+void test_comp_extreme_input_finite() {
+  // Full-scale white noise (+-1) for 1 s, with a few NaN/Inf samples injected.
+  const double sr = 48000.0;
+  auto x = noiseVec((size_t)sr, 1.0 / std::sqrt(3.0));
+  const float inf = std::numeric_limits<float>::infinity();
+  x[1000] = std::numeric_limits<float>::quiet_NaN();
+  x[2000] = inf;
+  x[3000] = -inf;
+  for (Mode m : {Mode::Speak, Mode::Sing, Mode::Puke}) {
+    for (float amount : {0.0f, 1.0f}) {
+      for (int dist : {2, 3}) {
+        for (int ratio : {0, 7}) {
+          DSP::DistressorComp c;
+          setupComp(c, {m, amount, 1.0f, ratio, dist}, sr);
+          int bad = 0;
+          for (size_t i = 0; i < x.size(); ++i) {
+            float f[2] = {x[i], -x[i]};
+            c.processFrame(f);
+            const float g = c.lastGainReductionDb();
+            if (!std::isfinite(f[0]) || !std::isfinite(f[1]) || std::fabs(f[0]) > 2.0f ||
+                std::fabs(f[1]) > 2.0f || !std::isfinite(g) || g < 0.0f) ++bad;
+          }
+          ASSERT_TRUE(bad == 0);
+        }
+      }
+    }
+  }
+}
+
+void test_comp_stereo_linked() {
+  // L = 0.5 * R, no distortion: the louder channel (R) drives the detector (max link), both
+  // channels get the same gain (out_L == 0.5 * out_R) and the reduction equals that of R alone.
+  const double sr = 48000.0;
+  DSP::DistressorComp c;
+  setupComp(c, {Mode::Speak, 1.0f, 1.0f, 0, 1}, sr);
+  const auto x = sineVec(sr, 1000.0, kMinus6, 1.0);
+  const size_t tail = (size_t)(0.2 * sr);
+  double maxErr = 0.0, maxDiff = 0.0, grSum = 0.0;
+  for (size_t i = 0; i < x.size(); ++i) {
+    float f[2] = {0.5f * x[i], x[i]};
+    c.processFrame(f);
+    if (i >= x.size() / 2) {
+      maxErr = std::max(maxErr, (double)std::fabs(f[0] - 0.5f * f[1]));
+      maxDiff = std::max(maxDiff, (double)std::fabs(f[1] - x[i]));
+    }
+    if (i >= x.size() - tail) grSum += c.lastGainReductionDb();
+  }
+  const double mono = runCompSine({Mode::Speak, 1.0f, 1.0f, 0, 1}, sr, 1000.0, kMinus6).meanGr;
+  ASSERT_TRUE(maxDiff > 0.05);
+  ASSERT_TRUE(maxErr < 1e-6);
+  ASSERT_NEAR(grSum / (double)tail, mono, 0.05);
+}
+
+void test_comp_soft_knee() {
+  // Amount 0.5 (threshold -18 dBFS), 2:1, 6 dB knee: a sine peaking at the threshold gets
+  // (1 - 1/2) * 3^2 / 12 = 0.375 dB (a hard knee gives 0), 3 dB below it none, 3 dB above 1.5 dB.
+  // The peak detector settles ~8 % below the static value on a sine (attack only near the peaks).
+  const double at = std::pow(10.0, -18.0 / 20.0);
+  for (double sr : kRates) {
+    const double g0 = runCompSine({Mode::Speak, 0.5f}, sr, 1000.0, at).meanGr;
+    const double gm = runCompSine({Mode::Speak, 0.5f}, sr, 1000.0, at * 0.70795).meanGr;
+    const double gp = runCompSine({Mode::Speak, 0.5f}, sr, 1000.0, at * 1.41254).meanGr;
+    ASSERT_NEAR(g0, 0.375, 0.1);
+    ASSERT_NEAR(gm, 0.0, 0.02);
+    ASSERT_NEAR(gp, 1.5, 0.25);
+  }
+}
+
+void test_comp_param_changes_are_smooth() {
+  // 300 Hz sine (max sample step ~0.004): Amount, Mix and Dist toggled every 50 ms. Smoothed
+  // makeup, threshold, mix and distortion crossfade keep the output steps small; an instant
+  // makeup jump alone would be a step of ~0.1.
+  const double sr = 48000.0;
+  DSP::DistressorComp c;
+  setupComp(c, {Mode::Sing, 1.0f, 1.0f, 1, 1}, sr);
+  const auto x = sineVec(sr, 300.0, 0.1, 1.0);
+  float prev = 0.0f;
+  double maxStep = 0.0;
+  const long period = 2437;  // ~50 ms, not a whole number of cycles: toggles hit any phase
+  for (size_t i = 0; i < x.size(); ++i) {
+    if (i % (size_t)period == 0) {
+      const long k = (long)(i / (size_t)period);
+      c.setAmount(k % 2 ? 0.0f : 1.0f);
+      c.setMix(k % 3 ? 1.0f : 0.3f);
+      c.setDistChoice(k % 2 ? 3 : 1);
+    }
+    float f[2] = {x[i], x[i]};
+    c.processFrame(f);
+    if (i > 0) maxStep = std::max(maxStep, (double)std::fabs(f[0] - prev));
+    prev = f[0];
+  }
+  ASSERT_TRUE(maxStep < 0.012);
+}
+
 } // namespace
 
 // ---- BreathReducer ----
@@ -1116,6 +1478,26 @@ int main() {
   RUN_TEST(test_deesser_finite_at_extreme_rates);
   RUN_TEST(test_deesser_gain_is_stereo_linked);
   RUN_TEST(test_deesser_freq_change_is_smooth);
+  RUN_TEST(test_comp_reduces_peaks);
+  RUN_TEST(test_comp_ratio_per_mode);
+  RUN_TEST(test_comp_ratio_choice_overrides_mode);
+  RUN_TEST(test_comp_auto_equals_mode_ratio);
+  RUN_TEST(test_comp_ratio_20);
+  RUN_TEST(test_comp_times_scale_with_ratio);
+  RUN_TEST(test_comp_detector_hpf);
+  RUN_TEST(test_comp_detector_hpf_choices);
+  RUN_TEST(test_comp_unity_below_threshold);
+  RUN_TEST(test_comp_level_compensation);
+  RUN_TEST(test_comp_dist2_adds_even_harmonics);
+  RUN_TEST(test_comp_dist3_adds_odd_harmonics);
+  RUN_TEST(test_comp_dist_choice_overrides_mode);
+  RUN_TEST(test_comp_dist2_level);
+  RUN_TEST(test_comp_distortion_grows_with_gr);
+  RUN_TEST(test_comp_mix_zero_is_dry);
+  RUN_TEST(test_comp_extreme_input_finite);
+  RUN_TEST(test_comp_stereo_linked);
+  RUN_TEST(test_comp_soft_knee);
+  RUN_TEST(test_comp_param_changes_are_smooth);
 
   std::fprintf(stdout, "\n%d passed, %d failed.\n", g_passed, g_failed);
   if (g_failed > 0) {
