@@ -99,6 +99,7 @@ add_executable(deep_throat_tests
   src/dsp/corrective_eq.cpp
   src/dsp/deesser.cpp
   src/dsp/distressor_comp.cpp
+  src/dsp/tone_eq.cpp
 )
 target_include_directories(deep_throat_tests PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src

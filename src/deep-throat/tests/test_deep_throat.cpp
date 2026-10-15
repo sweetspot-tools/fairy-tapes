@@ -14,6 +14,8 @@
 #include "dsp/corrective_eq.h"
 #include "dsp/deesser.h"
 #include "dsp/distressor_comp.h"
+#include "dsp/tone_eq.h"
+#include "mode_presets.h"
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -1355,6 +1357,174 @@ void test_comp_param_changes_are_smooth() {
   ASSERT_TRUE(maxStep < 0.012);
 }
 
+// ---- Tone EQ and mode presets ---------------------------------------------------------------
+
+// Stereo sine through the tone EQ; returns the gain in dB measured over the last 100 ms.
+double toneGainDb(double sr, double hz, Mode mode, float tone) {
+  DSP::ToneEq eq;
+  eq.prepare(sr, 2);
+  eq.setMode(mode);
+  eq.setTone(tone);
+  const long n = (long)(0.6 * sr), tail = (long)(0.1 * sr);
+  const double w = 2.0 * kPi * hz / sr;
+  double sIn = 0.0, sOut = 0.0;
+  for (long i = 0; i < n; ++i) {
+    const float x = (float)(0.1 * std::sin(w * (double)i));
+    const float yl = eq.process(0, x);
+    const float yr = eq.process(1, x);
+    if (i >= n - tail) { sIn += (double)x * x; sOut += (double)yl * yl; (void)yr; }
+  }
+  return 10.0 * std::log10(sOut / sIn);
+}
+
+constexpr double kToneRates[3] = {44100.0, 48000.0, 96000.0};
+
+void test_tone_neutral_is_flat() {
+  int bad = 0;
+  for (double sr : kToneRates)
+    for (Mode m : {Mode::Speak, Mode::Sing, Mode::Puke})
+      for (double hz : {250.0, 3500.0, 12000.0})
+        if (std::fabs(toneGainDb(sr, hz, m, 0.5f)) > 0.3) ++bad;
+  ASSERT_TRUE(bad == 0);
+}
+
+void test_tone_up_speak() {
+  int bad = 0;
+  for (double sr : kToneRates) {
+    if (std::fabs(toneGainDb(sr, 3500.0, Mode::Speak, 1.0f) - 3.0) > 0.7) ++bad;
+    if (std::fabs(toneGainDb(sr, 250.0, Mode::Speak, 1.0f) + 2.0) > 0.7) ++bad;
+  }
+  ASSERT_TRUE(bad == 0);
+}
+
+void test_tone_down_inverts() {
+  int bad = 0;
+  for (double sr : kToneRates) {
+    if (std::fabs(toneGainDb(sr, 3500.0, Mode::Speak, 0.0f) + 3.0) > 0.7) ++bad;
+    if (std::fabs(toneGainDb(sr, 250.0, Mode::Speak, 0.0f) - 2.0) > 0.7) ++bad;
+    // Linear scaling: half way down (t = -0.5) gives half the presence cut.
+    if (std::fabs(toneGainDb(sr, 3500.0, Mode::Speak, 0.25f) + 1.5) > 0.5) ++bad;
+  }
+  ASSERT_TRUE(bad == 0);
+}
+
+void test_tone_air_shelf_gain() {
+  // Well above the 12 kHz corner a shelf reaches (nearly) its full gain, and well below it
+  // stays flat. Two-sided around the per-mode values {Speak 2, Sing 4, Puke 0}.
+  int bad = 0;
+  for (double sr : {48000.0, 96000.0}) {
+    const double expect[3] = {2.0, 4.0, 0.0};
+    const Mode modes[3] = {Mode::Speak, Mode::Sing, Mode::Puke};
+    for (int k = 0; k < 3; ++k) {
+      const double g = toneGainDb(sr, 20000.0, modes[k], 1.0f);
+      if (g > expect[k] + 0.7 || g < expect[k] * 0.75 - 0.3) ++bad;
+      if (std::fabs(toneGainDb(sr, 1000.0, modes[k], 1.0f)) > 0.8) ++bad;
+    }
+  }
+  ASSERT_TRUE(bad == 0);
+}
+
+void test_tone_mode_curves_differ() {
+  int bad = 0;
+  for (double sr : kToneRates) {
+    const double sing = toneGainDb(sr, 12000.0, Mode::Sing, 1.0f);
+    const double speak = toneGainDb(sr, 12000.0, Mode::Speak, 1.0f);
+    const double puke = toneGainDb(sr, 12000.0, Mode::Puke, 1.0f);
+    if (!(sing > speak + 0.5 && speak > puke + 0.5)) ++bad;
+    // Mud cut and presence differ per mode too.
+    if (std::fabs(toneGainDb(sr, 250.0, Mode::Puke, 1.0f) + 3.0) > 0.7) ++bad;
+    if (std::fabs(toneGainDb(sr, 250.0, Mode::Sing, 1.0f) + 1.5) > 0.7) ++bad;
+    if (std::fabs(toneGainDb(sr, 3500.0, Mode::Puke, 1.0f) - 1.0) > 0.7) ++bad;
+    if (std::fabs(toneGainDb(sr, 3500.0, Mode::Sing, 1.0f) - 2.0) > 0.7) ++bad;
+  }
+  ASSERT_TRUE(bad == 0);
+}
+
+void test_tone_low_rate_shelf_stays_below_nyquist() {
+  // At 22.05 kHz the 12 kHz corner would sit at Nyquist: it is clamped to 0.45 x rate, so the
+  // output stays finite, bounded and the shelf still boosts the top of the band.
+  DSP::ToneEq eq;
+  eq.prepare(22050.0, 1);
+  eq.setMode(Mode::Sing);
+  eq.setTone(1.0f);
+  double peak = 0.0;
+  int bad = 0;
+  for (long i = 0; i < 22050; ++i) {
+    const float y = eq.process(0, (float)(0.1 * std::sin(2.0 * kPi * 10500.0 * (double)i / 22050.0)));
+    if (!std::isfinite(y)) ++bad;
+    if (i > 11025) peak += (double)y * y;
+  }
+  ASSERT_TRUE(bad == 0);
+  const double g = 10.0 * std::log10(peak / (11024.0 * 0.5 * 0.01));
+  ASSERT_TRUE(g > 1.5 && g < 4.7);
+}
+
+void test_tone_nonfinite_input_and_tone_are_safe() {
+  DSP::ToneEq eq;
+  eq.prepare(48000.0, 2);
+  eq.setTone(std::numeric_limits<float>::quiet_NaN());
+  const float bad[3] = {std::numeric_limits<float>::quiet_NaN(),
+                        std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity()};
+  int nonFinite = 0;
+  for (int i = 0; i < 3000; ++i) {
+    const float x = i % 100 < 3 ? bad[i % 3] : 0.1f;
+    if (!std::isfinite(eq.process(0, x))) ++nonFinite;
+    if (!std::isfinite(eq.process(1, x))) ++nonFinite;
+  }
+  ASSERT_TRUE(nonFinite == 0);
+}
+
+void test_tone_stereo_channels_identical() {
+  DSP::ToneEq eq;
+  eq.prepare(48000.0, 2);
+  eq.setMode(Mode::Sing);
+  const auto x = sineVec(48000.0, 700.0, 0.1, 0.5);
+  int diff = 0;
+  for (size_t i = 0; i < x.size(); ++i) {
+    if (i == x.size() / 2) eq.setTone(1.0f);
+    if (eq.process(0, x[i]) != eq.process(1, x[i])) ++diff;
+  }
+  ASSERT_TRUE(diff == 0);
+}
+
+// Tone and Mode changed on a running sine: the output must stay a smooth waveform. The step is
+// compared with the largest step of the steady-state output just before the change.
+void test_tone_changes_are_smooth() {
+  const double sr = 48000.0;
+  int bad = 0;
+  for (double hz : {250.0, 3500.0}) {
+    DSP::ToneEq eq;
+    eq.prepare(sr, 1);
+    eq.setMode(Mode::Speak);
+    const auto x = sineVec(sr, hz, 0.3, 1.0);
+    std::vector<float> y(x.size());
+    for (size_t i = 0; i < x.size(); ++i) {
+      if (i == x.size() / 2) { eq.setTone(1.0f); eq.setMode(Mode::Sing); }
+      if (i == x.size() / 2 + 12000) { eq.setTone(0.0f); eq.setMode(Mode::Puke); }
+      y[i] = eq.process(0, x[i]);
+    }
+    double before = 0.0, after = 0.0;
+    for (size_t i = x.size() / 2 - 4800; i < x.size() / 2; ++i)
+      before = std::max(before, (double)std::fabs(y[i] - y[i - 1]));
+    for (size_t i = x.size() / 2; i < x.size() / 2 + 24000; ++i)
+      after = std::max(after, (double)std::fabs(y[i] - y[i - 1]));
+    // The new curve legitimately changes amplitude by up to ~+3 dB (x1.41); an instant jump
+    // adds a transient on top. Allow the amplitude change, not a click.
+    if (!(after < before * 1.5)) ++bad;
+  }
+  ASSERT_TRUE(bad == 0);
+}
+
+void test_presets_values() {
+  ASSERT_NEAR(presetFor(Mode::Speak).riderMaxRangeDb, 6.0, 1e-9);
+  ASSERT_NEAR(presetFor(Mode::Speak).riderSlewDbPerSec, 8.0, 1e-9);
+  ASSERT_NEAR(presetFor(Mode::Sing).riderMaxRangeDb, 4.0, 1e-9);
+  ASSERT_NEAR(presetFor(Mode::Sing).riderSlewDbPerSec, 4.0, 1e-9);
+  ASSERT_NEAR(presetFor(Mode::Puke).riderMaxRangeDb, 3.0, 1e-9);
+  ASSERT_NEAR(presetFor(Mode::Puke).riderSlewDbPerSec, 2.0, 1e-9);
+  ASSERT_TRUE(&presetFor(Mode::Sing) == &kModePresets[1]);
+}
+
 } // namespace
 
 // ---- BreathReducer ----
@@ -1498,6 +1668,16 @@ int main() {
   RUN_TEST(test_comp_stereo_linked);
   RUN_TEST(test_comp_soft_knee);
   RUN_TEST(test_comp_param_changes_are_smooth);
+  RUN_TEST(test_tone_neutral_is_flat);
+  RUN_TEST(test_tone_up_speak);
+  RUN_TEST(test_tone_down_inverts);
+  RUN_TEST(test_tone_air_shelf_gain);
+  RUN_TEST(test_tone_mode_curves_differ);
+  RUN_TEST(test_tone_low_rate_shelf_stays_below_nyquist);
+  RUN_TEST(test_tone_nonfinite_input_and_tone_are_safe);
+  RUN_TEST(test_tone_stereo_channels_identical);
+  RUN_TEST(test_tone_changes_are_smooth);
+  RUN_TEST(test_presets_values);
 
   std::fprintf(stdout, "\n%d passed, %d failed.\n", g_passed, g_failed);
   if (g_failed > 0) {
