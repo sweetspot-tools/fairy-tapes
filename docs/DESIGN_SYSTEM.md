@@ -4,9 +4,9 @@ Regole visive condivise da tutti i plugin della suite. Materiale dei controlli e
 
 ## Pannello
 
-- Stile pannello rack, orizzontale; riquadri con bordo bianco e titolo sul bordo (il bordo è tracciato con un'interruzione per il titolo, mai coperto da un rettangolo); LED senza alone; nessun gradiente lucido. **Colore dei LED dei pulsanti:** i pulsanti **accendi/spegni** (IN, Bypass, Sync, Sidechain) hanno il LED **rosso**; i **selettori di valore o di modo** (Chan/Bus, Voice/Drums/Classic, NAM, note 1/16-1/2) lo hanno **giallo** (deciso 2026-10-14; regola estesa a Sync e Sidechain di Pillow Talk).
+- Stile pannello rack, orizzontale; riquadri con bordo bianco e titolo sul bordo (il bordo è tracciato con un'interruzione per il titolo, mai coperto da un rettangolo). **Il titolo dei riquadri del pannello frontale sta sul bordo BASSO, mai su quello alto** (nelle preview: `box(...,'bottom')`); solo i riquadri del retro (Settings, Credits e simili) hanno il titolo sul bordo alto. Regola ribadita dall'utente il 2026-10-15 perché sbagliata più volte nelle nuove grafiche. LED senza alone; nessun gradiente lucido. **Colore dei LED dei pulsanti:** i pulsanti **accendi/spegni** (IN, Bypass, Sync, Sidechain) hanno il LED **rosso**; i **selettori di valore o di modo** (Chan/Bus, Voice/Drums/Classic, NAM, note 1/16-1/2) lo hanno **giallo** (deciso 2026-10-14; regola estesa a Sync e Sidechain di Pillow Talk).
 - Testo visibile **in inglese**; nessun testo selezionabile con il mouse, salvo i due campi modificabili (valore sotto una manopola, scritta sul nastro).
-- Nessun nome o marchio delle fonti d'ispirazione nella UI.
+- Nessun nome o marchio delle fonti d'ispirazione nella UI, **tranne le sigle dei blocchi** (sezione "Sigle dei blocchi").
 - Doppio clic su una manopola: valore predefinito del parametro, come modifica unica annullabile.
 
 ## Livelli (dal fondo)
@@ -15,9 +15,20 @@ Regole visive condivise da tutti i plugin della suite. Materiale dei controlli e
 
 L'usura lascia passare i clic; solo il nastro li cattura (per scriverci sopra). La serigrafia si attenua con il suo modulo e con il bypass globale.
 
+## Sigle dei blocchi (motore esterno attivo)
+
+Regola per tutti i plugin (ribadita dall'utente il 2026-10-15), definita su The Stripper (spec, "Serigrafia dei blocchi", 2026-10-14; preview `boxTag`):
+
+- Ogni riquadro il cui DSP viene da un plugin esterno (o lo richiama) ha **in alto a sinistra**, dentro il bordo, una piccola sigla che cita il motore **attivo in quel momento**; la sigla cambia con i selettori (modi, motori). Esempi di The Stripper: Compression `OPTO-2A` / `FET-76` / `VCA-160` / `4K-G`; Drive `NAM` / `4K-G` / `4K-E`; Limiter `B-PARTY`; Gate `D-NOISE`.
+- **Posizione:** per un riquadro `box(x,y,…)` la sigla parte da `(x+16, y+22)`, allineata a sinistra; il contenuto del riquadro (schermi, controlli) lascia libero quell'angolo.
+- **Aspetto:** 7 px, grigio chiaro (`#c9c9c2`, lo stesso di "FAIRY TAPES"), **molto sbiadita** (opacità circa 10%): si intuisce senza saltare all'occhio.
+- **Livello:** serigrafia (sotto l'usura); si attenua con il modulo e con il bypass globale.
+- Niente sigla nei riquadri senza motore esterno (Input, Output, Level, meter, motori scritti da noi).
+- **Testo:** sigle abbreviate, **scelte dall'utente**, che richiamano il modello senza scriverlo per esteso; rischio marchi accettato dall'utente, da ricontrollare prima del rilascio. Nei Credits i componenti restano citati per esteso, con autore e licenza.
+
 ## Moduli, IN e bypass
 
-Ogni modulo ha un pulsante **IN** in alto a destra, acceso di default; a IN spento i controlli del modulo si attenuano (35%). Il **bypass globale** attenua tutto e fa passare il segnale identico. Solo l'interfaccia inverte la polarità dei parametri di bypass (ID e valori restano).
+Ogni modulo ha un pulsante **IN** **vicino all'angolo in alto a destra del suo riquadro**, dentro il bordo (nelle preview il centro del pulsante sta circa 29 px a sinistra del bordo destro e 38 px sotto il bordo alto, con l'etichetta IN sopra; per esempio riquadro `box(x,y,w,h,…)` → IN in `(x+w−29, y+38)`), mai a metà altezza, in basso o fuori dal riquadro; i **selettori di modo o di preset** del modulo stanno **in basso a destra** del riquadro, in fila verso sinistra a partire dalla colonna dell'IN (come CHAN/BUS nell'OUTPUT di The Stripper; regola dell'utente, 2026-10-16); eccezione già decisa: NAM/4K del Drive di The Stripper, accanto all'IN (vedi la sua spec). Regola ribadita dall'utente il 2026-10-15. L'IN è acceso di default; a IN spento i controlli del modulo si attenuano (35%). Il **bypass globale** attenua tutto e fa passare il segnale identico. Solo l'interfaccia inverte la polarità dei parametri di bypass (ID e valori restano).
 
 ## Usura (un seme per istanza)
 
@@ -35,7 +46,7 @@ Disegnati dal codice. Usura guidata dalla forma: bordo consumato sul lato del di
 
 ## Retro del pannello
 
-Una sola voce **BACK →** davanti; il retro (flip 3D) ha le schede **SETTINGS** e **CREDITS** e **← BACK**. Preferenze di aspetto per l'utente (file globale), impostazioni di comportamento nel progetto. Credits con le licenze di tutti i componenti di terze parti e gli avvisi di legge.
+**Obbligatorio per tutti i plugin della suite** (regola dell'utente, 2026-10-15): ogni editor ha il retro con almeno le schede **SETTINGS** e **CREDITS**, anche nelle preview, fin dalla prima bozza. **Il retro ha un template grafico fisso, quello di `stripper_rack.html`; cambiano solo i contenuti:** titolo grande = scheda corrente (corsivo, 38 px, in alto a sinistra) con "FAIRY TAPES" sotto; in alto a destra la riga "NOME PLUGIN · DESCRIZIONE"; sulla riga di "FAIRY TAPES" i link alle schede (SETTINGS, BUTTONS, CREDITS: attiva in bianco, le altre in grigio) e **← BACK**; riquadri con il titolo sul bordo alto. CREDITS: riquadro col nome del plugin (versione e licenza), COMPONENTS AND LICENSES (nome, autore, licenza in ambra, righe separate), NOTICES. SETTINGS: APPEARANCE a sinistra (saved for you, in every project; righe e controlli segmentati uguali per tutti), BEHAVIOUR a destra (saved with the project; contenuti del plugin), NOTES sotto. BUTTONS: WHAT THE BUTTONS DO. Non si inventa un retro nuovo (regola dell'utente, 2026-10-15). Una sola voce **BACK →** davanti; il retro (flip 3D) ha le schede **SETTINGS** e **CREDITS** e **← BACK**. Preferenze di aspetto per l'utente (file globale), impostazioni di comportamento nel progetto. Credits con le licenze di tutti i componenti di terze parti e gli avvisi di legge.
 
 I pulsanti che **impongono una configurazione o cambiano un modello** (modalità, dispositivi, preset) sono spiegati sul retro, in una scheda dedicata: cosa fanno e **quali valori impongono**. La scheda è generata dalla stessa tabella usata dal codice, così non diverge. Primo caso: la scheda DEVICES di Hotline; The Stripper (VOICE, DRUMS, CLASSIC) va allineato.
 
