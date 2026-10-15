@@ -92,6 +92,7 @@ endif()
 # ---------------------------------------------------------------------------
 add_executable(deep_throat_tests
   tests/test_deep_throat.cpp
+  src/dsp/rider.cpp
 )
 target_include_directories(deep_throat_tests PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src

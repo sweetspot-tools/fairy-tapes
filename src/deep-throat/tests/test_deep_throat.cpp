@@ -5,6 +5,7 @@
 
 #include "params.h"
 #include "state.h"
+#include "dsp/rider.h"
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -145,6 +146,90 @@ void test_state_rejects_bad_version_and_nan() {
   ASSERT_TRUE(out[kInput] == 1.0 && out[kOutput] == 0.0);  // clamped
 }
 
+float toDb(float lin) { return 20.0f * std::log10(lin); }
+
+float runRider(DSP::Rider& r, float levelDb, bool freeze, int samples) {
+  float g = 1.0f;
+  for (int i = 0; i < samples; ++i) g = r.processFrame(levelDb, freeze);
+  return g;
+}
+
+void test_rider_raises_quiet_to_target() {
+  DSP::Rider r;
+  r.prepare(48000.0);
+  r.setTargetDb(-20.0f);
+  r.setMaxRangeDb(6.0f);
+  r.setSlewDbPerSec(8.0f);
+  const float g = runRider(r, -30.0f, false, 3 * 48000);
+  ASSERT_NEAR(toDb(g), 6.0, 0.5);  // error 10 dB, clamped by the range
+}
+
+void test_rider_lowers_loud() {
+  DSP::Rider r;
+  r.prepare(48000.0);
+  r.setTargetDb(-20.0f);
+  r.setMaxRangeDb(6.0f);
+  r.setSlewDbPerSec(8.0f);
+  const float g = runRider(r, -10.0f, false, 3 * 48000);
+  ASSERT_NEAR(toDb(g), -6.0, 0.5);
+}
+
+void test_rider_slew_limited() {
+  for (double sr : {44100.0, 96000.0}) {
+    DSP::Rider r;
+    r.prepare(sr);
+    r.setTargetDb(-20.0f);
+    r.setMaxRangeDb(12.0f);
+    r.setSlewDbPerSec(4.0f);
+    const int n = (int)sr;
+    runRider(r, -20.0f, false, n);  // settle at 0 dB
+    const float g = runRider(r, -32.0f, false, n);  // level jump: wants +12 dB
+    ASSERT_TRUE(toDb(g) <= 4.0f + 0.1f);
+    ASSERT_TRUE(toDb(g) >= 3.5f);  // and does move at about the slew rate
+  }
+}
+
+void test_rider_freeze_holds_gain() {
+  DSP::Rider r;
+  r.prepare(48000.0);
+  r.setTargetDb(-20.0f);
+  r.setMaxRangeDb(12.0f);
+  r.setSlewDbPerSec(8.0f);
+  const float g0 = runRider(r, -26.0f, false, 48000);
+  ASSERT_TRUE(toDb(g0) > 1.0f);
+  const float g1 = runRider(r, -40.0f, true, 48000);
+  ASSERT_TRUE(g1 == g0);
+  const float g2 = runRider(r, -5.0f, true, 48000);
+  ASSERT_TRUE(g2 == g0);
+}
+
+void test_rider_ignores_silence() {
+  DSP::Rider r;
+  r.prepare(48000.0);
+  r.setTargetDb(-20.0f);
+  r.setMaxRangeDb(12.0f);
+  r.setSlewDbPerSec(8.0f);
+  const float g0 = runRider(r, -26.0f, false, 48000);
+  const float g1 = runRider(r, -80.0f, false, 48000);  // below -60 dB: like freeze
+  ASSERT_TRUE(g1 == g0);
+  const float g2 = runRider(r, -120.0f, false, 48000);
+  ASSERT_TRUE(g2 == g0);
+}
+
+void test_level_meter_sine() {
+  const double sr = 48000.0;
+  DSP::LevelMeter m;
+  m.prepare(sr, 200.0f);
+  const double amp = std::pow(10.0, -20.0 / 20.0);
+  float db = 0.0f;
+  for (int i = 0; i < (int)sr; ++i)
+    db = m.process((float)(amp * std::sin(2.0 * 3.14159265358979 * 1000.0 * i / sr)));
+  ASSERT_NEAR(db, -23.0, 0.5);
+  m.reset();
+  for (int i = 0; i < 100; ++i) db = m.process(0.0f);
+  ASSERT_TRUE(db <= -119.0f && std::isfinite(db));
+}
+
 } // namespace
 
 int main() {
@@ -156,6 +241,12 @@ int main() {
   RUN_TEST(test_defaults);
   RUN_TEST(test_state_roundtrip);
   RUN_TEST(test_state_rejects_bad_version_and_nan);
+  RUN_TEST(test_rider_raises_quiet_to_target);
+  RUN_TEST(test_rider_lowers_loud);
+  RUN_TEST(test_rider_slew_limited);
+  RUN_TEST(test_rider_freeze_holds_gain);
+  RUN_TEST(test_rider_ignores_silence);
+  RUN_TEST(test_level_meter_sine);
 
   std::fprintf(stdout, "\n%d passed, %d failed.\n", g_passed, g_failed);
   if (g_failed > 0) {
