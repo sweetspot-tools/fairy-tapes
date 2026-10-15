@@ -285,6 +285,13 @@ void Editor::createViews(CViewContainer* parent) {
       auto* knob = new RackKnob(rect, this, tag, look ? look->radius : FairyTapes::Ui::Rack::kDefaultCapRadius, &skin_);
       const ControlSpec* specPtr = &spec;
       knob->onValueClick = [this, specPtr] { editValue(*specPtr); };
+      knob->altDoubleClickTarget = [this, specPtr](float& value) {   // Alt + double click: back to the recalled value
+        const ParamID id = specPtr->id == kDriveAmount ? driveParam_ : specPtr->id;
+        const double cur = std::isnan(seen_[id]) ? 0.0 : seen_[id], rec = ctl_->recallValue(id);
+        if (!recallMarkVisible(cur, rec, ctl_->recallValid())) return false;   // no mark showing: plain default
+        value = static_cast<float>(rec);
+        return true;
+      };
       control = knob;
       break;
     }

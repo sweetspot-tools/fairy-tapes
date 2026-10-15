@@ -4,8 +4,8 @@
  * marks belong to the notes layer (a preference can hide them). Header-only and free of VSTGUI so it is unit tested;
  * RecallMarksView draws them.
  *
- * Provisional choices, to be confirmed (spec section 11): the threshold of "moved", the look of the mark, and no Alt-click
- * recall yet.
+ * Provisional choices, to be confirmed (spec section 11): the threshold of "moved", the look of the mark. (Alt/Ctrl + double
+ * click on a knob returns it to the recalled value while the mark shows; see Editor and AnalogKnob::altDoubleClickTarget.)
  */
 
 #pragma once

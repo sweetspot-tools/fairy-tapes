@@ -214,7 +214,12 @@ CMouseEventResult AnalogKnob::onMouseDown(CPoint& where, const CButtonState& but
       dragging_ = false;
       endEdit();
     }
-    editTo(getDefaultValue());
+    float target = getDefaultValue();
+    if (altDoubleClickTarget && (buttons.getModifierState() & (kAlt | kControl)) != 0) {
+      float v = target;
+      if (altDoubleClickTarget(v)) target = v;
+    }
+    editTo(target);
     return kMouseDownEventHandledButDontNeedMovedOrUpEvents;
   }
   beginEdit();

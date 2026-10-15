@@ -56,6 +56,11 @@ add_executable(fairy_ui_meter_control_tests tests/test_meter_controls.cpp)
 target_link_libraries(fairy_ui_meter_control_tests PRIVATE fairy_ui_widgets)
 add_test(NAME fairy_ui_meter_control_tests COMMAND fairy_ui_meter_control_tests)
 
+# Knob double-click gestures (default value, Alt + double click recall).
+add_executable(fairy_ui_knob_gesture_tests tests/test_knob_gestures.cpp)
+target_link_libraries(fairy_ui_knob_gesture_tests PRIVATE fairy_ui_widgets)
+add_test(NAME fairy_ui_knob_gesture_tests COMMAND fairy_ui_knob_gesture_tests)
+
 # Panel layers (wear, silkscreen) that do not need a window: construction, state, click-through.
 add_executable(fairy_ui_layer_view_tests tests/test_layer_views.cpp)
 target_link_libraries(fairy_ui_layer_view_tests PRIVATE fairy_ui_widgets)
