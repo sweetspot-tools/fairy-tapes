@@ -8,7 +8,7 @@ Documenti: spec `docs/superpowers/specs/2026-10-10-deep-throat-design.md`, piano
 
 - **Speak:** voce parlata (podcast, voice-over). Rilevatore di respiri spettrale.
 - **Sing:** voce cantata. Rilevatore di respiri spettrale.
-- **Puke:** voci estreme (scream, growl). Rilevatore di respiri a livello (nessuna analisi spettrale, perché growl e scream sono rumorosi e senza pitch).
+- **Puke:** voci estreme (scream, growl). Rilevatore di respiri a livello (nessuna analisi spettrale, perché growl e scream sono rumorosi e senza pitch). Il contesto di voce (300 ms) serve solo per entrare in un respiro, non per restarci: i respiri lunghi sono ridotti fino alla fine. Un passaggio quieto è trattato come respiro per al massimo 1,5 s; dopo, lo stesso passaggio non viene più ridotto finché non torna la voce.
 
 La modalità cambia i valori interni di tutta la catena:
 
@@ -28,7 +28,7 @@ Input → Rider → Breath control → EQ correttivo → De-esser → Compressor
 - **Breath control:** riduttore di respiri, non un gate: riduce fino a 12 dB × Amount (attacco 5 ms, rilascio 30 ms) in proporzione alla probabilità di respiro. Il rilevatore lavora sul mono (L+R)/2, quindi il guadagno è lo stesso sui due canali.
 - **EQ correttivo:** passa-alto (12 dB/ott), taglio del fango a 300 Hz (Q 1) e notch dinamico (Q 8, fino a 6 dB) che segue la risonanza più prominente persistente tra 1 e 6 kHz. EQ Amount scala il tutto.
 - **De-esser:** a banda separata, crossover Linkwitz-Riley a Freq, rilevatore sul mono linkato; riduce solo la banda alta (4:1, fino a 12 dB × Amount).
-- **Compressore** (stile Distressor, nome mai mostrato nella UI): feedforward con rilevatore logaritmico e passa-alto sul solo rilevamento, ginocchio morbido 6 dB, tempi programma-dipendenti legati al rapporto, distorsione che cresce con la riduzione di guadagno e con l'attacco veloce, Mix parallelo.
+- **Compressore:** compressore con rilascio programma-dipendente e due modalità di distorsione. Feedforward con rilevatore logaritmico e passa-alto sul solo rilevamento, ginocchio morbido 6 dB, tempi legati al rapporto, distorsione che cresce con la riduzione di guadagno e con l'attacco veloce, Mix parallelo. In Dist 3 sono limitati in banda (30 Hz - 12 kHz) solo i prodotti di distorsione aggiunti, non il segnale: senza riduzione la risposta resta piatta.
 - **Tone:** una manopola su tre filtri (fango 250 Hz, presenza 3,5 kHz, aria shelf 12 kHz) con curva per modalità; 0.5 = neutro.
 
 A IN spento un modulo lascia passare il segnale (latenza invariata). Tutti i moduli continuano a girare in background, così riattivarli non produce salti; IN, Bypass e i due Listen sfumano in 5 ms.
@@ -76,13 +76,12 @@ Breath Listen ha la precedenza su De-ess Listen. Breath Listen funziona anche co
 Fuori dal repo (il disco `/srv/http` è piccolo):
 
 ```
-cmake -S . -B /tmp/vc-build -DCMAKE_BUILD_TYPE=Release -DGPU_NAM_DISABLE_CUDA=ON
-cmake --build /tmp/vc-build --target deep_throat_tests -j2
-ctest --test-dir /tmp/vc-build -R deep_throat --output-on-failure
-cmake --build /tmp/vc-build --target deep_throat -j2
+cmake -S . -B /tmp/dt-build -DCMAKE_BUILD_TYPE=Release -DGPU_NAM_DISABLE_CUDA=ON
+cmake --build /tmp/dt-build --target deep_throat deep_throat_tests deep_throat_factory_test -j2
+ctest --test-dir /tmp/dt-build -R deep_throat --output-on-failure
 ```
 
-Il bundle è `DeepThroat.vst3` (in `dist/` per la CI). Non costruire tutti i target insieme.
+Il bundle è `DeepThroat.vst3`, costruito in locale in `dist/`. L'integrazione nella CI (build e upload del bundle) non è ancora configurata. Non costruire tutti i target insieme.
 
 ## Test
 
@@ -101,9 +100,9 @@ Il bundle è `DeepThroat.vst3` (in `dist/` per la CI). Non costruire tutti i tar
   - il primo respiro di una ripresa non viene rilevato (i rilevatori hanno bisogno del contesto di frase);
   - sibilanti contro respiri: non provato su voce reale;
   - un tono tenuto perfettamente dritto può attivare il notch dell'EQ dopo 300 ms (profondità massima 6 dB × 2·EQ Amount);
-  - in Puke un respiro più lungo di 300 ms (contesto del rilevatore) viene rilasciato prima della fine;
+  - in Puke un passaggio quieto dopo uno scream è ridotto come un respiro per al massimo 1,5 s;
   - dopo un cambio di modalità che cambia rilevatore, il nuovo rilevatore ha bisogno di qualche centinaio di ms di frase prima di rilevare di nuovo;
   - il rilascio di 30 ms del riduttore lascia circa 4 dB di riduzione 25 ms dopo la fine del respiro, quindi all'inizio della frase successiva.
-- **Compressore:** non è un modello del circuito originale (nessuna fonte pubblica sul VCA); tempi e distorsione sono tarati a orecchio e con misure sintetiche. Con Puke e Amount 0.5 il livello sotto soglia è circa 0,6 dB sopra l'unità. Un limitatore di sicurezza morbido sopra 0 dBFS sul percorso trattato mantiene l'uscita sotto 2.
+- **Compressore:** non è un modello di un circuito hardware (nessuna fonte pubblica sul VCA); tempi e distorsione sono tarati a orecchio e con misure sintetiche. Con Puke e Amount 0.5 il livello sotto soglia è circa 0,6 dB sopra l'unità. Un limitatore di sicurezza morbido sopra 0 dBFS sul percorso trattato mantiene l'uscita sotto 2.
 - **Sample rate bassi (22,05 kHz):** i bordi del rilevatore del de-esser e la shelf "aria" del Tone sono limitati a 0,45 × sample rate; il de-esser lavora in una banda ridotta e l'aria non arriva a 12 kHz. Verificato solo con test di fumo.
 - Layout: stereo e mono → mono; altre disposizioni non sono previste.
