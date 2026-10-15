@@ -8,14 +8,24 @@
  *
  * Latency D = lookahead (80 ms) + the spectral detector's frame, the same in every mode (the level
  * detector used in Puke reports 0 and simply gets more look-ahead). The breath probability that
- * drives the reducer and the Rider freeze is the maximum over the look-ahead window, so a breath is
- * covered in the delayed audio from its first to its last sample.
+ * drives the reducer and the Rider freeze is the maximum of every probability produced since the
+ * delayed sample entered the engine (a window of D + 1 values). Both detectors drop their output as
+ * soon as the phrase reaches their newest input sample, so with this window the reduction holds
+ * to the last sample of the breath in the delayed audio and the reducer's 30 ms release starts at
+ * the breath end (measured at 48 kHz: >= 9 dB in every 5 ms of the last 20 ms of a breath, < 1 dB
+ * on average over the 30-130 ms after it; about 4 dB is still left 25 ms after the end).
+ * Known onset limit (look-ahead minus the detectors' own confirmation time): in Speak/Sing the
+ * reduction starts ~25 ms before the breath onset (full at the onset); in Puke the level
+ * detector's 80 ms minimum duration makes it start ~25-30 ms after the onset (full ~50 ms in).
+ * A mode switch that changes detector resets the new one: it needs a few hundred ms of phrase
+ * context (its phrase-level tracker) before it detects breaths again.
  *
  * Every module keeps running when its IN is off (warm state); IN, Bypass and both Listen switches
  * crossfade linearly over 5 ms. Input and Output gains are smoothed per sample. Bypass outputs the
- * delayed input only (latency unchanged). Breath Listen (precedence) outputs the delayed input times
- * (1 - breath gain); De-ess Listen outputs the band the de-esser removes; the stages after the
- * listened one are not heard.
+ * delayed input only (latency unchanged). Breath Listen (precedence) outputs the delayed input
+ * (after input gain) times (1 - reducer gain): the reducer gain only, no Rider gain, and it works
+ * even with Breath IN off (you hear what the reducer would remove). De-ess Listen outputs the band
+ * the de-esser removes; the stages after the listened one are not heard.
  */
 
 #pragma once
@@ -101,6 +111,7 @@ private:
   double sr_ = 48000.0;
   int latency_ = 0;
   int lookahead_ = 0;
+  int window_ = 0;  // sliding-max length - 1 (= latency_)
 
   // Audio delay (raw sanitized input), length latency_ + 1.
   std::vector<float> delayL_, delayR_;

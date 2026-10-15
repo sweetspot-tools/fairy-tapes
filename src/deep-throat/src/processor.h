@@ -1,7 +1,8 @@
 /**
  * Fairy Tapes · Deep Throat — VST3 Audio Processor.
- * Stereo in / stereo out or mono in / mono out. The whole chain runs in Engine (engine.h); the
- * reported latency is the engine's look-ahead delay (constant for a given sample rate).
+ * Supported layouts: stereo in -> stereo out and mono in -> mono out (both tested; mixed layouts
+ * are rejected). The whole chain runs in Engine (engine.h); the reported latency is the engine's
+ * look-ahead delay (constant for a given sample rate, the same for mono and stereo).
  */
 
 #pragma once

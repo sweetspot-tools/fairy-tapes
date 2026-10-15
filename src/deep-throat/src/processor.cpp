@@ -1,5 +1,7 @@
 /**
  * Fairy Tapes · Deep Throat — VST3 Audio Processor implementation.
+ * Supported layouts: stereo in -> stereo out and mono in -> mono out (the mono path runs the
+ * engine with a null right channel: same chain, same latency). Mixed layouts are rejected.
  */
 
 #include "processor.h"
@@ -10,7 +12,6 @@
 #include <vector>
 
 namespace FairyTapes::DeepThroat {
-
 
 Processor::Processor() {
   setControllerClass(kControllerUID);

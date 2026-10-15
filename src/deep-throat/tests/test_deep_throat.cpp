@@ -1944,6 +1944,49 @@ void test_engine_puke_uses_level_detector() {
   ASSERT_TRUE(level[0] && !level[1]);
 }
 
+// Breath edges in the delayed audio, both detectors: the end of the breath is reduced and the
+// phrase after it is free again soon. Cut = output level at Amount 0 minus at Amount 1.
+void test_engine_breath_edges_covered() {
+  const double sr = 48000.0, b0 = 1.0, b1 = 1.25;
+  int bad = 0;
+  for (Mode m : {Mode::Speak, Mode::Puke}) {
+    SignalBuilder b(sr);
+    if (m == Mode::Puke) {
+      b.wideNoise(-10.0, b0);
+      b.wideNoise(-35.0, b1 - b0);
+      b.wideNoise(-10.0, 1.0);
+    } else {
+      b.saw(200.0, -18.0, b0);
+      b.hpNoise(-35.0, b1 - b0);
+      b.saw(200.0, -18.0, 1.0);
+    }
+    Settings s = engineDefaults();
+    s.mode = m;
+    s.breathAmount = 0.0f;
+    Engine e;
+    e.prepare(sr);
+    const int L = e.latencySamples();
+    const Stereo y0 = runEngine(e, s, b.x);
+    s.breathAmount = 1.0f;
+    const Stereo y1 = runFresh(sr, s, b.x);
+    auto cut = [&](double t0, double t1) {
+      return outRmsDb(y0.l, sr, L, t0, t1) - outRmsDb(y1.l, sr, L, t0, t1);
+    };
+    if (std::getenv("DT_PROBE"))
+      for (double t = b0 - 0.08; t < b1 + 0.2; t += 0.01)
+        std::fprintf(stderr, "  mode %d t=%.3f cut %.2f dB\n", (int)m, t, cut(t, t + 0.01));
+    // Every 5 ms of the last 20 ms of the breath is cut by at least 11 dB (full cut: 12 dB).
+    double tail = 1e9;
+    for (int k = 0; k < 4; ++k) tail = std::min(tail, cut(b1 - 0.02 + 0.005 * k, b1 - 0.015 + 0.005 * k));
+    const double after = cut(b1 + 0.03, b1 + 0.13);
+    if (!(tail >= 11.0 && tail <= 13.0) || !(after >= -0.5 && after < 1.0)) {
+      std::fprintf(stderr, "  mode %d: tail %.2f dB, after %.2f dB\n", (int)m, tail, after);
+      ++bad;
+    }
+  }
+  ASSERT_TRUE(bad == 0);
+}
+
 void test_engine_mode_switch_no_blowup() {
   const double sr = 48000.0;
   const int n = (int)(3.0 * sr), seg = (int)(0.1 * sr);
@@ -2244,7 +2287,7 @@ void test_engine_chain_order_matches_reference() {
   const Stereo y = runEngine(e, s, xl, xr);
 
   const int D = e.latencySamples();
-  const int W = (int)std::lround(kLookaheadMs * 0.001 * sr);
+  const int W = D;  // sliding max over every probability since the delayed sample came in
   DSP::SpectralBreathDetector det;
   det.prepare(sr);
   det.setSensitivity(s.breathSens);
@@ -2534,6 +2577,7 @@ int main() {
   RUN_TEST(test_engine_breath_reduced_end_to_end);
   RUN_TEST(test_engine_puke_scream_intact);
   RUN_TEST(test_engine_puke_uses_level_detector);
+  RUN_TEST(test_engine_breath_edges_covered);
   RUN_TEST(test_engine_mode_switch_no_blowup);
   RUN_TEST(test_engine_sample_rates);
   RUN_TEST(test_engine_all_in_off_is_passthrough);

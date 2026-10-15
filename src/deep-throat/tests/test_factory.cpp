@@ -5,13 +5,16 @@
  * release of every reference, ModuleExit. Exits 77 (skipped) when the module is absent.
  * The controller is initialized and queried for its 25 parameters (no editor view yet) and
  * typed values are parsed back; the processor is set up, activated and run (latency, bus
- * layouts, in-place stereo processing).
+ * layouts, in-place stereo processing, mono -> mono processing compared with the engine's mono path,
+ * mono bypass delay).
  */
 
 #include "pluginterfaces/base/ipluginbase.h"
 #include "pluginterfaces/vst/ivsteditcontroller.h"
 #include "pluginterfaces/vst/ivstaudioprocessor.h"
 #include "pluginterfaces/vst/ivstcomponent.h"
+#include "pluginterfaces/vst/ivstparameterchanges.h"
+#include "engine.h"
 #include "params.h"
 #include <algorithm>
 #include <cmath>
@@ -94,6 +97,144 @@ void exerciseController(Steinberg::Vst::IEditController* ctl) {
   }
 }
 
+// One parameter change (one point at offset 0) for ProcessData::inputParameterChanges.
+class OneQueue : public Steinberg::Vst::IParamValueQueue {
+public:
+  OneQueue(Steinberg::Vst::ParamID id, double v) : id_(id), v_(v) {}
+  Steinberg::Vst::ParamID PLUGIN_API getParameterId() override { return id_; }
+  Steinberg::int32 PLUGIN_API getPointCount() override { return 1; }
+  Steinberg::tresult PLUGIN_API getPoint(Steinberg::int32 index, Steinberg::int32& offset,
+                                         Steinberg::Vst::ParamValue& value) override {
+    if (index != 0) return Steinberg::kResultFalse;
+    offset = 0;
+    value = v_;
+    return Steinberg::kResultOk;
+  }
+  Steinberg::tresult PLUGIN_API addPoint(Steinberg::int32, Steinberg::Vst::ParamValue,
+                                         Steinberg::int32&) override { return Steinberg::kResultFalse; }
+  Steinberg::tresult PLUGIN_API queryInterface(const Steinberg::TUID, void**) override {
+    return Steinberg::kNoInterface;
+  }
+  Steinberg::uint32 PLUGIN_API addRef() override { return 1; }
+  Steinberg::uint32 PLUGIN_API release() override { return 1; }
+
+private:
+  Steinberg::Vst::ParamID id_;
+  double v_;
+};
+
+class OneChange : public Steinberg::Vst::IParameterChanges {
+public:
+  explicit OneChange(OneQueue* q) : q_(q) {}
+  Steinberg::int32 PLUGIN_API getParameterCount() override { return 1; }
+  Steinberg::Vst::IParamValueQueue* PLUGIN_API getParameterData(Steinberg::int32 i) override {
+    return i == 0 ? q_ : nullptr;
+  }
+  Steinberg::Vst::IParamValueQueue* PLUGIN_API addParameterData(const Steinberg::Vst::ParamID&,
+                                                                Steinberg::int32&) override {
+    return nullptr;
+  }
+  Steinberg::tresult PLUGIN_API queryInterface(const Steinberg::TUID, void**) override {
+    return Steinberg::kNoInterface;
+  }
+  Steinberg::uint32 PLUGIN_API addRef() override { return 1; }
+  Steinberg::uint32 PLUGIN_API release() override { return 1; }
+
+private:
+  OneQueue* q_;
+};
+
+float testSignal(long t) {  // 220 Hz sine plus a little 3.3 kHz, deterministic
+  return (float)(0.25 * std::sin(2.0 * 3.141592653589793 * 220.0 * t / 48000.0) +
+                 0.05 * std::sin(2.0 * 3.141592653589793 * 3300.0 * t / 48000.0));
+}
+
+// Mono -> mono is a supported layout: the processor must produce exactly the engine's mono
+// result (null right channel), in place and out of place, and the bypass delay must equal the
+// reported latency.
+void exerciseMono(Steinberg::Vst::IComponent* comp, Steinberg::Vst::IAudioProcessor* proc) {
+  using namespace Steinberg;
+  using namespace Steinberg::Vst;
+  SpeakerArrangement mo = SpeakerArr::kMono;
+  CHECK(proc->setBusArrangements(&mo, 1, &mo, 1) == kResultOk);
+  ProcessSetup setup{kRealtime, kSample32, 512, 48000.0};
+  CHECK(proc->setupProcessing(setup) == kResultOk);
+  constexpr int kBlock = 512, kBlocks = 30;
+
+  for (int inPlace = 0; inPlace < 2; ++inPlace) {
+    CHECK(comp->setActive(true) == kResultOk);
+    CHECK((int32)proc->getLatencySamples() == 4864);
+    double defaults[kNumParams];
+    loadDefaults(defaults);
+    Engine ref;
+    ref.prepare(48000.0);
+    static float inBuf[kBlock], outBuf[kBlock], refIn[kBlock], refOut[kBlock];
+    float* inChans[1] = {inBuf};
+    float* outChans[1] = {inPlace ? inBuf : outBuf};
+    AudioBusBuffers in{}, out{};
+    in.numChannels = out.numChannels = 1;
+    in.channelBuffers32 = inChans;
+    out.channelBuffers32 = outChans;
+    ProcessData data{};
+    data.processMode = kRealtime;
+    data.symbolicSampleSize = kSample32;
+    data.numSamples = kBlock;
+    data.numInputs = data.numOutputs = 1;
+    data.inputs = &in;
+    data.outputs = &out;
+    long mismatch = 0, bad = 0;
+    double late = 0.0;
+    long t = 0;
+    for (int b = 0; b < kBlocks; ++b) {
+      for (int i = 0; i < kBlock; ++i, ++t) inBuf[i] = refIn[i] = testSignal(t);
+      CHECK(proc->process(data) == kResultOk);
+      ref.setSettings(mapParams(defaults));
+      ref.process(refIn, nullptr, refOut, nullptr, kBlock);
+      const float* got = outChans[0];
+      for (int i = 0; i < kBlock; ++i) {
+        if (got[i] != refOut[i]) ++mismatch;
+        if (!std::isfinite(got[i])) ++bad;
+        if (b >= 15) late = std::max(late, (double)std::fabs(got[i]));
+      }
+    }
+    CHECK(mismatch == 0);
+    CHECK(bad == 0);
+    CHECK(late > 0.05 && late < 2.0);
+    CHECK(comp->setActive(false) == kResultOk);
+  }
+
+  // Bypass (sent as a parameter change): output = input delayed by the reported latency.
+  CHECK(comp->setActive(true) == kResultOk);
+  const long L = (long)proc->getLatencySamples();
+  OneQueue q(kBypass, 1.0);
+  OneChange changes(&q);
+  static float buf[kBlock];
+  static float hist[kBlock * kBlocks];
+  float* chans[1] = {buf};
+  AudioBusBuffers io{};
+  io.numChannels = 1;
+  io.channelBuffers32 = chans;
+  ProcessData data{};
+  data.processMode = kRealtime;
+  data.symbolicSampleSize = kSample32;
+  data.numSamples = kBlock;
+  data.numInputs = data.numOutputs = 1;
+  data.inputs = data.outputs = &io;
+  data.inputParameterChanges = &changes;
+  long mismatch = 0;
+  long t = 0;
+  for (int b = 0; b < kBlocks; ++b) {
+    for (int i = 0; i < kBlock; ++i) buf[i] = hist[t + i] = testSignal(t + i);
+    CHECK(proc->process(data) == kResultOk);
+    for (int i = 0; i < kBlock; ++i, ++t)
+      if (buf[i] != (t >= L ? hist[t - L] : 0.0f)) ++mismatch;
+  }
+  CHECK(mismatch == 0);
+  CHECK(comp->setActive(false) == kResultOk);
+  SpeakerArrangement st = SpeakerArr::kStereo;
+  CHECK(proc->setBusArrangements(&st, 1, &st, 1) == kResultOk);
+}
+
 void exerciseProcessor(Steinberg::FUnknown* obj) {
   using namespace Steinberg;
   using namespace Steinberg::Vst;
@@ -153,6 +294,7 @@ void exerciseProcessor(Steinberg::FUnknown* obj) {
     proc->setProcessing(false);
     CHECK(comp->setActive(false) == kResultOk);
   }
+  exerciseMono(comp, proc);
   CHECK(comp->terminate() == kResultOk);
   proc->release();
   comp->release();

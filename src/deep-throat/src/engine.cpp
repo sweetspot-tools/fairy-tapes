@@ -108,8 +108,9 @@ void Engine::prepare(double sampleRate) {
   latency_ = lookahead_ + spectral_.latencySamples();
   delayL_.assign((size_t)latency_ + 1, 0.0f);
   delayR_.assign((size_t)latency_ + 1, 0.0f);
-  maxVal_.assign((size_t)lookahead_ + 1, 0.0f);
-  maxIdx_.assign((size_t)lookahead_ + 1, 0);
+  window_ = latency_;
+  maxVal_.assign((size_t)window_ + 1, 0.0f);
+  maxIdx_.assign((size_t)window_ + 1, 0);
 
   gainCoef_ = (float)(1.0 - std::exp(-1.0 / (kGainSmoothMs * 0.001 * sr_)));
   rampInc_ = (float)(1.0 / (kSwitchFadeMs * 0.001 * sr_));
@@ -159,7 +160,9 @@ void Engine::applySettings(const Settings& s, bool force) {
         s.mode == Mode::Puke ? static_cast<DSP::BreathDetector*>(&level_) : &spectral_;
     if (want != detector_) {
       detector_ = want;
-      detector_->reset();  // the newly selected detector starts clean
+      // The newly selected detector starts clean: it needs a few hundred ms of phrase context
+      // before it detects again.
+      detector_->reset();
     }
   }
   // Setters are idempotent and never allocate; every block-level change is smoothed inside.
@@ -204,10 +207,15 @@ void Engine::setSettings(const Settings& raw) {
 }
 
 float Engine::lookaheadMax(float prob) {
-  // Window: the last lookahead_ + 1 probabilities. For the delayed audio sample this covers the
-  // detector's description of that sample and of the following lookahead_ samples.
+  // Window: the last latency_ + 1 probabilities, i.e. every value produced since the delayed audio
+  // sample entered the engine. Both detectors drop their probability as soon as the phrase reaches
+  // their newest input sample (the level detector has no latency; the spectral frame turns
+  // voiced as soon as the phrase enters it, ~F before the frame-centre alignment its
+  // latencySamples() assumes), so the window must reach back the full delay D for the breath tail
+  // to stay covered. A window of D - detector latency left the last ~F of every breath
+  // unreduced in Puke and released ~20 ms early in Speak.
   const int cap = (int)maxVal_.size();
-  const long long oldest = sampleIndex_ - lookahead_;
+  const long long oldest = sampleIndex_ - window_;
   while (maxCount_ > 0 && maxIdx_[(size_t)maxHead_] < oldest) {
     maxHead_ = maxHead_ + 1 == cap ? 0 : maxHead_ + 1;
     --maxCount_;
@@ -288,7 +296,8 @@ void Engine::process(const float* inL, const float* inR, float* outL, float* out
       l = xfade(l, tl, rTone);
       r = xfade(r, tr, rTone);
     }
-    // Listen: De-ess, then Breath (precedence). The later stages are not heard.
+    // Listen: De-ess, then Breath (precedence). The later stages are not heard. Breath Listen uses
+    // the reducer gain only (no Rider gain), also with Breath IN off.
     l = xfade(l, remL, rDeEssListen);
     r = xfade(r, remR, rDeEssListen);
     const float removed = 1.0f - gBreath;

@@ -124,7 +124,8 @@ if(NOT WIN32)
   else()
     set(DEEP_THROAT_MODULE_PATH "${SUITE_DIST_DIR}/DeepThroat.vst3/Contents/x86_64-linux/DeepThroat.so")
   endif()
-  add_executable(deep_throat_factory_test tests/test_factory.cpp)
+  # Also compiles the pure engine to compare the plugin's mono output with Engine's mono path.
+  add_executable(deep_throat_factory_test tests/test_factory.cpp ${DEEP_THROAT_DSP_SOURCES})
   target_include_directories(deep_throat_factory_test PRIVATE ${VST3_SDK_PATH}
     ${CMAKE_CURRENT_SOURCE_DIR}/src)
   target_compile_definitions(deep_throat_factory_test PRIVATE
