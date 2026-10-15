@@ -8,7 +8,7 @@ Documenti: spec `docs/superpowers/specs/2026-10-10-deep-throat-design.md`, piano
 
 - **Speak:** voce parlata (podcast, voice-over). Rilevatore di respiri spettrale.
 - **Sing:** voce cantata. Rilevatore di respiri spettrale.
-- **Puke:** voci estreme (scream, growl). Rilevatore di respiri a livello (nessuna analisi spettrale, perché growl e scream sono rumorosi e senza pitch). Il contesto di voce (300 ms) serve solo per entrare in un respiro, non per restarci: i respiri lunghi sono ridotti fino alla fine. Un passaggio quieto è trattato come respiro per al massimo 1,5 s; dopo, lo stesso passaggio non viene più ridotto finché non torna la voce.
+- **Puke:** voci estreme (scream, growl). Rilevatore di respiri a livello (nessuna analisi spettrale, perché growl e scream sono rumorosi e senza pitch). Il contesto di voce (300 ms) serve solo per entrare in un respiro, non per restarci: i respiri lunghi sono ridotti fino alla fine, entro certi limiti (vedi Limiti noti: oltre circa 0,7-0,8 s il decadimento dell'inseguitore di frase di 2 s li rilascia prima del tetto). Un passaggio quieto è trattato come respiro per al massimo 1,5 s; dopo, lo stesso passaggio non viene più ridotto finché non torna la voce.
 
 La modalità cambia i valori interni di tutta la catena:
 
@@ -101,6 +101,8 @@ Il bundle è `DeepThroat.vst3`, costruito in locale in `dist/`. L'integrazione n
   - sibilanti contro respiri: non provato su voce reale;
   - un tono tenuto perfettamente dritto può attivare il notch dell'EQ dopo 300 ms (profondità massima 6 dB × 2·EQ Amount);
   - in Puke un passaggio quieto dopo uno scream è ridotto come un respiro per al massimo 1,5 s;
+  - **difetto noto (aperto):** dopo il tetto di 1,5 s il blocco del rilevatore si toglie solo quando il livello torna entro 15 dB dal livello di frase dello scream precedente; se la voce riprende più di 15 dB più piano, in Puke il rilevamento dei respiri resta spento fino a un passaggio forte o a un reset (spec §9);
+  - un respiro profondo 25 dB resta ridotto fino alla fine solo fino a circa 0,7-0,8 s: oltre, il decadimento di 2 s dell'inseguitore di frase lo rilascia prima del tetto;
   - dopo un cambio di modalità che cambia rilevatore, il nuovo rilevatore ha bisogno di qualche centinaio di ms di frase prima di rilevare di nuovo;
   - il rilascio di 30 ms del riduttore lascia circa 4 dB di riduzione 25 ms dopo la fine del respiro, quindi all'inizio della frase successiva.
 - **Compressore:** non è un modello di un circuito hardware (nessuna fonte pubblica sul VCA); tempi e distorsione sono tarati a orecchio e con misure sintetiche. Con Puke e Amount 0.5 il livello sotto soglia è circa 0,6 dB sopra l'unità. Un limitatore di sicurezza morbido sopra 0 dBFS sul percorso trattato mantiene l'uscita sotto 2.
