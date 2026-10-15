@@ -136,7 +136,7 @@ Esito della ricerca del 2026-10-10 (pagine lette da un agente, riassunti non ver
 
 ## 11. Decisioni aperte (2026-10-10)
 
-- **Segni di richiamo, scelte provvisorie (2026-10-15):** realizzati come tratto di penna blu sulla scala nella posizione richiamata, visibile quando la manopola si è mossa di almeno il **2%** (`kRecallThreshold`); strato note (preferenza Notes: Hide li nasconde). Da confermare o cambiare: soglia, aspetto, scotch sui valori (non fatto).
+- **Segni di richiamo, scelte confermate (2026-10-15, "proviamo così"; da rivedere dopo l'ascolto in un host):** realizzati come tratto di penna blu sulla scala nella posizione richiamata, visibile quando la manopola si è mossa di almeno il **2%** (`kRecallThreshold`); strato note (preferenza Notes: Hide li nasconde). Confermati: soglia, aspetto, niente scotch sui valori.
 - **Richiamo da doppio clic:** il doppio clic riporta al valore neutro; **Alt + doppio clic** (o Ctrl/Cmd) riporta al valore di richiamo (il segno di biro) **solo quando il segno è visibile**; altrimenti si comporta come il doppio clic normale (valore neutro). Fatto 2026-10-15 (`AnalogKnob::altDoubleClickTarget` in `shared/ui`, test `fairy_ui_knob_gesture_tests`); su Linux l'Alt può essere preso dal gestore di finestre, per questo vale anche Ctrl.
 - **Segni di biro e scotch sui valori:** il concetto è approvato; restano da definire il disegno, la soglia "valore cambiato" e il comportamento con molte manopole mosse.
 - **Macchie da pennello asciutto:** la versione attuale (setole) è provvisoria; l'utente aveva in mente un'altra forma.
