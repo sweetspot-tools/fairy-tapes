@@ -294,7 +294,7 @@ function frontLink(label,tab,x,tip){var g=el('g',{style:'cursor:pointer'});el('t
   el('rect',{x:x-84,y:66,width:86,height:18,fill:'transparent'},g);txt(label,x,78,11,DIMW,'end',700,g);
   g.addEventListener('click',function(){showTab(lsGet('dt_tab',tab));document.getElementById('card').classList.add('flipped');});}
 frontLink('BACK  \u2192',lsGet('dt_tab','settings'),966,'Turn the panel around: settings, modes and credits');
-txt('VOCAL CHANNEL STRIP  \u00b7  RIDER  \u00b7  BREATH  \u00b7  CLEAN  \u00b7  DE-ESS  \u00b7  COMP  \u00b7  TONE',966,46,13,W,'end',700);
+txt('VOCAL CHANNEL STRIP  \u00b7  RIDER  \u00b7  BREATH  \u00b7  EQ  \u00b7  DE-ESS  \u00b7  COMP  \u00b7  TONE',966,46,13,W,'end',700);
 
 /* section box: title on top or bottom border */
 function box(x,y,w,h,title,where){
@@ -373,7 +373,7 @@ var MROWS=[
   ['Dist',function(m){return MODES.dist[m];}],
   ['Tone curve (mud / presence / air, dB at +100%)',function(m){return MODES.tone[m].map(fs).join(' / ')+' dB';}]];
 var MODE=0,RO=[],modeBtns=[],MODECELLS=[[],[],[]],MODEHEAD=[],MCAP=null,DNOTE=null;
-var INK={},OUTK={},TGK={},RGK={},BRK={},DSK=null,CPK={},TONEK={};
+var INK={},OUTK={},TGK={},RGK={},BRK={},DSK=null,CPK={},TONEK={},EQK={};
 /* read-only silkscreen value: panel layer (under the wear), dims with its module or with the bypass, refreshed from the MODES table */
 function silk(){var lg=el('g',{transform:'translate(0,'+OFFY+')'},LY.scale);lg.style.transition='opacity .15s';if(CUR){(CUR._x=CUR._x||[]).push(lg);}else gbtn(lg);return lg;}
 function ro(x,y,sz,col,anchor,fn){var t=txt('',x,y,sz,col,anchor,700,silk());if(col===AMBL)HWTXT.push([t,sz]);RO.push(function(){t.textContent=fn();});return t;}
@@ -432,7 +432,7 @@ box(806,96,170,130,'OUTPUT','bottom');
 reg(grp(),false);knob(868,150,'GAIN',0.5,'-12','+12','',{def:0.5,fmt:db(12),r:22,api:OUTK});endGrp();
 var bypBtn=btn(946,130,'BYPASS',false,function(b){toggle(b);GB=b._on;MODS.forEach(paint);GBTN.forEach(function(x){x.style.opacity=GB?DIM:1;if(x._lg)x._lg.style.opacity=GB?DIM:1;});});
 
-/* ============ ROW 2 : MODE, RIDER, BREATH, CLEAN ============ */
+/* ============ ROW 2 : MODE, RIDER, BREATH, EQ ============ */
 box(24,238,200,174,'MODE','bottom');
 ['SPEAK','SING','PUKE'].forEach(function(n,i){
   var b=gbtn(btn(68+i*56,322,n,i===0,function(){setMode(i);},YEL));modeBtns.push(b);});
@@ -457,11 +457,13 @@ var mBr=modBox(470,238,320,174,'BREATH',function(){
   lab('BREATH',678,354,10,W,'start');
   btn(756,364,'LISTEN',false,function(b){toggle(b);});
 },34);
-var mCl=modBox(796,238,180,174,'CLEAN',function(){
-  lab('HPF',840,332,13,W);ro(840,350,10,AMBL,'middle',function(){return MODES.hpf[MODE]+' Hz';});
-  lab('MUD CUT',912,332,13,W);ro(912,350,10,AMBL,'middle',function(){return fs(MODES.mud[MODE])+' dB';});
-  lab('at 300 Hz',912,378,10,DIMW);
-  boxTag(812,272,function(){return 'READ-ONLY \u00b7 FOLLOWS MODE';});
+function eqA(){return EQK.get?EQK.get():0.5;}
+var mCl=modBox(796,238,180,174,'EQ',function(){
+  knob(836,322,'AMOUNT',0.5,'0','100','',{def:0.5,fmt:pct,api:EQK,onchange:function(){refreshRO();}});
+  lab('HPF',928,310,11,W);ro(928,326,10,AMBL,'middle',function(){return Math.round(MODES.hpf[MODE]*(0.5+eqA()))+' Hz';});
+  lab('MUD CUT',928,350,11,W);ro(928,366,10,AMBL,'middle',function(){return fs(+(MODES.mud[MODE]*2*eqA()).toFixed(1))+' dB';});
+  lab('at 300 Hz',928,382,9,DIMW);
+  boxTag(812,272,function(){return 'FOLLOWS MODE \u00b7 AMOUNT';});
 });
 
 /* ============ ROW 3 : DE-ESS, COMP, TONE ============ */

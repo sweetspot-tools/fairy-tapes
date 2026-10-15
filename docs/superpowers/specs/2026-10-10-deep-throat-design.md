@@ -31,7 +31,7 @@ Successo: su una voce grezza, scelta la modalità, si arriva a un suono uniforme
 1. **Input**.
 2. **Rider:** RMS a finestra 100-300 ms (o LUFS a breve termine) confrontato col Target. Il guadagno si muove di ±Range dB con pendenza massima limitata (Speed). Resta fermo dove il Breath control rileva silenzio o respiro. Look-ahead 50-100 ms.
 3. **Breath control:** abbassa i respiri di una quantità (Amount), con look-ahead e isteresi; non chiude mai del tutto. La sensibilità del rilevatore è regolabile (Sensitivity) e un pulsante Listen fa ascoltare i soli respiri tolti.
-4. **EQ correttivo:** passa-alto, taglio del fango (200-400 Hz), notch dinamico per risonanze. Parametri interni dipendenti dalla modalità.
+4. **EQ correttivo:** passa-alto, taglio del fango (200-400 Hz), notch dinamico per risonanze. Valori di base dipendenti dalla modalità; il controllo **EQ Amount** (0..1, default 0.5 = valori della modalità) li scala: frequenza del passa-alto × (0.5 + Amount), taglio del fango e profondità del notch × (2 · Amount).
 5. **De-esser:** a banda separata, frequenza regolabile (Freq, 4-10 kHz, default 6,5 kHz), con ascolto del solo segnale tagliato.
 6. **Compressore stile Distressor:** Ratio selezionabile (AUTO, 2, 3, 4, 6, 8, 10, 20:1), Dist selezionabile (AUTO, OFF, Dist 2, Dist 3: armoniche pari/dispari), topologia feedforward con rilevatore in scala logaritmica e passa-alto sul solo rilevamento (SC HPF selezionabile: OFF, 80 Hz, 150 Hz; default 80 Hz), tempi programma-dipendenti legati al rapporto, distorsione che cresce con la riduzione di guadagno e con l'attacco, Mix parallelo. Dettagli e fonti in `src/deep-throat/docs/COMPRESSOR_RESEARCH.md`. AUTO usa il valore della modalità. Scritto da noi (vedi §2).
 7. **Tone:** una manopola che muove insieme taglio del fango, presenza e aria lungo una curva preimpostata per modalità.
@@ -59,7 +59,7 @@ Valori numerici da tarare con registrazioni reali (vedi "Decisioni aperte").
 
 ## 6. Parametri esposti
 
-Bypass, Mode (Speak/Sing/Puke), Input, Rider Target, Rider Range, Breath Amount, Breath Sensitivity, Breath Listen, De-esser Amount, De-ess Freq, De-ess Listen, Comp Amount, Comp Mix, Comp Ratio, Comp Dist, Comp SC HPF, Tone, Output, più un pulsante **IN** per ogni modulo (Rider In, Breath In, Clean In, De-ess In, Comp In, Tone In; default acceso): 24 parametri. A IN spento il modulo lascia passare il segnale (latenza invariata). Il modulo Clean (EQ correttivo) non ha altri controlli oltre a IN. Il resto è interno per modalità.
+Bypass, Mode (Speak/Sing/Puke), Input, Rider Target, Rider Range, Breath Amount, Breath Sensitivity, Breath Listen, EQ Amount, De-esser Amount, De-ess Freq, De-ess Listen, Comp Amount, Comp Mix, Comp Ratio, Comp Dist, Comp SC HPF, Tone, Output, più un pulsante **IN** per ogni modulo (Rider In, Breath In, EQ In, De-ess In, Comp In, Tone In; default acceso): 25 parametri. A IN spento il modulo lascia passare il segnale (latenza invariata). Il modulo EQ è l'EQ correttivo. Il resto è interno per modalità.
 
 ## 7. Struttura
 
@@ -76,7 +76,7 @@ Ogni blocco ha un test che prima fallisce: Rider (guadagno verso il Target, ness
 - Dati etichettati per il livello 2 (rete RTNeural).
 - (risolta) Riuso per De-esser e Distressor: no, scritti da noi (§2).
 - Interfaccia grafica: layout in anteprima in `src/deep-throat/docs/mockups/deep_throat_rack.html` (vedi §10); implementazione in un piano a parte.
-- Il modulo Clean non ha manopole: valutare un parametro Clean Amount.
+- (risolta) Il modulo EQ (ex Clean) ha il controllo Amount.
 
 ## 10. Grafica
 
@@ -84,7 +84,7 @@ Segue `docs/DESIGN_SYSTEM.md` (rack orizzontale, materiali e grana di The Stripp
 
 - Intestazione con titolo e BACK; il Bypass globale sta nel riquadro OUTPUT (LED rosso).
 - **Riga 1:** INPUT (Gain), **SCOPE** (grafico con voce, guadagno del rider e banda dei respiri rilevati), LEVEL (ingresso, uscita, riduzione del compressore, clip LED come ultima riga), OUTPUT (Gain e Bypass).
-- **Riga 2:** MODE (selettore Speak / Sing / Puke, LED giallo), RIDER (Target, Range), BREATH (Amount, Sensitivity, Listen, LED di rilevamento, nome del rilevatore), CLEAN (solo valori di sola lettura che seguono la modalità).
+- **Riga 2:** MODE (selettore Speak / Sing / Puke, LED giallo), RIDER (Target, Range), BREATH (Amount, Sensitivity, Listen, LED di rilevamento, nome del rilevatore), EQ (Amount; HPF e Mud cut di sola lettura che seguono modalità e Amount).
 - **Riga 3:** DE-ESS (Amount, Freq, pulsante Listen), COMP (Amount, Mix, selettori Ratio e Dist con AUTO, selettore SC HPF), TONE (una manopola).
-- Ogni modulo con un controllo di segnale (RIDER, BREATH, CLEAN, DE-ESS, COMP, TONE) ha il pulsante IN; titoli dei riquadri in basso.
+- Ogni modulo con un controllo di segnale (RIDER, BREATH, EQ, DE-ESS, COMP, TONE) ha il pulsante IN; titoli dei riquadri in basso.
 - Retro: schede SETTINGS, CREDITS e **MODES**; MODES elenca i valori imposti da ciascuna modalità ed è generata dalla stessa tabella dei preset usata dal codice.
