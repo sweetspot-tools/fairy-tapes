@@ -6,8 +6,14 @@
 #include "state.h"
 #include "pluginterfaces/base/ibstream.h"
 #include "public.sdk/source/vst/vstparameters.h"
+#include <algorithm>
+#include <cctype>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <initializer_list>
 
 namespace FairyTapes::DeepThroat {
 
@@ -19,6 +25,32 @@ void asciiToStr128(const char* src, Steinberg::Vst::String128 dst) {
   for (; i < 127 && src[i]; ++i)
     dst[i] = static_cast<Steinberg::Vst::TChar>(static_cast<unsigned char>(src[i]));
   dst[i] = 0;
+}
+
+// ASCII copy of a host string (non-ASCII characters become '?'), lower-cased, trimmed.
+void str128ToLowerAscii(const Steinberg::Vst::TChar* src, char* dst, int size) {
+  int n = 0;
+  for (int i = 0; src && src[i] && n < size - 1; ++i)
+    dst[n++] = src[i] < 128 ? (char)std::tolower((unsigned char)src[i]) : '?';
+  dst[n] = 0;
+  while (n > 0 && std::isspace((unsigned char)dst[n - 1])) dst[--n] = 0;
+}
+
+// Leading number of the text (units after it are ignored).
+bool parseNumber(const char* text, double& out) {
+  char* end = nullptr;
+  out = std::strtod(text, &end);
+  return end != text && std::isfinite(out);
+}
+
+bool isSwitch(Steinberg::Vst::ParamID tag) {
+  switch (tag) {
+  case kBypass: case kDeEssListen: case kBreathListen: case kRiderIn: case kBreathIn:
+  case kEqIn: case kDeEssIn: case kCompIn: case kToneIn:
+    return true;
+  default:
+    return false;
+  }
 }
 
 // Stepped choice parameter: entries are given in order, norm = index / (count - 1).
@@ -134,6 +166,55 @@ Steinberg::tresult PLUGIN_API Controller::getParamStringByValue(Steinberg::Vst::
     return EditController::getParamStringByValue(tag, v, string);
   }
   asciiToStr128(buf, string);
+  return Steinberg::kResultOk;
+}
+
+Steinberg::tresult PLUGIN_API Controller::getParamValueByString(Steinberg::Vst::ParamID tag,
+    Steinberg::Vst::TChar* string, Steinberg::Vst::ParamValue& valueNormalized) {
+  char text[128];
+  str128ToLowerAscii(string, text, (int)sizeof(text));
+  const char* t = text;
+  while (std::isspace((unsigned char)*t)) ++t;
+  double x = 0.0;
+  double n = 0.0;
+  if (isSwitch(tag)) {
+    if (std::strcmp(t, "on") == 0) n = 1.0;
+    else if (std::strcmp(t, "off") == 0) n = 0.0;
+    else if (parseNumber(t, x)) n = x >= 0.5 ? 1.0 : 0.0;
+    else return Steinberg::kResultFalse;
+    valueNormalized = n;
+    return Steinberg::kResultOk;
+  }
+  switch (tag) {
+  case kInput:
+  case kOutput:
+    if (!parseNumber(t, x)) return Steinberg::kResultFalse;
+    n = (x + 12.0) / 24.0;
+    break;
+  case kRiderTarget:
+    if (!parseNumber(t, x)) return Steinberg::kResultFalse;
+    n = (x + 30.0) / 20.0;
+    break;
+  case kDeEssFreq:
+    if (!parseNumber(t, x) || x <= 0.0) return Steinberg::kResultFalse;
+    if (std::strstr(t, "k")) x *= 1000.0;  // "6.5 kHz"
+    n = std::log(x / 4000.0) / std::log(10000.0 / 4000.0);
+    break;
+  case kRiderRange:
+  case kBreathAmount:
+  case kDeEssAmount:
+  case kCompAmount:
+  case kTone:
+  case kBreathSens:
+  case kCompMix:
+  case kEqAmount:
+    if (!parseNumber(t, x)) return Steinberg::kResultFalse;
+    n = x / 100.0;
+    break;
+  default:  // choice lists: the StringListParameter matches its entries
+    return EditController::getParamValueByString(tag, string, valueNormalized);
+  }
+  valueNormalized = std::clamp(n, 0.0, 1.0);
   return Steinberg::kResultOk;
 }
 

@@ -11,11 +11,6 @@
 
 namespace FairyTapes::DeepThroat {
 
-namespace {
-bool isMonoOrStereo(Steinberg::Vst::SpeakerArrangement a) {
-  return a == Steinberg::Vst::SpeakerArr::kStereo || a == Steinberg::Vst::SpeakerArr::kMono;
-}
-} // namespace
 
 Processor::Processor() {
   setControllerClass(kControllerUID);
@@ -34,9 +29,31 @@ Steinberg::tresult PLUGIN_API Processor::initialize(Steinberg::FUnknown* context
 Steinberg::tresult PLUGIN_API Processor::setBusArrangements(
   Steinberg::Vst::SpeakerArrangement* inputs, Steinberg::int32 numIns,
   Steinberg::Vst::SpeakerArrangement* outputs, Steinberg::int32 numOuts) {
-  if (numIns != 1 || numOuts != 1 || !isMonoOrStereo(inputs[0]) || !isMonoOrStereo(outputs[0]))
+  // Stereo -> stereo or mono -> mono only (the engine links the channels; no up/down mix).
+  using namespace Steinberg::Vst::SpeakerArr;
+  if (numIns != 1 || numOuts != 1 || inputs[0] != outputs[0] ||
+      (inputs[0] != kStereo && inputs[0] != kMono))
     return Steinberg::kResultFalse;
   return AudioEffect::setBusArrangements(inputs, numIns, outputs, numOuts);
+}
+
+Steinberg::tresult PLUGIN_API Processor::setupProcessing(Steinberg::Vst::ProcessSetup& newSetup) {
+  const auto result = AudioEffect::setupProcessing(newSetup);
+  if (result == Steinberg::kResultOk)
+    engine_.prepare(newSetup.sampleRate);  // latency is known before activation
+  return result;
+}
+
+Steinberg::tresult PLUGIN_API Processor::setActive(Steinberg::TBool state) {
+  // Every (re)activation follows setupProcessing: rebuild all DSP for the current rate. The host
+  // re-reads getLatencySamples() after activation.
+  if (state)
+    engine_.prepare(processSetup.sampleRate);
+  return AudioEffect::setActive(state);
+}
+
+Steinberg::uint32 PLUGIN_API Processor::getLatencySamples() {
+  return (Steinberg::uint32)engine_.latencySamples();
 }
 
 void Processor::updateParamsFromChanges(Steinberg::Vst::IParameterChanges* changes) {
@@ -65,22 +82,20 @@ Steinberg::tresult PLUGIN_API Processor::process(Steinberg::Vst::ProcessData& da
 
   Steinberg::Vst::AudioBusBuffers& in = data.inputs[0];
   Steinberg::Vst::AudioBusBuffers& out = data.outputs[0];
-  if (!in.channelBuffers32 || !out.channelBuffers32 || in.numChannels < 1 || out.numChannels < 1)
+  if (!in.channelBuffers32 || !out.channelBuffers32 || in.numChannels < 1 ||
+      out.numChannels < 1 || !in.channelBuffers32[0] || !out.channelBuffers32[0])
     return Steinberg::kResultOk;
 
-  const bool bypass = param_value_[kBypass] >= 0.5;
-  const float gain = bypass ? 1.0f
-                            : (float)dbToGain(inputDbFromNorm(param_value_[kInput]) +
-                                              outputDbFromNorm(param_value_[kOutput]));
-  const Steinberg::int32 n = data.numSamples;
-  for (Steinberg::int32 ch = 0; ch < out.numChannels; ++ch) {
-    const float* src = in.channelBuffers32[ch < in.numChannels ? ch : 0];
-    float* dst = out.channelBuffers32[ch];
-    if (!src || !dst)
-      continue;
-    for (Steinberg::int32 i = 0; i < n; ++i)
-      dst[i] = src[i] * gain;
-  }
+  // Gains, IN, Bypass and Listen are smoothed / crossfaded inside the engine.
+  engine_.setSettings(mapParams(param_value_));
+  const float* inL = in.channelBuffers32[0];
+  const float* inR = in.numChannels >= 2 ? in.channelBuffers32[1] : nullptr;  // null: mono
+  float* outL = out.channelBuffers32[0];
+  float* outR = out.numChannels >= 2 ? out.channelBuffers32[1] : nullptr;
+  engine_.process(inL, inR, outL, outR, data.numSamples);
+  for (Steinberg::int32 ch = 2; ch < out.numChannels; ++ch)  // never with the accepted layouts
+    if (float* extra = out.channelBuffers32[ch])
+      for (Steinberg::int32 i = 0; i < data.numSamples; ++i) extra[i] = 0.0f;
   out.silenceFlags = 0;
   return Steinberg::kResultOk;
 }

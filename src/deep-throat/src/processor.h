@@ -1,11 +1,13 @@
 /**
  * Fairy Tapes · Deep Throat — VST3 Audio Processor.
- * Stereo in, stereo out. For now only Input/Output gain is applied (DSP blocks come later).
+ * Stereo in / stereo out or mono in / mono out. The whole chain runs in Engine (engine.h); the
+ * reported latency is the engine's look-ahead delay (constant for a given sample rate).
  */
 
 #pragma once
 
 #include "cids.h"
+#include "engine.h"
 #include "params.h"
 #include "state.h"
 #include "public.sdk/source/vst/vstaudioeffect.h"
@@ -21,6 +23,9 @@ public:
   Steinberg::tresult PLUGIN_API setBusArrangements(
     Steinberg::Vst::SpeakerArrangement* inputs, Steinberg::int32 numIns,
     Steinberg::Vst::SpeakerArrangement* outputs, Steinberg::int32 numOuts) override;
+  Steinberg::tresult PLUGIN_API setupProcessing(Steinberg::Vst::ProcessSetup& newSetup) override;
+  Steinberg::tresult PLUGIN_API setActive(Steinberg::TBool state) override;
+  Steinberg::uint32 PLUGIN_API getLatencySamples() override;
   Steinberg::tresult PLUGIN_API process(Steinberg::Vst::ProcessData& data) override;
   Steinberg::tresult PLUGIN_API setState(Steinberg::IBStream* state) override;
   Steinberg::tresult PLUGIN_API getState(Steinberg::IBStream* state) override;
@@ -29,6 +34,7 @@ private:
   void updateParamsFromChanges(Steinberg::Vst::IParameterChanges* changes);
 
   double param_value_[kNumParams];
+  Engine engine_;
 };
 
 } // namespace FairyTapes::DeepThroat

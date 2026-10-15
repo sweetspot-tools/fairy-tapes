@@ -41,7 +41,7 @@ enum ParamID : Steinberg::Vst::ParamID {
 
 enum class Mode { Speak, Sing, Puke };
 
-// Step counts of the choice parameters (StringListParameter-like: norm = index / (count - 1)).
+// Step counts of the choice parameters (StringListParameter: norm = index / (count - 1)).
 constexpr int kModeCount = 3;
 constexpr int kCompRatioCount = 8;  // AUTO, 2, 3, 4, 6, 8, 10, 20 :1
 constexpr int kCompDistCount = 4;   // AUTO, OFF, Dist 2, Dist 3
@@ -95,9 +95,11 @@ inline void loadDefaults(double* d) {
 
 namespace detail {
 inline double clamp01(double n) { return std::clamp(n, 0.0, 1.0); }
-// Index 0..count-1 of a stepped parameter at normalized value n.
+// Index 0..count-1 of a stepped parameter at normalized value n, the same entry the SDK's
+// StringListParameter displays (Parameter::toPlain: min(count - 1, floor(n * count))). The exact
+// steps index / (count - 1) map to their index.
 inline int stepIndex(double n, int count) {
-  return (int)std::lround(clamp01(n) * (count - 1));
+  return std::min(count - 1, (int)std::floor(clamp01(n) * count));
 }
 } // namespace detail
 

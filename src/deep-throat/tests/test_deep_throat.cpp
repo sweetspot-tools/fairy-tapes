@@ -106,6 +106,23 @@ void test_mode_from_norm_steps() {
   ASSERT_TRUE(modeFromNorm(0.8) == Mode::Puke);
 }
 
+// The DSP must hear the choice the host displays: the SDK's StringListParameter shows entry
+// min(count - 1, floor(n * count)) for a normalized value n (Parameter::toPlain).
+void test_choice_mapping_matches_sdk_display() {
+  int bad = 0;
+  for (int k = 0; k <= 1000; ++k) {
+    const double n = k / 1000.0;
+    auto sdk = [n](int count) { return std::min(count - 1, (int)std::floor(n * count)); };
+    if ((int)modeFromNorm(n) != sdk(kModeCount)) ++bad;
+    if (compRatioChoiceFromNorm(n) != sdk(kCompRatioCount)) ++bad;
+    if (compDistChoiceFromNorm(n) != sdk(kCompDistCount)) ++bad;
+    if (compHpfChoiceFromNorm(n) != sdk(kCompHpfCount)) ++bad;
+  }
+  ASSERT_TRUE(bad == 0);
+  ASSERT_TRUE(modeFromNorm(0.3) == Mode::Speak);
+  ASSERT_TRUE(compRatioChoiceFromNorm(-1.0) == 0 && compRatioChoiceFromNorm(2.0) == 7);
+}
+
 void test_io_gain_ranges() {
   ASSERT_NEAR(inputDbFromNorm(0.0), -12.0, 1e-9);
   ASSERT_NEAR(inputDbFromNorm(0.5), 0.0, 1e-9);
@@ -2425,6 +2442,7 @@ int main() {
   RUN_TEST(test_deess_freq_range);
   RUN_TEST(test_comp_choice_steps);
   RUN_TEST(test_mode_from_norm_steps);
+  RUN_TEST(test_choice_mapping_matches_sdk_display);
   RUN_TEST(test_io_gain_ranges);
   RUN_TEST(test_defaults);
   RUN_TEST(test_state_roundtrip);
