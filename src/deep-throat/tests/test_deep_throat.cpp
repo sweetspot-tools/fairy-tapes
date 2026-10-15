@@ -10,6 +10,7 @@
 #include "dsp/spectral_breath_detector.h"
 #include "dsp/level_breath_detector.h"
 #include "dsp/breath_reducer.h"
+#include "dsp/biquad.h"
 #include "dsp/corrective_eq.h"
 #include <cmath>
 #include <cstdint>
@@ -624,6 +625,16 @@ double toneMag(const std::vector<float>& x, size_t a, size_t b, double hz, doubl
   return std::sqrt(re * re + im * im);
 }
 
+// Energy (sqrt of summed squared DFT magnitudes on a 20 Hz grid) in a 300 Hz band around hz.
+double bandRms(const std::vector<float>& x, size_t a, size_t b, double hz, double sr) {
+  double e = 0.0;
+  for (double f = hz - 150.0; f <= hz + 150.0; f += 20.0) {
+    const double m = toneMag(x, a, b, f, sr);
+    e += m * m;
+  }
+  return std::sqrt(e);
+}
+
 void test_eq_notch_cuts_resonance() {
   const double sr = 48000.0;
   auto x = noiseVec((size_t)(1.5 * sr), 0.01);
@@ -640,16 +651,137 @@ void test_eq_notch_cuts_resonance() {
 
 void test_eq_notch_idle_on_clean_signal() {
   for (double sr : kRates) {
-    const auto x = noiseVec((size_t)(2.0 * sr), 0.1);
+    const auto x = noiseVec((size_t)(2.5 * sr), 0.1);
     DSP::CorrectiveEq eq;
     eq.prepare(sr, 1);
     const auto y = runEq(eq, x);
-    const size_t a = (size_t)(1.0 * sr), b = x.size();
+    const size_t a = (size_t)(1.5 * sr), b = x.size();
     ASSERT_NEAR(20.0 * std::log10(rmsRange(y, a, b) / rmsRange(x, a, b)), 0.0, 0.5);
+    // A wrongly engaged notch is narrow: check the band level at several centres in 1-6 kHz.
+    for (double hz : {1200.0, 1800.0, 2500.0, 3000.0, 3700.0, 4500.0, 5300.0}) {
+      const double dB = 20.0 * std::log10(bandRms(y, a, b, hz, sr) / bandRms(x, a, b, hz, sr));
+      ASSERT_NEAR(dB, 0.0, 0.5);
+    }
   }
 }
 
-void test_eq_channels_identical_and_block_independent() {
+// Noise + a sine 20 dB above it; with loudBump: a sine 6 dB above the noise under a much
+// louder broad (non-prominent) bump at 1.3 kHz.
+std::vector<float> resonanceSignal(double sr, double sec, double hz, bool loudBump) {
+  const double sineDb = loudBump ? 6.0 : 20.0;
+  auto x = noiseVec((size_t)(sec * sr), 0.01);
+  if (loudBump) {
+    DSP::Biquad bump;
+    bump.setPeaking(sr, 1300.0, 0.7, 40.0);
+    for (auto& v : x) v = bump.process(v);
+  }
+  const double amp = 0.01 * std::pow(10.0, sineDb / 20.0) * std::sqrt(2.0);
+  for (size_t i = 0; i < x.size(); ++i) x[i] += (float)(amp * std::sin(2.0 * kPi * hz * (double)i / sr));
+  return x;
+}
+
+double notchDropDb(const std::vector<float>& x, DSP::CorrectiveEq& eq, double hz, double sr) {
+  const auto y = runEq(eq, x);
+  const size_t a = (size_t)(1.0 * sr), b = x.size();
+  return 20.0 * std::log10(toneMag(x, a, b, hz, sr) / toneMag(y, a, b, hz, sr));
+}
+
+void test_eq_notch_finds_prominent_peak_under_loud_band() {
+  const double sr = 48000.0;
+  const auto x = resonanceSignal(sr, 1.5, 4000.0, true);
+  DSP::CorrectiveEq eq;
+  eq.prepare(sr, 1);
+  ASSERT_TRUE(notchDropDb(x, eq, 4000.0, sr) >= 4.0);
+}
+
+void test_eq_amount_zero_notch_off() {
+  const double sr = 48000.0;
+  const auto x = resonanceSignal(sr, 1.5, 3000.0, false);
+  DSP::CorrectiveEq eq;
+  eq.prepare(sr, 1);
+  eq.setAmount(0.0f);
+  ASSERT_TRUE(notchDropDb(x, eq, 3000.0, sr) < 0.5);
+}
+
+// Synthetic vowel: harmonics 1/k shaped by a formant near 3 kHz, with vibrato (+-3 %, 5.5 Hz).
+std::vector<float> vowel(double sr, double f0, double sec) {
+  std::vector<float> x((size_t)(sec * sr));
+  const double vibHz = 5.5, vibDepth = 0.03;
+  for (size_t i = 0; i < x.size(); ++i) {
+    const double t = (double)i / sr;
+    // Integral of f0 * (1 + d sin(2 pi v t)).
+    const double ph = 2.0 * kPi * f0 * (t + vibDepth / (2.0 * kPi * vibHz) * (1.0 - std::cos(2.0 * kPi * vibHz * t)));
+    double v = 0.0;
+    for (int k = 1; k * f0 * (1.0 + vibDepth) < 0.45 * sr; ++k) {
+      const double f = k * f0, d = (f - 3000.0) / 500.0;
+      v += (1.0 / k) * (1.0 + 4.0 * std::exp(-d * d)) * std::sin(k * ph);
+    }
+    x[i] = (float)(0.05 * v);
+  }
+  return x;
+}
+
+void test_eq_notch_ignores_vowel_harmonics() {
+  const double sr = 48000.0;
+  for (double f0 : {300.0, 400.0}) {
+    const auto x = vowel(sr, f0, 2.0);
+    DSP::CorrectiveEq eq;
+    eq.prepare(sr, 1);
+    const auto y = runEq(eq, x);
+    // Worst 250 Hz band cut over 1-6 kHz in the last second (Hann-windowed 8192 blocks).
+    const int n = 8192;
+    const size_t a = x.size() - (size_t)sr;
+    std::vector<double> pin(n / 2 + 1, 0.0), pout(n / 2 + 1, 0.0);
+    std::vector<float> wi(n), wo(n), spec(n / 2 + 1);
+    for (size_t off = a; off + n <= x.size(); off += n / 2) {
+      for (int i = 0; i < n; ++i) {
+        const float w = (float)(0.5 - 0.5 * std::cos(2.0 * kPi * i / n));
+        wi[i] = x[off + i] * w;
+        wo[i] = y[off + i] * w;
+      }
+      DSP::fftPowerSpectrum(wi.data(), n, spec.data());
+      for (int k = 0; k <= n / 2; ++k) pin[k] += spec[k];
+      DSP::fftPowerSpectrum(wo.data(), n, spec.data());
+      for (int k = 0; k <= n / 2; ++k) pout[k] += spec[k];
+    }
+    const double binHz = sr / n;
+    double worst = 0.0;
+    for (double lo = 1000.0; lo < 6000.0; lo += 250.0) {
+      double ei = 0.0, eo = 0.0;
+      for (int k = (int)(lo / binHz); k < (int)((lo + 250.0) / binHz); ++k) { ei += pin[k]; eo += pout[k]; }
+      worst = std::max(worst, 10.0 * std::log10(ei / eo));
+    }
+    ASSERT_TRUE(worst < 1.5);
+  }
+}
+
+void test_eq_ignores_out_of_range_channel() {
+  DSP::CorrectiveEq eq;
+  eq.prepare(48000.0, 1);
+  ASSERT_TRUE(eq.process(3, 0.5f) == 0.5f);
+  ASSERT_TRUE(eq.process(-1, 0.25f) == 0.25f);
+}
+
+void test_biquad_high_shelf_gain() {
+  const double sr = 48000.0;
+  for (double g : {6.0, -6.0}) {
+    DSP::Biquad bq;
+    bq.setHighShelf(sr, 4000.0, g);
+    const auto x = sineVec(sr, 16000.0, 0.1, 0.2);
+    std::vector<float> y(x.size());
+    for (size_t i = 0; i < x.size(); ++i) y[i] = bq.process(x[i]);
+    const size_t a = x.size() / 2;
+    ASSERT_NEAR(20.0 * std::log10(rmsRange(y, a, x.size()) / rmsRange(x, a, x.size())), g, 0.5);
+    DSP::Biquad lo;
+    lo.setHighShelf(sr, 4000.0, g);
+    const auto xl = sineVec(sr, 200.0, 0.1, 0.2);
+    std::vector<float> yl(xl.size());
+    for (size_t i = 0; i < xl.size(); ++i) yl[i] = lo.process(xl[i]);
+    ASSERT_NEAR(20.0 * std::log10(rmsRange(yl, a, xl.size()) / rmsRange(xl, a, xl.size())), 0.0, 0.5);
+  }
+}
+
+void test_eq_stereo_channels_identical() {
   const double sr = 48000.0;
   auto x = noiseVec((size_t)(1.0 * sr), 0.01);
   for (size_t i = 0; i < x.size(); ++i) x[i] += (float)(0.05 * std::sin(2.0 * kPi * 3000.0 * (double)i / sr));
@@ -784,7 +916,12 @@ int main() {
   RUN_TEST(test_eq_amount_scales_mud_and_hpf);
   RUN_TEST(test_eq_notch_cuts_resonance);
   RUN_TEST(test_eq_notch_idle_on_clean_signal);
-  RUN_TEST(test_eq_channels_identical_and_block_independent);
+  RUN_TEST(test_eq_notch_finds_prominent_peak_under_loud_band);
+  RUN_TEST(test_eq_amount_zero_notch_off);
+  RUN_TEST(test_eq_notch_ignores_vowel_harmonics);
+  RUN_TEST(test_eq_ignores_out_of_range_channel);
+  RUN_TEST(test_biquad_high_shelf_gain);
+  RUN_TEST(test_eq_stereo_channels_identical);
   RUN_TEST(test_eq_amount_change_is_smooth);
 
   std::fprintf(stdout, "\n%d passed, %d failed.\n", g_passed, g_failed);

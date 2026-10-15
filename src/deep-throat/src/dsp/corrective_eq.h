@@ -43,6 +43,9 @@ private:
   double targetHpfHz_ = 80.0, targetMudDb_ = -2.0, maxNotchDb_ = 6.0;
   double notchTargetHz_ = 3000.0, notchTargetDb_ = 0.0;  // written by analyze()
 
+  int persistCount_ = 0;       // consecutive analyses with the same winning peak
+  double persistBin_ = 0.0;    // where that run started (FFT bins)
+
   int refreshInterval_ = 16;
   long long hop_ = 2400;
   int fftSize_ = 2048;

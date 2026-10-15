@@ -14,6 +14,8 @@ constexpr double kNotchQ = 8.0;
 constexpr double kNotchLoHz = 1000.0;
 constexpr double kNotchHiHz = 6000.0;
 constexpr double kProminenceDb = 8.0;
+constexpr double kPersistBins = 1.5;
+constexpr double kPersistSec = 0.3;
 constexpr int kRingSize = 1 << 16;  // per-channel analysis history (power of two)
 constexpr double kSmoothMs = 20.0;
 constexpr double kNotchAttackMs = 30.0;
@@ -46,6 +48,7 @@ void CorrectiveEq::prepare(double sampleRate, int channels) {
 
 void CorrectiveEq::reset() {
   notchTargetDb_ = 0.0;
+  persistCount_ = 0;
   for (auto& c : ch_) {
     c.hpf.reset(); c.mud.reset(); c.notch.reset();
     c.counter = 0;
@@ -109,8 +112,8 @@ void CorrectiveEq::refresh(Channel& c) {
 }
 
 float CorrectiveEq::process(int channel, float x) {
-  if (ch_.empty()) return x;
-  const int idx = std::clamp(channel, 0, (int)ch_.size() - 1);
+  if (channel < 0 || channel >= (int)ch_.size()) return x;
+  const int idx = channel;
   Channel& c = ch_[idx];
   if (!std::isfinite(x)) x = 0.0f;
 
@@ -148,35 +151,44 @@ void CorrectiveEq::analyze() {
   const double binHz = sr_ / fftSize_;
   const int lo = std::max(2, (int)std::ceil(kNotchLoHz / binHz));
   const int hi = std::min(half - 1, (int)std::floor(kNotchHiHz / binHz));
+  // Among the local maxima in range, take the one that stands out most from its neighbours
+  // (mean power 5..12 bins either side), not the loudest.
   int best = -1;
-  float bestSum = 0.0f;
+  double bestProm = kProminenceDb;
   for (int k = lo; k <= hi; ++k) {
     if (power_[k] < power_[k - 1] || power_[k] < power_[k + 1]) continue;  // local maxima only
-    const float s = power_[k - 1] + power_[k] + power_[k + 1];
-    if (s > bestSum) { bestSum = s; best = k; }
+    double sum = 0.0;
+    int cnt = 0;
+    for (int d = 5; d <= 12; ++d) {
+      if (k - d >= 1) { sum += power_[k - d]; ++cnt; }
+      if (k + d <= half) { sum += power_[k + d]; ++cnt; }
+    }
+    if (cnt == 0 || sum <= 0.0) continue;
+    const double mean = sum / cnt;
+    if (mean < 1e-14) continue;  // silence
+    const double sPeak = (power_[k - 1] + power_[k] + power_[k + 1]) / 3.0;
+    const double prom = 10.0 * std::log10(sPeak / mean);
+    if (prom > bestProm) { bestProm = prom; best = k; }
   }
   notchTargetDb_ = 0.0;
-  if (best < 0) return;
-
-  // Neighbour level: mean power 5..12 bins on either side of the peak.
-  double sum = 0.0;
-  int cnt = 0;
-  for (int d = 5; d <= 12; ++d) {
-    if (best - d >= 1) { sum += power_[best - d]; ++cnt; }
-    if (best + d <= half) { sum += power_[best + d]; ++cnt; }
-  }
-  if (cnt == 0 || sum <= 0.0) return;
-  const double mean = sum / cnt;
-  if (mean < 1e-14) return;  // silence
-  const double prominence = 10.0 * std::log10((bestSum / 3.0) / mean);
-  if (prominence <= kProminenceDb) return;
+  if (best < 0) { persistCount_ = 0; return; }
 
   const double w0 = power_[best - 1], w1 = power_[best], w2 = power_[best + 1];
-  const double centroid = ((best - 1) * w0 + best * w1 + (best + 1) * w2) / (w0 + w1 + w2);
+  const double centroidBin = ((best - 1) * w0 + best * w1 + (best + 1) * w2) / (w0 + w1 + w2);
+  // Persistence: the winning peak must stay within +-1.5 bins of where its run started for
+  // 300 ms of consecutive analyses, so moving harmonics (vibrato, pitch) never engage the notch.
+  if (persistCount_ == 0 || std::fabs(centroidBin - persistBin_) > kPersistBins) {
+    persistCount_ = 1;
+    persistBin_ = centroidBin;
+  } else {
+    ++persistCount_;
+  }
+  if (persistCount_ * hop_ < (long long)std::llround(kPersistSec * sr_)) return;
+  const double centroid = centroidBin;
   notchTargetHz_ = std::clamp(centroid * binHz, kNotchLoHz, kNotchHiHz);
   // Depth grows with the prominence above the threshold; the cap (6 dB x 2 x Amount) is
   // applied per channel in refresh().
-  notchTargetDb_ = std::clamp(prominence - kProminenceDb, 0.0, 6.0 * 2.0);
+  notchTargetDb_ = std::clamp(bestProm - kProminenceDb, 0.0, 6.0 * 2.0);
 }
 
 }  // namespace FairyTapes::DeepThroat::DSP
