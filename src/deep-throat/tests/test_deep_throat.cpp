@@ -10,6 +10,7 @@
 #include "dsp/spectral_breath_detector.h"
 #include "dsp/level_breath_detector.h"
 #include "dsp/breath_reducer.h"
+#include "dsp/corrective_eq.h"
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -537,6 +538,146 @@ void test_puke_sensitivity() {
   }
 }
 
+// ---- Corrective EQ ----------------------------------------------------------------------
+
+// Runs one channel of the EQ over x and returns the output.
+std::vector<float> runEq(DSP::CorrectiveEq& eq, const std::vector<float>& x) {
+  std::vector<float> y(x.size());
+  for (size_t i = 0; i < x.size(); ++i) y[i] = eq.process(0, x[i]);
+  return y;
+}
+
+std::vector<float> sineVec(double sr, double hz, double amp, double sec) {
+  std::vector<float> x((size_t)(sec * sr));
+  for (size_t i = 0; i < x.size(); ++i) x[i] = (float)(amp * std::sin(2.0 * kPi * hz * (double)i / sr));
+  return x;
+}
+
+double rmsRange(const std::vector<float>& x, size_t a, size_t b) {
+  double s = 0.0;
+  for (size_t i = a; i < b; ++i) s += (double)x[i] * x[i];
+  return std::sqrt(s / (double)(b - a));
+}
+
+// Gain in dB of the EQ on a steady sine (measured over 0.5..0.9 s, after the settle).
+double eqGainDb(Mode mode, float amount, double hz, double sr = 48000.0) {
+  DSP::CorrectiveEq eq;
+  eq.prepare(sr, 1);
+  eq.setMode(mode);
+  eq.setAmount(amount);
+  const auto x = sineVec(sr, hz, 0.1, 1.0);
+  const auto y = runEq(eq, x);
+  const size_t a = (size_t)(0.5 * sr);
+  // Whole cycles only: use the last 0.4 s (an integer number of cycles for the test tones).
+  const size_t b = (size_t)(0.9 * sr);
+  return 20.0 * std::log10(rmsRange(y, a, b) / rmsRange(x, a, b));
+}
+
+void test_eq_hpf_attenuates_rumble() {
+  // 12 dB/oct at 80 Hz: ~17 dB at 30 Hz (controller ruling: >= 15 dB).
+  ASSERT_TRUE(eqGainDb(Mode::Speak, 0.5f, 30.0) <= -15.0);
+}
+
+void test_eq_mud_cut_at_300() {
+  ASSERT_NEAR(eqGainDb(Mode::Speak, 0.5f, 300.0), -2.0, 0.5);
+  ASSERT_NEAR(eqGainDb(Mode::Puke, 0.5f, 300.0), -4.0, 0.5);
+}
+
+void test_eq_passband_flat() {
+  for (double sr : kRates) {
+    ASSERT_NEAR(eqGainDb(Mode::Speak, 0.5f, 800.0, sr), 0.0, 0.5);
+    // 1 kHz: a steady sine is itself a resonance the notch will chase, so measure the
+    // static response before the first analysis can act (10..30 ms).
+    DSP::CorrectiveEq eq;
+    eq.prepare(sr, 1);
+    const auto x = sineVec(sr, 1000.0, 0.1, 0.03);
+    const auto y = runEq(eq, x);
+    const size_t a = (size_t)(0.010 * sr), b = (size_t)(0.030 * sr);
+    ASSERT_NEAR(20.0 * std::log10(rmsRange(y, a, b) / rmsRange(x, a, b)), 0.0, 0.5);
+  }
+}
+
+void test_eq_amount_scales_mud_and_hpf() {
+  ASSERT_NEAR(eqGainDb(Mode::Speak, 0.0f, 300.0), 0.0, 0.5);
+  ASSERT_TRUE(eqGainDb(Mode::Speak, 0.0f, 40.0) > eqGainDb(Mode::Speak, 0.5f, 40.0));
+  ASSERT_NEAR(eqGainDb(Mode::Speak, 1.0f, 300.0), -4.0, 0.5);
+}
+
+// White noise (seeded LCG) at the given RMS.
+std::vector<float> noiseVec(size_t n, double rms, uint32_t seed = 0x1234u) {
+  std::vector<float> x(n);
+  for (auto& v : x) {
+    seed = seed * 1664525u + 1013904223u;
+    v = (float)(((double)(seed >> 8) / 8388608.0 - 1.0) * rms * std::sqrt(3.0));
+  }
+  return x;
+}
+
+// Magnitude of the DFT of x[a, b) at hz (Goertzel-free direct sum).
+double toneMag(const std::vector<float>& x, size_t a, size_t b, double hz, double sr) {
+  double re = 0.0, im = 0.0;
+  for (size_t i = a; i < b; ++i) {
+    const double ph = 2.0 * kPi * hz * (double)i / sr;
+    re += x[i] * std::cos(ph);
+    im += x[i] * std::sin(ph);
+  }
+  return std::sqrt(re * re + im * im);
+}
+
+void test_eq_notch_cuts_resonance() {
+  const double sr = 48000.0;
+  auto x = noiseVec((size_t)(1.5 * sr), 0.01);
+  // Sine 20 dB above the noise RMS.
+  const double amp = 0.01 * 10.0 * std::sqrt(2.0);
+  for (size_t i = 0; i < x.size(); ++i) x[i] += (float)(amp * std::sin(2.0 * kPi * 3000.0 * (double)i / sr));
+  DSP::CorrectiveEq eq;
+  eq.prepare(sr, 1);
+  const auto y = runEq(eq, x);
+  const size_t a = (size_t)(1.0 * sr), b = (size_t)(1.5 * sr);
+  const double dropDb = 20.0 * std::log10(toneMag(x, a, b, 3000.0, sr) / toneMag(y, a, b, 3000.0, sr));
+  ASSERT_TRUE(dropDb >= 4.0);
+}
+
+void test_eq_notch_idle_on_clean_signal() {
+  for (double sr : kRates) {
+    const auto x = noiseVec((size_t)(2.0 * sr), 0.1);
+    DSP::CorrectiveEq eq;
+    eq.prepare(sr, 1);
+    const auto y = runEq(eq, x);
+    const size_t a = (size_t)(1.0 * sr), b = x.size();
+    ASSERT_NEAR(20.0 * std::log10(rmsRange(y, a, b) / rmsRange(x, a, b)), 0.0, 0.5);
+  }
+}
+
+void test_eq_channels_identical_and_block_independent() {
+  const double sr = 48000.0;
+  auto x = noiseVec((size_t)(1.0 * sr), 0.01);
+  for (size_t i = 0; i < x.size(); ++i) x[i] += (float)(0.05 * std::sin(2.0 * kPi * 3000.0 * (double)i / sr));
+  DSP::CorrectiveEq eq;
+  eq.prepare(sr, 2);
+  std::vector<float> l(x.size()), r(x.size());
+  for (size_t i = 0; i < x.size(); ++i) { l[i] = eq.process(0, x[i]); r[i] = eq.process(1, x[i]); }
+  for (size_t i = 0; i < x.size(); ++i) ASSERT_TRUE(l[i] == r[i]);
+}
+
+void test_eq_amount_change_is_smooth() {
+  const double sr = 48000.0;
+  DSP::CorrectiveEq eq;
+  eq.prepare(sr, 1);
+  const auto x = sineVec(sr, 300.0, 0.1, 1.0);
+  std::vector<float> y(x.size());
+  for (size_t i = 0; i < x.size(); ++i) {
+    if (i == x.size() / 2) { eq.setAmount(1.0f); eq.setMode(Mode::Puke); }
+    y[i] = eq.process(0, x[i]);
+  }
+  double maxStep = 0.0;
+  for (size_t i = x.size() / 2; i < x.size() / 2 + 4800; ++i)
+    maxStep = std::max(maxStep, (double)std::fabs(y[i] - y[i - 1]));
+  // A 300 Hz sine of amplitude 0.1 has a max sample step of ~0.0039; allow some headroom.
+  ASSERT_TRUE(maxStep < 0.006);
+}
+
+
 } // namespace
 
 // ---- BreathReducer ----
@@ -637,6 +778,14 @@ int main() {
   RUN_TEST(test_reducer_scales_with_prob);
   RUN_TEST(test_reducer_smooth);
   RUN_TEST(test_reducer_nan_prob_safe);
+  RUN_TEST(test_eq_hpf_attenuates_rumble);
+  RUN_TEST(test_eq_mud_cut_at_300);
+  RUN_TEST(test_eq_passband_flat);
+  RUN_TEST(test_eq_amount_scales_mud_and_hpf);
+  RUN_TEST(test_eq_notch_cuts_resonance);
+  RUN_TEST(test_eq_notch_idle_on_clean_signal);
+  RUN_TEST(test_eq_channels_identical_and_block_independent);
+  RUN_TEST(test_eq_amount_change_is_smooth);
 
   std::fprintf(stdout, "\n%d passed, %d failed.\n", g_passed, g_failed);
   if (g_failed > 0) {
