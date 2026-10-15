@@ -27,7 +27,8 @@ struct SpectralTuning {
   float voicedMin = 0.60f;        // harmonicity of the frames that drive the phrase tracker
   float phraseReleaseMs = 1500.f; // phrase tracker release (attack is immediate)
   float attackMs = 5.f;           // output smoothing toward a higher value
-  float releaseMs = 20.f;         // output smoothing toward a lower value
+  float releaseMs = 2.f;          // output smoothing toward a lower value: fast, so the
+                                  // phrase after a breath is free within one frame
 };
 
 class SpectralBreathDetector final : public BreathDetector {

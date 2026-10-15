@@ -340,7 +340,7 @@ bool allInUnitRange(const std::vector<float>& p) {
 }
 
 constexpr double kRates[] = {44100.0, 48000.0, 96000.0};
-constexpr double kGuard = 0.05;  // s around segment boundaries (frame-based analysis)
+constexpr double kGuard = 0.01;  // s after a breath ends: frame (hop) resolution only
 
 void test_breath_detects_noise_between_phrases() {
   for (double sr : kRates) {

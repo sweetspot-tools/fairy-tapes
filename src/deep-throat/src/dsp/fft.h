@@ -85,8 +85,9 @@ private:
 };
 
 // |X_k|^2 for k = 0..n/2 of the real input in[0..n) (no window, no scaling).
-// n must be a power of two, at most kMaxSize (otherwise outPower is zeroed). Never allocates:
-// the work buffers live on the stack and twiddles come from a per-stage recurrence in double.
+// n must be a power of two, at most kMaxSize (otherwise outPower is zeroed). Never allocates
+// (stack work buffers, twiddles from a per-stage recurrence in double) but is NOT real-time
+// safe: ~64 KB of stack. Tests and offline use only; the audio path uses Fft.
 inline void fftPowerSpectrum(const float* in, int n, float* outPower) {
   constexpr int kMaxSize = 8192;
   if (!isPowerOfTwo(n) || n > kMaxSize) {
