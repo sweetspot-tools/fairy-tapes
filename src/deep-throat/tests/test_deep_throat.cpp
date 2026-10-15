@@ -8,6 +8,7 @@
 #include "dsp/rider.h"
 #include "dsp/fft.h"
 #include "dsp/spectral_breath_detector.h"
+#include "dsp/level_breath_detector.h"
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -284,6 +285,16 @@ public:
     for (double v : seg) x.push_back((float)(v * g));
   }
 
+  // Wide-band white noise normalized to the RMS level (growl / scream / inhalation stand-in).
+  void wideNoise(double rmsDb, double sec) {
+    const int n = (int)(sec * sr_);
+    std::vector<double> seg(n);
+    double sum = 0.0;
+    for (int i = 0; i < n; ++i) { seg[i] = uniform(); sum += seg[i] * seg[i]; }
+    const double g = std::pow(10.0, rmsDb / 20.0) / std::sqrt(sum / std::max(1, n));
+    for (double v : seg) x.push_back((float)(v * g));
+  }
+
   void silence(double sec) { x.insert(x.end(), (size_t)(sec * sr_), 0.0f); }
 
   std::vector<float> x;
@@ -315,7 +326,7 @@ private:
 
 // Runs the detector one sample at a time and returns the probability aligned to the input:
 // the output at sample t describes input sample t - latencySamples().
-std::vector<float> runDetector(DSP::SpectralBreathDetector& d, const std::vector<float>& x) {
+std::vector<float> runDetector(DSP::BreathDetector& d, const std::vector<float>& x) {
   const size_t lat = (size_t)d.latencySamples();
   std::vector<float> out;
   out.reserve(x.size());
@@ -445,6 +456,86 @@ void test_breath_reset_is_deterministic_and_safe() {
   ASSERT_TRUE(d44.latencySamples() == 1024 && d96.latencySamples() == 2048);
 }
 
+// ---------------------------------------------------------------------------
+// Level-based breath detector (Puke)
+// ---------------------------------------------------------------------------
+
+void test_puke_breath_after_scream() {
+  for (double sr : kRates) {
+    SignalBuilder s(sr);
+    s.wideNoise(-10.0, 1.0);
+    s.wideNoise(-35.0, 0.4);
+    s.wideNoise(-10.0, 1.0);
+    DSP::LevelBreathDetector d;
+    d.prepare(sr);
+    ASSERT_TRUE(d.latencySamples() == 0);
+    const auto p = runDetector(d, s.x);
+    ASSERT_TRUE(allInUnitRange(p));
+    ASSERT_TRUE(maxIn(p, sr, 1.0, 1.4) > 0.6f);
+    ASSERT_TRUE(maxIn(p, sr, 0.0, 1.0) < 0.1f);
+    ASSERT_TRUE(maxIn(p, sr, 1.4 + kGuard, 2.4) < 0.1f);
+  }
+}
+
+void test_puke_growl_not_breath() {
+  for (double sr : kRates) {
+    SignalBuilder s(sr);
+    s.wideNoise(-12.0, 3.0);
+    DSP::LevelBreathDetector d;
+    d.prepare(sr);
+    ASSERT_TRUE(maxIn(runDetector(d, s.x), sr, 0.0, 3.0) < 0.1f);
+  }
+}
+
+void test_puke_loud_gasp_not_cut() {
+  for (double sr : kRates) {
+    SignalBuilder s(sr);
+    s.wideNoise(-10.0, 1.0);
+    s.wideNoise(-14.0, 0.3);
+    s.wideNoise(-10.0, 1.0);
+    DSP::LevelBreathDetector d;
+    d.prepare(sr);
+    ASSERT_TRUE(maxIn(runDetector(d, s.x), sr, 0.0, 2.3) < 0.1f);
+  }
+}
+
+void test_puke_silence_is_zero() {
+  for (double sr : kRates) {
+    DSP::LevelBreathDetector d;
+    d.prepare(sr);
+    for (int i = 0; i < (int)(2 * sr); ++i) ASSERT_TRUE(d.process(0.0f) == 0.0f);
+    // Scream, then digital silence: the breath context expires and the output is exactly 0.
+    SignalBuilder s(sr);
+    s.wideNoise(-10.0, 0.5);
+    s.silence(1.0);
+    d.reset();
+    const auto p = runDetector(d, s.x);
+    for (size_t i = (size_t)((0.5 + kGuard) * sr); i < p.size(); ++i) ASSERT_TRUE(p[i] == 0.0f);
+    // Non-finite input never leaks into the output.
+    d.reset();
+    for (int i = 0; i < 4096; ++i) {
+      const float v = d.process(i % 5 == 0 ? std::numeric_limits<float>::quiet_NaN() : 0.3f);
+      ASSERT_TRUE(std::isfinite(v) && v >= 0.0f && v <= 1.0f);
+    }
+  }
+}
+
+void test_puke_sensitivity() {
+  for (double sr : kRates) {
+    SignalBuilder s(sr);
+    s.wideNoise(-10.0, 1.0);
+    s.wideNoise(-32.0, 0.3);  // 22 dB under the scream
+    s.wideNoise(-10.0, 1.0);
+    DSP::LevelBreathDetector d;
+    d.prepare(sr);
+    d.setSensitivity(0.0f);
+    ASSERT_TRUE(maxIn(runDetector(d, s.x), sr, 0.0, 2.3) < 0.3f);
+    d.reset();
+    d.setSensitivity(1.0f);
+    ASSERT_TRUE(maxIn(runDetector(d, s.x), sr, 1.0, 1.3) > 0.6f);
+  }
+}
+
 } // namespace
 
 int main() {
@@ -469,6 +560,11 @@ int main() {
   RUN_TEST(test_breath_silence_is_zero);
   RUN_TEST(test_breath_sensitivity);
   RUN_TEST(test_breath_reset_is_deterministic_and_safe);
+  RUN_TEST(test_puke_breath_after_scream);
+  RUN_TEST(test_puke_growl_not_breath);
+  RUN_TEST(test_puke_loud_gasp_not_cut);
+  RUN_TEST(test_puke_silence_is_zero);
+  RUN_TEST(test_puke_sensitivity);
 
   std::fprintf(stdout, "\n%d passed, %d failed.\n", g_passed, g_failed);
   if (g_failed > 0) {
