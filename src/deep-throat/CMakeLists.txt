@@ -24,6 +24,19 @@ else()
   set(PLUGIN_MAIN_SOURCE ${VST3_SDK_PATH}/public.sdk/source/main/linuxmain.cpp)
 endif()
 
+# Pure DSP + engine sources (no SDK libs), shared by the plugin and the unit tests.
+set(DEEP_THROAT_DSP_SOURCES
+  src/engine.cpp
+  src/dsp/rider.cpp
+  src/dsp/spectral_breath_detector.cpp
+  src/dsp/level_breath_detector.cpp
+  src/dsp/breath_reducer.cpp
+  src/dsp/corrective_eq.cpp
+  src/dsp/deesser.cpp
+  src/dsp/distressor_comp.cpp
+  src/dsp/tone_eq.cpp
+)
+
 # ---------------------------------------------------------------------------
 # Plugin
 # ---------------------------------------------------------------------------
@@ -34,6 +47,7 @@ add_library(deep_throat MODULE
   src/plug.cpp
   src/processor.cpp
   src/controller.cpp
+  ${DEEP_THROAT_DSP_SOURCES}
 )
 
 target_include_directories(deep_throat PRIVATE
@@ -92,14 +106,7 @@ endif()
 # ---------------------------------------------------------------------------
 add_executable(deep_throat_tests
   tests/test_deep_throat.cpp
-  src/dsp/rider.cpp
-  src/dsp/spectral_breath_detector.cpp
-  src/dsp/level_breath_detector.cpp
-  src/dsp/breath_reducer.cpp
-  src/dsp/corrective_eq.cpp
-  src/dsp/deesser.cpp
-  src/dsp/distressor_comp.cpp
-  src/dsp/tone_eq.cpp
+  ${DEEP_THROAT_DSP_SOURCES}
 )
 target_include_directories(deep_throat_tests PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src

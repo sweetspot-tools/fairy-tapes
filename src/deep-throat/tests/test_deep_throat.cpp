@@ -16,12 +16,27 @@
 #include "dsp/distressor_comp.h"
 #include "dsp/tone_eq.h"
 #include "mode_presets.h"
+#include "engine.h"
+#include <algorithm>
+#include <atomic>
+#include <new>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <limits>
 #include <vector>
+
+// Counts heap allocations while g_countAllocs is set (no-allocation-in-process checks).
+static std::atomic<bool> g_countAllocs{false};
+static std::atomic<int> g_allocs{0};
+void* operator new(std::size_t n) {
+  if (g_countAllocs) ++g_allocs;
+  if (void* p = std::malloc(n ? n : 1)) return p;
+  throw std::bad_alloc();
+}
+void operator delete(void* p) noexcept { std::free(p); }
+void operator delete(void* p, std::size_t) noexcept { std::free(p); }
 
 namespace {
 
@@ -1525,6 +1540,818 @@ void test_presets_values() {
   ASSERT_TRUE(&presetFor(Mode::Sing) == &kModePresets[1]);
 }
 
+
+// ---- Mode presets (ODR fix) ----
+
+void test_presets_out_of_range_mode_is_clamped() {
+  ASSERT_TRUE(&presetFor(static_cast<Mode>(-1)) == &kModePresets[0]);
+  ASSERT_TRUE(&presetFor(static_cast<Mode>(7)) == &kModePresets[2]);
+  ASSERT_NEAR(presetFor(static_cast<Mode>(99)).riderMaxRangeDb, 3.0, 1e-9);
+}
+
+// ---- DistressorComp: huge finite input ----
+
+void test_comp_huge_finite_input_recovers() {
+  // Samples near FLT_MAX used to overflow the float detector filter to inf, leaving the
+  // reduction (and so the output) NaN until reset().
+  const double sr = 48000.0;
+  for (Mode m : {Mode::Speak, Mode::Sing, Mode::Puke}) {
+    DSP::DistressorComp c;
+    c.prepare(sr, 2);
+    c.setMode(m);
+    c.setAmount(1.0f);
+    int bad = 0;
+    for (int i = 0; i < 64; ++i) {
+      float f[2] = {i % 2 ? 3e38f : -3e38f, i % 3 ? -3e38f : 3e38f};
+      c.processFrame(f);
+      if (!std::isfinite(f[0]) || !std::isfinite(f[1]) || !std::isfinite(c.lastGainReductionDb()))
+        ++bad;
+    }
+    double peak = 0.0;
+    for (int i = 0; i < (int)sr; ++i) {
+      const float s = (float)(0.25 * std::sin(2.0 * kPi * 440.0 * i / sr));
+      float f[2] = {s, s};
+      c.processFrame(f);
+      if (!std::isfinite(f[0]) || !std::isfinite(f[1]) || !std::isfinite(c.lastGainReductionDb()))
+        ++bad;
+      if (i > (int)(0.9 * sr)) peak = std::max(peak, (double)std::fabs(f[0]));
+    }
+    ASSERT_TRUE(bad == 0);
+    ASSERT_TRUE(peak > 0.05 && peak < 2.0);  // recovered to normal compression of the sine
+  }
+}
+
+// ---- Engine ----
+
+Settings engineDefaults() {
+  double v[kNumParams];
+  loadDefaults(v);
+  return mapParams(v);
+}
+
+struct Stereo { std::vector<float> l, r; };
+
+// Runs the engine over the whole signal in blocks, calling setSettings() before every block.
+Stereo runEngine(Engine& e, const Settings& s, const std::vector<float>& l,
+                 const std::vector<float>& r, int block = 256) {
+  Stereo out{std::vector<float>(l.size()), std::vector<float>(l.size())};
+  for (size_t i = 0; i < l.size(); i += (size_t)block) {
+    const int n = (int)std::min<size_t>((size_t)block, l.size() - i);
+    e.setSettings(s);
+    e.process(&l[i], &r[i], &out.l[i], &out.r[i], n);
+  }
+  return out;
+}
+
+Stereo runEngine(Engine& e, const Settings& s, const std::vector<float>& x, int block = 256) {
+  return runEngine(e, s, x, x, block);
+}
+
+Stereo runFresh(double sr, const Settings& s, const std::vector<float>& x, int block = 256) {
+  Engine e;
+  e.prepare(sr);
+  return runEngine(e, s, x, block);
+}
+
+// RMS in dB of x[a, b).
+double rmsDb(const std::vector<float>& x, size_t a, size_t b) {
+  b = std::min(b, x.size());
+  double sum = 0.0;
+  for (size_t i = a; i < b; ++i) sum += (double)x[i] * x[i];
+  return 10.0 * std::log10(sum / (double)std::max<size_t>(1, b - a) + 1e-30);
+}
+
+// RMS (dB) of the output over the input-time window [t0, t1) s (shifted by the latency).
+double outRmsDb(const std::vector<float>& y, double sr, int latency, double t0, double t1) {
+  return rmsDb(y, (size_t)(t0 * sr) + (size_t)latency, (size_t)(t1 * sr) + (size_t)latency);
+}
+
+double maxAbsDiff(const std::vector<float>& a, const std::vector<float>& b) {
+  double m = 0.0;
+  for (size_t i = 0; i < std::min(a.size(), b.size()); ++i)
+    m = std::max(m, (double)std::fabs(a[i] - b[i]));
+  return m;
+}
+
+// Phrase (200 Hz saw, -18 dB RMS) 1 s, breath (high-passed noise) 0.3 s, phrase 1 s.
+std::vector<float> phraseBreathPhrase(double sr, double breathDb = -35.0) {
+  SignalBuilder s(sr);
+  s.saw(200.0, -18.0, 1.0);
+  s.hpNoise(breathDb, 0.3);
+  s.saw(200.0, -18.0, 1.0);
+  return s.x;
+}
+
+int expectedLatency(double sr) {
+  return (int)std::lround(0.080 * sr) + DSP::nextPow2((int)std::ceil(0.020 * sr));
+}
+
+void test_engine_defaults_finite_and_mapped() {
+  double v[kNumParams];
+  loadDefaults(v);
+  Settings s = mapParams(v);
+  ASSERT_TRUE(s.mode == Mode::Speak);
+  ASSERT_NEAR(s.inputDb, 0.0, 1e-6);
+  ASSERT_NEAR(s.outputDb, 0.0, 1e-6);
+  ASSERT_NEAR(s.riderTargetDb, -20.0, 1e-5);
+  ASSERT_NEAR(s.riderRangeDb, 3.0, 1e-6);  // Speak 6 dB x 0.5
+  ASSERT_NEAR(s.breathAmount, 0.5, 1e-6);
+  ASSERT_NEAR(s.deEssAmount, 0.5, 1e-6);
+  ASSERT_NEAR(s.compAmount, 0.5, 1e-6);
+  ASSERT_NEAR(s.tone, 0.5, 1e-6);
+  ASSERT_NEAR(s.breathSens, 0.5, 1e-6);
+  ASSERT_NEAR(s.deEssFreqHz, deEssFreqHzFromNorm(kDefaultDeEssFreq), 1e-2);
+  ASSERT_NEAR(s.compMix, 1.0, 1e-6);
+  ASSERT_NEAR(s.eqAmount, 0.5, 1e-6);
+  ASSERT_TRUE(s.compRatioChoice == 0 && s.compDistChoice == 0 && s.compHpfChoice == 1);
+  ASSERT_TRUE(!s.breathListen && !s.deEssListen && !s.bypass);
+  ASSERT_TRUE(s.riderOn && s.breathOn && s.eqOn && s.deEssOn && s.compOn && s.toneOn);
+
+  // Out of range is clamped, non-finite falls back to the default.
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+  const double inf = std::numeric_limits<double>::infinity();
+  v[kInput] = 7.0;
+  v[kOutput] = -3.0;
+  v[kMode] = nan;
+  v[kRiderRange] = inf;
+  v[kTone] = nan;
+  v[kRiderTarget] = 0.25;
+  v[kCompRatio] = 1.0;
+  v[kCompDist] = 2.0 / 3.0;
+  v[kCompHpf] = 0.0;
+  v[kDeEssFreq] = 1.0;
+  v[kBypass] = 1.0;
+  v[kEqIn] = 0.0;
+  v[kBreathListen] = 1.0;
+  v[kDeEssListen] = 0.7;
+  v[kCompMix] = -inf;
+  s = mapParams(v);
+  ASSERT_NEAR(s.inputDb, 12.0, 1e-6);
+  ASSERT_NEAR(s.outputDb, -12.0, 1e-6);
+  ASSERT_TRUE(s.mode == Mode::Speak);
+  ASSERT_NEAR(s.riderRangeDb, 3.0, 1e-6);
+  ASSERT_NEAR(s.tone, 0.5, 1e-6);
+  ASSERT_NEAR(s.riderTargetDb, -25.0, 1e-5);
+  ASSERT_NEAR(s.deEssFreqHz, 10000.0, 1e-2);
+  ASSERT_NEAR(s.compMix, 1.0, 1e-6);
+  ASSERT_TRUE(s.compRatioChoice == 7 && s.compDistChoice == 2 && s.compHpfChoice == 0);
+  ASSERT_TRUE(s.bypass && !s.eqOn && s.riderOn && s.breathListen && s.deEssListen);
+
+  // Rider range follows the mode preset.
+  loadDefaults(v);
+  v[kRiderRange] = 1.0;
+  v[kMode] = 0.5;
+  s = mapParams(v);
+  ASSERT_TRUE(s.mode == Mode::Sing);
+  ASSERT_NEAR(s.riderRangeDb, 4.0, 1e-6);
+  v[kMode] = 1.0;
+  v[kRiderRange] = 0.5;
+  s = mapParams(v);
+  ASSERT_TRUE(s.mode == Mode::Puke);
+  ASSERT_NEAR(s.riderRangeDb, 1.5, 1e-6);
+
+  // Every float field is finite for any input.
+  int bad = 0;
+  for (int k = 0; k < 64; ++k) {
+    double w[kNumParams];
+    for (int i = 0; i < (int)kNumParams; ++i)
+      w[i] = (k + i) % 5 == 0 ? nan : ((k * 7 + i * 3) % 11) / 5.0 - 0.5;
+    const Settings t = mapParams(w);
+    for (float f : {t.inputDb, t.outputDb, t.riderTargetDb, t.riderRangeDb, t.breathAmount,
+                    t.deEssAmount, t.compAmount, t.tone, t.breathSens, t.deEssFreqHz, t.compMix,
+                    t.eqAmount})
+      if (!std::isfinite(f)) ++bad;
+  }
+  ASSERT_TRUE(bad == 0);
+}
+
+void test_engine_silence_stays_silent() {
+  const double sr = 48000.0;
+  std::vector<float> zeros(512, 0.0f), l(512), r(512);
+  for (Mode m : {Mode::Speak, Mode::Sing, Mode::Puke}) {
+    Settings s = engineDefaults();
+    s.mode = m;
+    Engine e;
+    e.prepare(sr);
+    long nonZero = 0;
+    for (int b = 0; b < (int)(10.0 * sr / 512); ++b) {
+      e.setSettings(s);
+      e.process(zeros.data(), zeros.data(), l.data(), r.data(), 512);
+      for (int i = 0; i < 512; ++i)
+        if (l[i] != 0.0f || r[i] != 0.0f) ++nonZero;
+    }
+    ASSERT_TRUE(nonZero == 0);
+
+    // After a phrase, the decaying tails never leave denormals at the output.
+    const auto x = phraseBreathPhrase(sr);
+    runEngine(e, s, x);
+    long denormals = 0;
+    for (int b = 0; b < (int)(5.0 * sr / 512); ++b) {
+      e.setSettings(s);
+      e.process(zeros.data(), zeros.data(), l.data(), r.data(), 512);
+      for (int i = 0; i < 512; ++i)
+        if (std::fpclassify(l[i]) == FP_SUBNORMAL || std::fpclassify(r[i]) == FP_SUBNORMAL)
+          ++denormals;
+    }
+    ASSERT_TRUE(denormals == 0);
+  }
+}
+
+void test_engine_full_scale_finite() {
+  const double sr = 48000.0;
+  auto l = noiseVec((size_t)(2.0 * sr), 1.0 / std::sqrt(3.0), 0x1111u);  // uniform +-1
+  auto r = noiseVec((size_t)(2.0 * sr), 1.0 / std::sqrt(3.0), 0x2222u);
+  l[1000] = std::numeric_limits<float>::quiet_NaN();
+  r[2000] = std::numeric_limits<float>::infinity();
+  l[3000] = -std::numeric_limits<float>::infinity();
+  for (Mode m : {Mode::Speak, Mode::Sing, Mode::Puke}) {
+    Settings s = engineDefaults();
+    s.mode = m;
+    Engine e;
+    e.prepare(sr);
+    const Stereo y = runEngine(e, s, l, r);
+    long bad = 0;
+    double peak = 0.0;
+    for (size_t i = 0; i < y.l.size(); ++i) {
+      if (!std::isfinite(y.l[i]) || !std::isfinite(y.r[i]) || std::fabs(y.l[i]) > 4.0f ||
+          std::fabs(y.r[i]) > 4.0f)
+        ++bad;
+      peak = std::max(peak, (double)std::fabs(y.l[i]));
+    }
+    ASSERT_TRUE(bad == 0);
+    ASSERT_TRUE(peak > 0.1);  // the noise does come through
+  }
+}
+
+void test_engine_zero_and_one_sample_blocks() {
+  const double sr = 48000.0;
+  auto x = phraseBreathPhrase(sr);
+  x.resize(65 * 1500);
+  const Settings s = engineDefaults();
+  const Stereo ref = runFresh(sr, s, x, 65);
+
+  Engine e;
+  e.prepare(sr);
+  Stereo y{std::vector<float>(x.size()), std::vector<float>(x.size())};
+  const int pattern[3] = {0, 1, 64};
+  size_t pos = 0;
+  for (int k = 0; pos < x.size(); ++k) {
+    const int n = (int)std::min<size_t>((size_t)pattern[k % 3], x.size() - pos);
+    e.setSettings(s);
+    e.process(&x[pos], &x[pos], &y.l[pos], &y.r[pos], n);
+    pos += (size_t)n;
+  }
+  ASSERT_TRUE(maxAbsDiff(ref.l, y.l) <= 1e-6);
+  ASSERT_TRUE(maxAbsDiff(ref.r, y.r) <= 1e-6);
+  ASSERT_TRUE(rmsDb(ref.l, (size_t)e.latencySamples(), ref.l.size()) > -40.0);
+}
+
+void test_engine_mono_in_mono_out() {
+  const double sr = 48000.0;
+  const auto x = phraseBreathPhrase(sr);
+  for (Mode m : {Mode::Speak, Mode::Sing, Mode::Puke}) {
+    Settings s = engineDefaults();
+    s.mode = m;
+    const Stereo y = runFresh(sr, s, x);
+    long mismatch = 0;
+    for (size_t i = 0; i < x.size(); ++i)
+      if (y.l[i] != y.r[i]) ++mismatch;
+    ASSERT_TRUE(mismatch == 0);
+
+    // Mono call (inR / outR null), processed in place: same as the left channel.
+    Engine e;
+    e.prepare(sr);
+    std::vector<float> buf = x;
+    for (size_t i = 0; i < buf.size(); i += 256) {
+      const int n = (int)std::min<size_t>(256, buf.size() - i);
+      e.setSettings(s);
+      e.process(&buf[i], nullptr, &buf[i], nullptr, n);
+    }
+    ASSERT_TRUE(maxAbsDiff(buf, y.l) == 0.0);
+    ASSERT_TRUE(rmsDb(buf, (size_t)e.latencySamples(), buf.size()) > -40.0);
+  }
+}
+
+void test_engine_latency_reported_and_bypass_delay() {
+  for (double sr : {44100.0, 48000.0, 96000.0}) {
+    Engine e;
+    e.prepare(sr);
+    const int L = e.latencySamples();
+    ASSERT_TRUE(L == expectedLatency(sr));
+    ASSERT_TRUE(L == (sr == 44100.0 ? 4552 : (sr == 48000.0 ? 4864 : 9728)));
+    auto l = noiseVec((size_t)(0.3 * sr) + (size_t)L, 0.2, 0x3333u);
+    auto r = noiseVec(l.size(), 0.2, 0x4444u);
+    for (Mode m : {Mode::Speak, Mode::Sing, Mode::Puke}) {
+      Settings s = engineDefaults();
+      s.mode = m;
+      s.bypass = true;
+      s.inputDb = 6.0f;   // bypass ignores the gains
+      s.outputDb = -6.0f;
+      e.reset();
+      const Stereo y = runEngine(e, s, l, r, 300);
+      ASSERT_TRUE(e.latencySamples() == L);  // the same in every mode
+      long mismatch = 0;
+      for (size_t i = 0; i < l.size(); ++i) {
+        const float el = i >= (size_t)L ? l[i - (size_t)L] : 0.0f;
+        const float er = i >= (size_t)L ? r[i - (size_t)L] : 0.0f;
+        if (y.l[i] != el || y.r[i] != er) ++mismatch;
+      }
+      ASSERT_TRUE(mismatch == 0);
+    }
+  }
+}
+
+void test_engine_breath_reduced_end_to_end() {
+  const double sr = 48000.0;
+  const auto x = phraseBreathPhrase(sr);
+  Settings s = engineDefaults();
+  s.breathAmount = 0.0f;
+  Engine e;
+  e.prepare(sr);
+  const int L = e.latencySamples();
+  const Stereo y0 = runEngine(e, s, x);
+  s.breathAmount = 1.0f;
+  const Stereo y1 = runFresh(sr, s, x);
+  // The whole breath, edges included (the look-ahead covers it from its first sample).
+  const double cut = outRmsDb(y0.l, sr, L, 1.0, 1.3) - outRmsDb(y1.l, sr, L, 1.0, 1.3);
+  ASSERT_TRUE(cut >= 6.0 && cut <= 13.0);
+  // The phrases are untouched.
+  ASSERT_NEAR(outRmsDb(y1.l, sr, L, 0.3, 0.95), outRmsDb(y0.l, sr, L, 0.3, 0.95), 0.5);
+  ASSERT_NEAR(outRmsDb(y1.l, sr, L, 1.4, 2.2), outRmsDb(y0.l, sr, L, 1.4, 2.2), 0.5);
+}
+
+void test_engine_puke_scream_intact() {
+  const double sr = 48000.0;
+  SignalBuilder b(sr);
+  b.wideNoise(-10.0, 3.0);
+  Settings s = engineDefaults();
+  s.mode = Mode::Puke;
+  s.breathAmount = 0.0f;
+  Engine e;
+  e.prepare(sr);
+  const int L = e.latencySamples();
+  const Stereo y0 = runEngine(e, s, b.x);
+  s.breathAmount = 1.0f;
+  const Stereo y1 = runFresh(sr, s, b.x);
+  const double d = outRmsDb(y0.l, sr, L, 1.0, 2.9) - outRmsDb(y1.l, sr, L, 1.0, 2.9);
+  ASSERT_TRUE(d >= -1.0 && d <= 1.0);
+  ASSERT_TRUE(outRmsDb(y1.l, sr, L, 1.0, 2.9) > -25.0);
+}
+
+void test_engine_puke_uses_level_detector() {
+  // Scream / quiet breath / scream: only the level detector sees this breath (the spectral one
+  // needs a voiced phrase first), so it is reduced in Puke and left alone in Speak.
+  const double sr = 48000.0;
+  SignalBuilder b(sr);
+  b.wideNoise(-10.0, 1.0);
+  b.wideNoise(-35.0, 0.4);
+  b.wideNoise(-10.0, 1.0);
+  double cut[2] = {0.0, 0.0};
+  bool level[2] = {false, false};
+  const Mode modes[2] = {Mode::Puke, Mode::Speak};
+  for (int k = 0; k < 2; ++k) {
+    Settings s = engineDefaults();
+    s.mode = modes[k];
+    s.breathAmount = 0.0f;
+    Engine e;
+    e.prepare(sr);
+    const int L = e.latencySamples();
+    const Stereo y0 = runEngine(e, s, b.x);
+    level[k] = e.usingLevelDetector();
+    s.breathAmount = 1.0f;
+    const Stereo y1 = runFresh(sr, s, b.x);
+    cut[k] = outRmsDb(y0.l, sr, L, 1.1, 1.35) - outRmsDb(y1.l, sr, L, 1.1, 1.35);
+  }
+  ASSERT_TRUE(cut[0] >= 6.0 && cut[0] <= 13.0);
+  ASSERT_TRUE(cut[1] >= -1.0 && cut[1] <= 1.0);
+  ASSERT_TRUE(level[0] && !level[1]);
+}
+
+void test_engine_mode_switch_no_blowup() {
+  const double sr = 48000.0;
+  const int n = (int)(3.0 * sr), seg = (int)(0.1 * sr);
+  std::vector<float> x((size_t)n), y((size_t)n);
+  for (int i = 0; i < n; ++i) x[(size_t)i] = (float)(0.5 * std::sin(2.0 * kPi * 220.0 * i / sr));
+  Engine e;
+  e.prepare(sr);
+  Settings s = engineDefaults();
+  const Mode cycle[4] = {Mode::Speak, Mode::Puke, Mode::Sing, Mode::Puke};
+  for (int b = 0; b * seg < n; ++b) {
+    s.mode = cycle[b % 4];
+    const int len = std::min(seg, n - b * seg);
+    e.setSettings(s);
+    e.process(&x[(size_t)(b * seg)], &x[(size_t)(b * seg)], &y[(size_t)(b * seg)], nullptr, len);
+  }
+  long bad = 0;
+  for (float v : y)
+    if (!std::isfinite(v) || std::fabs(v) > 4.0f) ++bad;
+  ASSERT_TRUE(bad == 0);
+  ASSERT_TRUE(rmsDb(y, (size_t)e.latencySamples(), y.size()) > -30.0);
+}
+
+void test_engine_sample_rates() {
+  for (double sr : {44100.0, 48000.0, 96000.0, 192000.0}) {
+    SignalBuilder b(sr);
+    b.saw(200.0, -18.0, 0.5);
+    b.hpNoise(-35.0, 0.2);
+    b.saw(200.0, -18.0, 0.3);
+    for (Mode m : {Mode::Speak, Mode::Puke}) {
+      Settings s = engineDefaults();
+      s.mode = m;
+      Engine e;
+      e.prepare(sr);
+      ASSERT_TRUE(e.latencySamples() == expectedLatency(sr));
+      const Stereo y = runEngine(e, s, b.x, 512);
+      long bad = 0;
+      for (size_t i = 0; i < y.l.size(); ++i)
+        if (!std::isfinite(y.l[i]) || !std::isfinite(y.r[i]) || std::fabs(y.l[i]) > 4.0f) ++bad;
+      ASSERT_TRUE(bad == 0);
+      const double lvl = rmsDb(y.l, (size_t)e.latencySamples(), y.l.size());
+      ASSERT_TRUE(lvl > -30.0 && lvl < -6.0);
+    }
+  }
+}
+
+void setAllIn(Settings& s, bool on) {
+  s.riderOn = s.breathOn = s.eqOn = s.deEssOn = s.compOn = s.toneOn = on;
+}
+
+void test_engine_all_in_off_is_passthrough() {
+  const double sr = 48000.0;
+  auto x = phraseBreathPhrase(sr);
+  const auto nz = noiseVec(x.size(), 0.05, 0x5555u);
+  for (size_t i = 0; i < x.size(); ++i) x[i] += nz[i];
+  for (Mode m : {Mode::Speak, Mode::Puke}) {
+    Settings s = engineDefaults();
+    s.mode = m;
+    s.compAmount = 1.0f;
+    s.tone = 1.0f;
+    setAllIn(s, false);
+    Engine e;
+    e.prepare(sr);
+    const size_t L = (size_t)e.latencySamples();
+    const Stereo y = runEngine(e, s, x);
+    long bad = 0;
+    for (size_t i = 0; i < x.size(); ++i)
+      if (std::fabs(y.l[i] - (i >= L ? x[i - L] : 0.0f)) > 1e-4f) ++bad;
+    ASSERT_TRUE(bad == 0);
+    // Sanity: with the modules in, the output is not the input.
+    setAllIn(s, true);
+    const Stereo yOn = runFresh(sr, s, x);
+    ASSERT_TRUE(maxAbsDiff(yOn.l, y.l) > 1e-2);
+  }
+}
+
+void test_engine_breath_in_off_disables_reduction() {
+  const double sr = 48000.0;
+  const auto x = phraseBreathPhrase(sr);
+  Settings s = engineDefaults();
+  s.breathAmount = 0.0f;
+  Engine e;
+  e.prepare(sr);
+  const int L = e.latencySamples();
+  const double ref = outRmsDb(runEngine(e, s, x).l, sr, L, 1.0, 1.3);
+  s.breathAmount = 1.0f;
+  s.breathOn = false;
+  const double off = outRmsDb(runFresh(sr, s, x).l, sr, L, 1.0, 1.3);
+  s.breathOn = true;
+  const double on = outRmsDb(runFresh(sr, s, x).l, sr, L, 1.0, 1.3);
+  ASSERT_NEAR(off, ref, 0.5);
+  ASSERT_TRUE(ref - on >= 6.0);
+}
+
+// Smooth synthetic voice: 200 Hz with two harmonics (small natural sample-to-sample steps),
+// a breath between two phrases and a sibilant burst.
+std::vector<float> smoothVoice(double sr) {
+  std::vector<float> x;
+  auto phrase = [&](double sec) {
+    const int n = (int)(sec * sr);
+    for (int i = 0; i < n; ++i) {
+      const double t = (double)i / sr;
+      x.push_back((float)(0.25 * std::sin(2.0 * kPi * 200.0 * t) +
+                          0.12 * std::sin(2.0 * kPi * 400.0 * t) +
+                          0.06 * std::sin(2.0 * kPi * 600.0 * t)));
+    }
+  };
+  SignalBuilder b(sr);
+  b.hpNoise(-35.0, 0.3);
+  SignalBuilder sib(sr);
+  sib.hpNoise(-28.0, 0.15);
+  phrase(0.6);
+  x.insert(x.end(), b.x.begin(), b.x.end());
+  phrase(0.4);
+  x.insert(x.end(), sib.x.begin(), sib.x.end());
+  phrase(0.4);
+  return x;
+}
+
+void test_engine_in_toggle_no_click() {
+  const double sr = 48000.0;
+  const auto x = smoothVoice(sr);
+  Settings base = engineDefaults();
+  base.riderTargetDb = -10.0f;
+  base.riderRangeDb = 6.0f;
+  base.breathAmount = 1.0f;
+  base.eqAmount = 1.0f;
+  base.deEssAmount = 1.0f;
+  base.compAmount = 1.0f;
+  base.tone = 1.0f;
+  const int seg = (int)(0.05 * sr);
+  int bad = 0;
+  for (int m = 0; m < 6; ++m) {
+    auto setIn = [m](Settings& s, bool on) {
+      bool* f[6] = {&s.riderOn, &s.breathOn, &s.eqOn, &s.deEssOn, &s.compOn, &s.toneOn};
+      *f[m] = on;
+    };
+    Settings on = base, off = base;
+    setIn(off, false);
+    const Stereo yOn = runFresh(sr, on, x, seg);
+    const Stereo yOff = runFresh(sr, off, x, seg);
+    Engine e;
+    e.prepare(sr);
+    std::vector<float> y(x.size());
+    for (size_t i = 0, k = 0; i < x.size(); i += (size_t)seg, ++k) {
+      const int n = (int)std::min<size_t>((size_t)seg, x.size() - i);
+      e.setSettings(k % 2 ? off : on);
+      e.process(&x[i], &x[i], &y[i], nullptr, n);
+    }
+    const size_t L = (size_t)e.latencySamples();
+    double maxStep = 0.0, maxExcess = 0.0;
+    for (size_t i = 1; i < y.size(); ++i) {
+      const double st = std::fabs(y[i] - y[i - 1]);
+      maxStep = std::max(maxStep, st);
+      // Inside the harmonic phrases (input time, 20 ms away from the noise segments) the steady
+      // outputs have small, smooth steps, so a switch click stands out.
+      const double t = ((double)i - (double)L) / sr;
+      const bool phrase = (t > 0.02 && t < 0.58) || (t > 0.92 && t < 1.28) ||
+                          (t > 1.47 && t < 1.83);
+      if (!phrase) continue;
+      const double ref = std::max(std::fabs(yOn.l[i] - yOn.l[i - 1]),
+                                  std::fabs(yOff.l[i] - yOff.l[i - 1]));
+      maxExcess = std::max(maxExcess, st - ref);
+    }
+    // Brief: no step above 0.5. Stricter: inside the phrases toggling adds no step beyond what
+    // the steady on / off outputs have at the same sample (a hard switch adds |on - off|).
+    if (!(maxStep < 0.5) || !(maxExcess < 0.01)) {
+      std::fprintf(stderr, "  module %d: maxStep %.4f excess %.4f\n", m, maxStep, maxExcess);
+      ++bad;
+    }
+  }
+  ASSERT_TRUE(bad == 0);
+}
+
+void test_engine_breath_listen_outputs_removed() {
+  const double sr = 48000.0;
+  const auto x = phraseBreathPhrase(sr);
+  Settings s = engineDefaults();
+  s.breathAmount = 1.0f;
+  s.breathListen = true;
+  Engine e;
+  e.prepare(sr);
+  const int L = e.latencySamples();
+  const Stereo y = runEngine(e, s, x);
+  ASSERT_TRUE(outRmsDb(y.l, sr, L, 1.02, 1.28) > -50.0);
+  ASSERT_TRUE(outRmsDb(y.l, sr, L, 1.02, 1.28) < -35.0);
+  ASSERT_TRUE(outRmsDb(y.l, sr, L, 0.3, 0.95) < -40.0);
+  ASSERT_TRUE(outRmsDb(y.l, sr, L, 1.45, 2.2) < -40.0);
+
+  // The stages after the reducer are not heard; Breath Listen wins over De-ess Listen.
+  Settings t = s;
+  t.eqAmount = 1.0f;
+  t.deEssAmount = 1.0f;
+  t.compAmount = 1.0f;
+  t.compMix = 0.3f;
+  t.tone = 0.0f;
+  t.deEssListen = true;
+  ASSERT_TRUE(maxAbsDiff(runFresh(sr, t, x).l, y.l) <= 1e-6);
+}
+
+void test_engine_deess_listen_outputs_removed_band() {
+  const double sr = 48000.0;
+  SignalBuilder b(sr);
+  b.saw(200.0, -18.0, 0.6);
+  b.hpNoise(-12.0, 0.3);  // sibilant burst
+  b.saw(200.0, -18.0, 0.6);
+  Settings s = engineDefaults();
+  s.deEssAmount = 1.0f;
+  s.deEssListen = true;
+  Engine e;
+  e.prepare(sr);
+  const int L = e.latencySamples();
+  const Stereo y = runEngine(e, s, b.x);
+  ASSERT_TRUE(outRmsDb(y.l, sr, L, 0.65, 0.85) > -40.0);
+  ASSERT_TRUE(outRmsDb(y.l, sr, L, 0.65, 0.85) < -10.0);
+  ASSERT_TRUE(outRmsDb(y.l, sr, L, 0.1, 0.55) < -50.0);
+
+  // Comp and Tone (after the de-esser) are not heard.
+  Settings t = s;
+  t.compAmount = 1.0f;
+  t.compMix = 0.4f;
+  t.tone = 1.0f;
+  ASSERT_TRUE(maxAbsDiff(runFresh(sr, t, b.x).l, y.l) <= 1e-6);
+  // Nothing is removed at Amount 0.
+  t.deEssAmount = 0.0f;
+  ASSERT_TRUE(outRmsDb(runFresh(sr, t, b.x).l, sr, L, 0.65, 0.85) < -80.0);
+}
+
+void test_engine_comp_mix_zero_bypasses_comp() {
+  const double sr = 48000.0;
+  const auto x = phraseBreathPhrase(sr);
+  Settings s = engineDefaults();
+  s.compAmount = 1.0f;
+  s.compMix = 0.0f;
+  const Stereo mix0 = runFresh(sr, s, x);
+  Settings off = s;
+  off.compOn = false;
+  off.compMix = 1.0f;
+  const Stereo inOff = runFresh(sr, off, x);
+  ASSERT_TRUE(maxAbsDiff(mix0.l, inOff.l) <= 1e-5);
+  ASSERT_TRUE(maxAbsDiff(mix0.r, inOff.r) <= 1e-5);
+  s.compMix = 1.0f;
+  ASSERT_TRUE(maxAbsDiff(runFresh(sr, s, x).l, inOff.l) > 1e-2);
+}
+
+void test_engine_gains_are_smoothed() {
+  const double sr = 48000.0;
+  const int n = (int)(1.0 * sr);
+  std::vector<float> x((size_t)n), y((size_t)n);
+  for (int i = 0; i < n; ++i) x[(size_t)i] = (float)(0.25 * std::sin(2.0 * kPi * 1000.0 * i / sr));
+  Settings s = engineDefaults();
+  setAllIn(s, false);
+  s.inputDb = -12.0f;
+  s.outputDb = 0.0f;
+  Engine e;
+  e.prepare(sr);
+  const int L = e.latencySamples();
+  for (int i = 0; i < n; i += 256) {
+    if (i >= L + 4800) s.inputDb = 12.0f;        // +24 dB jump of the input gain
+    if (i >= L + 14400) s.outputDb = -12.0f;     // -12 dB jump of the output gain
+    e.setSettings(s);
+    e.process(&x[(size_t)i], nullptr, &y[(size_t)i], nullptr, std::min(256, n - i));
+  }
+  double maxStep = 0.0;
+  for (size_t i = 1; i < y.size(); ++i) maxStep = std::max(maxStep, (double)std::fabs(y[i] - y[i - 1]));
+  // Natural step of the loudest part: 2 pi 1000 / 48000 x 1.0 = 0.13; a jump would be ~0.9.
+  ASSERT_TRUE(maxStep < 0.2);
+  // Settled values: +12 dB then +12 - 12 = 0 dB on the 0.25 sine (-15.05 dBFS RMS).
+  ASSERT_NEAR(rmsDb(y, (size_t)(L + 9600), (size_t)(L + 14400)), -15.05 + 12.0, 0.1);
+  ASSERT_NEAR(rmsDb(y, (size_t)(L + 24000), y.size()), -15.05, 0.1);
+}
+
+// Reference chain built from the blocks in the specified order, with constant settings.
+void test_engine_chain_order_matches_reference() {
+  const double sr = 48000.0;
+  SignalBuilder b(sr);
+  b.saw(200.0, -18.0, 0.8);
+  b.hpNoise(-35.0, 0.3);
+  b.saw(200.0, -18.0, 0.5);
+  b.hpNoise(-15.0, 0.15);
+  b.saw(200.0, -18.0, 0.5);
+  const std::vector<float>& xl = b.x;
+  std::vector<float> xr(xl.size());
+  for (size_t i = 0; i < xl.size(); ++i) xr[i] = 0.7f * xl[i];
+
+  Settings s = engineDefaults();
+  s.inputDb = 6.0f;
+  s.outputDb = -3.0f;
+  s.riderTargetDb = -14.0f;
+  s.riderRangeDb = 6.0f;
+  s.breathAmount = 1.0f;
+  s.eqAmount = 0.8f;
+  s.deEssAmount = 1.0f;
+  s.compAmount = 1.0f;
+  s.compMix = 0.8f;
+  s.tone = 0.8f;
+  Engine e;
+  e.prepare(sr);
+  const Stereo y = runEngine(e, s, xl, xr);
+
+  const int D = e.latencySamples();
+  const int W = (int)std::lround(kLookaheadMs * 0.001 * sr);
+  DSP::SpectralBreathDetector det;
+  det.prepare(sr);
+  det.setSensitivity(s.breathSens);
+  DSP::LevelMeter meter;
+  meter.prepare(sr, 200.0f);
+  DSP::Rider rider;
+  rider.prepare(sr);
+  rider.setTargetDb(s.riderTargetDb);
+  rider.setMaxRangeDb(s.riderRangeDb);
+  rider.setSlewDbPerSec(presetFor(s.mode).riderSlewDbPerSec);
+  DSP::BreathReducer red;
+  red.prepare(sr);
+  red.setAmount(s.breathAmount);
+  DSP::CorrectiveEq eq;
+  eq.prepare(sr, 2);
+  eq.setMode(s.mode);
+  eq.setAmount(s.eqAmount);
+  eq.reset();
+  DSP::DeEsser de;
+  de.prepare(sr, 2);
+  de.setMode(s.mode);
+  de.setAmount(s.deEssAmount);
+  de.setFreqHz(s.deEssFreqHz);
+  de.reset();
+  DSP::DistressorComp comp;
+  comp.prepare(sr, 2);
+  comp.setMode(s.mode);
+  comp.setAmount(s.compAmount);
+  comp.setMix(s.compMix);
+  comp.setRatioChoice(s.compRatioChoice);
+  comp.setDistChoice(s.compDistChoice);
+  comp.setDetectorHpf(s.compHpfChoice);
+  comp.reset();
+  DSP::ToneEq tone;
+  tone.prepare(sr, 2);
+  tone.setMode(s.mode);
+  tone.setTone(s.tone);
+  tone.reset();
+  const float gIn = (float)dbToGain(s.inputDb), gOut = (float)dbToGain(s.outputDb);
+
+  std::vector<float> prob;
+  prob.reserve(xl.size());
+  std::vector<int> dq;  // indices into prob, decreasing values (sliding max)
+  size_t dqHead = 0;
+  double maxDiff = 0.0, energy = 0.0;
+  for (size_t t = 0; t < xl.size(); ++t) {
+    const float ll = xl[t] * gIn, lr = xr[t] * gIn;
+    const float mono = 0.5f * (ll + lr);
+    const float lvl = meter.process(mono);
+    prob.push_back(det.process(mono));
+    while (dq.size() > dqHead && prob[(size_t)dq.back()] <= prob.back()) dq.pop_back();
+    dq.push_back((int)t);
+    while ((long)dq[dqHead] < (long)t - W) ++dqHead;
+    const float p = prob[(size_t)dq[dqHead]];
+    const float al = (t >= (size_t)D ? xl[t - (size_t)D] : 0.0f) * gIn;
+    const float ar = (t >= (size_t)D ? xr[t - (size_t)D] : 0.0f) * gIn;
+    const float gR = rider.processFrame(lvl, p > 0.5f);
+    const float gB = red.process(p);
+    float f[2] = {al * gR * gB, ar * gR * gB};
+    f[0] = eq.process(0, f[0]);
+    f[1] = eq.process(1, f[1]);
+    de.processFrame(f);
+    comp.processFrame(f);
+    f[0] = tone.process(0, f[0]) * gOut;
+    f[1] = tone.process(1, f[1]) * gOut;
+    maxDiff = std::max(maxDiff, (double)std::max(std::fabs(f[0] - y.l[t]), std::fabs(f[1] - y.r[t])));
+    energy += (double)f[0] * f[0];
+  }
+  ASSERT_TRUE(energy > 1.0);
+  ASSERT_TRUE(maxDiff <= 1e-5);
+}
+
+void test_engine_no_alloc_in_process() {
+  const double sr = 48000.0;
+  const auto x = smoothVoice(sr);
+  std::vector<float> l(x.size()), r(x.size());
+  Settings variants[24];
+  int nv = 0;
+  const Settings d = engineDefaults();
+  variants[nv++] = d;
+  for (int m = 0; m < 6; ++m) {
+    Settings s = d;
+    bool* f[6] = {&s.riderOn, &s.breathOn, &s.eqOn, &s.deEssOn, &s.compOn, &s.toneOn};
+    *f[m] = false;
+    variants[nv++] = s;
+  }
+  Settings s = d;
+  s.breathListen = true;
+  variants[nv++] = s;
+  s = d;
+  s.deEssListen = true;
+  variants[nv++] = s;
+  s = d;
+  s.bypass = true;
+  variants[nv++] = s;
+  for (Mode m : {Mode::Sing, Mode::Puke, Mode::Speak}) {
+    s = d;
+    s.mode = m;
+    s.compRatioChoice = (int)m + 2;
+    s.compDistChoice = (int)m + 1;
+    s.compHpfChoice = (int)m;
+    s.inputDb = 6.0f;
+    s.outputDb = -6.0f;
+    s.breathAmount = 1.0f;
+    s.deEssFreqHz = 9000.0f;
+    variants[nv++] = s;
+  }
+  Engine e;
+  e.prepare(sr);
+  const size_t block = x.size() / (size_t)(2 * nv);
+  g_allocs = 0;
+  g_countAllocs = true;
+  for (int rep = 0; rep < 2; ++rep) {
+    for (int k = 0; k < nv; ++k) {
+      const size_t at = (size_t)(rep * nv + k) * block;
+      e.setSettings(variants[k]);
+      e.process(&x[at], &x[at], &l[at], &r[at], (int)block);
+    }
+    e.reset();
+  }
+  g_countAllocs = false;
+  ASSERT_TRUE(g_allocs == 0);
+}
+
 } // namespace
 
 // ---- BreathReducer ----
@@ -1678,6 +2505,28 @@ int main() {
   RUN_TEST(test_tone_stereo_channels_identical);
   RUN_TEST(test_tone_changes_are_smooth);
   RUN_TEST(test_presets_values);
+  RUN_TEST(test_presets_out_of_range_mode_is_clamped);
+  RUN_TEST(test_comp_huge_finite_input_recovers);
+  RUN_TEST(test_engine_defaults_finite_and_mapped);
+  RUN_TEST(test_engine_silence_stays_silent);
+  RUN_TEST(test_engine_full_scale_finite);
+  RUN_TEST(test_engine_zero_and_one_sample_blocks);
+  RUN_TEST(test_engine_mono_in_mono_out);
+  RUN_TEST(test_engine_latency_reported_and_bypass_delay);
+  RUN_TEST(test_engine_breath_reduced_end_to_end);
+  RUN_TEST(test_engine_puke_scream_intact);
+  RUN_TEST(test_engine_puke_uses_level_detector);
+  RUN_TEST(test_engine_mode_switch_no_blowup);
+  RUN_TEST(test_engine_sample_rates);
+  RUN_TEST(test_engine_all_in_off_is_passthrough);
+  RUN_TEST(test_engine_breath_in_off_disables_reduction);
+  RUN_TEST(test_engine_in_toggle_no_click);
+  RUN_TEST(test_engine_breath_listen_outputs_removed);
+  RUN_TEST(test_engine_deess_listen_outputs_removed_band);
+  RUN_TEST(test_engine_comp_mix_zero_bypasses_comp);
+  RUN_TEST(test_engine_gains_are_smoothed);
+  RUN_TEST(test_engine_chain_order_matches_reference);
+  RUN_TEST(test_engine_no_alloc_in_process);
 
   std::fprintf(stdout, "\n%d passed, %d failed.\n", g_passed, g_failed);
   if (g_failed > 0) {

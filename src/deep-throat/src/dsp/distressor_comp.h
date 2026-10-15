@@ -23,7 +23,8 @@
 // -15 dBFS peak (-18 dBFS RMS) at the current threshold and ratio. Threshold, makeup and mix are
 // smoothed (20 ms). The wet path ends in a safety soft clip (identity up to 0 dBFS, never above 2)
 // for the onset overshoot of a loud transient after silence (no lookahead, makeup up to ~12 dB).
-// Mix: out = dry * (1 - mix) + wet * mix, dry = the (sanitised) input.
+// Mix: out = dry * (1 - mix) + wet * mix, dry = the (sanitised: non-finite -> 0, bounded to
+// +-1e6) input.
 //
 // processFrame() takes one sample per channel and is called per sample.
 #pragma once

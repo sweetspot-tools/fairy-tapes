@@ -24,6 +24,7 @@ constexpr double kK3 = 1.0;
 constexpr double kShaperLimit = 2.0;      // shaper input clamp (keeps huge inputs finite)
 constexpr double kDist3HpHz = 30.0, kDist3LpHz = 12000.0;
 constexpr double kDcBlockHz = 10.0;
+constexpr float kInputLimit = 1e6f;     // sanitised input bound (+120 dBFS)
 
 double coeffFor(double ms, double sr) { return 1.0 - std::exp(-1.0 / (ms * 0.001 * sr)); }
 
@@ -137,7 +138,9 @@ void DistressorComp::processFrame(float* samples) {
   double d = 0.0;
   for (int i = 0; i < n; ++i) {
     float x = samples[i];
-    if (!std::isfinite(x)) x = 0.0f;
+    // Non-finite -> 0; huge finite values are bounded so the float detector filter cannot
+    // overflow to inf (which would turn the reduction into NaN until reset()).
+    x = std::isfinite(x) ? std::clamp(x, -kInputLimit, kInputLimit) : 0.0f;
     samples[i] = x;
     const float h = ch_[(size_t)i].det.process(x);
     d = std::max(d, (double)std::fabs(hpfOn ? h : x));

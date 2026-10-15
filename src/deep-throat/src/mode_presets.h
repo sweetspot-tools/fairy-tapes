@@ -11,7 +11,7 @@ struct ModePreset {
   float riderSlewDbPerSec;
 };
 
-constexpr ModePreset kModePresets[3] = {
+inline constexpr ModePreset kModePresets[3] = {
     {6.0f, 8.0f},  // Speak
     {4.0f, 4.0f},  // Sing
     {3.0f, 2.0f},  // Puke
