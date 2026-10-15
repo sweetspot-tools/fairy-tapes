@@ -428,6 +428,7 @@ function bellBtn(cx,cy){
   var ic=el('path',{d:'M'+(cx-9)+' '+(cy+4)+' H'+(cx-5)+' C'+(cx-2)+' '+(cy+4)+' '+(cx-3)+' '+(cy-5)+' '+cx+' '+(cy-5)+' C'+(cx+3)+' '+(cy-5)+' '+(cx+2)+' '+(cy+4)+' '+(cx+5)+' '+(cy+4)+' H'+(cx+9),fill:'none','stroke-width':1.8,'stroke-linecap':'round','stroke-linejoin':'round'},ps.face);
   g._on=false;g._paint=function(o){r.setAttribute('fill',o?AMBL:'#8e8e91');ic.setAttribute('stroke',o?'#2a1d05':'#1a1a1c');ps.paint(o);};
   g._paint(false);g.addEventListener('click',function(){g._on=!g._on;g._paint(g._on);});
+  modeBtns.push(g);   /* the Bell exists only in the Channel (Black) EQ: dimmed and inert in Bus mode, like the compressor modes */
 }
 ['LF','LM','HM','HF'].forEach(function(n,i){var xs=[[ex[0],ex[1]],[ex[2],ex[4]],[ex[5],ex[7]],[ex[8],ex[9]]][i];
   var a=xs[0]-36,b=xs[1]+36,hasBell=(i===0||i===3),e=hasBell?b-34:b;

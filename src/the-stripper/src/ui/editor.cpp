@@ -702,6 +702,9 @@ void Editor::refreshModules() {
     bool dim = false;
     if (spec.module != Module::None) dim = spec.isIn ? state.globalBypass : moduleDimmed(spec.module, state);
     if (spec.id == kDriveAmount && driveKnobDimmed(namOn_, modelState_ == 2)) dim = true;   // NAM without a model passes through
+    const bool inUse = controlInUse(spec.id, channelMode_);
+    if (!inUse) dim = true;
+    control->setMouseEnabled(inUse);
     control->setDimmed(dim);
     if (silk_) silk_->setDimmed(static_cast<int>(spec.id), dim);
     const bool visible = visibleInMode(spec.id, channelMode_);

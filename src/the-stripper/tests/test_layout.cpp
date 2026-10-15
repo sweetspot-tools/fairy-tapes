@@ -187,6 +187,10 @@ void test_look_tables() {
   CHECK(knobLookOf(kDriveAmount)->radius == knobLookOf(kEqSaturation)->radius);
   CHECK(hasYellowLed(kStripMode) && hasYellowLed(kCompressorMode) && hasYellowLed(kDriveNamOn) && !hasYellowLed(kBypassEQ));
   CHECK(isBellButton(kEqLFBell) && isBellButton(kEqHFBell) && !isBellButton(kBypass));
+  // the Bell filter exists only in the Black (Channel) EQ: in Bus mode the buttons are dimmed and inert, every other control stays in use
+  CHECK(controlInUse(kEqLFBell, true) && controlInUse(kEqHFBell, true));
+  CHECK(!controlInUse(kEqLFBell, false) && !controlInUse(kEqHFBell, false));
+  CHECK(controlInUse(kEqLFGain, false) && controlInUse(kDriveAmount, false));
 }
 
 void test_meter_dimming() {
