@@ -12,6 +12,7 @@
 #include "dsp/breath_reducer.h"
 #include "dsp/biquad.h"
 #include "dsp/corrective_eq.h"
+#include "dsp/deesser.h"
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -810,6 +811,146 @@ void test_eq_amount_change_is_smooth() {
 }
 
 
+// ---- De-esser -------------------------------------------------------------------------------
+
+constexpr double kDsPi = 3.14159265358979323846;
+
+// Runs a stereo sine through the de-esser; returns the output RMS drop in dB over the last
+// 100 ms (0 = unchanged), relative to the same sine's input RMS.
+double deesserDropDb(double sr, double sineHz, double sineDb, float freqHz, float amount,
+                     Mode mode, double seconds = 0.5) {
+  DSP::DeEsser d;
+  d.prepare(sr, 2);
+  d.setMode(mode);
+  d.setFreqHz(freqHz);
+  d.setAmount(amount);
+  d.setListen(false);
+  const double amp = std::pow(10.0, sineDb / 20.0);
+  const long n = (long)(seconds * sr), tail = (long)(0.1 * sr);
+  double si = 0.0, so = 0.0;
+  for (long i = 0; i < n; ++i) {
+    float f[2];
+    f[0] = f[1] = (float)(amp * std::sin(2.0 * kDsPi * sineHz * i / sr));
+    const float in = f[0];
+    d.processFrame(f);
+    if (i >= n - tail) { si += (double)in * in; so += (double)f[0] * f[0]; }
+  }
+  return 10.0 * std::log10(si / std::max(so, 1e-30));
+}
+
+void test_biquad_low_pass() {
+  const double sr = 48000.0;
+  DSP::Biquad b;
+  b.setLowPass(sr, 1000.0, 0.70710678);
+  auto gain = [&](double hz) {
+    b.reset();
+    double s = 0.0;
+    const int n = 48000;
+    for (int i = 0; i < n; ++i) {
+      const float y = b.process((float)std::sin(2.0 * kDsPi * hz * i / sr));
+      if (i >= n / 2) s += (double)y * y;
+    }
+    return 10.0 * std::log10(2.0 * s / (n / 2));
+  };
+  ASSERT_NEAR(gain(100.0), 0.0, 0.1);
+  ASSERT_NEAR(gain(1000.0), -3.0, 0.3);
+  ASSERT_TRUE(gain(8000.0) < -30.0);
+}
+
+void test_deesser_freq_moves_detection() {
+  for (double sr : {44100.0, 48000.0, 96000.0}) {
+    ASSERT_TRUE(deesserDropDb(sr, 8000.0, -10.0, 8000.0f, 1.0f, Mode::Speak) >= 6.0);
+    ASSERT_TRUE(deesserDropDb(sr, 8000.0, -10.0, 4000.0f, 1.0f, Mode::Speak) < 3.0);
+  }
+}
+
+void test_deesser_reduces_sibilance() {
+  for (double sr : {44100.0, 48000.0, 96000.0})
+    ASSERT_TRUE(deesserDropDb(sr, 7000.0, -10.0, 6500.0f, 1.0f, Mode::Speak, 0.1) >= 6.0);
+}
+
+void test_deesser_leaves_low_band() {
+  for (double sr : {44100.0, 48000.0, 96000.0})
+    ASSERT_TRUE(deesserDropDb(sr, 500.0, -10.0, 6500.0f, 1.0f, Mode::Speak) < 0.5);
+}
+
+void test_deesser_amount_zero_is_transparent() {
+  DSP::DeEsser d;
+  d.prepare(48000.0, 2);
+  d.setAmount(0.0f);
+  d.setFreqHz(6500.0f);
+  uint32_t seed = 12345u;
+  double se = 0.0, si = 0.0;
+  for (int i = 0; i < 48000; ++i) {
+    float f[2];
+    for (int c = 0; c < 2; ++c) {
+      seed = seed * 1664525u + 1013904223u;
+      f[c] = ((seed >> 8) / 8388608.0f - 1.0f) * 0.3f;
+    }
+    const float in0 = f[0], in1 = f[1];
+    d.processFrame(f);
+    se += (double)(f[0] - in0) * (f[0] - in0) + (double)(f[1] - in1) * (f[1] - in1);
+    si += (double)in0 * in0 + (double)in1 * in1;
+  }
+  ASSERT_TRUE(10.0 * std::log10(std::max(se, 1e-30) / si) < -60.0);
+}
+
+void test_deesser_puke_nearly_off() {
+  ASSERT_TRUE(deesserDropDb(48000.0, 7000.0, -10.0, 6500.0f, 1.0f, Mode::Puke) < 3.0);
+}
+
+void test_deesser_listen_outputs_removed_band() {
+  auto rms = [](double hz) {
+    DSP::DeEsser d;
+    d.prepare(48000.0, 2);
+    d.setFreqHz(6500.0f);
+    d.setAmount(1.0f);
+    d.setListen(true);
+    const double amp = std::pow(10.0, -10.0 / 20.0);
+    double s = 0.0;
+    for (int i = 0; i < 24000; ++i) {
+      float f[2];
+      f[0] = f[1] = (float)(amp * std::sin(2.0 * kDsPi * hz * i / 48000.0));
+      d.processFrame(f);
+      if (i >= 12000) s += (double)f[0] * f[0];
+    }
+    return 10.0 * std::log10(std::max(s / 12000.0, 1e-30));
+  };
+  ASSERT_TRUE(rms(7000.0) > -30.0);
+  ASSERT_TRUE(rms(500.0) < -40.0);
+}
+
+void test_deesser_192k_finite_and_stereo_linked() {
+  DSP::DeEsser d;
+  d.prepare(192000.0, 2);
+  d.setFreqHz(10000.0f);
+  d.setAmount(1.0f);
+  bool ok = true;
+  for (int i = 0; i < 19200; ++i) {
+    float f[2] = {(float)(0.3 * std::sin(0.2 * i)), (float)(0.3 * std::sin(0.2 * i))};
+    d.processFrame(f);
+    ok = ok && std::isfinite(f[0]) && std::isfinite(f[1]) && f[0] == f[1];
+  }
+  ASSERT_TRUE(ok);
+}
+
+void test_deesser_freq_change_is_smooth() {
+  DSP::DeEsser d;
+  d.prepare(48000.0, 2);
+  d.setAmount(1.0f);
+  d.setFreqHz(4000.0f);
+  double maxJump = 0.0, prev = 0.0;
+  for (int i = 0; i < 48000; ++i) {
+    if (i == 24000) d.setFreqHz(10000.0f);
+    float f[2];
+    f[0] = f[1] = (float)(0.3 * std::sin(2.0 * kDsPi * 300.0 * i / 48000.0));
+    d.processFrame(f);
+    if (i > 100) maxJump = std::max(maxJump, std::fabs((double)f[0] - prev));
+    prev = f[0];
+  }
+  ASSERT_TRUE(maxJump < 0.3 * 2.0 * kDsPi * 300.0 / 48000.0 * 1.5);
+}
+
 } // namespace
 
 // ---- BreathReducer ----
@@ -923,6 +1064,15 @@ int main() {
   RUN_TEST(test_biquad_high_shelf_gain);
   RUN_TEST(test_eq_stereo_channels_identical);
   RUN_TEST(test_eq_amount_change_is_smooth);
+  RUN_TEST(test_biquad_low_pass);
+  RUN_TEST(test_deesser_freq_moves_detection);
+  RUN_TEST(test_deesser_reduces_sibilance);
+  RUN_TEST(test_deesser_leaves_low_band);
+  RUN_TEST(test_deesser_amount_zero_is_transparent);
+  RUN_TEST(test_deesser_puke_nearly_off);
+  RUN_TEST(test_deesser_listen_outputs_removed_band);
+  RUN_TEST(test_deesser_192k_finite_and_stereo_linked);
+  RUN_TEST(test_deesser_freq_change_is_smooth);
 
   std::fprintf(stdout, "\n%d passed, %d failed.\n", g_passed, g_failed);
   if (g_failed > 0) {

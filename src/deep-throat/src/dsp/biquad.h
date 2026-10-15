@@ -1,5 +1,5 @@
 // Fairy Tapes · Deep Throat — RBJ cookbook biquad (transposed direct form II, double state).
-// High-pass, peaking and high-shelf. Header-only, no VST3 SDK dependency. Setters compute
+// High-pass, low-pass, peaking and high-shelf. Header-only, no VST3 SDK dependency. Setters compute
 // coefficients only (they keep the filter state, so they can be called while running).
 #pragma once
 
@@ -14,6 +14,11 @@ struct Biquad {
   void setHighPass(double sr, double hz, double q) {
     const double w = omega(sr, hz), c = std::cos(w), al = std::sin(w) / (2.0 * q);
     set((1.0 + c) / 2.0, -(1.0 + c), (1.0 + c) / 2.0, 1.0 + al, -2.0 * c, 1.0 - al);
+  }
+
+  void setLowPass(double sr, double hz, double q) {
+    const double w = omega(sr, hz), c = std::cos(w), al = std::sin(w) / (2.0 * q);
+    set((1.0 - c) / 2.0, 1.0 - c, (1.0 - c) / 2.0, 1.0 + al, -2.0 * c, 1.0 - al);
   }
 
   void setPeaking(double sr, double hz, double q, double gainDb) {
