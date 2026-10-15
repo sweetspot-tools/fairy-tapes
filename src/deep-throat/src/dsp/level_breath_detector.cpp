@@ -36,6 +36,7 @@ void LevelBreathDetector::reset() {
   active_ = false;
   locked_ = false;
   entryPhraseDb_ = -120.0f;
+  lockLevelDb_ = -120.0f;
   prob_ = 0.0f;
 }
 
@@ -49,12 +50,24 @@ float LevelBreathDetector::process(float monoSample) {
     else phraseDb_ = static_cast<float>(level + (phraseDb_ - level) * phraseCoef_);
   }
 
-  const float depth = phraseDb_ - level;
+  float depth = phraseDb_ - level;
   if (audible && depth <= tuning_.voiceWithinDb) sinceVoice_ = 0;
   else if (sinceVoice_ < (1 << 30)) ++sinceVoice_;
 
-  // After the cap only a level back near the phrase level of the capped breath is voice.
-  if (locked_ && audible && level >= entryPhraseDb_ - tuning_.voiceWithinDb) locked_ = false;
+  // After the cap only real voice unlocks: a level back near the phrase level of the capped
+  // breath, or a clear rise above the capped passage (a softer voice returning). On a rise the
+  // stale phrase level is dropped to the current level so the next breath is judged against the
+  // new voice (the immediate attack then follows the voice up).
+  if (locked_ && audible) {
+    if (level >= entryPhraseDb_ - tuning_.voiceWithinDb) {
+      locked_ = false;
+    } else if (level >= lockLevelDb_ + tuning_.unlockRiseDb) {
+      locked_ = false;
+      phraseDb_ = std::min(phraseDb_, level);
+      depth = phraseDb_ - level;
+      sinceVoice_ = 0;
+    }
+  }
 
   const float need = tuning_.belowPhraseDb - (active_ ? tuning_.holdMarginDb : 0.0f);
   // Context is needed to enter a breath, not to stay in one.
@@ -73,6 +86,7 @@ float LevelBreathDetector::process(float monoSample) {
     runSamples_ = 0;
     active_ = false;
     locked_ = true;
+    lockLevelDb_ = level;
     prob_ = 0.0f;
     return 0.0f;
   }

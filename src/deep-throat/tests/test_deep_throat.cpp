@@ -631,6 +631,71 @@ void test_puke_breath_duration_cap() {
   }
 }
 
+// Re-reviewer probe: scream, a capped quiet passage, then the voice comes back more than 15 dB
+// softer than the scream. The lock must clear on the clear rise above the capped passage
+// (unlockRiseDb), and the next breath is judged against the new, softer voice.
+std::vector<float> pukeSofterVoiceProbe(double sr, bool cappedPassage) {
+  SignalBuilder s(sr);
+  s.wideNoise(-5.0, 1.0);
+  if (cappedPassage) s.wideNoise(-50.0, 2.0);  // 1.0 .. 3.0 s, capped at ~2.55 s
+  s.wideNoise(-25.0, 2.0);
+  s.wideNoise(-50.0, 0.3);                     // the breath
+  s.wideNoise(-25.0, 1.0);
+  return s.x;
+}
+
+void test_puke_unlock_on_softer_voice() {
+  for (double sr : kRates) {
+    for (bool capped : {true, false}) {
+      DSP::LevelBreathDetector d;
+      d.prepare(sr);
+      ASSERT_TRUE(d.tuning().unlockRiseDb == 8.0f);
+      const auto p = runDetector(d, pukeSofterVoiceProbe(sr, capped));
+      const double b0 = capped ? 5.0 : 3.0;
+      ASSERT_TRUE(maxIn(p, sr, b0, b0 + 0.3) > 0.6f);
+      ASSERT_TRUE(minIn(p, sr, b0 + 0.16, b0 + 0.3) > 0.6f);
+      ASSERT_TRUE(maxIn(p, sr, b0 + 0.3 + 0.003, b0 + 1.3) < 0.05f);
+    }
+  }
+}
+
+// The voice returns only 10 dB above the capped passage (-40 over -50): still a clear rise.
+void test_puke_unlock_on_small_clear_rise() {
+  for (double sr : kRates) {
+    SignalBuilder s(sr);
+    s.wideNoise(-5.0, 1.0);
+    s.wideNoise(-50.0, 2.0);   // 1.0 .. 3.0 s, capped
+    s.wideNoise(-40.0, 2.0);   // 3.0 .. 5.0 s
+    s.wideNoise(-56.0, 0.3);   // 5.0 .. 5.3 s: breath 16 dB under the voice
+    s.wideNoise(-40.0, 1.0);
+    DSP::LevelBreathDetector d;
+    d.prepare(sr);
+    d.setSensitivity(1.0f);    // 14 dB below the phrase is enough
+    const auto p = runDetector(d, s.x);
+    ASSERT_TRUE(minIn(p, sr, 5.16, 5.3) > 0.6f);
+  }
+}
+
+// A capped passage that only wobbles (a 3 dB dip, then a 5 dB rise: both < unlockRiseDb) stays
+// locked; a deep drop after it would otherwise re-enter (the decayed phrase gives it context).
+void test_puke_no_unlock_without_clear_rise() {
+  for (double sr : kRates) {
+    SignalBuilder s(sr);
+    s.wideNoise(-5.0, 1.0);
+    s.wideNoise(-45.0, 2.2);   // 1.0 .. 3.2 s, capped at ~2.55 s
+    s.wideNoise(-48.0, 0.3);   // 3.2 .. 3.5 s
+    s.wideNoise(-40.0, 0.4);   // 3.5 .. 3.9 s: +5 dB over the capped passage
+    s.wideNoise(-58.0, 0.5);   // 3.9 .. 4.4 s
+    s.wideNoise(-5.0, 1.0);
+    DSP::LevelBreathDetector d;
+    d.prepare(sr);
+    d.setSensitivity(1.0f);
+    const auto p = runDetector(d, s.x);
+    ASSERT_TRUE(minIn(p, sr, 1.15, 2.45) > 0.6f);
+    ASSERT_TRUE(maxIn(p, sr, 2.56, 4.4) < 0.05f);
+  }
+}
+
 // ---- Corrective EQ ----------------------------------------------------------------------
 
 // Runs one channel of the EQ over x and returns the output.
@@ -2079,6 +2144,23 @@ void test_engine_puke_long_breath_cut_to_end() {
   ASSERT_TRUE(cut >= 11.0 && cut <= 13.0);
 }
 
+// Engine, Puke, the probe signal: the breath after the softer voice is fully reduced.
+void test_engine_puke_breath_after_capped_passage() {
+  const double sr = 48000.0, b1 = 5.3;
+  const auto x = pukeSofterVoiceProbe(sr, true);
+  Settings s = engineDefaults();
+  s.mode = Mode::Puke;
+  s.breathAmount = 0.0f;
+  Engine e;
+  e.prepare(sr);
+  const int L = e.latencySamples();
+  const Stereo y0 = runEngine(e, s, x);
+  s.breathAmount = 1.0f;
+  const Stereo y1 = runFresh(sr, s, x);
+  const double cut = outRmsDb(y0.l, sr, L, b1 - 0.05, b1) - outRmsDb(y1.l, sr, L, b1 - 0.05, b1);
+  ASSERT_TRUE(cut >= 11.0 && cut <= 13.0);
+}
+
 void test_engine_mode_switch_no_blowup() {
   const double sr = 48000.0;
   const int n = (int)(3.0 * sr), seg = (int)(0.1 * sr);
@@ -2602,6 +2684,9 @@ int main() {
   RUN_TEST(test_puke_sensitivity);
   RUN_TEST(test_puke_long_breath_held_to_end);
   RUN_TEST(test_puke_breath_duration_cap);
+  RUN_TEST(test_puke_unlock_on_softer_voice);
+  RUN_TEST(test_puke_unlock_on_small_clear_rise);
+  RUN_TEST(test_puke_no_unlock_without_clear_rise);
   RUN_TEST(test_reducer_amount_zero_is_unity);
   RUN_TEST(test_reducer_full_amount_is_minus_12_db);
   RUN_TEST(test_reducer_scales_with_prob);
@@ -2674,6 +2759,7 @@ int main() {
   RUN_TEST(test_engine_puke_uses_level_detector);
   RUN_TEST(test_engine_breath_edges_covered);
   RUN_TEST(test_engine_puke_long_breath_cut_to_end);
+  RUN_TEST(test_engine_puke_breath_after_capped_passage);
   RUN_TEST(test_engine_mode_switch_no_blowup);
   RUN_TEST(test_engine_sample_rates);
   RUN_TEST(test_engine_all_in_off_is_passthrough);
