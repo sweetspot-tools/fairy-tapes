@@ -860,7 +860,10 @@ void test_biquad_low_pass() {
 void test_deesser_freq_moves_detection() {
   for (double sr : {44100.0, 48000.0, 96000.0}) {
     ASSERT_TRUE(deesserDropDb(sr, 8000.0, -10.0, 8000.0f, 1.0f, Mode::Speak) >= 6.0);
-    ASSERT_TRUE(deesserDropDb(sr, 8000.0, -10.0, 4000.0f, 1.0f, Mode::Speak) < 3.0);
+    {
+      const double off = deesserDropDb(sr, 8000.0, -10.0, 4000.0f, 1.0f, Mode::Speak);
+      ASSERT_TRUE(off < 3.0 && off > -0.5);
+    }
   }
 }
 
@@ -871,7 +874,7 @@ void test_deesser_reduces_sibilance() {
 
 void test_deesser_leaves_low_band() {
   for (double sr : {44100.0, 48000.0, 96000.0})
-    ASSERT_TRUE(deesserDropDb(sr, 500.0, -10.0, 6500.0f, 1.0f, Mode::Speak) < 0.5);
+    ASSERT_TRUE(std::fabs(deesserDropDb(sr, 500.0, -10.0, 6500.0f, 1.0f, Mode::Speak)) < 0.5);
 }
 
 void test_deesser_amount_zero_is_transparent() {
@@ -892,11 +895,14 @@ void test_deesser_amount_zero_is_transparent() {
     se += (double)(f[0] - in0) * (f[0] - in0) + (double)(f[1] - in1) * (f[1] - in1);
     si += (double)in0 * in0 + (double)in1 * in1;
   }
-  ASSERT_TRUE(10.0 * std::log10(std::max(se, 1e-30) / si) < -60.0);
+  ASSERT_TRUE(se / si < 1e-12);  // ~1e-6 amplitude: float rounding only
 }
 
 void test_deesser_puke_nearly_off() {
-  ASSERT_TRUE(deesserDropDb(48000.0, 7000.0, -10.0, 6500.0f, 1.0f, Mode::Puke) < 3.0);
+  {
+    const double d = deesserDropDb(48000.0, 7000.0, -10.0, 6500.0f, 1.0f, Mode::Puke);
+    ASSERT_TRUE(d < 3.0 && d > -0.5);
+  }
 }
 
 void test_deesser_listen_outputs_removed_band() {
@@ -920,35 +926,71 @@ void test_deesser_listen_outputs_removed_band() {
   ASSERT_TRUE(rms(500.0) < -40.0);
 }
 
-void test_deesser_192k_finite_and_stereo_linked() {
-  DSP::DeEsser d;
-  d.prepare(192000.0, 2);
-  d.setFreqHz(10000.0f);
-  d.setAmount(1.0f);
-  bool ok = true;
-  for (int i = 0; i < 19200; ++i) {
-    float f[2] = {(float)(0.3 * std::sin(0.2 * i)), (float)(0.3 * std::sin(0.2 * i))};
-    d.processFrame(f);
-    ok = ok && std::isfinite(f[0]) && std::isfinite(f[1]) && f[0] == f[1];
+void test_deesser_finite_at_extreme_rates() {
+  for (double sr : {22050.0, 192000.0}) {
+    DSP::DeEsser d;
+    d.prepare(sr, 2);
+    d.setFreqHz(10000.0f);
+    d.setAmount(1.0f);
+    bool ok = true;
+    for (int i = 0; i < (int)(sr / 10); ++i) {
+      float f[2] = {(float)(0.3 * std::sin(0.2 * i)), (float)(0.3 * std::sin(0.2 * i))};
+      d.processFrame(f);
+      ok = ok && std::isfinite(f[0]) && std::isfinite(f[1]) && std::fabs(f[0]) < 2.0f;
+    }
+    ASSERT_TRUE(ok);
   }
-  ASSERT_TRUE(ok);
+}
+
+void test_deesser_gain_is_stereo_linked() {
+  // R is exactly half of L, same frequency. Linear high band => out_R == 0.5 * out_L only if
+  // both channels get the same gain (independent detectors would reduce R less).
+  DSP::DeEsser d;
+  d.prepare(48000.0, 2);
+  d.setFreqHz(6500.0f);
+  d.setAmount(1.0f);
+  double maxErr = 0.0, maxDiff = 0.0;
+  for (int i = 0; i < 24000; ++i) {
+    const float x = (float)(0.316 * std::sin(2.0 * kDsPi * 7000.0 * i / 48000.0));
+    float f[2] = {x, 0.5f * x};
+    d.processFrame(f);
+    if (i >= 12000) {
+      maxErr = std::max(maxErr, (double)std::fabs(f[1] - 0.5f * f[0]));
+      maxDiff = std::max(maxDiff, (double)std::fabs(f[0] - x));
+    }
+  }
+  ASSERT_TRUE(maxDiff > 0.1);   // reduction really is active
+  ASSERT_TRUE(maxErr < 1e-5);
+}
+
+// Largest deviation from a pure 7 kHz sinusoid (second-order recurrence residual) of the output
+// while Freq is toggled (or not) every 50 ms with reduction active. A smooth gain/coefficient
+// glide leaves a small residual; an instant coefficient jump makes a click.
+double deesserMaxResidual(bool toggle) {
+  const double sr = 48000.0, w = 2.0 * kDsPi * 7000.0 / sr;
+  DSP::DeEsser d;
+  d.prepare(sr, 2);
+  d.setMode(Mode::Speak);
+  d.setAmount(1.0f);
+  d.setFreqHz(toggle ? 4000.0f : 10000.0f);
+  double y1 = 0.0, y2 = 0.0, worst = 0.0;
+  for (int i = 0; i < 48000; ++i) {
+    if (toggle && i % 2400 == 0) d.setFreqHz((i / 2400) % 2 ? 10000.0f : 4000.0f);
+    float f[2];
+    f[0] = f[1] = (float)(0.316 * std::sin(w * i));
+    d.processFrame(f);
+    if (i > 4800) worst = std::max(worst, std::fabs(f[0] - 2.0 * std::cos(w) * y1 + y2));
+    y2 = y1;
+    y1 = f[0];
+  }
+  return worst;
 }
 
 void test_deesser_freq_change_is_smooth() {
-  DSP::DeEsser d;
-  d.prepare(48000.0, 2);
-  d.setAmount(1.0f);
-  d.setFreqHz(4000.0f);
-  double maxJump = 0.0, prev = 0.0;
-  for (int i = 0; i < 48000; ++i) {
-    if (i == 24000) d.setFreqHz(10000.0f);
-    float f[2];
-    f[0] = f[1] = (float)(0.3 * std::sin(2.0 * kDsPi * 300.0 * i / 48000.0));
-    d.processFrame(f);
-    if (i > 100) maxJump = std::max(maxJump, std::fabs((double)f[0] - prev));
-    prev = f[0];
-  }
-  ASSERT_TRUE(maxJump < 0.3 * 2.0 * kDsPi * 300.0 / 48000.0 * 1.5);
+  const double steady = deesserMaxResidual(false);
+  const double moving = deesserMaxResidual(true);
+  ASSERT_TRUE(steady < 1e-3);
+  ASSERT_TRUE(moving < 0.02);
 }
 
 } // namespace
@@ -1071,7 +1113,8 @@ int main() {
   RUN_TEST(test_deesser_amount_zero_is_transparent);
   RUN_TEST(test_deesser_puke_nearly_off);
   RUN_TEST(test_deesser_listen_outputs_removed_band);
-  RUN_TEST(test_deesser_192k_finite_and_stereo_linked);
+  RUN_TEST(test_deesser_finite_at_extreme_rates);
+  RUN_TEST(test_deesser_gain_is_stereo_linked);
   RUN_TEST(test_deesser_freq_change_is_smooth);
 
   std::fprintf(stdout, "\n%d passed, %d failed.\n", g_passed, g_failed);

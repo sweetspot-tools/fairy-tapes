@@ -2,7 +2,9 @@
 //
 // Complementary crossover: low = Linkwitz-Riley 4th-order low-pass of the input, high = input
 // - low, so the output equals the input when the gain is 1. The detector reads the linked mono
-// signal through a band-pass 0.62..1.38 x freq; gain reduction (threshold -30 dBFS, 4:1,
+// signal through a band-pass 0.62..1.38 x freq (edges clamped to 0.45 x sample rate); its level
+// is the 2 ms mean-square (RMS) of that band, so the -30 dBFS threshold is effectively
+// -27 dBFS peak for a sine;  gain reduction (threshold -30 dBFS, 4:1,
 // max 12 dB x Amount, attack 1 ms, release 40 ms, smoothed in dB) hits the high band only and is
 // the same for all channels. Listen outputs only the removed part: high * (1 - gain).
 //

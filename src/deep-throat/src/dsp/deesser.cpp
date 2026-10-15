@@ -55,14 +55,18 @@ void DeEsser::setMode(Mode mode) {
 }
 
 void DeEsser::applyFreq(double hz) {
+  // Keep every edge below Nyquist at low sample rates.
+  const double maxHz = 0.45 * sr_;
+  const double xo = std::min(hz, maxHz);
+  const double bandLo = std::min(kBandLo * hz, maxHz), bandHi = std::min(kBandHi * hz, maxHz);
   for (auto& c : ch_) {
-    c.lp1.setLowPass(sr_, hz, kQ);
-    c.lp2.setLowPass(sr_, hz, kQ);
+    c.lp1.setLowPass(sr_, xo, kQ);
+    c.lp2.setLowPass(sr_, xo, kQ);
   }
-  dhp1_.setHighPass(sr_, kBandLo * hz, kQ);
-  dhp2_.setHighPass(sr_, kBandLo * hz, kQ);
-  dlp1_.setLowPass(sr_, kBandHi * hz, kQ);
-  dlp2_.setLowPass(sr_, kBandHi * hz, kQ);
+  dhp1_.setHighPass(sr_, bandLo, kQ);
+  dhp2_.setHighPass(sr_, bandLo, kQ);
+  dlp1_.setLowPass(sr_, bandHi, kQ);
+  dlp2_.setLowPass(sr_, bandHi, kQ);
 }
 
 void DeEsser::processFrame(float* samples) {
