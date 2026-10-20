@@ -9,6 +9,9 @@
 // Paper tapes (TapeView, between the wear and the controls): placed by layoutFromSeed (ui/decor.h) for the seed and the
 // Wear level, written in the tape font of the preferences; a click opens a text field (at most 14 characters, Enter or
 // leaving the field confirms, Escape cancels) and the text goes to the instance decor (Controller::editDecor).
+// Corner screws (FairyTapes::Ui::ScrewView, over the wear and the tapes, below the controls): look from the seed
+// (ui/screw_angles.h, the same as The Stripper's), the missing one shows only its hole; dragging turns a screw and the
+// end of the drag stores the user's rotation in the instance decor (Controller::editDecor, project marked dirty once).
 #pragma once
 
 #include "params.h"
@@ -42,6 +45,7 @@ class MeterBar;
 class ClipLed;
 class SilkscreenView;
 class WearView;
+class ScrewView;
 }
 
 namespace FairyTapes::PillowTalk {
@@ -64,6 +68,7 @@ public:
 
   // Wear used when the controller is not Pillow Talk's (cannot happen in the plug-in) or before open().
   static constexpr uint32_t kFallbackWearSeed = FairyTapes::Ui::kDefaultWearSeed;
+  static constexpr int kNumScrewViews = 4;   // one per kScrewPos (checked against the state in editor.cpp)
 
   explicit Editor(Steinberg::Vst::EditController* controller);
   ~Editor() override;
@@ -129,6 +134,9 @@ private:
   void commitTapeText(int slot, const std::string& typed);
   // Removes the text field; `confirm` first takes what was typed (unless Escape was pressed).
   void closeTapeEdit(bool confirm);
+  // Screw views for the current seed and the decor's rotations (created once, then updated in place).
+  void placeScrews();
+  void screwTurned(int index, double shownDeg);
 
   double scale_ = 1.0;  // sanitized content scale factor
   FairyTapes::Ui::Skin skin_;
@@ -138,6 +146,7 @@ private:
   FairyTapes::Ui::WearView* wear_ = nullptr;
   VSTGUI::CViewContainer* root_ = nullptr;   // the container the views were created in
   std::vector<TapeView*> tapes_;
+  std::array<FairyTapes::Ui::ScrewView*, kNumScrewViews> screws_{};
   VSTGUI::CTextEdit* tapeEdit_ = nullptr;
   int tapeEditSlot_ = -1;
   FairyTapes::Ui::TapeFontId tapeFont_ = FairyTapes::Ui::TapeFontId::Zeyada;
@@ -155,6 +164,7 @@ private:
   FairyTapes::Ui::WearLevel wearLevel_ = FairyTapes::Ui::WearLevel::Light;
   uint32_t decorRevision_ = 0;
   std::vector<std::string> tapeTexts_;   // the decor's tape texts, as last seen
+  std::array<float, kNumScrewViews> screwAngles_{};   // the decor's screw rotations, as last seen
   bool decorKnown_ = false;
 
   std::array<Steinberg::IPtr<Steinberg::Vst::Parameter>, kNumParams> watched_{};

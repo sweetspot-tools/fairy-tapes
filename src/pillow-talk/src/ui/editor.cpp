@@ -6,6 +6,7 @@
 #include "ui/duck_scope.h"
 #include "ui/panel_view.h"
 #include "ui/prefs.h"
+#include "ui/screw_angles.h"
 #include "ui/tape_view.h"
 #include "ui/tapes.h"
 
@@ -13,6 +14,7 @@
 #include "fairy_ui/meters.h"
 #include "fairy_ui/rack_controls.h"
 #include "fairy_ui/sanitize.h"
+#include "fairy_ui/screw_view.h"
 #include "fairy_ui/silkscreen_view.h"
 #include "fairy_ui/wear_view.h"
 
@@ -44,6 +46,7 @@ using FairyTapes::Ui::RackChoice;
 using FairyTapes::Ui::RackKnob;
 using FairyTapes::Ui::RackLed;
 using FairyTapes::Ui::RackToggle;
+using FairyTapes::Ui::ScrewView;
 using FairyTapes::Ui::SilkscreenView;
 using FairyTapes::Ui::WearLevel;
 using FairyTapes::Ui::WearMark;
@@ -55,6 +58,7 @@ namespace {
 static_assert(kNumParams <= 32, "pending_ holds one bit per persistent parameter");
 static_assert(kMaxTapeTexts == kNumTapeSlots, "one stored tape text per tape slot");
 static_assert(kNumScrews == static_cast<int>(sizeof(kScrewPos) / sizeof(kScrewPos[0])), "one stored angle per screw");
+static_assert(Editor::kNumScrewViews == kNumScrews, "one view per stored screw angle");
 
 constexpr uint32_t kTimerMs = 30;
 constexpr double kTimerSeconds = kTimerMs / 1000.0;
@@ -215,6 +219,7 @@ void Editor::resetViewPointers() {
   wear_ = nullptr;
   root_ = nullptr;
   tapes_.clear();
+  screws_.fill(nullptr);
   tapeEdit_ = nullptr;
   tapeEditSlot_ = -1;
 }
@@ -238,12 +243,14 @@ void Editor::refreshDecor() {
   decorKnown_ = true;
   const bool textsChanged = d.tapeTexts != tapeTexts_;
   tapeTexts_ = d.tapeTexts;
+  for (int i = 0; i < kNumScrewViews; ++i) screwAngles_[static_cast<std::size_t>(i)] = d.screwAngles[i];
   if (d.seed != 0 && d.seed != seed_) {
     seed_ = d.seed;
     applyWear();   // new tapes, with the new texts
   } else if (textsChanged) {
     refreshTapeTexts();
   }
+  placeScrews();   // new seed or rotations (state recall, undo, re-roll)
 }
 
 void Editor::setWearLevel(WearLevel level) {
@@ -272,7 +279,8 @@ void Editor::rebuildTapes() {
     auto* view = new TapeView(p, tapeFont_, seed_);
     view->setText(p.slot < static_cast<int>(tapeTexts_.size()) ? tapeTexts_[static_cast<std::size_t>(p.slot)] : std::string());
     view->onClick = [this](TapeView* t) { editTape(t); };
-    if (scope_) root_->addView(view, scope_);   // above the wear, below the scope and the controls
+    // above the wear, below the screws, the scope and the controls
+    if (CView* above = screws_[0] ? static_cast<CView*>(screws_[0]) : static_cast<CView*>(scope_)) root_->addView(view, above);
     else root_->addView(view);
     tapes_.push_back(view);
   }
@@ -326,11 +334,44 @@ void Editor::closeTapeEdit(bool confirm) {
   tapeEditSlot_ = -1;
 }
 
+void Editor::placeScrews() {
+  if (!root_) return;
+  const auto specs = screwSpecs(seed_);
+  for (int i = 0; i < kNumScrewViews; ++i) {
+    const auto k = static_cast<std::size_t>(i);
+    const double shown = shownScrewAngle(specs[k].initialAngle, screwAngles_[k]);
+    if (ScrewView* v = screws_[k]) {
+      if (v->spec().cross != specs[k].cross || v->spec().missing != specs[k].missing ||
+          v->spec().initialAngle != specs[k].initialAngle)
+        v->setScrew(specs[k], shown);   // another seed: another screw
+      else
+        v->setAngle(shown);   // left alone while the user is turning it
+      continue;
+    }
+    auto* view = new ScrewView(specs[k], shown);
+    view->onTurned = [this, i](double angle) { screwTurned(i, angle); };
+    if (scope_) root_->addView(view, scope_);   // over the wear and the tapes, below the scope and the controls
+    else root_->addView(view);
+    screws_[k] = view;
+  }
+}
+
+// The end of a drag: the rotation from the seeded angle goes to the instance decor (one edit, one dirty mark).
+void Editor::screwTurned(int index, double shownDeg) {
+  if (!owner_ || index < 0 || index >= kNumScrews || !screws_[static_cast<std::size_t>(index)]) return;
+  const float user = userScrewAngle(shownDeg, screws_[static_cast<std::size_t>(index)]->spec().initialAngle);
+  const Decor d = withScrewAngle(owner_->decor(), index, user);
+  screwAngles_[static_cast<std::size_t>(index)] = d.screwAngles[index];
+  owner_->editDecor(d);
+  decorRevision_ = owner_->decorRevision();
+}
+
 void Editor::createViews(CViewContainer* parent) {
   auto* ctl = getController();
   const CRect all(0, 0, kWidth, kHeight);
 
-  // 1-2: panel, grain, boxes and fixed texts. 3: silkscreen. 4: wear. 5: paper tapes. Then the controls and displays.
+  // 1-2: panel, grain, boxes and fixed texts. 3: silkscreen. 4: wear and paper tapes. 5: screws. Then the controls and
+  // displays.
   root_ = parent;
   parent->addView(new PanelView(all, &skin_));
   silk_ = new SilkscreenView(all, silkscreenItems());
@@ -340,7 +381,8 @@ void Editor::createViews(CViewContainer* parent) {
 
   scope_ = new DuckScope(toCRect(kScopeRect));
   parent->addView(scope_);
-  rebuildTapes();   // inserted before the scope
+  placeScrews();    // inserted before the scope
+  rebuildTapes();   // inserted before the screws
 
   for (const ControlSpec& spec : kControls) {
     const CRect rect = toCRect(viewRect(spec));

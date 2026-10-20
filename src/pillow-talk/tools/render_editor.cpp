@@ -1,18 +1,21 @@
 // Developer tool: draws the Pillow Talk editor offscreen into a PNG, no host or window needed.
 //   pillow_talk_render out.png [bypass] [sync] [meters] [scope] [wear=off|light|heavy] [seed=<n>] [no-grain]
-//                      [text=<s>] [text1..text6=<s>] [font=zeyada|rocksalt|homemade]
+//                      [text=<s>] [text1..text6=<s>] [font=zeyada|rocksalt|homemade] [screw1..screw4=<deg>]
 // The seed and the tape texts go through the controller's decor (as a stored state would): text= writes on every tape
 // slot, textN= on slot N-1 (only the slots the seed and Wear show are drawn; the tool prints them). The wear level goes
 // through Editor::setWearLevel and the font through Editor::setTapeFont; without wear= / font= they come from the user
-// preferences file, as when the editor opens.
+// preferences file, as when the editor opens. screwN= stores the user's rotation of screw N-1 (added to its seeded angle)
+// in the decor; the tool prints each screw's look and shown angle.
 // Used to check the look of the code-drawn GUI against docs/mockups/pillow_rack.html on a machine without a host.
 #include "controller.h"
 #include "ui/duck_scope.h"
 #include "ui/editor.h"
 #include "ui/prefs.h"
+#include "ui/screw_angles.h"
 #include "ui/tape_view.h"
 #include "ui/tapes.h"
 
+#include "fairy_ui/screw_view.h"
 #include "fairy_ui/wear_view.h"
 
 #include "pluginterfaces/base/ipluginbase.h"
@@ -62,6 +65,11 @@ struct EditorPreview {
       std::printf("tape slot %d at (%.0f, %.0f) %.0f x %.0f: \"%s\"\n", t->slot(), r.getCenter().x, r.getCenter().y,
                   r.getWidth(), r.getHeight(), t->text().c_str());
     }
+    for (const auto* sv : ed.screws_)
+      if (sv)
+        std::printf("screw at (%.0f, %.0f): %s, %s, shown %.1f deg (seeded %.0f)\n", sv->spec().x, sv->spec().y,
+                    sv->spec().cross ? "cross" : "slot", sv->spec().missing ? "missing" : "present", sv->angle(),
+                    sv->spec().initialAngle);
     std::printf("seed %u, wear %d, %zu marks\n", ed.wearSeed(), static_cast<int>(ed.wearLevel()),
                 ed.wear_ ? ed.wear_->marks().size() : 0u);
     if (opt.scope && ed.scope_) {
@@ -97,7 +105,7 @@ int main(int argc, char** argv) {
   if (argc < 2) {
     std::fprintf(stderr,
                  "usage: %s out.png [bypass] [sync] [meters] [scope] [wear=off|light|heavy] [seed=<n>] [no-grain]\n"
-                 "       [text=<s>] [text1..text6=<s>] [font=zeyada|rocksalt|homemade]\n",
+                 "       [text=<s>] [text1..text6=<s>] [font=zeyada|rocksalt|homemade] [screw1..screw4=<deg>]\n",
                  argv[0]);
     return 2;
   }
@@ -141,6 +149,8 @@ int main(int argc, char** argv) {
       ctl.editDecor(d);
     } else if (!std::strncmp(argv[i], "text", 4) && argv[i][4] >= '1' && argv[i][4] <= '6' && argv[i][5] == '=') {
       ctl.editDecor(Ui::withTapeText(ctl.decor(), argv[i][4] - '1', argv[i] + 6));
+    } else if (!std::strncmp(argv[i], "screw", 5) && argv[i][5] >= '1' && argv[i][5] <= '4' && argv[i][6] == '=') {
+      ctl.editDecor(Ui::withScrewAngle(ctl.decor(), argv[i][5] - '1', std::strtof(argv[i] + 7, nullptr)));
     } else if (!std::strncmp(argv[i], "seed=", 5)) {
       Decor d = ctl.decor();
       d.seed = static_cast<uint32_t>(std::strtoul(argv[i] + 5, nullptr, 0));
