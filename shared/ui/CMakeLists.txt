@@ -51,9 +51,14 @@ add_executable(fairy_ui_tape_tests tests/test_tape.cpp)
 target_link_libraries(fairy_ui_tape_tests PRIVATE fairy_ui)
 add_test(NAME fairy_ui_tape_tests COMMAND fairy_ui_tape_tests)
 
+# The four panel screws: seeded look (the same as The Stripper's), missing screw, turning by dragging.
+add_executable(fairy_ui_screw_tests tests/test_screws.cpp)
+target_link_libraries(fairy_ui_screw_tests PRIVATE fairy_ui)
+add_test(NAME fairy_ui_screw_tests COMMAND fairy_ui_screw_tests)
+
 # Code-drawn VSTGUI controls and optional bitmap skin.
 add_library(fairy_ui_widgets STATIC src/controls.cpp src/skin.cpp src/meters.cpp src/rack_controls.cpp
-  src/draw_util.cpp src/wear_view.cpp src/silkscreen_view.cpp src/tape_draw.cpp)
+  src/draw_util.cpp src/wear_view.cpp src/silkscreen_view.cpp src/tape_draw.cpp src/screw_view.cpp)
 target_include_directories(fairy_ui_widgets PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(fairy_ui_widgets PUBLIC fairy_ui vstgui_support)
 # Linked into plugin modules (shared objects).
@@ -75,3 +80,8 @@ add_test(NAME fairy_ui_knob_gesture_tests COMMAND fairy_ui_knob_gesture_tests)
 add_executable(fairy_ui_layer_view_tests tests/test_layer_views.cpp)
 target_link_libraries(fairy_ui_layer_view_tests PRIVATE fairy_ui_widgets)
 add_test(NAME fairy_ui_layer_view_tests COMMAND fairy_ui_layer_view_tests)
+
+# Panel screw view without a window: hit area, dragging, end of the gesture, cancel.
+add_executable(fairy_ui_screw_view_tests tests/test_screw_view.cpp)
+target_link_libraries(fairy_ui_screw_view_tests PRIVATE fairy_ui_widgets)
+add_test(NAME fairy_ui_screw_view_tests COMMAND fairy_ui_screw_view_tests)
