@@ -20,7 +20,7 @@ class Skin;
 // top and the dark edge. The same for every plug-in and for the front and the back of the panel. Clips to `r` while
 // tiling and restores the context state.
 constexpr const char* kPanelGrainTile = "panel_grain.png";   // 256 x 256 tile, optional
-void drawPanelBase(VSTGUI::CDrawContext* ctx, const VSTGUI::CRect& r, const Skin* skin);
+void drawPanelBackground(VSTGUI::CDrawContext* ctx, const VSTGUI::CRect& r, const Skin* skin);
 
 // Rounded white box border with a gap on the top or bottom edge, and `title` centred in the gap.
 void drawTitledBox(VSTGUI::CDrawContext* ctx, const VSTGUI::CRect& box, const char* title, bool titleOnTop);

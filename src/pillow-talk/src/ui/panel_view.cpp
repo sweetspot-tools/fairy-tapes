@@ -44,7 +44,7 @@ void PanelView::draw(CDrawContext* ctx) {
   const CRect& r = getViewSize();
   const CPoint o = r.getTopLeft();
 
-  FairyTapes::Ui::drawPanelBase(ctx, r, skin_);   // tint, grain tile, soft light, edge (shared, as The Stripper)
+  FairyTapes::Ui::drawPanelBackground(ctx, r, skin_);   // tint, grain tile, soft light, edge (shared, as The Stripper)
 
   // Boxes: white border with a gap for the title on the bottom edge.
   ctx->saveGlobalState();

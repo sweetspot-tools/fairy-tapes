@@ -27,7 +27,7 @@ Scritta il 2026-10-14 dalla chat di Pillow Talk (branch `feat/pillow-talk`). Pil
 | `src/ui/back_widgets.{h,cpp}` (`SegmentRow`, `FontStepper`, `TextLink`) e `PushButton` di `browser_widgets.h` | `include/fairy_ui/back_widgets.h`, `src/back_widgets.cpp` (`SegmentRow`, `OptionStepper` = `FontStepper` per qualsiasi elenco, `TextLink`, `PushButton`) | `fairy_ui_widgets` |
 | `src/ui/flip_pose.h` | `include/fairy_ui/flip_pose.h` (stessi numeri, in più `flipProgress`, `flipDone`) | `fairy_ui` (header-only) |
 | `src/ui/flip_view.{h,cpp}` e `Editor::startFlip`/`finishFlip` | `include/fairy_ui/flip_view.h`, `src/flip_view.cpp` (`FlipView` identica; `PanelFlip` fa istantanee, nasconde i lati, avanza col timer, `reset()` alla chiusura) | `fairy_ui_widgets` |
-| `drawPanelBase` (in `src/ui/panel_view.cpp`) | `drawPanelBase(ctx, rect, skin)` e `kPanelGrainTile` in `include/fairy_ui/draw_util.h` (stesso disegno) | `fairy_ui_widgets` |
+| `drawPanelBase` (in `src/ui/panel_view.cpp`) | `drawPanelBackground(ctx, rect, skin)` e `kPanelGrainTile` in `include/fairy_ui/draw_util.h` (stesso disegno) | `fairy_ui_widgets` |
 | `tests/test_flip.cpp`, parte di `tests/test_back_panel.cpp` (a capo, stepper) | `shared/ui/tests/test_flip.cpp`, `tests/test_back_panel.cpp`, `tests/test_back_view.cpp` | test `fairy_ui_flip_tests`, `fairy_ui_back_panel_tests`, `fairy_ui_back_view_tests` |
 | `assets/panel_grain.png` (tessera di grana 256 × 256) | `shared/ui/assets/panel_grain.png` (copia identica byte per byte, aggiunta il 2026-10-15 per Pillow Talk) | copiata nel bundle dal CMake del plugin |
 

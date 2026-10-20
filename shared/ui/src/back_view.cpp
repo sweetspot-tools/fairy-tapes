@@ -168,7 +168,7 @@ void BackView::drawBackgroundRect(CDrawContext* ctx, const CRect&) {
   ctx->saveGlobalState();
   ctx->setDrawMode(kAntiAliasing | kNonIntegralMode);
   const CPoint o = getViewSize().getTopLeft();
-  drawPanelBase(ctx, getViewSize(), skin_);
+  drawPanelBackground(ctx, getViewSize(), skin_);
 
   // header: the current tab as the big title, the brand under it, the plug-in line at the top right
   const std::string title =

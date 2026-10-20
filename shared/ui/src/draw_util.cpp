@@ -57,7 +57,7 @@ SharedPointer<CGraphicsPath> boxPath(CDrawContext* ctx, const CRect& r, bool tit
 
 } // namespace
 
-void drawPanelBase(CDrawContext* ctx, const CRect& r, const Skin* skin) {
+void drawPanelBackground(CDrawContext* ctx, const CRect& r, const Skin* skin) {
   const CPoint o = r.getTopLeft();
   // Tint, then the optional grain tile, then the soft light (reflection at the top, shade at the bottom).
   if (auto body = owned(ctx->createRoundRectGraphicsPath(r, kPanelRadius))) {
