@@ -50,10 +50,10 @@ WearLayout layoutFromSeed(uint32_t seed, WearLevel w, const Rect& panel) {
     const int want = w == WearLevel::Off ? 0 : (w == WearLevel::Light ? 1 : 2) + extra;
     for (int t = 0; t < 3; ++t) {
       const TapeSlot& s = kTapeSlots[order[t]];
-      const float jx = r.rnd(-35.f, 35.f), jy = r.rnd(-14.f, 14.f);
+      const float jx = r.rnd(-s.jx, s.jx), jy = r.rnd(-s.jy, s.jy);
       const float tw = r.rnd(58.f, 96.f), th = r.rnd(19.f, 26.f), rot = r.rnd(-9.f, 9.f);
       if (t >= want) continue;
-      TapePlacement p{panel.x + (s.cx + jx) * kx, panel.y + (s.cy + jy) * ky, tw * kx, th * kx, rot};
+      TapePlacement p{panel.x + (s.cx + jx) * kx, panel.y + (s.cy + jy) * ky, tw * kx, th * kx, rot, order[t]};
       const float rad = rot * kPi / 180.f, c = std::fabs(std::cos(rad)), sn = std::fabs(std::sin(rad));
       const float hx = 0.5f * (p.w * c + p.h * sn) + 1.f, hy = 0.5f * (p.w * sn + p.h * c) + 1.f;
       p.cx = std::clamp(p.cx, panel.x + hx, std::max(panel.x + hx, panel.x + panel.w - hx));

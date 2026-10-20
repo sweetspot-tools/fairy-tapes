@@ -268,11 +268,20 @@ inline std::vector<FairyTapes::Ui::PrintedItem> silkscreenItems() {
 }
 
 // ---- Decor: base positions of the paper tapes and the corner screws (ui/decor.h adds the seeded variation) ---------
+// Base centre and how far the seed may move it (+-jx, +-jy). Chosen so that no tape (up to 96 x 26, turned up to 9 degrees,
+// with its torn ends) ever covers a control, the scope, the LEVEL rows or the clip LEDs, nor another tape
+// (tests/test_decor.cpp): in the header, in the free bands between the rows of boxes, and in the empty corners of
+// DELAY and AUTO DUCK. A tape may lie over printed text and box borders, as real tape would.
 struct TapeSlot {
-  float cx, cy;
+  float cx, cy, jx, jy;
 };
 constexpr TapeSlot kTapeSlots[] = {
-    {150.f, 150.f}, {500.f, 135.f}, {850.f, 150.f}, {200.f, 540.f}, {550.f, 560.f}, {880.f, 535.f},
+    {430.f, 50.f, 50.f, 10.f},    // header, between the title and the tagline
+    {130.f, 284.f, 40.f, 10.f},   // band between DUCKING and DELAY, left
+    {890.f, 415.f, 20.f, 8.f},    // DELAY, under the note buttons, on the right
+    {250.f, 450.f, 60.f, 12.f},   // band between DELAY and AUTO DUCK
+    {508.f, 535.f, 25.f, 25.f},   // AUTO DUCK, between the knobs and Hold Sync
+    {800.f, 580.f, 70.f, 8.f},    // AUTO DUCK, under the note buttons
 };
 constexpr int kNumTapeSlots = static_cast<int>(sizeof(kTapeSlots) / sizeof(kTapeSlots[0]));
 constexpr float kScrewPos[4][2] = {{18.f, 18.f}, {982.f, 18.f}, {18.f, 610.f}, {982.f, 610.f}};

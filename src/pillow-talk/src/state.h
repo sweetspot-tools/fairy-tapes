@@ -16,6 +16,7 @@
 
 #include "engine.h"   // loadDefaults
 #include "params.h"
+#include "fairy_ui/tape_label.h"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -35,6 +36,7 @@ constexpr size_t kStateSizeV1 = sizeof(int32_t) + sizeof(double) * kNumParams;
 constexpr int kNumScrews = 4;
 constexpr int kMaxTapeTexts = 6;           // == Ui::kNumTapeSlots (checked in ui/editor.cpp)
 constexpr int kMaxTapeChars = 14;
+static_assert(kMaxTapeChars == static_cast<int>(FairyTapes::Ui::kTapeTextMaxChars), "the suite-wide tape text length");
 constexpr uint32_t kMaxStoredTexts = 64;   // more announced texts: corrupt state
 constexpr uint32_t kMaxStoredTextBytes = 256;
 // Upper bound of a valid v2 blob (readers stop there).
@@ -100,26 +102,9 @@ struct Reader {
 };
 } // namespace detail
 
-// Printable ASCII only (0x20-0x7E), spaces trimmed at both ends, at most kMaxTapeChars characters.
-inline std::string sanitizeTapeText(std::string_view in) {
-  std::string out;
-  out.reserve(std::min<size_t>(in.size(), 64));
-  for (char ch : in) {
-    const auto c = static_cast<unsigned char>(ch);
-    if (c >= 0x20 && c < 0x7f) out.push_back(ch);
-  }
-  const auto trim = [](std::string& s) {
-    const size_t a = s.find_first_not_of(' ');
-    if (a == std::string::npos) { s.clear(); return; }
-    s = s.substr(a, s.find_last_not_of(' ') - a + 1);
-  };
-  trim(out);
-  if (out.size() > (size_t)kMaxTapeChars) {
-    out.resize(kMaxTapeChars);
-    trim(out);
-  }
-  return out;
-}
+// Printable ASCII only (0x20-0x7E), spaces trimmed at both ends, at most kMaxTapeChars characters (shared rule,
+// fairy_ui/tape_label.h: what the tape fonts can draw).
+inline std::string sanitizeTapeText(std::string_view in) { return FairyTapes::Ui::sanitizeTapeText(in, kMaxTapeChars); }
 
 // Degrees in [0,360); non-finite -> 0.
 inline float sanitizeScrewAngle(float deg) {

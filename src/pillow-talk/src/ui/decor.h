@@ -18,9 +18,11 @@ using FairyTapes::Ui::WearLevel;
 constexpr float kDecorDesignW = 1000.f;
 constexpr float kDecorDesignH = 628.f;
 
-// A strip of paper tape: centre, size and rotation (degrees, clockwise), in panel units.
+// A strip of paper tape: centre, size and rotation (degrees, clockwise), in panel units. `slot`: its base position in
+// kTapeSlots, which is also the index of its text in the instance decor (Decor::tapeTexts).
 struct TapePlacement {
   float cx = 0.f, cy = 0.f, w = 0.f, h = 0.f, rotDeg = 0.f;
+  int slot = 0;
 };
 
 // A corner screw. `missing`: only the empty hole is drawn.
