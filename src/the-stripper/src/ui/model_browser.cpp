@@ -3,7 +3,7 @@
 
 #include "ui/browser_widgets.h"
 #include "preferences.h"
-#include "ui/draw_util.h"
+#include "fairy_ui/draw_util.h"
 
 #include "vstgui/lib/cdrawcontext.h"
 #include "vstgui/lib/cfileselector.h"
@@ -16,6 +16,12 @@
 #include <thread>
 
 namespace FairyTapes::TheStripper::Ui {
+
+using FairyTapes::Ui::drawTitledBox;
+using FairyTapes::Ui::kAmber;
+using FairyTapes::Ui::kDimWhite;
+using FairyTapes::Ui::kPanelBlack;
+using FairyTapes::Ui::kWhite;
 
 using namespace VSTGUI;
 

@@ -13,6 +13,7 @@
 #include "pluginterfaces/base/ipluginbase.h"
 #include "pluginterfaces/vst/ivstaudioprocessor.h"
 #include "pluginterfaces/vst/ivstcomponent.h"
+#include "pluginterfaces/vst/ivsteditcontroller.h"
 #include "pluginterfaces/vst/ivsthostapplication.h"
 #include "pluginterfaces/vst/ivstmessage.h"
 #include "pluginterfaces/vst/ivstprocesscontext.h"
@@ -121,6 +122,14 @@ struct Reader {
   long long readRaw(void* b, std::int32_t n) { if (p + (size_t)n > d.size()) return 0; std::memcpy(b, d.data() + p, (size_t)n); p += (size_t)n; return n; }
 };
 
+/// Writer for writeState into a byte vector (little-endian, as on this platform).
+struct Writer {
+  std::vector<char>& d;
+  bool writeInt32(std::int32_t v) { d.insert(d.end(), (char*)&v, (char*)&v + 4); return true; }
+  bool writeDouble(double v) { d.insert(d.end(), (char*)&v, (char*)&v + 8); return true; }
+  long long writeRaw(const void* b, std::int32_t n) { d.insert(d.end(), (const char*)b, (const char*)b + n); return n; }
+};
+
 struct Plugin {
   void* h = nullptr; IComponent* comp = nullptr; IConnectionPoint* cp = nullptr; MockHost host; MockPeer peer;
   std::vector<float> in, out; int dummy = 0;
@@ -197,6 +206,69 @@ void test_model_path_is_saved_and_restored() {
     p2.close();
   }
 }
+// The controller keeps the editor data (wear seed, writing on the tape) in its own state, apart from the processor's.
+void test_controller_state_keeps_seed_and_tape() {
+  void* h = dlopen(THE_STRIPPER_MODULE, RTLD_NOW | RTLD_LOCAL); CHECK(h != nullptr);
+  if (!h) return;
+  auto entry = (bool (*)(void*))dlsym(h, "ModuleEntry"); auto getFactory = (IPluginFactory * (*)())dlsym(h, "GetPluginFactory");
+  entry(h);
+  IPluginFactory* f = getFactory(); FUnknown* obj = nullptr;
+  CHECK(f->createInstance(FairyTapes::TheStripper::kControllerUID.toTUID(), IEditController::iid, (void**)&obj) == kResultOk && obj);
+  auto* ctl = static_cast<IEditController*>(obj);
+  MockHost host;
+  CHECK(ctl->initialize(&host) == kResultOk);
+
+  auto readBack = [&](PluginState& st) {
+    MockStream s; CHECK(ctl->getState(&s) == kResultOk);
+    Reader r{s.data}; CHECK(FairyTapes::TheStripper::readState(r, st));
+  };
+  PluginState first; readBack(first);
+  CHECK(first.wearSeed != 0);                                  // a fresh instance made a seed
+  CHECK(first.tapeTexts.empty());
+
+  // a project state with a seed and writing on the tape restores both
+  PluginState in; FairyTapes::TheStripper::fillDefaultParams(in.params);
+  in.wearSeed = 0xABCDEF01u; in.tapeTexts = {{true, "VOX"}, {false, ""}, {true, "7/12"}};
+  { MockStream s; Writer w{s.data}; CHECK(FairyTapes::TheStripper::writeState(w, in)); CHECK(ctl->setState(&s) == kResultOk); }
+  PluginState got; readBack(got);
+  CHECK(got.wearSeed == 0xABCDEF01u && got.tapeTexts.size() == 3);
+  CHECK(got.tapeTexts[0].set && got.tapeTexts[0].text == "VOX" && !got.tapeTexts[1].set && got.tapeTexts[2].text == "7/12");
+
+  // the processor's state (no seed, no tape) loaded as component state must not wipe the editor data
+  PluginState proc; FairyTapes::TheStripper::fillDefaultParams(proc.params);
+  { MockStream s; Writer w{s.data}; CHECK(FairyTapes::TheStripper::writeState(w, proc)); CHECK(ctl->setComponentState(&s) == kResultOk); }
+  PluginState after; readBack(after);
+  CHECK(after.wearSeed == 0xABCDEF01u && after.tapeTexts.size() == 3);
+
+  // an older project (v9: no seed) keeps the seed of this instance
+  { MockStream s; s.data.resize(0); Writer w{s.data}; w.writeInt32(9); for (int i = 0; i < FairyTapes::TheStripper::kNumParams; ++i) w.writeDouble(0.5); w.writeInt32(0);
+    CHECK(ctl->setState(&s) == kResultOk); }
+  PluginState old; readBack(old);
+  CHECK(old.wearSeed == 0xABCDEF01u);
+
+  // screws and recall marks (v11)
+  {
+    PluginState st; FairyTapes::TheStripper::fillDefaultParams(st.params);
+    st.params[FairyTapes::TheStripper::kInputGain] = 0.8;
+    st.hasScrewAngles = true; for (int i = 0; i < 4; ++i) st.screwAngles[i] = 33.0 + i;
+    st.recallValid = true; for (int i = 0; i < FairyTapes::TheStripper::kNumParams; ++i) st.recall[i] = 0.1;
+    st.recallMode = 1;   // Manual: the saved marks stay
+    { MockStream m; Writer w{m.data}; CHECK(FairyTapes::TheStripper::writeState(w, st)); CHECK(ctl->setState(&m) == kResultOk); }
+    PluginState manual; readBack(manual);
+    CHECK(manual.hasScrewAngles && manual.screwAngles[0] == 33.0 && manual.screwAngles[3] == 36.0);
+    CHECK(manual.recallMode == 1 && manual.recallValid && manual.recall[FairyTapes::TheStripper::kInputGain] == 0.1);
+    st.recallMode = 0;   // Auto: the marks are the values just loaded
+    { MockStream m; Writer w{m.data}; CHECK(FairyTapes::TheStripper::writeState(w, st)); CHECK(ctl->setState(&m) == kResultOk); }
+    PluginState autoMode; readBack(autoMode);
+    CHECK(autoMode.recallMode == 0 && autoMode.recallValid && autoMode.recall[FairyTapes::TheStripper::kInputGain] == 0.8);
+    // a state without a seed or marks (an older project) leaves this instance's seed alone
+    CHECK(autoMode.wearSeed != 0);
+  }
+
+  ctl->terminate(); ctl->release(); f->release();
+  auto ex = (bool (*)())dlsym(h, "ModuleExit"); if (ex) ex();
+  dlclose(h);
+}
 } // namespace
 
 int main() {
@@ -205,6 +277,7 @@ int main() {
   test_load_message_loads_and_reports_status();
   test_missing_file_reports_failed_and_empty_path_unloads();
   test_model_path_is_saved_and_restored();
+  test_controller_state_keeps_seed_and_tape();
   std::printf(g_failed ? "Model message module tests FAILED\n" : "Model message module tests OK\n");
   return g_failed ? 1 : 0;
 }

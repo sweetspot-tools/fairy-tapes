@@ -61,6 +61,11 @@ void MeterBar::setLevel(double norm, double dtSeconds) {
   if (changed || peak_.hold() != beforeHold) invalid();
 }
 
+void MeterBar::setHoldSettings(double holdSeconds, double fallDbPerSecond) {
+  peak_.configure(holdSeconds, fallDbPerSecond);
+  invalid();
+}
+
 void MeterBar::setDimmed(bool dimmed) {
   if (dimmed_ == dimmed) return;
   dimmed_ = dimmed;
@@ -80,7 +85,7 @@ void MeterBar::draw(CDrawContext* ctx) {
   for (int i = 0; i < count_; ++i) {
     const CPoint c(r.left + pitch * (i + 0.5), cy);
     const bool on = i < lit;
-    const bool held = kind_ == MeterKind::Level && i == holdIndex && !on;   // held peak above the live level
+    const bool held = kind_ == MeterKind::Level && peak_.holdEnabled() && i == holdIndex && !on;   // held peak above the live level
     fillLed(ctx, c, radius, (on || held) ? ledRgb(ledColor(i, count_, kind_)) : kOff);
   }
   ctx->restoreGlobalState();

@@ -2,6 +2,7 @@
 #include "ui/model_strip.h"
 
 #include "ui/model_source.h"
+#include "ui/tape_text.h"
 
 #include "vstgui/lib/cdrawcontext.h"
 #include "vstgui/lib/cfont.h"
@@ -43,6 +44,12 @@ void ModelStrip::setSaturate(bool saturate) {
   invalid();
 }
 
+void ModelStrip::setFont(TapeFontId font) {
+  if (font_ == font) return;
+  font_ = font;
+  invalid();
+}
+
 void ModelStrip::setDimmed(bool dimmed) {
   if (dimmed_ == dimmed) return;
   dimmed_ = dimmed;
@@ -77,12 +84,12 @@ void ModelStrip::draw(CDrawContext* ctx) {
     ctx->drawGraphicsPath(tape, CDrawContext::kPathFilled);
   }
 
-  static const SharedPointer<CFontDesc> font = makeOwned<CFontDesc>("Arial", 13, kBoldFace | kItalicFace);
-  ctx->setFont(font);
-  ctx->setFontColor(!saturate_ && kind_ == Kind::Error ? kErrorInk : kInk);
+  // The writing: the tape font, sized so its digits match the standard text (x1.3), cut by its measured width.
+  const double em = normalizedFontSize(font_, 13.0);
   std::string text = saturate_ ? "4K Saturate" : kind_ == Kind::NoModel ? "No model" : kind_ == Kind::Loading ? "Loading..." : text_;
-  text = truncateToWidth(text, w - 2 * kTextInset, [ctx](const std::string& s) { return ctx->getStringWidth(s.c_str()); });
-  ctx->drawString(text.c_str(), CRect(r.left + kTextInset, r.top, r.right, r.bottom), kLeftText);
+  text = fitTapeText(font_, text, em, w - 2 * kTextInset);
+  drawTapeText(ctx, font_, text, CPoint(r.left + kTextInset, r.top + h * 0.68), em,
+               !saturate_ && kind_ == Kind::Error ? kErrorInk : kInk, 0x5eed, 1.0);
   ctx->restoreGlobalState();
   setDirty(false);
 }

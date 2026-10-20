@@ -50,6 +50,9 @@ public:
              std::string label, const Skin* skin = nullptr);
 
   void setLabel(std::string label);
+  // Alt (or Ctrl/Cmd) + double click goes here instead of to the default value: return true and set `value` (0..1)
+  // to jump to it. Unset or false = the plain double-click behaviour.
+  std::function<bool(float& value)> altDoubleClickTarget;
   // Value text under the label; formatted only when the value changes.
   void setValueFormatter(ValueFormatter formatter);
 

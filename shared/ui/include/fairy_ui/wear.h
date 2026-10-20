@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include "fairy_ui/wear_rng.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
@@ -44,23 +46,7 @@ struct WearMark {
   std::vector<double> dashes;  // Bristle: dash pattern, empty = solid
 };
 
-// mulberry32, as in the preview (the same sequence for the same seed).
-class WearRng {
-public:
-  explicit WearRng(std::uint32_t seed) : a_(seed) {}
-  double next() {
-    a_ += 0x6D2B79F5u;
-    std::uint32_t t = a_;
-    t = (t ^ (t >> 15)) * (t | 1u);
-    t ^= t + (t ^ (t >> 7)) * (t | 61u);
-    return static_cast<double>((t ^ (t >> 14))) / 4294967296.0;
-  }
-  double range(double lo, double hi) { return lo + next() * (hi - lo); }
-  std::size_t pick(std::size_t n) { return static_cast<std::size_t>(next() * static_cast<double>(n)) % n; }
-
-private:
-  std::uint32_t a_;
-};
+// mulberry32 (fairy_ui/wear_rng.h, shared with the control wear): the same sequence for the same seed.
 
 // Box that holds everything a mark can paint (its points, padded by the line width plus 2): used to skip marks
 // outside the area being redrawn. For curves the control point is included, so the box is never too small.

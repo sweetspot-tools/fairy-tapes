@@ -132,6 +132,49 @@ void drawBellIcon(CDrawContext* ctx, const CPoint& c, bool on) {
   }
 }
 
+
+// Draws the marks of one control at `origin`, at 25 % opacity (the material shows through). `underPass` selects the marks
+// below the cap/face (dirt around it) or the ones over it. Pointer marks are the knob's business and are skipped here.
+void drawWearMarks(CDrawContext* ctx, const std::vector<ControlWearMark>& marks, const CPoint& origin, bool underPass) {
+  for (const auto& m : marks) {
+    if (m.underCap != underPass || m.kind == ControlWearMark::Kind::Pointer) continue;
+    auto path = owned(ctx->createGraphicsPath());
+    if (!path) continue;
+    const CColor colour(static_cast<uint8_t>((m.rgb >> 16) & 0xFF), static_cast<uint8_t>((m.rgb >> 8) & 0xFF),
+                        static_cast<uint8_t>(m.rgb & 0xFF),
+                        static_cast<uint8_t>(std::clamp(m.alpha * kTexture, 0.0, 1.0) * 255.0 + 0.5));
+    switch (m.kind) {
+    case ControlWearMark::Kind::Blob:
+    case ControlWearMark::Kind::Chip:
+      path->beginSubpath(CPoint(origin.x + m.pts[0].first, origin.y + m.pts[0].second));
+      for (std::size_t i = 1; i < m.pts.size(); ++i) path->addLine(CPoint(origin.x + m.pts[i].first, origin.y + m.pts[i].second));
+      path->closeSubpath();
+      ctx->setFillColor(colour);
+      ctx->drawGraphicsPath(path, CDrawContext::kPathFilled);
+      break;
+    case ControlWearMark::Kind::Speck:
+      path->addEllipse(circleRect(origin.x + m.pts[0].first, origin.y + m.pts[0].second, m.size));
+      ctx->setFillColor(colour);
+      ctx->drawGraphicsPath(path, CDrawContext::kPathFilled);
+      break;
+    case ControlWearMark::Kind::Stroke: {
+      const double x0 = origin.x + m.pts[0].first, y0 = origin.y + m.pts[0].second;
+      const double xc = origin.x + m.pts[1].first, yc = origin.y + m.pts[1].second;
+      const double x2 = origin.x + m.pts[2].first, y2 = origin.y + m.pts[2].second;
+      path->beginSubpath(CPoint(x0, y0));
+      path->addBezierCurve(CPoint(x0 + 2.0 / 3.0 * (xc - x0), y0 + 2.0 / 3.0 * (yc - y0)),
+                           CPoint(x2 + 2.0 / 3.0 * (xc - x2), y2 + 2.0 / 3.0 * (yc - y2)), CPoint(x2, y2));
+      ctx->setFrameColor(colour);
+      ctx->setLineWidth(m.size);
+      ctx->setLineStyle(CLineStyle(CLineStyle::kLineCapButt));
+      ctx->drawGraphicsPath(path, CDrawContext::kPathStroked);
+      break;
+    }
+    case ControlWearMark::Kind::Pointer: break;
+    }
+  }
+}
+
 } // namespace
 
 // ---------------------------------------------------------------------------
@@ -140,6 +183,26 @@ void drawBellIcon(CDrawContext* ctx, const CPoint& c, bool on) {
 RackKnob::RackKnob(const CRect& size, IControlListener* listener, int32_t tag, double capRadius, const Skin* skin)
     : AnalogKnob(size, listener, tag, std::string(), skin), capRadius_(capRadius > 4 ? capRadius : Rack::kDefaultCapRadius) {}
 
+void RackKnob::setWear(std::uint32_t seed, double amount) {
+  wear_ = knobWear(seed, amount, capRadius_);
+  invalid();
+}
+
+CRect RackKnob::valueArea() const {
+  const CRect& r = getViewSize();
+  const double cx = r.left + r.getWidth() / 2, cy = r.top + AnalogKnob::kCenterOffsetY;
+  const double baseline = Rack::valueBaseline(cy, capRadius_);
+  return CRect(cx - 34, baseline - 12, cx + 34, baseline + 5);
+}
+
+CMouseEventResult RackKnob::onMouseDown(CPoint& where, const CButtonState& buttons) {
+  if (onValueClick && buttons.isLeftButton() && valueArea().pointInside(where)) {
+    onValueClick();
+    return kMouseDownEventHandledButDontNeedMovedOrUpEvents;
+  }
+  return AnalogKnob::onMouseDown(where, buttons);
+}
+
 void RackKnob::draw(CDrawContext* ctx) {
   begin(ctx, dimmed_);
   const double v = sanitizeNorm(getValue(), getDefaultValue());
@@ -147,6 +210,7 @@ void RackKnob::draw(CDrawContext* ctx) {
   const double cx = r.left + r.getWidth() / 2, cy = r.top + AnalogKnob::kCenterOffsetY, R = capRadius_;
   const double Zf = std::max(0.35, R / 56.0);   // the preview scales its fine marks with the cap
 
+  drawWearMarks(ctx, wear_, CPoint(cx, cy), true);   // dirt around the base, below the cap
   // contact shadow: three soft layers instead of a blur
   fillCircle(ctx, cx + R * 0.05, cy + R * 0.16, R * 1.12, CColor(0, 0, 0, 46));
   fillCircle(ctx, cx + R * 0.05, cy + R * 0.16, R * 1.06, CColor(0, 0, 0, 64));
@@ -179,6 +243,8 @@ void RackKnob::draw(CDrawContext* ctx) {
   strokeCircle(ctx, cx - 0.5, cy - 0.6, R - 0.5, 0.8 * Zf, CColor(255, 255, 255, 20));
   strokeCircle(ctx, cx + 0.5, cy + 0.7, R - 0.3, 1.0 * Zf, CColor(0, 0, 0, 153));
 
+  drawWearMarks(ctx, wear_, CPoint(cx, cy), false);   // worn edge, dents, residue and specks on the cap
+
   // pointer: a groove with a cream inlay, rotated with the value
   const double rad = Rack::pointerDegrees(v) * Rack::kPi / 180.0;
   const double dx = std::cos(rad), dy = -std::sin(rad);
@@ -190,6 +256,15 @@ void RackKnob::draw(CDrawContext* ctx) {
   ctx->setLineWidth(3.2 * Zf);
   ctx->setFrameColor(kInlay);
   ctx->drawLine(CPoint(cx + dx * R * 0.3, cy + dy * R * 0.3), CPoint(cx + dx * R * 0.86, cy + dy * R * 0.86));
+  // the inlay worn through in places (the cap showing through the cream) and nicked
+  ctx->setLineStyle(CLineStyle(CLineStyle::kLineCapButt));
+  for (const auto& m : wear_) {
+    if (m.kind != ControlWearMark::Kind::Pointer) continue;
+    const double t0 = 0.3 + 0.56 * m.size, t1 = 0.3 + 0.56 * (m.size + m.length);
+    ctx->setFrameColor(CColor(static_cast<uint8_t>((m.rgb >> 16) & 0xFF), static_cast<uint8_t>((m.rgb >> 8) & 0xFF),
+                              static_cast<uint8_t>(m.rgb & 0xFF), static_cast<uint8_t>(m.alpha * 255.0 + 0.5)));
+    ctx->drawLine(CPoint(cx + dx * R * t0, cy + dy * R * t0), CPoint(cx + dx * R * t1, cy + dy * R * t1));
+  }
 
   ctx->restoreGlobalState();
   setDirty(false);
@@ -201,6 +276,11 @@ void RackKnob::draw(CDrawContext* ctx) {
 RackToggle::RackToggle(const CRect& size, IControlListener* listener, int32_t tag, RackLed led, bool bellIcon,
                        const Skin* skin)
     : ToggleButton(size, listener, tag, std::string(), skin), led_(led), bell_(bellIcon) {}
+
+void RackToggle::setWear(std::uint32_t seed, double amount) {
+  wear_ = bell_ ? std::vector<ControlWearMark>() : buttonWear(seed, amount, Rack::kFaceWidth, Rack::kFaceHeight);
+  invalid();
+}
 
 void RackToggle::draw(CDrawContext* ctx) {
   begin(ctx, dimmed_);
@@ -226,7 +306,10 @@ void RackToggle::draw(CDrawContext* ctx) {
     }
     drawBellIcon(ctx, f.getCenter(), on);
   } else {
-    drawFace(ctx, faceIn(r), on, led_, true);
+    const CRect face = faceIn(r);
+    drawWearMarks(ctx, wear_, face.getTopLeft(), true);                        // dirt in the gap, below the face
+    drawFace(ctx, face, on, led_, true);
+    drawWearMarks(ctx, wear_, CPoint(face.left, face.top + (on ? Rack::kPressDepth : 0.0)), false);   // follows the sunk face
   }
   ctx->restoreGlobalState();
   setDirty(false);
@@ -246,10 +329,24 @@ CRect RackChoice::slot(int index) const {
   return CRect(r.left + index * w, r.top, r.left + (index + 1) * w, r.bottom);
 }
 
+void RackChoice::setWear(std::uint32_t seed, double amount) {
+  wear_.clear();
+  for (int i = 0; i < count_; ++i)
+    wear_.push_back(buttonWear(seed + static_cast<std::uint32_t>(i) * 7919u, amount, Rack::kFaceWidth, Rack::kFaceHeight));
+  invalid();
+}
+
 void RackChoice::draw(CDrawContext* ctx) {
   begin(ctx, dimmed_);
   const int selected = selectedIndex();
-  for (int i = 0; i < count_; ++i) drawFace(ctx, faceIn(slot(i)), i == selected, led_, true);
+  for (int i = 0; i < count_; ++i) {
+    const CRect face = faceIn(slot(i));
+    const bool on = i == selected;
+    const bool hasWear = static_cast<size_t>(i) < wear_.size();
+    if (hasWear) drawWearMarks(ctx, wear_[static_cast<size_t>(i)], face.getTopLeft(), true);
+    drawFace(ctx, face, on, led_, true);
+    if (hasWear) drawWearMarks(ctx, wear_[static_cast<size_t>(i)], CPoint(face.left, face.top + (on ? Rack::kPressDepth : 0.0)), false);
+  }
   ctx->restoreGlobalState();
   setDirty(false);
 }

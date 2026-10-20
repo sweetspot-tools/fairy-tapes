@@ -85,6 +85,15 @@ void test_invalid_values_fall_back_per_key() {
   CHECK(p.meterReleaseDbPerSec == 20.0);
 }
 
+void test_back_tab() {
+  CHECK(Preferences().backTab == BackTab::Settings);                       // default: SETTINGS
+  CHECK(parsePreferences("backTab=Credits\n").backTab == BackTab::Credits);
+  CHECK(parsePreferences("backTab=Buttons\n").backTab == BackTab::Buttons);
+  CHECK(parsePreferences("backTab=Nonsense\n").backTab == BackTab::Settings);
+  Preferences in; in.backTab = BackTab::Buttons;
+  CHECK(parsePreferences(serializePreferences(in)).backTab == BackTab::Buttons);   // round trip
+}
+
 void test_numbers_are_clamped() {
   Preferences p = parsePreferences("meterHoldSeconds=9999\nmeterReleaseDbPerSec=0.0001\n");
   CHECK(p.meterHoldSeconds == kMaxMeterHoldSeconds);
@@ -172,6 +181,7 @@ int main() {
   test_missing_file_gives_defaults();
   test_corrupt_files_give_defaults_without_crashing();
   test_invalid_values_fall_back_per_key();
+  test_back_tab();
   test_numbers_are_clamped();
   test_unknown_keys_and_comments_are_ignored();
   test_round_trip();

@@ -5,7 +5,10 @@
 #pragma once
 
 #include "params.h"
+#include "preferences.h"
+#include "state.h"
 #include "ui/layout.h"
+#include "ui/tape_font.h"
 
 #include "fairy_ui/skin.h"
 
@@ -15,11 +18,19 @@
 #include "vstgui/lib/cvstguitimer.h"
 
 #include <array>
+#include <functional>
+#include <memory>
 #include <chrono>
 #include <string>
 
+namespace VSTGUI {
+class CTextEdit;
+}
+
 namespace FairyTapes::Ui {
+class WearView;
 class NormalizedControl;
+class SilkscreenView;
 class MeterBar;
 class ClipLed;
 }
@@ -30,9 +41,14 @@ class Controller;
 
 namespace FairyTapes::TheStripper::Ui {
 
+class BackView;
+class FlipView;
 class ModelBrowser;
 class ModelStrip;
-class SilkscreenView;
+class RecallMarksView;
+class GpuChipView;
+class ScrewView;
+class TapePieceView;
 
 class Editor : public Steinberg::Vst::VSTGUIEditor,
                public Steinberg::IPlugViewContentScaleSupport,
@@ -80,6 +96,19 @@ private:
   void updateMeters();
   void updateModel();      // model strip and Drive dimming from the controller's model status
   void openBrowser();
+  void applyAppearance(const Preferences& prefs);   // wear, fonts, meter settings: live, from the back panel
+  void updateRecallMarks();                       // current and recalled values of the knobs, for the pen marks
+  void placeScrews(bool useSavedAngles);          // the four screws of the current seed, at their saved angles or the initial ones
+  void screwsTurned();                            // a screw was turned: save the four angles
+  void rebuildPieces();                           // the pieces of tape of the current seed, in their place in the layers
+  void startFlip(bool toBack);
+  void finishFlip();
+  void changePreference(const std::function<void(Preferences&)>& mutate);
+  void editValue(const ControlSpec& spec);   // opens the text field over the printed value of a knob
+  void closeValueEdit();
+  void commitValue(const ControlSpec& spec, double paramNorm);   // a value typed in (same path as turning the knob)
+  void editTape(TapePieceView* piece);   // opens the text field over a piece of tape
+  void closeTapeEdit();
   void refreshModules();
   const ControlSpec* specOf(VSTGUI::CControl* control) const;
 
@@ -92,7 +121,27 @@ private:
   std::array<FairyTapes::Ui::MeterBar*, kMeterRowCount> bars_{};   // owned by the frame, in kMeterRows order
   std::array<FairyTapes::Ui::ClipLed*, kClipCount> clips_{};
   std::chrono::steady_clock::time_point lastTick_{};
-  SilkscreenView* silk_ = nullptr;         // owned by the frame
+  VSTGUI::CViewContainer* front_ = nullptr;          // the front of the panel (all views of createViews), owned by the frame
+  BackView* backView_ = nullptr;                     // the back, owned by the frame (hidden until the panel is turned)
+  FlipView* flip_ = nullptr;                         // the turn in progress, owned by the frame
+  VSTGUI::CView* flipFrom_ = nullptr;
+  VSTGUI::CView* flipTo_ = nullptr;
+  std::chrono::steady_clock::time_point flipStart_{};
+  Preferences prefs_;
+  FairyTapes::Ui::WearView* wearView_ = nullptr;     // owned by front_
+  FairyTapes::Ui::SilkscreenView* silk_ = nullptr;   // owned by the frame
+  bool tapeValues_ = false;                // the values under the knobs are handwritten (preference)
+  TapeFontId valuesFont_ = TapeFontId::Zeyada;
+  std::uint32_t valuesSeed_ = 0;
+  RecallMarksView* marks_ = nullptr;                      // owned by front_
+  std::array<ScrewView*, 4> screws_{};                    // owned by front_
+  std::array<TapePieceView*, kMaxTapePieces> pieces_{};   // owned by the frame
+  VSTGUI::CTextEdit* valueEdit_ = nullptr;               // the open value field, owned by the frame
+  const ControlSpec* valueEditSpec_ = nullptr;
+  VSTGUI::CTextEdit* tapeEdit_ = nullptr;                // the open text field, owned by the frame
+  int tapeEditIndex_ = -1;
+  GpuChipView* gpuChip_ = nullptr;         // on the NAM button while the model runs on the GPU; owned by the frame
+  bool modelGpu_ = false;
   ModelStrip* strip_ = nullptr;            // owned by the frame
   ModelBrowser* browser_ = nullptr;        // owned by the frame while the popup is open
   bool browserClosing_ = false;            // set by the popup, handled on the UI timer

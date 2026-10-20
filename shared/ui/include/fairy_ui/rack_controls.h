@@ -4,8 +4,13 @@
 // scratches and tape can cover them. The controls draw only the parts that stand above the wear.
 #pragma once
 
+#include "fairy_ui/control_wear.h"
 #include "fairy_ui/controls.h"
 #include "fairy_ui/rack_geometry.h"
+
+#include <cstdint>
+#include <functional>
+#include <vector>
 
 namespace FairyTapes::Ui {
 
@@ -18,11 +23,21 @@ public:
   RackKnob(const VSTGUI::CRect& size, VSTGUI::IControlListener* listener, int32_t tag,
            double capRadius = Rack::kDefaultCapRadius, const Skin* skin = nullptr);
 
+  // Wear of the cap (0 = none, 1 = light, 2.2 = heavy) from a per-control seed; drawn at 25 %.
+  void setWear(std::uint32_t seed, double amount);
+
+  // A click on the printed value under the knob (the silkscreen draws it) calls this instead of starting a drag: the plug-in
+  // opens a text field there. Nothing happens when it is not set.
+  std::function<void()> onValueClick;
+  VSTGUI::CRect valueArea() const;   // where the value is printed, in the view's coordinates
+
   void draw(VSTGUI::CDrawContext* context) override;
+  VSTGUI::CMouseEventResult onMouseDown(VSTGUI::CPoint& where, const VSTGUI::CButtonState& buttons) override;
   CLASS_METHODS_NOCOPY(RackKnob, AnalogKnob)
 
 private:
   double capRadius_;
+  std::vector<ControlWearMark> wear_;
 };
 
 // On/off button: a grey face with an LED under it (lit = on), or the bell icon variant (amber face, no LED).
@@ -33,12 +48,15 @@ public:
   RackToggle(const VSTGUI::CRect& size, VSTGUI::IControlListener* listener, int32_t tag, RackLed led,
              bool bellIcon = false, const Skin* skin = nullptr);
 
+  void setWear(std::uint32_t seed, double amount);
+
   void draw(VSTGUI::CDrawContext* context) override;
   CLASS_METHODS_NOCOPY(RackToggle, ToggleButton)
 
 private:
   RackLed led_;
   bool bell_;
+  std::vector<ControlWearMark> wear_;
 };
 
 // N exclusive buttons side by side (slot width = view width / N), each a grey face with an LED.
@@ -46,6 +64,8 @@ class RackChoice : public ChoiceButtons {
 public:
   RackChoice(const VSTGUI::CRect& size, VSTGUI::IControlListener* listener, int32_t tag, int count, RackLed led,
              const Skin* skin = nullptr);
+
+  void setWear(std::uint32_t seed, double amount);   // every button gets its own marks
 
   void draw(VSTGUI::CDrawContext* context) override;
   VSTGUI::CMouseEventResult onMouseDown(VSTGUI::CPoint& where, const VSTGUI::CButtonState& buttons) override;
@@ -55,6 +75,7 @@ private:
   VSTGUI::CRect slot(int index) const;
   RackLed led_;
   int count_;
+  std::vector<std::vector<ControlWearMark>> wear_;
 };
 
 } // namespace FairyTapes::Ui

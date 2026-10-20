@@ -1,6 +1,8 @@
 // The Stripper GUI: the model name written on a strip of paper tape (Drive box). A click opens the model picker.
 #pragma once
 
+#include "ui/tape_font.h"
+
 #include "vstgui/lib/cview.h"
 
 #include <functional>
@@ -21,6 +23,7 @@ public:
   void setSaturate(bool saturate);
   bool isSaturate() const { return saturate_; }
   void setDimmed(bool dimmed);
+  void setFont(TapeFontId font);   // the handwriting font chosen in the preferences
   std::function<void()> onClick;
 
   void draw(VSTGUI::CDrawContext* context) override;
@@ -32,6 +35,7 @@ private:
   std::string text_;
   bool dimmed_ = false;
   bool saturate_ = false;
+  TapeFontId font_ = TapeFontId::Zeyada;
 };
 
 } // namespace FairyTapes::TheStripper::Ui

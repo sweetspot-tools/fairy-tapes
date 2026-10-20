@@ -2,7 +2,7 @@
 // (src/the-stripper/docs/mockups/stripper_rack.html).
 #include "ui/panel_view.h"
 
-#include "ui/draw_util.h"
+#include "fairy_ui/draw_util.h"
 #include "ui/layout.h"
 
 #include "fairy_ui/skin.h"
@@ -17,6 +17,11 @@
 #include <string>
 
 namespace FairyTapes::TheStripper::Ui {
+
+using FairyTapes::Ui::drawTitledBox;
+using FairyTapes::Ui::kAmber;
+using FairyTapes::Ui::kDimWhite;
+using FairyTapes::Ui::kWhite;
 
 using namespace VSTGUI;
 
@@ -40,17 +45,13 @@ PanelView::PanelView(const CRect& size, const FairyTapes::Ui::Skin* skin)
   setMouseEnabled(false);
 }
 
-void PanelView::draw(CDrawContext* ctx) {
-  ctx->saveGlobalState();
-  ctx->setDrawMode(kAntiAliasing | kNonIntegralMode);
-  const CRect& r = getViewSize();
+void drawPanelBase(CDrawContext* ctx, const CRect& r, const FairyTapes::Ui::Skin* skin) {
   const CPoint o = r.getTopLeft();
-
   // Tint, then the optional grain tile, then the soft light (reflection at the top, shade at the bottom).
   if (auto body = owned(ctx->createRoundRectGraphicsPath(r, kPanelRadius))) {
     ctx->setFillColor(kTint);
     ctx->drawGraphicsPath(body, CDrawContext::kPathFilled);
-    if (CBitmap* tile = skin_ ? skin_->bitmap(kGrainTile) : nullptr) {
+    if (CBitmap* tile = skin ? skin->bitmap(kGrainTile) : nullptr) {
       const CCoord tw = tile->getWidth(), th = tile->getHeight();
       if (tw > 0 && th > 0) {
         ctx->setClipRect(r);
@@ -66,6 +67,14 @@ void PanelView::draw(CDrawContext* ctx) {
     ctx->setLineWidth(2);
     ctx->drawGraphicsPath(edge, CDrawContext::kPathStroked);
   }
+}
+
+void PanelView::draw(CDrawContext* ctx) {
+  ctx->saveGlobalState();
+  ctx->setDrawMode(kAntiAliasing | kNonIntegralMode);
+  const CRect& r = getViewSize();
+  const CPoint o = r.getTopLeft();
+  drawPanelBase(ctx, r, skin_);
 
   // Header
   ctx->setFont(titleFont_);

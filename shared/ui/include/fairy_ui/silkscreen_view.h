@@ -9,6 +9,7 @@
 #include "vstgui/lib/cfont.h"
 #include "vstgui/lib/cview.h"
 
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -28,6 +29,14 @@ public:
   void setTag(int key, const std::string& text);
   void setTagDimmed(int key, bool dimmed);
 
+  // Optional: a plug-in that prints the values another way (e.g. handwriting) draws them itself. Called for every value
+  // text with the view origin and the index of its item (dimming is already applied); returns true when it drew the text.
+  using ValueDrawer = std::function<bool(VSTGUI::CDrawContext*, const PrintText& text, const VSTGUI::CPoint& origin, std::size_t item)>;
+  void setValueDrawer(ValueDrawer drawer) {
+    valueDrawer_ = std::move(drawer);
+    invalid();
+  }
+
   const SilkscreenModel& model() const { return model_; }
 
   void draw(VSTGUI::CDrawContext* context) override;
@@ -39,6 +48,7 @@ private:
   }
 
   SilkscreenModel model_;
+  ValueDrawer valueDrawer_;
   VSTGUI::SharedPointer<VSTGUI::CFontDesc> endFont_, nameFont_, valueFont_, labelFont_, tagFont_;
 };
 

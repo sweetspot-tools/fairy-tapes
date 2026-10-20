@@ -9,10 +9,12 @@
 #include "params.h"
 #include "pluginterfaces/base/funknown.h"
 #include "messages.h"
+#include "state.h"
 #include "pluginterfaces/vst/ivsteditcontroller.h"
 #include "pluginterfaces/vst/ivstmessage.h"
 #include "pluginterfaces/vst/ivsthostapplication.h"
 #include <mutex>
+#include <vector>
 
 namespace FairyTapes::TheStripper {
 
@@ -66,19 +68,44 @@ public:
   void performEdit(Steinberg::Vst::ParamID tag, Steinberg::Vst::ParamValue value);
   void endEdit(Steinberg::Vst::ParamID tag);
 
+  /** Editor-only data kept with the plug-in state (controller side): the seed of the wear and the writing on the tape. */
+  std::uint32_t wearSeed() const;
+  TapeText tapeText(int index) const;                       // `set` false when never written (or out of range)
+  void setTapeText(int index, const std::string& text);     // UTF-8, cut to kMaxTapeTextBytes
+  // The four screws of the panel (angles in degrees). Until the user turns one, the angles come from the seed (no saved angles).
+  bool screwAngles(double out[4]) const;                    // false when none are saved
+  void setScrewAngles(const double in[4]);
+  // Recall marks: the parameter values at the last load (Auto) or at the last "Mark now" (Manual), shown as pen marks.
+  bool recallValid() const;
+  double recallValue(Steinberg::Vst::ParamID id) const;     // 0..1; 0 when there are no marks
+  void markRecallNow();                                     // sets the marks to the current values
+  int recallMode() const;                                   // 0 = Auto, 1 = Manual
+  void setRecallMode(int mode);
+  void rerollWear();                                        // RE-ROLL: a new seed (new wear, dirt, tape) and the writing erased
+
   /** Ask the processor to load a .nam model (UTF-8 path); empty = no model. The editor shows the outcome via the getters below. */
   void requestModelLoad(const std::string& path);
   std::string modelPath() const;
   std::string modelName() const;    // file name of the loaded model, empty when none
   std::string modelError() const;   // why the last load failed, empty otherwise
+  bool modelGpu() const;            // the loaded model runs on the GPU
   int modelState() const;           // 0 idle, 1 loading, 2 loaded, 3 failed
 
   DECLARE_FUNKNOWN_METHODS
 
 private:
+  Steinberg::tresult applyState(Steinberg::IBStream* state, bool withEditorData);
   friend struct Ui::EditorPreview;   // tools/render_editor.cpp sets the model status without a processor
   Steinberg::Vst::ParamValue param_value_[kNumParams];
   Steinberg::Vst::ParamValue meter_value_[kNumMeters] = {};   // written by the processor, read by the editor
+  std::uint32_t wearSeed_ = 0;                 // editor data (v10 state); 0 until initialize() or setState() gives one
+  std::vector<TapeText> tapeTexts_;
+  bool hasScrews_ = false;
+  double screws_[4] = {0, 0, 0, 0};
+  bool recallValid_ = false;
+  double recall_[kNumParams] = {};
+  int recallMode_ = 0;
+  mutable std::mutex uiMutex_;
   std::string modelPath_;
   mutable std::mutex modelMutex_;   // notify() may arrive on a worker thread
   ModelStatus modelStatus_;

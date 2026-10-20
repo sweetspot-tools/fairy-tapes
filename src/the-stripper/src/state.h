@@ -12,17 +12,38 @@
 #pragma once
 
 #include "params.h"
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace FairyTapes::TheStripper {
 
-constexpr int kStateVersion = 9;
+constexpr int kStateVersion = 11;
 constexpr std::int32_t kMaxModelPathBytes = 4096;
+constexpr int kMaxTapePieces = 4;            // pieces of tape whose writing is saved
+constexpr std::int32_t kMaxTapeTextBytes = 64;   // 14 characters, UTF-8, with room to spare
+
+/// What is written on one piece of tape: `set` false = never written (the default text is shown), true = the user's text
+/// (possibly empty, erased on purpose).
+struct TapeText {
+  bool set = false;
+  std::string text;
+};
 
 struct PluginState {
   double params[kNumParams];
   std::string modelPath;
+  std::uint32_t wearSeed = 0;          // 0 = none yet (the controller creates one); v10
+  std::vector<TapeText> tapeTexts;     // v10
+  // v11: the four screws of the panel (angle in degrees, 0 <= a < 360), the recall marks (the parameter values at the last
+  // load or "Mark now") and how the marks are set (0 = Auto: at every load, 1 = Manual: only with "Mark now").
+  bool hasScrewAngles = false;
+  double screwAngles[4] = {0, 0, 0, 0};
+  bool recallValid = false;
+  double recall[kNumParams] = {};
+  int recallMode = 0;
 };
 
 /// Default value of every parameter (the table the frozen-parameter test pins down).
@@ -131,7 +152,7 @@ bool readState(S& s, PluginState& out) {
   } else if (version == 7) {
     if (!readDoubles(s, P, kNumParamsV7))
       return false;
-  } else if (version == 8 || version == 9) {
+  } else if (version >= 8) {   // 8, 9, 10: parameters, then the model path (10: then seed and tape)
     if (!readDoubles(s, P, version == 8 ? kNumParamsV8 : kNumParams))
       return false;
     std::int32_t len = 0;
@@ -141,6 +162,58 @@ bool readState(S& s, PluginState& out) {
       out.modelPath.resize(static_cast<std::size_t>(len));
       if (s.readRaw(&out.modelPath[0], len) != len)
         return false;
+    }
+    if (version >= 10) {
+      std::int32_t seed = 0, count = 0;
+      if (!s.readInt32(seed) || !s.readInt32(count) || count < 0 || count > kMaxTapePieces)
+        return false;
+      out.wearSeed = static_cast<std::uint32_t>(seed);
+      for (std::int32_t i = 0; i < count; ++i) {
+        std::int32_t n = 0;
+        if (!s.readInt32(n) || n < -1 || n > kMaxTapeTextBytes)
+          return false;
+        TapeText t;
+        t.set = n >= 0;
+        if (n > 0) {
+          t.text.resize(static_cast<std::size_t>(n));
+          if (s.readRaw(&t.text[0], n) != n)
+            return false;
+        }
+        out.tapeTexts.push_back(std::move(t));
+      }
+    }
+    if (version >= 11) {
+      std::int32_t screws = 0;
+      if (!s.readInt32(screws) || (screws != 0 && screws != 4))
+        return false;
+      if (screws == 4) {
+        out.hasScrewAngles = true;
+        for (int i = 0; i < 4; ++i) {
+          double a = 0;
+          if (!s.readDouble(a))
+            return false;
+          if (!std::isfinite(a))
+            a = 0.0;
+          a = std::fmod(a, 360.0);
+          out.screwAngles[i] = a < 0.0 ? a + 360.0 : a;
+        }
+      }
+      std::int32_t recallFlag = 0;
+      if (!s.readInt32(recallFlag) || (recallFlag != 0 && recallFlag != 1))
+        return false;
+      if (recallFlag == 1) {
+        out.recallValid = true;
+        for (int i = 0; i < kNumParams; ++i) {
+          double v = 0;
+          if (!s.readDouble(v))
+            return false;
+          out.recall[i] = std::isfinite(v) ? std::min(1.0, std::max(0.0, v)) : 0.0;
+        }
+      }
+      std::int32_t mode = 0;
+      if (!s.readInt32(mode) || (mode != 0 && mode != 1))
+        return false;
+      out.recallMode = mode;
     }
   } else {
     // v1..v3: read what is available, then fill the rest with defaults
@@ -208,7 +281,7 @@ bool readState(S& s, PluginState& out) {
   return true;
 }
 
-/// Writes the current version (9).
+/// Writes the current version (11).
 template <class S>
 bool writeState(S& s, const PluginState& in) {
   if (!s.writeInt32(kStateVersion))
@@ -221,7 +294,32 @@ bool writeState(S& s, const PluginState& in) {
     return false;
   if (len > 0 && s.writeRaw(in.modelPath.data(), len) != len)
     return false;
-  return true;
+  if (!s.writeInt32(static_cast<std::int32_t>(in.wearSeed)))
+    return false;
+  const std::int32_t pieces = static_cast<std::int32_t>(std::min<std::size_t>(in.tapeTexts.size(), kMaxTapePieces));
+  if (!s.writeInt32(pieces))
+    return false;
+  for (std::int32_t i = 0; i < pieces; ++i) {
+    const TapeText& t = in.tapeTexts[static_cast<std::size_t>(i)];
+    const std::int32_t n = t.set ? static_cast<std::int32_t>(std::min<std::size_t>(t.text.size(), kMaxTapeTextBytes)) : -1;
+    if (!s.writeInt32(n))
+      return false;
+    if (n > 0 && s.writeRaw(t.text.data(), n) != n)
+      return false;
+  }
+  if (!s.writeInt32(in.hasScrewAngles ? 4 : 0))
+    return false;
+  if (in.hasScrewAngles)
+    for (int i = 0; i < 4; ++i)
+      if (!s.writeDouble(in.screwAngles[i]))
+        return false;
+  if (!s.writeInt32(in.recallValid ? 1 : 0))
+    return false;
+  if (in.recallValid)
+    for (int i = 0; i < kNumParams; ++i)
+      if (!s.writeDouble(in.recall[i]))
+        return false;
+  return s.writeInt32(in.recallMode == 1 ? 1 : 0);
 }
 
 } // namespace FairyTapes::TheStripper

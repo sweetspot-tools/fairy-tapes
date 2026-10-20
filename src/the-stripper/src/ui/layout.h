@@ -246,6 +246,9 @@ inline bool moduleDimmed(Module m, const ModuleState& s) {
 }
 
 // Controls that exist only in Channel mode (the Mix bus engine ignores the compressor mode).
+// The Bell filter is part of the Black (Channel) EQ only; in Bus mode the DSP ignores it, so the buttons are out of use.
+inline bool controlInUse(Steinberg::Vst::ParamID id, bool channelMode) { return channelMode || !isBellButton(id); }
+
 inline bool visibleInMode(Steinberg::Vst::ParamID id, bool channelMode) {
   return id != kCompressorMode || channelMode;
 }

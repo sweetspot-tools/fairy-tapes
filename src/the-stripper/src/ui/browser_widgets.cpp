@@ -1,7 +1,7 @@
 // The Stripper GUI: small code-drawn widgets of the model popup.
 #include "ui/browser_widgets.h"
 
-#include "ui/draw_util.h"
+#include "fairy_ui/draw_util.h"
 #include "ui/model_source.h"
 
 #include "vstgui/lib/cdrawcontext.h"
@@ -13,6 +13,10 @@
 #include <cmath>
 
 namespace FairyTapes::TheStripper::Ui {
+
+using FairyTapes::Ui::kAmber;
+using FairyTapes::Ui::kDimWhite;
+using FairyTapes::Ui::kWhite;
 
 using namespace VSTGUI;
 

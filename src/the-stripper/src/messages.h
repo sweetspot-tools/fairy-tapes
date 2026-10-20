@@ -2,7 +2,7 @@
  * Fairy Tapes · The Stripper — messages between controller and processor (model loading).
  *
  *   "LoadModel"   controller -> processor   attribute "path": UTF-8 path of the .nam file (empty = unload)
- *   "ModelStatus" processor  -> controller  attributes "state" (one digit, NamDrive::LoadState), "name", "error" (UTF-8)
+ *   "ModelStatus" processor  -> controller  attributes "state" (one digit, NamDrive::LoadState), "name", "error" (UTF-8), "gpu" ("1" = inference on the GPU)
  *
  * Strings travel as binary UTF-8 (setBinary/getBinary), so non-ASCII paths need no UTF-16 conversion.
  * Header-only templates over the message type: Steinberg::Vst::IMessage in the plugin, a fake in the tests.
@@ -25,6 +25,7 @@ struct ModelStatus {
   int state = 0;          // NamDrive::LoadState as an int (0 Idle, 1 Loading, 2 Loaded, 3 Failed)
   std::string name;       // file name of the loaded model, empty when none
   std::string error;      // reason of the last failure, empty otherwise
+  bool gpu = false;       // the loaded model runs on the GPU
 };
 
 namespace messages_detail {
@@ -73,6 +74,7 @@ void encodeStatusMessage(Msg* m, const ModelStatus& st) {
   messages_detail::setString(m, "state", std::to_string(st.state));
   messages_detail::setString(m, "name", st.name);
   messages_detail::setString(m, "error", st.error);
+  messages_detail::setString(m, "gpu", st.gpu ? "1" : "0");
 }
 
 template <class Msg>
@@ -83,6 +85,8 @@ bool decodeStatusMessage(Msg* m, ModelStatus& st) {
   if (!messages_detail::getString(m, "state", state) || state.size() != 1 || state[0] < '0' || state[0] > '3')
     return false;
   st.state = state[0] - '0';
+  std::string gpu;
+  st.gpu = messages_detail::getString(m, "gpu", gpu) && gpu == "1";   // absent = CPU
   return messages_detail::getString(m, "name", st.name) && messages_detail::getString(m, "error", st.error);
 }
 

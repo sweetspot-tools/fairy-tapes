@@ -40,7 +40,7 @@ We expose **only two cutoff frequencies** (HP, LP) + bypass. Q/slope **fixed in 
 
 **Design:** EQ stage uses **one engine per mode** (4K-EQ or Pultec). Layout (band topology may differ per engine; 4K-EQ has 4 parametric + HP/LP, Pultec has EQP-1A bands). Stepped controls where applicable. Layout: **Low shelf**, **Mid 1** (bell), **Mid 2** (bell), **High shelf**. All controls **stepped** (Freq, Gain, Q where applicable). Solo/Mute per band (FEATURES §1.1).
 
-**Algorithm source (FEATURES §1.2c):** **4K-EQ** (SSL 4000 style) is the **primary candidate** — analog, full channel EQ (4 parametric + HPF/LPF, saturation). Neve not available open-source; Pultec (EQP-WDF-1A) excluded (colour only, not channel EQ). **ZL Equalizer** as alternative for transparent/surgical use. Confirm by listening.
+**Algorithm source (FEATURES §1.2c):** **4K-EQ** (SSL 4000 style) is the **primary candidate** — analog, full channel EQ (4 parametric + HPF/LPF, saturation). Neve not available open-source; Pultec (EQP-WDF-1A) excluded (colour only, not channel EQ). Confirm by listening.
 
 | Band     | Type  | Param   | Role              | Proposed for UI |
 |----------|-------|---------|-------------------|------------------|

@@ -394,6 +394,7 @@ void Processor::sendModelStatus() {
   st.state = static_cast<int>(namDrive_.loadState());
   st.name = namDrive_.loadedModelName();
   st.error = namDrive_.lastError();
+  st.gpu = st.state == 2 && namDrive_.isGpuActive();
   encodeStatusMessage(msg, st);
   sendMessage(msg);
   msg->release();
