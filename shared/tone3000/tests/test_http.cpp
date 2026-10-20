@@ -55,6 +55,19 @@ void test_redirect_policy() {
   CHECK(isLoopbackHost("localhost") && isLoopbackHost("127.0.0.1") && isLoopbackHost("::1") && !isLoopbackHost("tone3000.com"));
 }
 
+void test_redirect_decision() {
+  const auto api = parseUrl("https://www.tone3000.com/api/v1/models/1");
+  const auto same = parseUrl("https://www.tone3000.com/files/a.nam");
+  const auto other = parseUrl("https://files.example.org/a.nam");
+  CHECK(decideRedirect(api, same, false, false) == RedirectDecision::FollowKeepAuth);
+  CHECK(decideRedirect(api, same, false, true) == RedirectDecision::FollowKeepAuth);        // same host: still with the token
+  CHECK(decideRedirect(api, other, false, false) == RedirectDecision::Refuse);              // refused unless asked
+  CHECK(decideRedirect(api, other, false, true) == RedirectDecision::FollowDropAuth);       // followed, but without the token
+  CHECK(decideRedirect(api, parseUrl("http://files.example.org/a.nam"), false, true) == RedirectDecision::Refuse);   // never to plain http
+  CHECK(decideRedirect(api, parseUrl("https://user@files.example.org/a"), false, true) == RedirectDecision::Refuse);
+  CHECK(decideRedirect(api, parseUrl("garbage"), false, true) == RedirectDecision::Refuse);
+}
+
 void test_resolve_location() {
   const auto base = parseUrl("https://tone3000.com:8443/api/x");
   CHECK(resolveLocation(base, "https://tone3000.com/y") == "https://tone3000.com/y");
@@ -135,6 +148,8 @@ private:
     else if (path == "/echo") reply(200, req);
     else if (path == "/redir-same") reply(302, "moved", "Location: /ok\r\n");
     else if (path == "/redir-other") reply(302, "moved", "Location: http://example.invalid/x\r\n");
+    else if (path == "/redir-echo") reply(302, "moved", "Location: /echo\r\n");
+    else if (path == "/redir-localhost") reply(302, "moved", "Location: http://localhost:" + std::to_string(port_) + "/echo\r\n");
     else if (path == "/redir-loop") reply(302, "moved", "Location: /redir-loop\r\n");
     else if (path == "/big") reply(200, std::string(100000, 'x'));
     else if (path == "/slow") { ::usleep(1500000); reply(200, "late"); }
@@ -192,6 +207,25 @@ void test_client_redirects() {
   CHECK(!r.ok() && r.error.find("too many") != std::string::npos);
 }
 
+void test_client_token_stays_on_its_host() {
+  TestServer srv;
+  CurlHttpClient c;
+  auto q = req(srv, "/redir-echo");
+  q.headers = {{"Authorization", "Bearer secret-token"}};
+  auto r = c.perform(q);
+  CHECK(r.ok() && r.body.find("Authorization: Bearer secret-token") != std::string::npos);   // same host: the token goes along
+  q = req(srv, "/redir-localhost");                                                           // "localhost" is another host than 127.0.0.1
+  q.headers = {{"Authorization", "Bearer secret-token"}, {"Cookie", "a=b"}, {"X-Other", "kept"}};
+  r = c.perform(q);
+  CHECK(!r.ok() && r.error.find("refused") != std::string::npos);                             // refused unless the caller allows it
+  q.allowOtherHostRedirects = true;
+  r = c.perform(q);
+  CHECK(r.ok() && r.body.find("GET /echo") == 0);
+  CHECK(r.body.find("secret-token") == std::string::npos && r.body.find("Authorization") == std::string::npos);   // dropped
+  CHECK(r.body.find("Cookie") == std::string::npos);
+  CHECK(r.body.find("X-Other: kept") != std::string::npos);                                   // other headers are not touched
+}
+
 void test_client_refuses_plain_http_without_flag() {
   TestServer srv;
   CurlHttpClient c;
@@ -231,11 +265,13 @@ int main() {
   std::puts("tone3000 http tests");
   test_parse_url();
   test_redirect_policy();
+  test_redirect_decision();
   test_resolve_location();
 #ifndef _WIN32
   test_client_basic();
   test_client_headers_and_post();
   test_client_redirects();
+  test_client_token_stays_on_its_host();
   test_client_refuses_plain_http_without_flag();
   test_client_limits_sink_and_cancel();
 #endif

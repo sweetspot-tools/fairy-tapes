@@ -68,6 +68,14 @@ bool redirectAllowed(const UrlParts& origin, const UrlParts& target, bool loopba
   return originPort == targetPort;
 }
 
+RedirectDecision decideRedirect(const UrlParts& origin, const UrlParts& target, bool loopbackHttp, bool allowOtherHosts) {
+  if (redirectAllowed(origin, target, loopbackHttp)) return RedirectDecision::FollowKeepAuth;
+  if (!allowOtherHosts || !origin.valid || !target.valid) return RedirectDecision::Refuse;
+  const bool secure = target.scheme == "https";
+  const bool loopbackPlain = loopbackHttp && target.scheme == "http" && isLoopbackHost(target.host);
+  return secure || loopbackPlain ? RedirectDecision::FollowDropAuth : RedirectDecision::Refuse;
+}
+
 std::string resolveLocation(const UrlParts& origin, const std::string& location) {
   if (!origin.valid || location.empty()) return {};
   if (location.find("://") != std::string::npos) return location;

@@ -51,7 +51,7 @@ function(fairy_add_curl)
 endfunction()
 fairy_add_curl()
 
-add_library(tone3000 STATIC src/http_policy.cpp src/http_curl.cpp src/pkce.cpp src/metadata.cpp)
+add_library(tone3000 STATIC src/http_policy.cpp src/http_curl.cpp src/pkce.cpp src/metadata.cpp src/api.cpp)
 target_include_directories(tone3000 PUBLIC ${TONE3000_DIR}/include)
 # nlohmann/json (single header, MIT) as shipped with the NAM core
 target_include_directories(tone3000 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../vendors/NeuralAmpModelerCore/Dependencies)
@@ -72,3 +72,8 @@ set_tests_properties(tone3000_http_tests PROPERTIES SKIP_RETURN_CODE 77)
 add_executable(tone3000_basics_tests tests/test_basics.cpp)
 target_link_libraries(tone3000_basics_tests PRIVATE tone3000)
 add_test(NAME tone3000_basics_tests COMMAND tone3000_basics_tests)
+
+# The REST client against a fake HttpClient and files of example answers (no network).
+add_executable(tone3000_api_tests tests/test_api.cpp)
+target_link_libraries(tone3000_api_tests PRIVATE tone3000)
+add_test(NAME tone3000_api_tests COMMAND tone3000_api_tests)

@@ -3,6 +3,7 @@
 
 #include <curl/curl.h>
 
+#include <cctype>
 #include <mutex>
 
 namespace FairyTapes::Tone3000 {
@@ -22,6 +23,13 @@ struct Transfer {
   bool tooLarge = false;
   bool sinkRefused = false;
 };
+
+bool iequals(const std::string& a, const char* b) {
+  std::size_t i = 0;
+  for (; i < a.size() && b[i]; ++i)
+    if (std::tolower(static_cast<unsigned char>(a[i])) != std::tolower(static_cast<unsigned char>(b[i]))) return false;
+  return i == a.size() && b[i] == '\0';
+}
 
 bool isRedirectStatus(long code) { return code == 301 || code == 302 || code == 303 || code == 307 || code == 308; }
 
@@ -82,13 +90,18 @@ HttpResponse CurlHttpClient::perform(const HttpRequest& request, const HttpSink&
   std::string url = request.url;
   std::string method = request.method, body = request.body;
   UrlParts origin = parseUrl(url);
+  bool dropAuth = false;
   for (int hop = 0; hop <= kMaxRedirects; ++hop) {
     const UrlParts here = parseUrl(url);
     if (!here.valid) { out.error = "invalid URL"; return out; }
     const bool plain = here.scheme == "http";
-    if (hop > 0 && !redirectAllowed(origin, here, request.allowLoopbackHttp)) {
-      out.error = "redirect to another host refused";
-      return out;
+    if (hop > 0) {
+      const RedirectDecision d = decideRedirect(origin, here, request.allowLoopbackHttp, request.allowOtherHostRedirects);
+      if (d == RedirectDecision::Refuse) {
+        out.error = "redirect to another host refused";
+        return out;
+      }
+      if (d == RedirectDecision::FollowDropAuth) dropAuth = true;   // stays dropped for the rest of the chain
     }
     if (plain && !(request.allowLoopbackHttp && isLoopbackHost(here.host))) {
       out.error = "plain http is not allowed";
@@ -103,7 +116,10 @@ HttpResponse CurlHttpClient::perform(const HttpRequest& request, const HttpSink&
     t.cancel = cancel;
     t.easy = easy;
     curl_slist* headers = nullptr;
-    for (const auto& h : request.headers) headers = curl_slist_append(headers, (h.first + ": " + h.second).c_str());
+    for (const auto& h : request.headers) {
+      if (dropAuth && (iequals(h.first, "Authorization") || iequals(h.first, "Cookie"))) continue;   // never to another host
+      headers = curl_slist_append(headers, (h.first + ": " + h.second).c_str());
+    }
 
     curl_easy_setopt(easy, CURLOPT_URL, url.c_str());
     curl_easy_setopt(easy, CURLOPT_PROTOCOLS_STR, (plain ? "http" : "https"));

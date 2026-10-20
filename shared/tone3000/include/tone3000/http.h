@@ -34,6 +34,9 @@ struct HttpRequest {
   long timeoutSeconds = 30;                                       // whole transfer; the connect phase is capped at 10 s
   std::size_t maxBodyBytes = 4 * 1024 * 1024;                     // bigger responses are cut off and reported as an error
   bool allowLoopbackHttp = false;                                 // tests only
+  // A redirect to another https host is followed (for a file served from a storage host) but the Authorization and Cookie
+  // headers are NOT sent there: the access token never leaves the API host. Off: any other host is refused.
+  bool allowOtherHostRedirects = false;
 };
 
 struct HttpResponse {
@@ -74,6 +77,10 @@ bool isLoopbackHost(const std::string& host);
 // True if `target` may be followed from `origin`: https, same host and same port. With `loopbackHttp` (tests) a plain-http
 // redirect between the same loopback host and port is accepted too.
 bool redirectAllowed(const UrlParts& origin, const UrlParts& target, bool loopbackHttp = false);
+enum class RedirectDecision { Refuse, FollowKeepAuth, FollowDropAuth };
+// What to do with a redirect from `origin` (the host the caller asked for) to `target`; see HttpRequest.
+RedirectDecision decideRedirect(const UrlParts& origin, const UrlParts& target, bool loopbackHttp, bool allowOtherHosts);
+
 // Resolves a Location header (absolute or starting with "/") against the request URL; empty when unusable.
 std::string resolveLocation(const UrlParts& origin, const std::string& location);
 
