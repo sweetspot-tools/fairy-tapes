@@ -192,4 +192,19 @@ if(NOT WIN32)
   add_test(NAME pillow_talk_processor_level_test COMMAND pillow_talk_processor_level_test)
   set_tests_properties(pillow_talk_processor_level_test PROPERTIES SKIP_RETURN_CODE 77)
 
+  # State v2 (seed, screw angles, tape texts) and the Decor messages on the real module, with the SDK's minimal host
+  # classes (IHostApplication, IMessage); skipped when the module is absent.
+  add_executable(pillow_talk_state_module_test tests/test_state_module.cpp
+    ${VST3_SDK_PATH}/public.sdk/source/vst/vstinitiids.cpp
+    ${VST3_SDK_PATH}/public.sdk/source/vst/hosting/hostclasses.cpp
+    ${VST3_SDK_PATH}/public.sdk/source/vst/hosting/pluginterfacesupport.cpp
+    ${VST3_SDK_PATH}/public.sdk/source/vst/utility/stringconvert.cpp
+    ${VST3_SDK_PATH}/public.sdk/source/common/commonstringconvert.cpp
+    src/engine.cpp src/dsp/ducker.cpp src/dsp/tape_echo.cpp)
+  target_include_directories(pillow_talk_state_module_test PRIVATE ${VST3_SDK_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_compile_definitions(pillow_talk_state_module_test PRIVATE
+    PILLOW_TALK_MODULE="${PILLOW_TALK_MODULE_PATH}")
+  target_link_libraries(pillow_talk_state_module_test PRIVATE pluginterfaces fairy_ui ${CMAKE_DL_LIBS})
+  add_test(NAME pillow_talk_state_module_test COMMAND pillow_talk_state_module_test)
+  set_tests_properties(pillow_talk_state_module_test PROPERTIES SKIP_RETURN_CODE 77)
 endif()
