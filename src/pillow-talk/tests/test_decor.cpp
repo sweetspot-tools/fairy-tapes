@@ -5,6 +5,7 @@
  */
 #include "ui/decor.h"
 
+#include "fairy_ui/back_panel.h"
 #include "fairy_ui/screws.h"
 #include "fairy_ui/tape_paper.h"
 
@@ -116,13 +117,15 @@ void test_layout_pinned() {
   ASSERT_TRUE(m.tapes.size() == 3 && near(m.tapes[2].cx, 112.072601f) && near(m.tapes[2].rotDeg, 5.90488815f));
   ASSERT_TRUE(m.screws[0].angleDeg == 154.f && !m.screws[0].cross && m.screws[3].cross);
 }
-// What a tape must never cover: every control view, the scope, the LEVEL rows and the clip LEDs.
+// What a tape must never cover: every control view, the scope, the LEVEL rows, the clip LEDs and "BACK ->".
 std::vector<Rect> tapeObstacles() {
   std::vector<Rect> out;
   for (const ControlSpec& c : kControls) out.push_back(viewRect(c));
   out.push_back(kScopeRect);
   for (const MeterRow& r : kMeterRows) out.push_back(meterBarRect(r));
   for (const ClipSpec& c : kClips) out.push_back(clipRect(c));
+  const FairyTapes::Ui::BackBox link = FairyTapes::Ui::frontBackLinkBox();
+  out.push_back(Rect{static_cast<float>(link.x), static_cast<float>(link.y), static_cast<float>(link.w), static_cast<float>(link.h)});
   return out;
 }
 bool overlaps(const FairyTapes::Ui::TapeBox& b, const Rect& r) {

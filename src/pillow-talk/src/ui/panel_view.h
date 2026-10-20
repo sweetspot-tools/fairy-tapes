@@ -6,6 +6,8 @@
 #include "vstgui/lib/cfont.h"
 #include "vstgui/lib/cview.h"
 
+#include "fairy_ui/draw_util.h"
+
 namespace FairyTapes::Ui {
 class Skin;
 }
@@ -14,7 +16,7 @@ namespace FairyTapes::PillowTalk::Ui {
 
 class PanelView : public VSTGUI::CView {
 public:
-  static constexpr const char* kGrainTile = "panel_grain.png";   // 256 x 256 tile, optional
+  static constexpr const char* kGrainTile = FairyTapes::Ui::kPanelGrainTile;   // 256 x 256 tile, optional
 
   PanelView(const VSTGUI::CRect& size, const FairyTapes::Ui::Skin* skin);
 

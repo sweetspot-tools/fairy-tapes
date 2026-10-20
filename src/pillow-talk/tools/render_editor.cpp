@@ -1,13 +1,19 @@
 // Developer tool: draws the Pillow Talk editor offscreen into a PNG, no host or window needed.
 //   pillow_talk_render out.png [bypass] [sync] [meters] [scope] [wear=off|light|heavy] [seed=<n>] [no-grain]
 //                      [text=<s>] [text1..text6=<s>] [font=zeyada|rocksalt|homemade] [screw1..screw4=<deg>]
+//                      [values=standard|tape] [window=3|6|12] [peaks=off|1.5|3] [back] [tab=settings|credits]
+//                      [flip=<0..1>] [cycles=<n>]
 // The seed and the tape texts go through the controller's decor (as a stored state would): text= writes on every tape
 // slot, textN= on slot N-1 (only the slots the seed and Wear show are drawn; the tool prints them). The wear level goes
 // through Editor::setWearLevel and the font through Editor::setTapeFont; without wear= / font= they come from the user
 // preferences file, as when the editor opens. screwN= stores the user's rotation of screw N-1 (added to its seeded angle)
-// in the decor; the tool prints each screw's look and shown angle.
+// in the decor; the tool prints each screw's look and shown angle. values= goes through Editor::setHandwrittenValues;
+// window= and peaks= are the behaviour settings of the instance (stored in the decor, as the back panel does).
+// back draws the back of the panel (tab= SETTINGS or CREDITS) instead of the front; flip=<p> draws the turn from the
+// front to the back at progress p. cycles=<n> builds and removes the editor's views n times first (for leak checkers).
 // Used to check the look of the code-drawn GUI against docs/mockups/pillow_rack.html on a machine without a host.
 #include "controller.h"
+#include "ui/back_settings.h"
 #include "ui/duck_scope.h"
 #include "ui/editor.h"
 #include "ui/prefs.h"
@@ -15,6 +21,8 @@
 #include "ui/tape_view.h"
 #include "ui/tapes.h"
 
+#include "fairy_ui/back_view.h"
+#include "fairy_ui/flip_view.h"
 #include "fairy_ui/screw_view.h"
 #include "fairy_ui/wear_view.h"
 
@@ -47,16 +55,59 @@ struct EditorPreview {
     FairyTapes::Ui::WearLevel wear = FairyTapes::Ui::WearLevel::Light;
     bool customFont = false;
     FairyTapes::Ui::TapeFontId font = FairyTapes::Ui::TapeFontId::Zeyada;
+    int values = -1;   // -1 = from the preferences, 0 = standard, 1 = tape font
+    bool back = false;
+    int tab = 0;
+    double flip = -1;   // < 0: no turn
+    int cycles = 0;
   };
+
+  static VSTGUI::SharedPointer<VSTGUI::CBitmap> snap(VSTGUI::CView* v) {
+    auto ctx = VSTGUI::COffscreenContext::create(VSTGUI::CPoint(Editor::kWidth, Editor::kHeight), 1.0);
+    if (!ctx) return nullptr;
+    ctx->beginDraw();
+    v->draw(ctx);
+    ctx->endDraw();
+    return VSTGUI::SharedPointer<VSTGUI::CBitmap>(ctx->getBitmap());
+  }
+
+  // Builds and removes the editor's views (front and back) as open()/close() do, without a window.
+  static void cycle(Steinberg::Vst::EditController& ctl, int n) {
+    for (int i = 0; i < n; ++i) {
+      Editor ed(&ctl);
+      ed.refreshDecor();
+      auto root = VSTGUI::makeOwned<VSTGUI::CViewContainer>(VSTGUI::CRect(0, 0, Editor::kWidth, Editor::kHeight));
+      auto* front = new VSTGUI::CViewContainer(VSTGUI::CRect(0, 0, Editor::kWidth, Editor::kHeight));
+      ed.createViews(front);
+      root->addView(front);
+      ed.buildBack(root);
+      ed.flip_ = FairyTapes::Ui::PanelFlip(root, front, ed.back_);
+      ed.startFlip(true);   // a turn left running when the editor closes
+      ed.flip_.reset();
+      root->removeAll(true);
+      ed.resetViewPointers();
+    }
+    std::printf("%d editor build/remove cycles\n", n);
+  }
 
   static bool render(Steinberg::Vst::EditController& ctl, const char* path, const Options& opt) {
     Editor ed(&ctl);
-    const Prefs prefs = loadPrefs(prefsPath());   // what open() does
+    Prefs prefs = loadPrefs(prefsPath());   // what open() does
+    if (opt.customWear) prefs.wear = opt.wear;   // as if chosen on the back (the file is not written)
+    if (opt.customFont)
+      prefs.tapeFont = opt.font == FairyTapes::Ui::TapeFontId::RockSalt        ? TapeFont::RockSalt
+                       : opt.font == FairyTapes::Ui::TapeFontId::HomemadeApple ? TapeFont::HomemadeApple
+                                                                               : TapeFont::Zeyada;
+    if (opt.values >= 0) prefs.handwrittenValues = opt.values == 1;
     ed.wearLevel_ = prefs.wear;
     ed.tapeFont_ = tapeFontIdOf(prefs.tapeFont);
+    ed.prefs_ = prefs;
+    ed.handwrittenValues_ = prefs.handwrittenValues;
     ed.refreshDecor();
     auto root = VSTGUI::makeOwned<VSTGUI::CViewContainer>(VSTGUI::CRect(0, 0, Editor::kWidth, Editor::kHeight));
     ed.createViews(root);
+    ed.buildBack(root);   // hidden in root: root->draw() shows the front only
+    if (opt.values >= 0) ed.setHandwrittenValues(opt.values == 1);
     for (Steinberg::Vst::ParamID id = 0; id < kNumParams; ++id) ed.syncFromController(id);
     if (opt.customWear) ed.setWearLevel(opt.wear);
     if (opt.customFont) ed.setTapeFont(opt.font);
@@ -74,7 +125,7 @@ struct EditorPreview {
                 ed.wear_ ? ed.wear_->marks().size() : 0u);
     if (opt.scope && ed.scope_) {
       // A few phrases: voice over the threshold, the send ducks, the echo follows after each phrase.
-      for (int i = 0; i < DuckScope::kPoints; ++i) {
+      for (int i = 0; i < ed.scope_->points(); ++i) {
         const double t = i * 0.03;
         const bool talking = std::fmod(t, 2.0) < 1.1;
         const float voice = talking ? static_cast<float>(0.6 + 0.25 * std::fabs(std::sin(t * 9))) : 0.05f;
@@ -84,10 +135,23 @@ struct EditorPreview {
       }
     }
     ed.updateDisplays();
+    std::printf("values %s, display window %d points, peak hold %.1f s, tempo fallback %.0f BPM\n",
+                ed.handwrittenValues() ? "tape font" : "standard", ed.scope_ ? ed.scope_->points() : 0,
+                displayPeakHoldSeconds(ed.behaviour_.displayPeaks), ed.behaviour_.tempoFallbackBpm);
+    if (ed.back_) ed.back_->setTab(opt.tab);
     auto ctx = VSTGUI::COffscreenContext::create(VSTGUI::CPoint(Editor::kWidth, Editor::kHeight), 1.0);
     if (!ctx) return false;
     ctx->beginDraw();
-    root->draw(ctx);
+    if (opt.flip >= 0 && ed.back_) {
+      auto turn = VSTGUI::makeOwned<FairyTapes::Ui::FlipView>(VSTGUI::CRect(0, 0, Editor::kWidth, Editor::kHeight), snap(root),
+                                                             snap(ed.back_));
+      turn->setProgress(opt.flip);
+      turn->draw(ctx);
+    } else if (opt.back && ed.back_) {
+      ed.back_->draw(ctx);
+    } else {
+      root->draw(ctx);
+    }
     ctx->endDraw();
     auto png = VSTGUI::getPlatformFactory().createBitmapMemoryPNGRepresentation(ctx->getBitmap()->getPlatformBitmap());
     std::ofstream(path, std::ios::binary).write(reinterpret_cast<const char*>(png.data()),
@@ -105,7 +169,9 @@ int main(int argc, char** argv) {
   if (argc < 2) {
     std::fprintf(stderr,
                  "usage: %s out.png [bypass] [sync] [meters] [scope] [wear=off|light|heavy] [seed=<n>] [no-grain]\n"
-                 "       [text=<s>] [text1..text6=<s>] [font=zeyada|rocksalt|homemade] [screw1..screw4=<deg>]\n",
+                 "       [text=<s>] [text1..text6=<s>] [font=zeyada|rocksalt|homemade] [screw1..screw4=<deg>]\n"
+                 "       [values=standard|tape] [window=3|6|12] [peaks=off|1.5|3] [back] [tab=settings|credits]\n"
+                 "       [flip=<0..1>] [cycles=<n>]\n",
                  argv[0]);
     return 2;
   }
@@ -151,12 +217,31 @@ int main(int argc, char** argv) {
       ctl.editDecor(Ui::withTapeText(ctl.decor(), argv[i][4] - '1', argv[i] + 6));
     } else if (!std::strncmp(argv[i], "screw", 5) && argv[i][5] >= '1' && argv[i][5] <= '4' && argv[i][6] == '=') {
       ctl.editDecor(Ui::withScrewAngle(ctl.decor(), argv[i][5] - '1', std::strtof(argv[i] + 7, nullptr)));
+    } else if (!std::strncmp(argv[i], "values=", 7)) {
+      opt.values = !std::strcmp(argv[i] + 7, "standard") ? 0 : 1;
+    } else if (!std::strncmp(argv[i], "window=", 7) || !std::strncmp(argv[i], "peaks=", 6)) {
+      Decor d = ctl.decor();
+      const bool window = argv[i][0] == 'w';
+      const char* v = argv[i] + (window ? 7 : 6);
+      if (window) d.behaviour.displayWindow = !std::strcmp(v, "3") ? 0 : !std::strcmp(v, "12") ? 2 : 1;
+      else d.behaviour.displayPeaks = !std::strcmp(v, "off") ? 0 : !std::strcmp(v, "3") ? 2 : 1;
+      ctl.editDecor(d);
+    } else if (!std::strcmp(argv[i], "back")) {
+      opt.back = true;
+    } else if (!std::strncmp(argv[i], "tab=", 4)) {
+      opt.back = true;
+      opt.tab = !std::strcmp(argv[i] + 4, "credits") ? 1 : 0;
+    } else if (!std::strncmp(argv[i], "flip=", 5)) {
+      opt.flip = std::strtod(argv[i] + 5, nullptr);
+    } else if (!std::strncmp(argv[i], "cycles=", 7)) {
+      opt.cycles = std::atoi(argv[i] + 7);
     } else if (!std::strncmp(argv[i], "seed=", 5)) {
       Decor d = ctl.decor();
       d.seed = static_cast<uint32_t>(std::strtoul(argv[i] + 5, nullptr, 0));
       ctl.editDecor(d);
     }
   }
+  if (opt.cycles > 0) Ui::EditorPreview::cycle(ctl, opt.cycles);
   const bool ok = Ui::EditorPreview::render(ctl, argv[1], opt);
   ctl.terminate();
   return ok ? 0 : 1;

@@ -7,10 +7,8 @@
 #include "fairy_ui/draw_util.h"
 #include "fairy_ui/skin.h"
 
-#include "vstgui/lib/cbitmap.h"
 #include "vstgui/lib/ccolor.h"
 #include "vstgui/lib/cdrawcontext.h"
-#include "vstgui/lib/cgradient.h"
 #include "vstgui/lib/cgraphicspath.h"
 
 namespace FairyTapes::PillowTalk::Ui {
@@ -21,10 +19,7 @@ using FairyTapes::Ui::kWhite;
 
 namespace {
 
-constexpr CColor kTint(0x16, 0x16, 0x17);
-constexpr CColor kEdge(0x2c, 0x2c, 0x2f);
 constexpr CColor kYellow(0xf2, 0xc2, 0x1b);
-constexpr CCoord kPanelRadius = 14;
 
 SharedPointer<CFontDesc> bold(CCoord size, int32_t extra = 0) {
   return makeOwned<CFontDesc>("Arial", size, kBoldFace | extra);
@@ -49,28 +44,7 @@ void PanelView::draw(CDrawContext* ctx) {
   const CRect& r = getViewSize();
   const CPoint o = r.getTopLeft();
 
-  // Tint, then the optional grain tile, then the soft light (reflection at the top, shade at the bottom).
-  if (auto body = owned(ctx->createRoundRectGraphicsPath(r, kPanelRadius))) {
-    ctx->setFillColor(kTint);
-    ctx->drawGraphicsPath(body, CDrawContext::kPathFilled);
-    if (CBitmap* tile = skin_ ? skin_->bitmap(kGrainTile) : nullptr) {
-      const CCoord tw = tile->getWidth(), th = tile->getHeight();
-      if (tw > 0 && th > 0) {
-        ctx->saveGlobalState();
-        ctx->setClipRect(r);
-        for (CCoord y = r.top; y < r.bottom; y += th)
-          for (CCoord x = r.left; x < r.right; x += tw) tile->draw(ctx, CRect(x, y, x + tw, y + th));
-        ctx->restoreGlobalState();
-      }
-    }
-    if (auto light = owned(CGradient::create(0., 1., CColor(255, 255, 255, 16), CColor(0, 0, 0, 40))))
-      ctx->fillLinearGradient(body, *light, CPoint(o.x, o.y), CPoint(o.x, r.bottom));
-  }
-  if (auto edge = owned(ctx->createRoundRectGraphicsPath(CRect(r).inset(1, 1), kPanelRadius - 1))) {
-    ctx->setFrameColor(kEdge);
-    ctx->setLineWidth(2);
-    ctx->drawGraphicsPath(edge, CDrawContext::kPathStroked);
-  }
+  FairyTapes::Ui::drawPanelBase(ctx, r, skin_);   // tint, grain tile, soft light, edge (shared, as The Stripper)
 
   // Boxes: white border with a gap for the title on the bottom edge.
   ctx->saveGlobalState();

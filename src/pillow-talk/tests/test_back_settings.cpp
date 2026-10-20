@@ -101,12 +101,29 @@ void test_applying_a_choice() {
   ASSERT_TRUE(applySetting(kSetLook, 0, p, b) == SettingTarget::None);   // a button, not a choice
   ASSERT_TRUE(applySetting(12345, 0, p, b) == SettingTarget::None);
 }
+void test_reroll_gives_a_new_look_and_keeps_the_behaviour() {
+  Decor d;
+  d.seed = 1234;
+  d.screwAngles[0] = 45.f;
+  d.screwAngles[3] = 300.f;
+  d.tapeTexts = {"VOX", "", "take 3"};
+  d.behaviour.displayWindow = 2;
+  d.behaviour.tempoFallbackBpm = 90.f;
+  const Decor r = rerolledDecor(d, 777);
+  ASSERT_TRUE(r.seed == 777);
+  for (float a : r.screwAngles) ASSERT_TRUE(a == 0.f);        // the screws as the new seed makes them
+  ASSERT_TRUE(r.tapeTexts.empty());                           // blank tapes
+  ASSERT_TRUE(r.behaviour.displayWindow == 2 && r.behaviour.tempoFallbackBpm == 90.f);   // not part of the look
+  ASSERT_TRUE(rerolledDecor(d, 1234).seed != 1234 && rerolledDecor(d, 1234).seed != 0);   // always another seed
+  ASSERT_TRUE(rerolledDecor(d, 0).seed != 0 && rerolledDecor(d, 0).seed != 1234);
+}
 } // namespace
 
 int main() {
   RUN_TEST(test_settings_are_the_preview_ones);
   RUN_TEST(test_current_values_are_selected);
   RUN_TEST(test_applying_a_choice);
+  RUN_TEST(test_reroll_gives_a_new_look_and_keeps_the_behaviour);
   std::printf("%d passed, %d failed\n", g_passed, g_failed);
   return g_failed ? 1 : 0;
 }

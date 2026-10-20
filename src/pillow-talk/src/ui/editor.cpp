@@ -3,6 +3,7 @@
 
 #include "controller.h"
 #include "state.h"
+#include "ui/back_settings.h"
 #include "ui/duck_scope.h"
 #include "ui/panel_view.h"
 #include "ui/prefs.h"
@@ -10,12 +11,16 @@
 #include "ui/tape_view.h"
 #include "ui/tapes.h"
 
+#include "fairy_ui/back_view.h"
+#include "fairy_ui/back_widgets.h"
 #include "fairy_ui/controls.h"
+#include "fairy_ui/draw_util.h"
 #include "fairy_ui/meters.h"
 #include "fairy_ui/rack_controls.h"
 #include "fairy_ui/sanitize.h"
 #include "fairy_ui/screw_view.h"
 #include "fairy_ui/silkscreen_view.h"
+#include "fairy_ui/tape_draw.h"
 #include "fairy_ui/wear_view.h"
 
 #include "base/source/updatehandler.h"
@@ -23,6 +28,7 @@
 #include "vstgui/lib/cfont.h"
 #include "vstgui/lib/cframe.h"
 #include "vstgui/lib/controls/ctextedit.h"
+#include "vstgui/lib/cviewcontainer.h"
 
 #if SMTG_OS_LINUX
 #include "public.sdk/source/vst/vstgui_linux_runloop_support.h"
@@ -38,6 +44,9 @@
 namespace FairyTapes::PillowTalk::Ui {
 
 using namespace VSTGUI;
+using FairyTapes::Ui::BackContent;
+using FairyTapes::Ui::BackItemKind;
+using FairyTapes::Ui::BackView;
 using FairyTapes::Ui::ClipLed;
 using FairyTapes::Ui::MeterBar;
 using FairyTapes::Ui::MeterKind;
@@ -48,6 +57,8 @@ using FairyTapes::Ui::RackLed;
 using FairyTapes::Ui::RackToggle;
 using FairyTapes::Ui::ScrewView;
 using FairyTapes::Ui::SilkscreenView;
+using FairyTapes::Ui::TapeAlign;
+using FairyTapes::Ui::TextLink;
 using FairyTapes::Ui::WearLevel;
 using FairyTapes::Ui::WearMark;
 using FairyTapes::Ui::WearView;
@@ -66,6 +77,12 @@ constexpr CColor kFrameBackground(0x16, 0x16, 0x17);
 constexpr float kDimmedAlpha = 0.35f;   // DESIGN_SYSTEM.md: dimmed parts at 35 %
 constexpr int32_t kTapeEditTag = 9000;   // + slot; outside the parameter ids
 constexpr CCoord kTapeEditMinWidth = 120, kTapeEditHeight = 24;
+constexpr uint32_t kBackWearSalt = 0x77u;   // the back's wear: another pattern from the same seed (as The Stripper)
+constexpr double kPeakFallDbPerSecond = 20.0;   // fall of the held peak (MeterBar default)
+
+bool sameBehaviour(const Behaviour& a, const Behaviour& b) {
+  return a.displayWindow == b.displayWindow && a.displayPeaks == b.displayPeaks && a.tempoFallbackBpm == b.tempoFallbackBpm;
+}
 
 // The text field of a tape (the pattern of The Stripper's typed values): Escape cancels, Enter or leaving the field
 // confirms. CTextEdit itself would still report the typed text when Escape comes through the platform field.
@@ -166,20 +183,26 @@ bool PLUGIN_API Editor::open(void* parent, const PlatformType& platformType) {
   config = &x11Config;
 #endif
 
-  // Wear level and tape font from the user preferences (missing or bad file: defaults), seed from the instance decor.
-  Prefs prefs;
+  // Appearance from the user preferences (missing or bad file: defaults), seed and behaviour from the instance decor.
   try {
-    prefs = loadPrefs(prefsPath());
+    prefs_ = loadPrefs(prefsPath());
   } catch (...) {
-    prefs = Prefs{};
+    prefs_ = Prefs{};
   }
-  wearLevel_ = prefs.wear;
-  tapeFont_ = tapeFontIdOf(prefs.tapeFont);
+  wearLevel_ = prefs_.wear;
+  tapeFont_ = tapeFontIdOf(prefs_.tapeFont);
+  handwrittenValues_ = prefs_.handwrittenValues;
   refreshDecor();
 
   frame = new CFrame(CRect(0, 0, kWidth, kHeight), this);
   frame->setBackgroundColor(kFrameBackground);
-  createViews(frame);
+  // The two sides of the panel: the front (controls) and the back (settings, credits), turned by flip_.
+  front_ = new CViewContainer(CRect(0, 0, kWidth, kHeight));
+  front_->setBackgroundColor(kFrameBackground);
+  createViews(front_);
+  frame->addView(front_);
+  buildBack(frame);
+  flip_ = FairyTapes::Ui::PanelFlip(frame, front_, back_, scale_);
   if (scale_ != 1.0) frame->setZoom(scale_);  // VSTGUIEditor::attached then reports the scaled size
   if (!frame->open(parent, platformType, config)) {
     close();
@@ -198,6 +221,7 @@ void PLUGIN_API Editor::close() {
   }
   unwatchParameters();
   closeTapeEdit(true);   // what was typed is kept, as when the field loses the focus
+  flip_.reset();         // a running turn: its view goes away with the frame's
   if (frame) {
     // Removing the views closes any open knob gesture (controlEndEdit -> endEdit).
     frame->removeAll(true);
@@ -222,6 +246,9 @@ void Editor::resetViewPointers() {
   screws_.fill(nullptr);
   tapeEdit_ = nullptr;
   tapeEditSlot_ = -1;
+  front_ = nullptr;
+  back_ = nullptr;
+  backLink_ = nullptr;
 }
 
 const std::vector<WearMark>& Editor::wearMarks(uint32_t seed, WearLevel level) {
@@ -243,6 +270,7 @@ void Editor::refreshDecor() {
   decorKnown_ = true;
   const bool textsChanged = d.tapeTexts != tapeTexts_;
   tapeTexts_ = d.tapeTexts;
+  if (!sameBehaviour(d.behaviour, behaviour_)) applyBehaviour(d.behaviour);   // state recall, undo
   for (int i = 0; i < kNumScrewViews; ++i) screwAngles_[static_cast<std::size_t>(i)] = d.screwAngles[i];
   if (d.seed != 0 && d.seed != seed_) {
     seed_ = d.seed;
@@ -261,12 +289,99 @@ void Editor::setWearLevel(WearLevel level) {
 
 void Editor::applyWear() {
   if (wear_) wear_->setMarks(wearMarks(seed_, wearLevel_));
+  applyBackWear();
   rebuildTapes();
+  if (silk_ && handwrittenValues_) silk_->invalid();   // the handwriting varies with the seed
+}
+
+void Editor::applyBackWear() {
+  if (back_) back_->setWear(FairyTapes::Ui::generateWear(seed_ ^ kBackWearSalt, wearLevel_, kWidth, kHeight));
 }
 
 void Editor::setTapeFont(FairyTapes::Ui::TapeFontId font) {
   tapeFont_ = font;
   for (TapeView* t : tapes_) t->setFont(font);
+  if (silk_ && handwrittenValues_) silk_->invalid();
+}
+
+void Editor::setHandwrittenValues(bool on) {
+  if (on == handwrittenValues_) return;
+  handwrittenValues_ = on;
+  if (silk_) silk_->invalid();
+}
+
+void Editor::applyBehaviour(const Behaviour& in) {
+  Behaviour b = in;
+  sanitizeBehaviour(b);
+  behaviour_ = b;
+  if (scope_) scope_->setPoints(scopePointsFor(displayWindowSeconds(b.displayWindow), kTimerSeconds));
+  for (MeterBar* bar : bars_)
+    if (bar) bar->setHoldSettings(displayPeakHoldSeconds(b.displayPeaks), kPeakFallDbPerSecond);
+  if (back_) {
+    for (int key : {kSetDisplayWindow, kSetDisplayPeaks, kSetTempoFallback}) back_->setSelected(key, selectedFor(key, prefs_, b));
+  }
+}
+
+// ---- The back of the panel ------------------------------------------------------------------------------------------
+void Editor::buildBack(CViewContainer* host) {
+  if (!host) return;
+  BackContent content = backContent(prefs_, behaviour_);
+  for (auto& item : content.items) {
+    if (item.kind == BackItemKind::Button) {
+      item.onPress = [this] { reroll(); };
+    } else {
+      const int key = item.key;
+      item.onChange = [this, key](int index) { changeSetting(key, index); };
+    }
+  }
+  BackView::Callbacks cb;
+  cb.back = [this] { startFlip(false); };
+  cb.tabChanged = [this](int tab) { backTab_ = tab; };
+  back_ = new BackView(CRect(0, 0, kWidth, kHeight), &skin_, std::move(content), std::move(cb), backTab_);
+  back_->setVisible(false);
+  host->addView(back_);
+  applyBackWear();
+}
+
+// Turns the panel. A text field open on a tape is closed first, keeping what was typed (Review Focus).
+void Editor::startFlip(bool toBack) {
+  closeTapeEdit(true);
+  flip_.start(toBack);
+}
+
+void Editor::changeSetting(int key, int index) {
+  Prefs p = prefs_;
+  Behaviour b = behaviour_;
+  switch (applySetting(key, index, p, b)) {
+  case SettingTarget::Prefs:
+    prefs_ = p;
+    try {
+      savePrefs(prefsPath(), prefs_);   // a failed write is ignored: the setting still applies to this editor
+    } catch (...) {
+    }
+    setWearLevel(p.wear);
+    setTapeFont(tapeFontIdOf(p.tapeFont));
+    setHandwrittenValues(p.handwrittenValues);
+    break;
+  case SettingTarget::Behaviour:
+    if (owner_) {   // saved with the project and sent to the processor (tempo fallback)
+      Decor d = owner_->decor();
+      d.behaviour = b;
+      owner_->editDecor(d);
+      decorRevision_ = owner_->decorRevision();
+    }
+    applyBehaviour(b);
+    break;
+  case SettingTarget::None: break;
+  }
+}
+
+// LOOK > RE-ROLL: a new seed (new wear, tapes and screws), the screws' rotations back to 0 and the tapes blank.
+void Editor::reroll() {
+  if (!owner_) return;
+  closeTapeEdit(true);
+  owner_->editDecor(rerolledDecor(owner_->decor(), newRandomSeed()));
+  refreshDecor();   // the new revision: new wear, tapes and screws
 }
 
 void Editor::rebuildTapes() {
@@ -375,6 +490,18 @@ void Editor::createViews(CViewContainer* parent) {
   root_ = parent;
   parent->addView(new PanelView(all, &skin_));
   silk_ = new SilkscreenView(all, silkscreenItems());
+  // VALUES FONT on the back: the yellow values in the tape font, with a small seeded variation per control.
+  silk_->setValueDrawer([this](CDrawContext* ctx, const FairyTapes::Ui::PrintText& t, const CPoint& origin, std::size_t item) {
+    if (!handwrittenValues_ || !silk_) return false;
+    const int id = silk_->model().item(item).id;
+    const TapeAlign align = t.align == FairyTapes::Ui::TextAlign::Left    ? TapeAlign::Left
+                            : t.align == FairyTapes::Ui::TextAlign::Right ? TapeAlign::Right
+                                                                          : TapeAlign::Center;
+    FairyTapes::Ui::drawTapeText(ctx, tapeFont_, t.text, CPoint(origin.x + t.x, origin.y + t.y),
+                                 FairyTapes::Ui::normalizedFontSize(tapeFont_, FairyTapes::Ui::kSilkValueSize),
+                                 FairyTapes::Ui::kAmber, seed_ + static_cast<uint32_t>(id) * 131u, 0.5, align);
+    return true;
+  });
   parent->addView(silk_);
   wear_ = new WearView(all, wearMarks(seed_, wearLevel_));
   parent->addView(wear_);
@@ -411,6 +538,14 @@ void Editor::createViews(CViewContainer* parent) {
     clips_[i]->onClick = [this] { clearClips(); };
     parent->addView(clips_[i]);
   }
+
+  // The way to the back of the panel: a small text at the right of the header (DESIGN_SYSTEM.md, one link only).
+  const FairyTapes::Ui::BackBox link = FairyTapes::Ui::frontBackLinkBox();
+  backLink_ = new TextLink(CRect(link.x, link.y, link.x + link.w, link.y + link.h), "BACK  \xE2\x86\x92");
+  backLink_->onClick = [this] { startFlip(true); };
+  parent->addView(backLink_);
+
+  applyBehaviour(behaviour_);   // display window and peak hold of the instance
 }
 
 // One click clears both clip LEDs: the hidden writable parameter goes to the processor, which clears the flags and
@@ -454,6 +589,7 @@ void PLUGIN_API Editor::update(Steinberg::FUnknown* changedUnknown, Steinberg::i
 }
 
 void Editor::onTimer() {
+  flip_.tick();   // the turn of the panel, if one is running
   const uint32_t changed = pending_.exchange(0);
   for (ParamID id = 0; id < kNumParams; ++id)
     if (changed & bit(id)) syncFromController(id);

@@ -89,6 +89,17 @@ inline SettingTarget applySetting(int key, int index, Prefs& p, Behaviour& b) {
   }
 }
 
+// LOOK > RE-ROLL: the decor with a new seed (new wear, tapes and screws), the user's screw rotations back to 0 and the
+// tapes blank; the behaviour settings are kept. A seed of 0 or equal to the current one is replaced by another one.
+inline Decor rerolledDecor(Decor d, uint32_t newSeed) {
+  if (newSeed == 0 || newSeed == d.seed) newSeed = (d.seed ^ 0x9E3779B9u) * 2654435761u + 0x7F4A7C15u;
+  if (newSeed == 0 || newSeed == d.seed) newSeed = d.seed + 1u ? d.seed + 1u : 1u;
+  d.seed = newSeed;
+  for (float& a : d.screwAngles) a = 0.f;
+  d.tapeTexts.clear();
+  return d;
+}
+
 // The whole back for the given preferences and behaviour (no callbacks).
 inline FairyTapes::Ui::BackContent backContent(const Prefs& p, const Behaviour& b) {
   using namespace FairyTapes::Ui;

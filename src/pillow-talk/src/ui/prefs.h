@@ -32,7 +32,7 @@ constexpr std::uintmax_t kMaxPrefsBytes = 64 * 1024;
 
 struct Prefs {
   WearLevel wear = WearLevel::Light;
-  bool notes = true;               // note-value labels by the Sync knobs (Settings: Notes)
+  bool notes = true;               // NOTES LAYER (tape and pen marks on the values): stored, nothing drawn yet
   TapeFont tapeFont = TapeFont::Zeyada;
   bool handwrittenValues = true;   // yellow values in the tape font (valuesFont=Tape) or plain (Standard)
 };

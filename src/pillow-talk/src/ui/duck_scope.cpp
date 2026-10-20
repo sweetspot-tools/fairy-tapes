@@ -8,6 +8,8 @@
 #include "vstgui/lib/cfont.h"
 #include "vstgui/lib/cgraphicspath.h"
 
+#include <algorithm>
+
 namespace FairyTapes::PillowTalk::Ui {
 
 using namespace VSTGUI;
@@ -65,6 +67,14 @@ void DuckScope::setThreshold(float norm) {
   invalid();
 }
 
+void DuckScope::setPoints(int points) {
+  points = std::clamp(points, 2, 2000);
+  if (points == points_) return;
+  points_ = points;
+  history_ = history_.resized(points);
+  invalid();
+}
+
 void DuckScope::push(float voice, float send, float echo) {
   history_.push(voice, send, echo);
   invalid();
@@ -95,17 +105,17 @@ void DuckScope::draw(CDrawContext* ctx) {
   ctx->setClipRect(clip);
 
   if (history_.size() > 0) {
-    if (auto p = areaPath(ctx, history_, Trace::Voice, r, base, span, kPoints)) {
+    if (auto p = areaPath(ctx, history_, Trace::Voice, r, base, span, points_)) {
       ctx->setFillColor(kVoice);
       ctx->drawGraphicsPath(p, CDrawContext::kPathFilled);
     }
-    if (auto p = areaPath(ctx, history_, Trace::Echo, r, base, span, kPoints)) {
+    if (auto p = areaPath(ctx, history_, Trace::Echo, r, base, span, points_)) {
       ctx->setFillColor(kEcho);
       ctx->drawGraphicsPath(p, CDrawContext::kPathFilled);
     }
     if (auto line = owned(ctx->createGraphicsPath())) {
-      const CCoord step = r.getWidth() / (kPoints - 1);
-      const int offset = kPoints - history_.size();
+      const CCoord step = r.getWidth() / (points_ - 1);
+      const int offset = points_ - history_.size();
       for (int i = 0; i < history_.size(); ++i) {
         const CPoint pt(r.left + (offset + i) * step, base - history_.send(i) * span);
         if (i == 0) line->beginSubpath(pt); else line->addLine(pt);

@@ -12,12 +12,22 @@
 // Corner screws (FairyTapes::Ui::ScrewView, over the wear and the tapes, below the controls): look from the seed
 // (ui/screw_angles.h, the same as The Stripper's), the missing one shows only its hole; dragging turns a screw and the
 // end of the drag stores the user's rotation in the instance decor (Controller::editDecor, project marked dirty once).
+// Back of the panel (shared FairyTapes::Ui::BackView, contents from ui/back_settings.h): "BACK ->" at the right of the
+// header turns the panel (FairyTapes::Ui::PanelFlip, about 0.8 s), "<- BACK" turns it again; a text field open on a
+// tape is confirmed first. Appearance settings are saved in the user preferences (a failed write is ignored) and applied
+// at once: Wear (setWearLevel), tape font (setTapeFont), values font (handwritten values under the knobs, drawn through
+// SilkscreenView::setValueDrawer); NOTES LAYER is only stored. RE-ROLL gives the instance a new seed with the screws
+// and tapes cleared. Behaviour settings go to the instance decor (state v3): display window (DuckScope points), display
+// peaks (peak hold of the LEVEL meters), tempo fallback (used by the processor).
 #pragma once
 
 #include "params.h"
+#include "state.h"
 #include "ui/editor_size.h"
 #include "ui/layout.h"
+#include "ui/prefs.h"
 
+#include "fairy_ui/flip_view.h"
 #include "fairy_ui/skin.h"
 #include "fairy_ui/tape_font.h"
 #include "fairy_ui/wear.h"
@@ -46,6 +56,8 @@ class ClipLed;
 class SilkscreenView;
 class WearView;
 class ScrewView;
+class BackView;
+class TextLink;
 }
 
 namespace FairyTapes::PillowTalk {
@@ -105,8 +117,13 @@ public:
   void setWearLevel(FairyTapes::Ui::WearLevel level);
   FairyTapes::Ui::WearLevel wearLevel() const { return wearLevel_; }
   uint32_t wearSeed() const { return seed_; }
-  // Tape font (Settings on the back, Task 8): the writing changes in place.
+  // Tape font (Settings on the back): the writing on the tapes (and the handwritten values) changes in place.
   void setTapeFont(FairyTapes::Ui::TapeFontId font);
+  // Values font (Settings on the back): the values under the knobs in the tape font (true) or in plain text.
+  void setHandwrittenValues(bool on);
+  bool handwrittenValues() const { return handwrittenValues_; }
+  // Behaviour settings of the instance (Settings on the back): display window and display peaks in the views.
+  void applyBehaviour(const Behaviour& b);
 
 private:
   friend struct EditorPreview;
@@ -137,6 +154,13 @@ private:
   // Screw views for the current seed and the decor's rotations (created once, then updated in place).
   void placeScrews();
   void screwTurned(int index, double shownDeg);
+  // The back of the panel, hidden, in `host` (the frame; the render tool passes its own container).
+  void buildBack(VSTGUI::CViewContainer* host);
+  void startFlip(bool toBack);
+  // A choice on the back: stored (preferences or instance decor) and applied.
+  void changeSetting(int key, int index);
+  void reroll();
+  void applyBackWear();
 
   double scale_ = 1.0;  // sanitized content scale factor
   FairyTapes::Ui::Skin skin_;
@@ -147,6 +171,14 @@ private:
   VSTGUI::CViewContainer* root_ = nullptr;   // the container the views were created in
   std::vector<TapeView*> tapes_;
   std::array<FairyTapes::Ui::ScrewView*, kNumScrewViews> screws_{};
+  VSTGUI::CViewContainer* front_ = nullptr;          // the front side, when the editor turns (open())
+  FairyTapes::Ui::BackView* back_ = nullptr;         // the back side, owned by the frame
+  FairyTapes::Ui::TextLink* backLink_ = nullptr;     // "BACK ->" in the header
+  FairyTapes::Ui::PanelFlip flip_;
+  int backTab_ = 0;                                  // the back's tab, kept while the editor lives
+  Prefs prefs_;                                      // the user preferences, as loaded at open and changed on the back
+  bool handwrittenValues_ = true;
+  Behaviour behaviour_;                              // the decor's behaviour settings, as last seen
   VSTGUI::CTextEdit* tapeEdit_ = nullptr;
   int tapeEditSlot_ = -1;
   FairyTapes::Ui::TapeFontId tapeFont_ = FairyTapes::Ui::TapeFontId::Zeyada;
