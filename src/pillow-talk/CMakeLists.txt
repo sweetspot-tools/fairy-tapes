@@ -42,6 +42,7 @@ add_library(pillow_talk MODULE
   src/ui/panel_view.cpp
   src/ui/decor.cpp
   src/ui/prefs.cpp
+  src/ui/tape_view.cpp
 )
 
 target_include_directories(pillow_talk PRIVATE
@@ -131,6 +132,12 @@ target_include_directories(pillow_talk_decor_tests PRIVATE ${CMAKE_CURRENT_SOURC
 target_link_libraries(pillow_talk_decor_tests PRIVATE fairy_ui)
 add_test(NAME pillow_talk_decor_tests COMMAND pillow_talk_decor_tests)
 
+# Writing on the paper tapes (pure, no VSTGUI): font preference, text per slot, ink kept inside the tape.
+add_executable(pillow_talk_tapes_tests tests/test_tapes.cpp)
+target_include_directories(pillow_talk_tapes_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${VST3_SDK_PATH})
+target_link_libraries(pillow_talk_tapes_tests PRIVATE fairy_ui)
+add_test(NAME pillow_talk_tapes_tests COMMAND pillow_talk_tapes_tests)
+
 # User preferences file (pure C++, no SDK): defaults on missing or corrupt files, per-OS location.
 add_executable(pillow_talk_prefs_tests
   tests/test_prefs.cpp
@@ -162,6 +169,8 @@ add_executable(pillow_talk_render EXCLUDE_FROM_ALL
   src/ui/editor.cpp
   src/ui/panel_view.cpp
   src/ui/prefs.cpp
+  src/ui/decor.cpp
+  src/ui/tape_view.cpp
 )
 target_include_directories(pillow_talk_render PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${VST3_SDK_PATH})
 target_compile_definitions(pillow_talk_render PRIVATE

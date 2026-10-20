@@ -6,6 +6,9 @@
 // Wear: the seed comes from the instance decor (Controller::decor, saved in the state), the level from the user
 // preferences (ui/prefs.h, read when the editor opens; any problem -> defaults). The marks are regenerated only when
 // one of the two changes (the timer polls Controller::decorRevision).
+// Paper tapes (TapeView, between the wear and the controls): placed by layoutFromSeed (ui/decor.h) for the seed and the
+// Wear level, written in the tape font of the preferences; a click opens a text field (at most 14 characters, Enter or
+// leaving the field confirms, Escape cancels) and the text goes to the instance decor (Controller::editDecor).
 #pragma once
 
 #include "params.h"
@@ -13,6 +16,7 @@
 #include "ui/layout.h"
 
 #include "fairy_ui/skin.h"
+#include "fairy_ui/tape_font.h"
 #include "fairy_ui/wear.h"
 
 #include "public.sdk/source/vst/vstguieditor.h"
@@ -24,10 +28,12 @@
 #include <array>
 #include <atomic>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 namespace VSTGUI {
 class CViewContainer;
+class CTextEdit;
 }
 
 namespace FairyTapes::Ui {
@@ -45,6 +51,7 @@ class Controller;
 namespace FairyTapes::PillowTalk::Ui {
 
 class DuckScope;
+class TapeView;
 struct EditorPreview;   // offscreen render tool (tools/render_editor.cpp)
 
 class Editor : public Steinberg::Vst::VSTGUIEditor,
@@ -93,6 +100,8 @@ public:
   void setWearLevel(FairyTapes::Ui::WearLevel level);
   FairyTapes::Ui::WearLevel wearLevel() const { return wearLevel_; }
   uint32_t wearSeed() const { return seed_; }
+  // Tape font (Settings on the back, Task 8): the writing changes in place.
+  void setTapeFont(FairyTapes::Ui::TapeFontId font);
 
 private:
   friend struct EditorPreview;
@@ -113,6 +122,13 @@ private:
   // Seed from the controller's decor; regenerates the wear marks when it changed.
   void refreshDecor();
   void applyWear();
+  // Tape views for the current seed and Wear level (removed and created again), texts from decor_.
+  void rebuildTapes();
+  void refreshTapeTexts();
+  void editTape(TapeView* tape);
+  void commitTapeText(int slot, const std::string& typed);
+  // Removes the text field; `confirm` first takes what was typed (unless Escape was pressed).
+  void closeTapeEdit(bool confirm);
 
   double scale_ = 1.0;  // sanitized content scale factor
   FairyTapes::Ui::Skin skin_;
@@ -120,6 +136,11 @@ private:
   DuckScope* scope_ = nullptr;
   FairyTapes::Ui::SilkscreenView* silk_ = nullptr;
   FairyTapes::Ui::WearView* wear_ = nullptr;
+  VSTGUI::CViewContainer* root_ = nullptr;   // the container the views were created in
+  std::vector<TapeView*> tapes_;
+  VSTGUI::CTextEdit* tapeEdit_ = nullptr;
+  int tapeEditSlot_ = -1;
+  FairyTapes::Ui::TapeFontId tapeFont_ = FairyTapes::Ui::TapeFontId::Zeyada;
   std::array<FairyTapes::Ui::MeterBar*, kMeterRowCount> bars_{};
   std::array<FairyTapes::Ui::ClipLed*, kClipCount> clips_{};
   DimState dim_{};
@@ -133,6 +154,7 @@ private:
   uint32_t seed_ = kFallbackWearSeed;
   FairyTapes::Ui::WearLevel wearLevel_ = FairyTapes::Ui::WearLevel::Light;
   uint32_t decorRevision_ = 0;
+  std::vector<std::string> tapeTexts_;   // the decor's tape texts, as last seen
   bool decorKnown_ = false;
 
   std::array<Steinberg::IPtr<Steinberg::Vst::Parameter>, kNumParams> watched_{};
