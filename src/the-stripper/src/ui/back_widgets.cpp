@@ -1,7 +1,7 @@
 // The Stripper GUI: widgets of the back panel. Look from the approved preview (white outlines, grey push buttons).
 #include "ui/back_widgets.h"
 
-#include "ui/tape_text.h"
+#include "ui/tape_kit.h"
 
 #include "fairy_ui/draw_util.h"
 

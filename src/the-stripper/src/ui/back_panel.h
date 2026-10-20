@@ -14,7 +14,7 @@
 #include "version.h"
 #include "ui/layout.h"
 #include "ui/model_source.h"
-#include "ui/tape_font.h"
+#include "ui/tape_font_id.h"
 
 #include <cmath>
 #include <functional>

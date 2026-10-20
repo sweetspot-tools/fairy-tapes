@@ -2,7 +2,7 @@
 #include "ui/model_strip.h"
 
 #include "ui/model_source.h"
-#include "ui/tape_text.h"
+#include "ui/tape_kit.h"
 
 #include "vstgui/lib/cdrawcontext.h"
 #include "vstgui/lib/cfont.h"

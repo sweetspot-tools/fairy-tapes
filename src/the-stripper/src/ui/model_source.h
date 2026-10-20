@@ -6,6 +6,8 @@
 
 #pragma once
 
+#include "fairy_ui/tape_font.h"
+
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
@@ -17,6 +19,8 @@
 #include <vector>
 
 namespace FairyTapes::TheStripper::Ui {
+
+using FairyTapes::Ui::truncateToWidth;   // moved to the common tape kit
 
 struct ModelEntry {
   std::string name;     // file name with extension
@@ -112,27 +116,6 @@ inline std::size_t utf8Length(const std::string& s) {
   for (unsigned char c : s)
     if ((c & 0xC0) != 0x80) ++n;
   return n;
-}
-
-// Cuts `text` so that its measured width fits `maxWidth`, ending with an ellipsis; separators left at the cut
-// are dropped. Never cuts a UTF-8 sequence in half. `measure` returns the pixel width of a string.
-inline std::string truncateToWidth(const std::string& text, double maxWidth,
-                                   const std::function<double(const std::string&)>& measure) {
-  if (text.empty() || measure(text) <= maxWidth) return text;
-  static const std::string kEllipsis = "\xE2\x80\xA6";
-  std::size_t end = text.size();
-  while (end > 0) {
-    // step back to the start of the previous UTF-8 character
-    do {
-      --end;
-    } while (end > 0 && (static_cast<unsigned char>(text[end]) & 0xC0) == 0x80);
-    std::string head = text.substr(0, end);
-    while (!head.empty() && (head.back() == ' ' || head.back() == '_' || head.back() == '-' || head.back() == '.'))
-      head.pop_back();
-    const std::string candidate = head + kEllipsis;
-    if (measure(candidate) <= maxWidth) return candidate;
-  }
-  return {};
 }
 
 } // namespace FairyTapes::TheStripper::Ui

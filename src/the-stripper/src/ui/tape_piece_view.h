@@ -1,7 +1,7 @@
 // The Stripper GUI: one piece of writable paper tape on the panel. A click asks the editor to open the text field.
 #pragma once
 
-#include "ui/tape_font.h"
+#include "ui/tape_kit.h"
 #include "ui/tape_pieces.h"
 
 #include "vstgui/lib/cview.h"

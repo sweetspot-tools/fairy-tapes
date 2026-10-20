@@ -1,7 +1,7 @@
 // The Stripper GUI: the model name written on a strip of paper tape (Drive box). A click opens the model picker.
 #pragma once
 
-#include "ui/tape_font.h"
+#include "ui/tape_kit.h"
 
 #include "vstgui/lib/cview.h"
 

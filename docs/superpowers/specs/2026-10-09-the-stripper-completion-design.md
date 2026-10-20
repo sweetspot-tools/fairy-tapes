@@ -152,6 +152,7 @@ Doggystyle riusa `shared/nam_drive` e il caricamento asincrono: questo spec va i
 
 ## 11. Decisioni aperte (2026-10-10)
 
+- **Kit comune del nastro e delle viti (2026-10-21):** viti, font a tracciati, regole del testo, carta del nastro, disegno e tessera di grana sono in `shared/ui` (scritti prima per lo Stripper, poi resi comuni dalla chat di Pillow Talk) e lo Stripper li usa; il testo sul nastro segue la regola comune (ASCII stampabile, 14 caratteri, spazi ai bordi tolti). Piano: Task 17.
 - **Segni di richiamo, scelte confermate (2026-10-15, "proviamo così"; da rivedere dopo l'ascolto in un host):** realizzati come tratto di penna blu sulla scala nella posizione richiamata, visibile quando la manopola si è mossa di almeno il **2%** (`kRecallThreshold`); strato note (preferenza Notes: Hide li nasconde). Confermati: soglia, aspetto, niente scotch sui valori.
 - **Richiamo da doppio clic:** il doppio clic riporta al valore neutro; **Alt + doppio clic** (o Ctrl/Cmd) riporta al valore di richiamo (il segno di biro) **solo quando il segno è visibile**; altrimenti si comporta come il doppio clic normale (valore neutro). Fatto 2026-10-15 (`AnalogKnob::altDoubleClickTarget` in `shared/ui`, test `fairy_ui_knob_gesture_tests`); su Linux l'Alt può essere preso dal gestore di finestre, per questo vale anche Ctrl.
 - **Segni di biro e scotch sui valori:** il concetto è approvato; restano da definire il disegno, la soglia "valore cambiato" e il comportamento con molte manopole mosse.
