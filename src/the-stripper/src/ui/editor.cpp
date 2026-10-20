@@ -689,7 +689,11 @@ void Editor::refreshModules() {
   }
   channelMode_ = isChannelMode(seen_[kStripMode]);
   namOn_ = seen_[kDriveNamOn] >= 0.5 || std::isnan(seen_[kDriveNamOn]);
-  if (strip_) strip_->setSaturate(stripShowsSaturate(namOn_));
+  if (strip_) {
+    strip_->setSaturate(stripShowsSaturate(namOn_));
+    stripTip_ = stripTooltip(modelState_, modelName_, modelError_, stripShowsSaturate(namOn_));
+    strip_->setTooltipText(stripTip_.c_str());
+  }
   if (silk_) {
     const double comp = std::isnan(seen_[kCompressorMode]) ? 0.0 : seen_[kCompressorMode];
     for (const Module m : kModules) {

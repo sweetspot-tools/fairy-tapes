@@ -104,6 +104,17 @@ inline std::vector<ModelEntry> filterModels(const std::vector<ModelEntry>& all, 
   return out;
 }
 
+// The hint on the model strip (the strip itself shows a name shortened to fit): the full file name once a model is loaded,
+// why a load failed, or what a click does. With the NAM off it names the engine at work instead. `state` is the
+// controller's model state (0 idle, 1 loading, 2 loaded, 3 failed).
+inline std::string stripTooltip(int state, const std::string& name, const std::string& error, bool saturate) {
+  if (saturate) return "4K saturation drives the stage (the NAM is off)";
+  if (state == 1) return "Loading the model";
+  if (state == 2 && !name.empty()) return name;
+  if (state == 3) return error.empty() ? "Could not load the model" : error;
+  return "Click to choose a NAM model";
+}
+
 // File name without directory and without the .nam extension (kept as is when nothing would remain).
 inline std::string displayName(const std::string& pathOrName) {
   std::string name = toUtf8(fromUtf8(pathOrName).filename());

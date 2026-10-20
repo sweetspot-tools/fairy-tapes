@@ -119,6 +119,19 @@ void test_truncate_by_measured_width() {
   const std::string out = truncateToWidth("\xC3\xA8\xC3\xA8\xC3\xA8\xC3\xA8", 30, measure);
   CHECK(out == "\xC3\xA8\xC3\xA8\xE2\x80\xA6");
 }
+
+void test_strip_tooltip() {
+  // NAM on: the full file name (extension and all) once a model is loaded, the error text when it failed
+  CHECK(stripTooltip(2, "JCM clean v2.nam", "", false) == "JCM clean v2.nam");
+  CHECK(stripTooltip(3, "", "File not found", false) == "File not found");
+  CHECK(stripTooltip(1, "", "", false) == "Loading the model");
+  CHECK(stripTooltip(0, "", "", false) == "Click to choose a NAM model");
+  CHECK(stripTooltip(2, "", "", false) == "Click to choose a NAM model");   // loaded but nameless: nothing to show
+  CHECK(stripTooltip(3, "", "", false) == "Could not load the model");
+  // NAM off: the strip says which engine works, whatever the model state
+  CHECK(stripTooltip(2, "JCM clean v2.nam", "", true) == "4K saturation drives the stage (the NAM is off)");
+  CHECK(stripTooltip(3, "", "File not found", true) == "4K saturation drives the stage (the NAM is off)");
+}
 } // namespace
 
 int main() {
@@ -130,6 +143,7 @@ int main() {
   test_filter();
   test_display_name();
   test_truncate_by_measured_width();
+  test_strip_tooltip();
   if (g_failed) { std::fprintf(stderr, "%d check(s) failed\n", g_failed); return 1; }
   std::puts("test_model_source: ok");
   return 0;

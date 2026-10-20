@@ -142,6 +142,7 @@ private:
   int tapeEditIndex_ = -1;
   GpuChipView* gpuChip_ = nullptr;         // on the NAM button while the model runs on the GPU; owned by the frame
   bool modelGpu_ = false;
+  std::string stripTip_;                   // the hint on the model strip (setTooltipText keeps the pointer)
   ModelStrip* strip_ = nullptr;            // owned by the frame
   ModelBrowser* browser_ = nullptr;        // owned by the frame while the popup is open
   bool browserClosing_ = false;            // set by the popup, handled on the UI timer
