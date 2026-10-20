@@ -6,6 +6,8 @@
 
 #pragma once
 
+#include "fairy_ui/tape_font.h"
+
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
@@ -17,6 +19,8 @@
 #include <vector>
 
 namespace FairyTapes::TheStripper::Ui {
+
+using FairyTapes::Ui::truncateToWidth;   // moved to the common tape kit
 
 struct ModelEntry {
   std::string name;     // file name with extension
@@ -100,6 +104,17 @@ inline std::vector<ModelEntry> filterModels(const std::vector<ModelEntry>& all, 
   return out;
 }
 
+// The hint on the model strip (the strip itself shows a name shortened to fit): the full file name once a model is loaded,
+// why a load failed, or what a click does. With the NAM off it names the engine at work instead. `state` is the
+// controller's model state (0 idle, 1 loading, 2 loaded, 3 failed).
+inline std::string stripTooltip(int state, const std::string& name, const std::string& error, bool saturate) {
+  if (saturate) return "4K saturation drives the stage (the NAM is off)";
+  if (state == 1) return "Loading the model";
+  if (state == 2 && !name.empty()) return name;
+  if (state == 3) return error.empty() ? "Could not load the model" : error;
+  return "Click to choose a NAM model";
+}
+
 // File name without directory and without the .nam extension (kept as is when nothing would remain).
 inline std::string displayName(const std::string& pathOrName) {
   std::string name = toUtf8(fromUtf8(pathOrName).filename());
@@ -112,27 +127,6 @@ inline std::size_t utf8Length(const std::string& s) {
   for (unsigned char c : s)
     if ((c & 0xC0) != 0x80) ++n;
   return n;
-}
-
-// Cuts `text` so that its measured width fits `maxWidth`, ending with an ellipsis; separators left at the cut
-// are dropped. Never cuts a UTF-8 sequence in half. `measure` returns the pixel width of a string.
-inline std::string truncateToWidth(const std::string& text, double maxWidth,
-                                   const std::function<double(const std::string&)>& measure) {
-  if (text.empty() || measure(text) <= maxWidth) return text;
-  static const std::string kEllipsis = "\xE2\x80\xA6";
-  std::size_t end = text.size();
-  while (end > 0) {
-    // step back to the start of the previous UTF-8 character
-    do {
-      --end;
-    } while (end > 0 && (static_cast<unsigned char>(text[end]) & 0xC0) == 0x80);
-    std::string head = text.substr(0, end);
-    while (!head.empty() && (head.back() == ' ' || head.back() == '_' || head.back() == '-' || head.back() == '.'))
-      head.pop_back();
-    const std::string candidate = head + kEllipsis;
-    if (measure(candidate) <= maxWidth) return candidate;
-  }
-  return {};
 }
 
 } // namespace FairyTapes::TheStripper::Ui

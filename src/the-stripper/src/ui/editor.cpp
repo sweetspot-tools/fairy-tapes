@@ -9,15 +9,14 @@
 #include "ui/model_source.h"
 #include "ui/model_strip.h"
 #include "ui/silkscreen_items.h"
-#include "ui/tape_text.h"
 #include "ui/recall_marks.h"
 #include "ui/gpu_chip_view.h"
 #include "ui/recall_marks_view.h"
-#include "ui/screw_view.h"
+#include "fairy_ui/screw_view.h"
 #include "ui/tape_piece_view.h"
 #include "ui/value_text.h"
 #include "preferences.h"
-#include "ui/tape_font.h"
+#include "ui/tape_kit.h"
 #include "ui/panel_view.h"
 
 #include "fairy_ui/controls.h"
@@ -53,6 +52,9 @@ using FairyTapes::Ui::AnalogKnob;
 using FairyTapes::Ui::ChoiceButtons;
 using FairyTapes::Ui::ClipLed;
 using FairyTapes::Ui::MeterBar;
+using FairyTapes::Ui::ScrewView;
+using FairyTapes::Ui::generateScrews;
+using FairyTapes::Ui::kScrewCount;
 using FairyTapes::Ui::MeterKind;
 using FairyTapes::Ui::RackChoice;
 using FairyTapes::Ui::RackKnob;
@@ -435,7 +437,7 @@ void Editor::placeScrews(bool useSavedAngles) {
       continue;
     }
     auto* view = new ScrewView(specs[static_cast<std::size_t>(i)], angle);
-    view->onTurned = [this](double) { screwsTurned(); };
+    view->onTurned = [this](double) { screwsTurned(); };   // the end of a drag: the angles are saved with the project
     front_->addView(view);
     screws_[static_cast<std::size_t>(i)] = view;
   }
@@ -687,7 +689,11 @@ void Editor::refreshModules() {
   }
   channelMode_ = isChannelMode(seen_[kStripMode]);
   namOn_ = seen_[kDriveNamOn] >= 0.5 || std::isnan(seen_[kDriveNamOn]);
-  if (strip_) strip_->setSaturate(stripShowsSaturate(namOn_));
+  if (strip_) {
+    strip_->setSaturate(stripShowsSaturate(namOn_));
+    stripTip_ = stripTooltip(modelState_, modelName_, modelError_, stripShowsSaturate(namOn_));
+    strip_->setTooltipText(stripTip_.c_str());
+  }
   if (silk_) {
     const double comp = std::isnan(seen_[kCompressorMode]) ? 0.0 : seen_[kCompressorMode];
     for (const Module m : kModules) {
@@ -744,7 +750,7 @@ void Editor::valueChanged(CControl* control) {
   }
   if (control == tapeEdit_) {   // the writing on a piece of tape: at most 14 characters, saved with the project
     const std::string typed = tapeEdit_->getText().getString();
-    const std::string clamped = clampTapeText(typed);
+    const std::string clamped = FairyTapes::Ui::sanitizeTapeText(typed);
     if (clamped != typed) tapeEdit_->setText(clamped.c_str());
     ctl_->setTapeText(tapeEditIndex_, clamped);
     if (tapeEditIndex_ >= 0 && tapeEditIndex_ < static_cast<int>(pieces_.size()) && pieces_[static_cast<std::size_t>(tapeEditIndex_)])

@@ -8,7 +8,7 @@
 #include "preferences.h"
 #include "state.h"
 #include "ui/layout.h"
-#include "ui/tape_font.h"
+#include "ui/tape_kit.h"
 
 #include "fairy_ui/skin.h"
 
@@ -33,6 +33,7 @@ class NormalizedControl;
 class SilkscreenView;
 class MeterBar;
 class ClipLed;
+class ScrewView;
 }
 
 namespace FairyTapes::TheStripper {
@@ -47,7 +48,6 @@ class ModelBrowser;
 class ModelStrip;
 class RecallMarksView;
 class GpuChipView;
-class ScrewView;
 class TapePieceView;
 
 class Editor : public Steinberg::Vst::VSTGUIEditor,
@@ -134,7 +134,7 @@ private:
   TapeFontId valuesFont_ = TapeFontId::Zeyada;
   std::uint32_t valuesSeed_ = 0;
   RecallMarksView* marks_ = nullptr;                      // owned by front_
-  std::array<ScrewView*, 4> screws_{};                    // owned by front_
+  std::array<FairyTapes::Ui::ScrewView*, 4> screws_{};                    // owned by front_
   std::array<TapePieceView*, kMaxTapePieces> pieces_{};   // owned by the frame
   VSTGUI::CTextEdit* valueEdit_ = nullptr;               // the open value field, owned by the frame
   const ControlSpec* valueEditSpec_ = nullptr;
@@ -142,6 +142,7 @@ private:
   int tapeEditIndex_ = -1;
   GpuChipView* gpuChip_ = nullptr;         // on the NAM button while the model runs on the GPU; owned by the frame
   bool modelGpu_ = false;
+  std::string stripTip_;                   // the hint on the model strip (setTooltipText keeps the pointer)
   ModelStrip* strip_ = nullptr;            // owned by the frame
   ModelBrowser* browser_ = nullptr;        // owned by the frame while the popup is open
   bool browserClosing_ = false;            // set by the popup, handled on the UI timer

@@ -31,7 +31,8 @@ void test_pieces_stay_on_the_panel_and_clear_of_the_header() {
       CHECK(p.w >= 58 && p.w <= 96 && p.h >= 19 && p.h <= 26);
       CHECK(p.x >= 70 && p.x + p.w <= 1000 - 4 && p.y >= 110 && p.y + p.h <= 628);
       CHECK(std::fabs(p.rotationDeg) <= 9.0);
-      CHECK(p.outline.size() == 5 + 6 + 5 + 4);   // a closed ragged outline: top 5, right 6, bottom 5, left 4
+      CHECK(p.paper.outline.size() == 5 + 6 + 5 + 4 && p.paper.fibres.size() == 5);   // a closed ragged outline: top 5, right 6, bottom 5, left 4
+      CHECK(p.paper.w == p.w && p.paper.h == p.h);
       CHECK(p.defaultText.size() <= static_cast<std::size_t>(kTapeTextCharacters));
       CHECK(p.textSize >= 11 && p.textSize <= 14);
     }
@@ -62,15 +63,14 @@ void test_displayed_text_prefers_what_the_user_wrote() {
   CHECK(displayedTapeText(p, TapeText{true, ""}).empty());       // erased on purpose: stays blank
 }
 
-void test_clamp_to_fourteen_characters() {
-  CHECK(clampTapeText("0123456789ABCDEFGH") == "0123456789ABCD");
-  CHECK(clampTapeText("short") == "short");
-  CHECK(clampTapeText("").empty());
-  // multi-byte characters count as one character each and are never cut in half
-  const std::string e8 = "\xC3\xA8\xC3\xA8\xC3\xA8\xC3\xA8\xC3\xA8\xC3\xA8\xC3\xA8\xC3\xA8\xC3\xA8\xC3\xA8\xC3\xA8\xC3\xA8\xC3\xA8\xC3\xA8\xC3\xA8";   // 16 x e-grave
-  const std::string cut = clampTapeText(e8);
-  CHECK(utf8Length(cut) == 14 && cut.size() == 28);
-  CHECK(clampTapeText("a\nb\tc") == "a b c");   // control characters become spaces
+void test_typed_text_follows_the_common_rule() {
+  using FairyTapes::Ui::sanitizeTapeText;
+  CHECK(sanitizeTapeText("0123456789ABCDEFGH") == "0123456789ABCD");   // at most 14 characters
+  CHECK(sanitizeTapeText("  short  ") == "short");
+  CHECK(sanitizeTapeText("").empty());
+  CHECK(sanitizeTapeText("a\nb\tc") == "abc");                         // control characters are dropped
+  CHECK(sanitizeTapeText("caf\xC3\xA9") == "caf");                      // the tape fonts draw printable ASCII only
+  static_assert(kTapeTextCharacters == 14, "the writing is limited to 14 characters on every plug-in");
 }
 } // namespace
 
@@ -80,7 +80,7 @@ int main() {
   test_how_many_are_shown();
   test_default_texts_come_from_a_list_or_are_empty();
   test_displayed_text_prefers_what_the_user_wrote();
-  test_clamp_to_fourteen_characters();
+  test_typed_text_follows_the_common_rule();
   if (g_failed) { std::fprintf(stderr, "%d check(s) failed\n", g_failed); return 1; }
   std::puts("test_tape_pieces: ok");
   return 0;

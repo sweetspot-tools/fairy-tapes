@@ -1,7 +1,7 @@
 // The Stripper GUI: widgets of the back panel (segmented selector, tape-font stepper, text link).
 #pragma once
 
-#include "ui/tape_font.h"
+#include "ui/tape_kit.h"
 
 #include "vstgui/lib/cview.h"
 
