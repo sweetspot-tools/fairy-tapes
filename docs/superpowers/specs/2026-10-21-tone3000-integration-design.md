@@ -69,7 +69,8 @@ src/the-stripper/src/ui/tone3000_tab.{h,cpp}   la scheda nel popup (usa Worker, 
 
 ## 7. Decisioni e dipendenze
 
-- **HTTP:** la proposta è **libcurl** (come il plugin ufficiale di TONE3000, licenza tipo MIT/X) come sottomodulo di `vendors/` fissato a un commit, compilato statico con TLS del sistema (Schannel su Windows, Secure Transport su macOS, OpenSSL/mbedTLS su Linux) — **da decidere** (§9): in alternativa lo scarico con le API native di ogni sistema (WinHTTP, NSURLSession, ...) senza nuove dipendenze, con più codice per sistema. Aggiungere un sottomodulo va detto all'utente e va in un commit dedicato.
+- **HTTP: libcurl (deciso 2026-10-21).** Sottomodulo `vendors/curl` fissato alla release **8.23.0** (clone superficiale, 36 MB; licenza "curl", tipo MIT), compilato come libreria statica con solo HTTP/HTTPS (protocolli, zlib, brotli, zstd, libpsl, libssh, nghttp2, IDN disattivati). **TLS:** Windows con Schannel (nessuna libreria da distribuire); **Linux con OpenSSL**; **macOS con OpenSSL**, perché curl ha **rimosso Secure Transport nella 8.15**: su macOS e Linux OpenSSL è quindi una dipendenza (collegamento statico o libreria in bundle da decidere al momento dell'impacchettamento, §9). Senza OpenSSL (non Windows) il client non viene compilato e la configurazione continua. Il sottomodulo è del progetto "di terzi": non si aggiorna senza dirlo (regole del repository, §5).
+- **Host dell'API: `www.tone3000.com`.** `tone3000.com` risponde con un redirect 308 a `www.tone3000.com`; la regola "solo stesso host" è giusta e il client deve usare direttamente l'host con `www`.
 - **JSON:** nlohmann/json, già nei sottomoduli.
 - **SHA-256 e casualità per PKCE:** funzioni piccole interne (o quelle del TLS scelto); test con i vettori noti (RFC 7636 appendice B).
 - **Registrazione dell'app:** serve un'app registrata su TONE3000 con `client_id` e URI di ritorno; la fa **l'utente** con il proprio account (l'agente non crea account). Finché manca, la scheda resta nel modo "TONE3000 not configured" (attenuata) e tutto si prova con i finti.
@@ -87,7 +88,7 @@ La bozza della richiesta si prepara a parte; **non si contatta il supporto da qu
 
 ## 9. Decisioni aperte
 
-- Libcurl contro API native per l'HTTP (§7).
+- Come distribuire OpenSSL su Linux e macOS (statico o in bundle) e relative licenze nei CREDITS (OpenSSL Apache-2.0, curl).
 - URI di ritorno (loopback o flusso del dispositivo), dalla risposta del supporto (§4, §8).
 - Cartella dei toni scaricati: predefinita o scelta dall'utente (§5).
 - Posizione grafica della scheda e dell'avanzamento dello scarico: da definire con un mockup in `src/the-stripper/docs/mockups/stripper_model_browser.html` (aggiungere la scheda TONE3000).
@@ -102,10 +103,10 @@ La bozza della richiesta si prepara a parte; **non si contatta il supporto da qu
 ## 11. Piano di massima (da trasformare in piano in `docs/superpowers/plans/`)
 
 1. PKCE, limitatore, pulizia dei nomi, file laterale (puro, con test).
-2. `HttpClient` + finto, `Tone3000Api` con i parsing (test su file di esempio).
+2. `Tone3000Api` con i parsing (test su file di esempio). **`HttpClient` e implementazione libcurl: fatti il 2026-10-21** (`shared/tone3000`: URL e regola dei redirect, 5 test sul client con un server di prova su loopback, HTTPS vero verificato su `www.tone3000.com`, certificato scaduto rifiutato).
 3. Macchina a stati OAuth + server locale + apertura del browser (finti).
 4. `TokenStore`, `Worker`.
-5. Sottomodulo libcurl e `http_curl.cpp` (decisione §9; da dire all'utente).
+5. ~~Sottomodulo libcurl e `http_curl.cpp`~~ (fatto il 2026-10-21, vedi sopra).
 6. Scheda TONE3000 nel popup e mockup aggiornato, con badge di licenza e "Powered by TONE3000".
 7. Credits e impostazioni (cartella, SIGN OUT) nel retro; documentazione.
 8. Prova con l'app registrata (a cura dell'utente) e verifica del flusso vero.
