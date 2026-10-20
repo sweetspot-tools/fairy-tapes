@@ -152,6 +152,8 @@
 
 ### Task 7: Viti ruotabili
 
+**Esito (2026-10-21): le viti sono comuni, in `shared/ui`.** Come per usura e nastro, copia comune e indipendente dal plugin della logica dello Stripper (senza toccarne i file): `fairy_ui/screws.h` (puro, stesso generatore e stesso ordine di estrazioni dello Stripper, fissato da test) e `FairyTapes::Ui::ScrewView` (`fairy_ui/screw_view.h`, `fairy_ui_widgets`). In Pillow Talk: `layoutFromSeed` usa il generatore comune, `src/ui/screw_angles.h` (puro) tiene la semantica dell'angolo salvato, l'editor crea le quattro viste. Al posto di `src/ui/screw_view.{h,cpp}` e `tests/test_screw_math.cpp` previsti: vista comune; `tests/test_screw_math.cpp` esiste ma prova `screw_angles.h`. Dettagli nella spec §12. Sotto, il testo originale con lo stato.
+
 **Files:**
 - Create: `src/pillow-talk/src/ui/screw_view.{h,cpp}`, `src/pillow-talk/tests/test_screw_math.cpp`
 - Modify: `src/pillow-talk/src/ui/editor.cpp`
@@ -159,10 +161,12 @@
 **Interfaces:**
 - Produces: `class ScrewView : public VSTGUI::CView` (taglio o croce, angolo iniziale dal seme, una può mancare con bassa probabilità, trascinamento che ruota; l'angolo si salva nello stato) e la funzione pura `float angleFromDrag(...)`. Tipo, angolo iniziale e vite mancante (al più una) vengono da `ScrewPlacement` di `layoutFromSeed` (`ui/decor.h`, già testato), non da nuove funzioni.
 
-- [ ] **Step 1: Test** delle funzioni pure (deterministiche, una sola vite mancante al massimo, angolo normalizzato).
-- [ ] **Step 2: Eseguire, verificare il fallimento; implementare** `ScrewView` e collegarla alle posizioni di `WearLayout` (`ui/decor.h`, `layoutFromSeed`: tipo, angolo iniziale e vite mancante vengono già da lì).
-- [ ] **Step 3: Eseguire i test e la build.** Expected: PASS.
-- [ ] **Step 4: Commit** `feat(pillow-talk): rotatable screws`.
+- [x] **Step 1: Test** delle funzioni pure (deterministiche, una sola vite mancante al massimo, angolo normalizzato).
+  - Esito: `shared/ui/tests/test_screws.cpp` (target `fairy_ui_screw_tests`: deterministiche, posizioni, valori fissati uguali a quelli dello Stripper per sei semi, al più una mancante su 5000 semi, trascinamento, normalizzazione, raggio del clic); `shared/ui/tests/test_screw_view.cpp` (`fairy_ui_screw_view_tests`, senza finestra: area del clic, vite mancante, fine del gesto riportata una volta, clic senza movimento, annullamento); `tests/test_screw_math.cpp` (`pillow_talk_screw_math_tests`: angolo mostrato = iniziale + rotazione dell'utente e ritorno); in `tests/test_decor.cpp` le viti di `layoutFromSeed` = quelle comuni.
+- [x] **Step 2: Eseguire, verificare il fallimento; implementare** `ScrewView` e collegarla alle posizioni di `WearLayout` (`ui/decor.h`, `layoutFromSeed`: tipo, angolo iniziale e vite mancante vengono già da lì).
+  - Esito: header comuni assenti; il test di `test_decor.cpp` falliva sui semi dove la copia in `float` differiva. L'editor usa `screwSpecs(seed)` (stesse viti di `layoutFromSeed` alle coordinate dell'editor); la fine di un trascinamento chiama `editDecor` una volta.
+- [x] **Step 3: Eseguire i test e la build.** Expected: PASS. Esito: `ctest -R "pillow_talk|fairy_ui"` 24/24, `the_stripper_tests` verde, 0 simboli `Steinberg::*` indefiniti nel modulo; render offscreen (semi 3 e 555, rotazioni dell'utente): viti come nella preview e nello Stripper, foro della vite mancante.
+- [x] **Step 4: Commit** `feat(pillow-talk): rotatable screws` (diviso: `feat(ui)` per le parti comuni, `feat(pillow-talk)` per generatore, angoli e vista).
 
 ---
 
