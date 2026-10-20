@@ -41,9 +41,19 @@ add_executable(fairy_ui_silkscreen_tests tests/test_silkscreen.cpp)
 target_link_libraries(fairy_ui_silkscreen_tests PRIVATE fairy_ui)
 add_test(NAME fairy_ui_silkscreen_tests COMMAND fairy_ui_silkscreen_tests)
 
+# Tape fonts as vector paths (generated fairy_ui/tape_glyphs.h): measuring, layout with variation, fitting.
+add_executable(fairy_ui_tape_font_tests tests/test_tape_font.cpp)
+target_link_libraries(fairy_ui_tape_font_tests PRIVATE fairy_ui)
+add_test(NAME fairy_ui_tape_font_tests COMMAND fairy_ui_tape_font_tests)
+
+# Writable paper tape: text rules and the seeded paper body.
+add_executable(fairy_ui_tape_tests tests/test_tape.cpp)
+target_link_libraries(fairy_ui_tape_tests PRIVATE fairy_ui)
+add_test(NAME fairy_ui_tape_tests COMMAND fairy_ui_tape_tests)
+
 # Code-drawn VSTGUI controls and optional bitmap skin.
 add_library(fairy_ui_widgets STATIC src/controls.cpp src/skin.cpp src/meters.cpp src/rack_controls.cpp
-  src/draw_util.cpp src/wear_view.cpp src/silkscreen_view.cpp)
+  src/draw_util.cpp src/wear_view.cpp src/silkscreen_view.cpp src/tape_draw.cpp)
 target_include_directories(fairy_ui_widgets PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(fairy_ui_widgets PUBLIC fairy_ui vstgui_support)
 # Linked into plugin modules (shared objects).
