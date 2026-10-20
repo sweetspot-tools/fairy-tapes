@@ -41,6 +41,7 @@ add_library(pillow_talk MODULE
   src/ui/editor.cpp
   src/ui/panel_view.cpp
   src/ui/decor.cpp
+  src/ui/prefs.cpp
 )
 
 target_include_directories(pillow_talk PRIVATE
@@ -160,6 +161,7 @@ add_executable(pillow_talk_render EXCLUDE_FROM_ALL
   src/ui/duck_scope.cpp
   src/ui/editor.cpp
   src/ui/panel_view.cpp
+  src/ui/prefs.cpp
 )
 target_include_directories(pillow_talk_render PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${VST3_SDK_PATH})
 target_compile_definitions(pillow_talk_render PRIVATE

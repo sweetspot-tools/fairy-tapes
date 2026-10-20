@@ -3,6 +3,9 @@
 // controls, scope, meters and clip LEDs. Every persistent parameter is bound to one control (ui/layout.h). User gestures
 // go to the controller as beginEdit / performEdit / endEdit; host-side changes (automation, presets, undo) arrive as
 // Parameter dependents and are applied on the UI timer, which also reads the processor's display parameters.
+// Wear: the seed comes from the instance decor (Controller::decor, saved in the state), the level from the user
+// preferences (ui/prefs.h, read when the editor opens; any problem -> defaults). The marks are regenerated only when
+// one of the two changes (the timer polls Controller::decorRevision).
 #pragma once
 
 #include "params.h"
@@ -35,6 +38,10 @@ class SilkscreenView;
 class WearView;
 }
 
+namespace FairyTapes::PillowTalk {
+class Controller;
+}
+
 namespace FairyTapes::PillowTalk::Ui {
 
 class DuckScope;
@@ -48,9 +55,8 @@ public:
   static constexpr int kWidth = kEditorWidth;
   static constexpr int kHeight = kEditorHeight;
 
-  // Wear until the seed and the preference exist (Task 5: state v2 and user preferences).
-  static constexpr uint32_t kWearSeed = FairyTapes::Ui::kDefaultWearSeed;
-  static constexpr FairyTapes::Ui::WearLevel kWearLevel = FairyTapes::Ui::WearLevel::Light;
+  // Wear used when the controller is not Pillow Talk's (cannot happen in the plug-in) or before open().
+  static constexpr uint32_t kFallbackWearSeed = FairyTapes::Ui::kDefaultWearSeed;
 
   explicit Editor(Steinberg::Vst::EditController* controller);
   ~Editor() override;
@@ -83,6 +89,11 @@ public:
   // IDependent (Parameter objects): may arrive on any thread, only flags the parameter.
   void PLUGIN_API update(Steinberg::FUnknown* changedUnknown, Steinberg::int32 message) override;
 
+  // Wear level (Settings on the back, Task 8): the background changes without rebuilding the window.
+  void setWearLevel(FairyTapes::Ui::WearLevel level);
+  FairyTapes::Ui::WearLevel wearLevel() const { return wearLevel_; }
+  uint32_t wearSeed() const { return seed_; }
+
 private:
   friend struct EditorPreview;
 
@@ -99,6 +110,9 @@ private:
   // Marks for a seed and level, regenerated only when one of them changes.
   const std::vector<FairyTapes::Ui::WearMark>& wearMarks(uint32_t seed, FairyTapes::Ui::WearLevel level);
   void resetViewPointers();
+  // Seed from the controller's decor; regenerates the wear marks when it changed.
+  void refreshDecor();
+  void applyWear();
 
   double scale_ = 1.0;  // sanitized content scale factor
   FairyTapes::Ui::Skin skin_;
@@ -114,6 +128,12 @@ private:
   uint32_t marksSeed_ = 0;
   FairyTapes::Ui::WearLevel marksLevel_ = FairyTapes::Ui::WearLevel::Off;
   bool marksValid_ = false;
+
+  Controller* owner_ = nullptr;   // the same object as getController(), when it is Pillow Talk's controller
+  uint32_t seed_ = kFallbackWearSeed;
+  FairyTapes::Ui::WearLevel wearLevel_ = FairyTapes::Ui::WearLevel::Light;
+  uint32_t decorRevision_ = 0;
+  bool decorKnown_ = false;
 
   std::array<Steinberg::IPtr<Steinberg::Vst::Parameter>, kNumParams> watched_{};
   std::atomic<uint32_t> pending_{0};  // one bit per ParamID changed by the host

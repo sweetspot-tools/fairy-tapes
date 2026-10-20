@@ -1,8 +1,11 @@
 // Pillow Talk GUI: the plugin editor. Layout from the approved rack preview (docs/mockups/pillow_rack.html, ui/layout.h).
 #include "ui/editor.h"
 
+#include "controller.h"
+#include "state.h"
 #include "ui/duck_scope.h"
 #include "ui/panel_view.h"
+#include "ui/prefs.h"
 
 #include "fairy_ui/controls.h"
 #include "fairy_ui/meters.h"
@@ -45,6 +48,8 @@ using Steinberg::Vst::ParamID;
 namespace {
 
 static_assert(kNumParams <= 32, "pending_ holds one bit per persistent parameter");
+static_assert(kMaxTapeTexts == kNumTapeSlots, "one stored tape text per tape slot");
+static_assert(kNumScrews == static_cast<int>(sizeof(kScrewPos) / sizeof(kScrewPos[0])), "one stored angle per screw");
 
 constexpr uint32_t kTimerMs = 30;
 constexpr double kTimerSeconds = kTimerMs / 1000.0;
@@ -68,7 +73,7 @@ double controllerNorm(Steinberg::Vst::EditController* ctl, ParamID id, double fa
 } // namespace
 
 Editor::Editor(Steinberg::Vst::EditController* controller)
-: VSTGUIEditor(controller) {
+: VSTGUIEditor(controller), owner_(dynamic_cast<Controller*>(controller)) {
   const PixelSize px = scaledEditorSize(scale_);
   setRect(Steinberg::ViewRect(0, 0, px.width, px.height));
   // Parameter dependents need the global update handler (VST3Editor creates it the same way).
@@ -130,6 +135,14 @@ bool PLUGIN_API Editor::open(void* parent, const PlatformType& platformType) {
   config = &x11Config;
 #endif
 
+  // Wear level from the user preferences (missing or bad file: defaults), seed from the instance decor.
+  try {
+    wearLevel_ = loadPrefs(prefsPath()).wear;
+  } catch (...) {
+    wearLevel_ = Prefs{}.wear;
+  }
+  refreshDecor();
+
   frame = new CFrame(CRect(0, 0, kWidth, kHeight), this);
   frame->setBackgroundColor(kFrameBackground);
   createViews(frame);
@@ -181,6 +194,29 @@ const std::vector<WearMark>& Editor::wearMarks(uint32_t seed, WearLevel level) {
   return marks_;
 }
 
+void Editor::refreshDecor() {
+  if (!owner_) return;
+  const uint32_t rev = owner_->decorRevision();
+  if (decorKnown_ && rev == decorRevision_) return;
+  const Decor d = owner_->decor();   // generates the seed if the controller has none yet
+  decorRevision_ = owner_->decorRevision();
+  decorKnown_ = true;
+  if (d.seed != 0 && d.seed != seed_) {
+    seed_ = d.seed;
+    applyWear();
+  }
+}
+
+void Editor::setWearLevel(WearLevel level) {
+  if (level == wearLevel_) return;
+  wearLevel_ = level;
+  applyWear();
+}
+
+void Editor::applyWear() {
+  if (wear_) wear_->setMarks(wearMarks(seed_, wearLevel_));
+}
+
 void Editor::createViews(CViewContainer* parent) {
   auto* ctl = getController();
   const CRect all(0, 0, kWidth, kHeight);
@@ -189,7 +225,7 @@ void Editor::createViews(CViewContainer* parent) {
   parent->addView(new PanelView(all, &skin_));
   silk_ = new SilkscreenView(all, silkscreenItems());
   parent->addView(silk_);
-  wear_ = new WearView(all, wearMarks(kWearSeed, kWearLevel));
+  wear_ = new WearView(all, wearMarks(seed_, wearLevel_));
   parent->addView(wear_);
 
   scope_ = new DuckScope(toCRect(kScopeRect));
@@ -268,6 +304,7 @@ void Editor::onTimer() {
   const uint32_t changed = pending_.exchange(0);
   for (ParamID id = 0; id < kNumParams; ++id)
     if (changed & bit(id)) syncFromController(id);
+  refreshDecor();
   updateDisplays();
 }
 

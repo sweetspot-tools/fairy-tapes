@@ -1,9 +1,12 @@
 // Developer tool: draws the Pillow Talk editor offscreen into a PNG, no host or window needed.
 //   pillow_talk_render out.png [bypass] [sync] [meters] [scope] [wear=off|light|heavy] [seed=<n>] [no-grain]
+// The seed goes through the controller's decor (as a stored state would), the wear level through Editor::setWearLevel;
+// without wear= the level comes from the user preferences file, as when the editor opens.
 // Used to check the look of the code-drawn GUI against docs/mockups/pillow_rack.html on a machine without a host.
 #include "controller.h"
 #include "ui/duck_scope.h"
 #include "ui/editor.h"
+#include "ui/prefs.h"
 
 #include "fairy_ui/wear_view.h"
 
@@ -33,16 +36,19 @@ struct EditorPreview {
   struct Options {
     bool scope = false;
     bool customWear = false;
-    uint32_t seed = Editor::kWearSeed;
-    FairyTapes::Ui::WearLevel wear = Editor::kWearLevel;
+    FairyTapes::Ui::WearLevel wear = FairyTapes::Ui::WearLevel::Light;
   };
 
   static bool render(Steinberg::Vst::EditController& ctl, const char* path, const Options& opt) {
     Editor ed(&ctl);
+    ed.wearLevel_ = loadPrefs(prefsPath()).wear;   // what open() does
+    ed.refreshDecor();
     auto root = VSTGUI::makeOwned<VSTGUI::CViewContainer>(VSTGUI::CRect(0, 0, Editor::kWidth, Editor::kHeight));
     ed.createViews(root);
     for (Steinberg::Vst::ParamID id = 0; id < kNumParams; ++id) ed.syncFromController(id);
-    if (opt.customWear && ed.wear_) ed.wear_->setMarks(ed.wearMarks(opt.seed, opt.wear));
+    if (opt.customWear) ed.setWearLevel(opt.wear);
+    std::printf("seed %u, wear %d, %zu marks\n", ed.wearSeed(), static_cast<int>(ed.wearLevel()),
+                ed.wear_ ? ed.wear_->marks().size() : 0u);
     if (opt.scope && ed.scope_) {
       // A few phrases: voice over the threshold, the send ducks, the echo follows after each phrase.
       for (int i = 0; i < DuckScope::kPoints; ++i) {
@@ -107,8 +113,9 @@ int main(int argc, char** argv) {
                  : !std::strcmp(w, "heavy") ? FairyTapes::Ui::WearLevel::Heavy
                                             : FairyTapes::Ui::WearLevel::Light;
     } else if (!std::strncmp(argv[i], "seed=", 5)) {
-      opt.customWear = true;
-      opt.seed = static_cast<uint32_t>(std::strtoul(argv[i] + 5, nullptr, 0));
+      Decor d = ctl.decor();
+      d.seed = static_cast<uint32_t>(std::strtoul(argv[i] + 5, nullptr, 0));
+      ctl.editDecor(d);
     }
   }
   const bool ok = Ui::EditorPreview::render(ctl, argv[1], opt);
