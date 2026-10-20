@@ -130,6 +130,8 @@
 
 ### Task 6: Nastro con scritte a mano
 
+**Esito (2026-10-21): la pila del nastro è comune, in `shared/ui`.** La chat dello Stripper l'aveva già costruita in `src/the-stripper/`; come per l'usura, ne esiste ora una copia comune e indipendente dal plugin (namespace `FairyTapes::Ui`), senza toccare i file dello Stripper (migrazione: `docs/superpowers/notes/stripper-migration-to-shared-ui.md`). Comune: `shared/ui/tools/gen_tape_fonts.py` (+ test pytest), `fairy_ui/tape_glyphs.h` (rigenerato dagli stessi tre TTF scaricati da `github.com/google/fonts`, SHA-256 verificati, dati dei glifi identici a quelli dello Stripper), `shared/ui/assets/fonts/` (README e tre licenze), `fairy_ui/tape_font.h` (normalizzazione dell'altezza delle cifre, variazione per lettera dal seme, `fitTapeLine`), `fairy_ui/tape_label.h` (`sanitizeTapeText`, `fitScale`), `fairy_ui/tape_paper.h` (carta con bordo strappato e fibre dal seme), `fairy_ui/tape_draw.h` (`drawTapeText`, `drawTapePaper`, in `fairy_ui_widgets`); test `fairy_ui_tape_font_tests`, `fairy_ui_tape_tests`. Pillow Talk: `src/ui/tapes.h` (puro: font dalle preferenze, testo per posizione, aspetto dal seme, inchiostro che resta dentro il nastro; `tests/test_tapes.cpp`, target `pillow_talk_tapes_tests`), `src/ui/tape_view.{h,cpp}`, editor; `kTapeSlots` spostati perché nessun nastro copra un controllo (test in `tests/test_decor.cpp`). Sotto, il testo originale del compito con lo stato.
+
 **Files:**
 - Create: `src/pillow-talk/tools/gen_tape_fonts.py`, `src/pillow-talk/tools/test_gen_tape_fonts.py`, `src/pillow-talk/src/ui/tape_fonts.h` (generato e committato), `src/pillow-talk/src/ui/tape_view.{h,cpp}`, `src/pillow-talk/tests/test_tape_text.cpp`
 - Modify: `src/pillow-talk/src/ui/editor.cpp`
@@ -137,11 +139,14 @@
 **Interfaces:**
 - Produces: `tape_fonts.h` con i contorni vettoriali dei glifi ASCII stampabili dei tre font (curve quadratiche e cubiche, `advance`, `unitsPerEm`); `tape_view.h`: `class TapeView : public VSTGUI::CView` (un nastro di `WearLayout` da `ui/decor.h`: disegna il corpo di carta, prima previsto in `renderTapes`, e il testo con il font scelto e piccola variazione per lettera dal seme; un clic apre un campo di testo da 14 caratteri al massimo, Invio conferma, Esc annulla) e funzioni pure `std::string sanitizeTapeText(std::string)` e `float fitScale(float textWidth, float tapeWidth)`.
 
-- [ ] **Step 1: Test:** `gen_tape_fonts` produce l'header deterministicamente e ogni glifo ASCII stampabile esiste; `sanitizeTapeText` (lunghezza 14, caratteri non stampabili rimossi, spazi ai bordi tolti); `fitScale` non supera mai il nastro.
-- [ ] **Step 2: Eseguire, verificare il fallimento.**
-- [ ] **Step 3: Implementare** lo script (sorgenti dei font da percorso indicato, licenze riportate in testa all'header) e `TapeView`; i testi vanno nello stato (Task 5).
-- [ ] **Step 4: Eseguire i test e la build.** Expected: PASS.
-- [ ] **Step 5: Commit** `feat(pillow-talk): tape handwriting with vector fonts`.
+- [x] **Step 1: Test:** `gen_tape_fonts` produce l'header deterministicamente e ogni glifo ASCII stampabile esiste; `sanitizeTapeText` (lunghezza 14, caratteri non stampabili rimossi, spazi ai bordi tolti); `fitScale` non supera mai il nastro.
+  - Esito: pytest `shared/ui/tools/test_gen_tape_fonts.py` (7 test, due nuovi: namespace comune, ogni ASCII stampabile convertito); `shared/ui/tests/test_tape_font.cpp` (portato dallo Stripper, più `truncateToWidth` e `fitTapeLine`); `shared/ui/tests/test_tape.cpp` (`sanitizeTapeText`, `fitScale`, carta identica a quella dello Stripper per lo stesso stato del generatore, limiti); `tests/test_tapes.cpp` (font, testo per posizione, scrittura, aspetto, inchiostro mai fuori dal nastro per i tre font e le larghezze 58-96); in `tests/test_decor.cpp` nessun nastro copre controlli, display o un altro nastro (5000 semi, Light e Heavy) e ogni nastro ha la sua posizione.
+- [x] **Step 2: Eseguire, verificare il fallimento.** (Header comuni assenti; `TapePlacement::slot` assente; con i vecchi `kTapeSlots` il test di sovrapposizione fallisce.)
+- [x] **Step 3: Implementare** lo script (sorgenti dei font da percorso indicato, licenze riportate in testa all'header) e `TapeView`; i testi vanno nello stato (Task 5).
+  - Esito: `TapeView` per ogni nastro di `layoutFromSeed` (0 con Wear Off, 1-2 Light, 2-3 Heavy), tra usura e controlli; testo da `Controller::decor()` (indice = `TapePlacement::slot`), font da `Prefs::tapeFont` (`Editor::setTapeFont` per il Task 8; `handwrittenValues` riguarda i valori sotto le manopole, non il nastro). Un clic apre un `CTextEdit` sopra il nastro (schema dei valori digitati dello Stripper): Invio o perdita del fuoco confermano (`editDecor`, testo sanificato a 14 caratteri), Esc annulla; la chiusura dell'editor con il campo aperto conferma. Nastro vuoto = carta bianca. `pillow_talk_render` accetta `text=`, `text1..text6=`, `font=`.
+- [x] **Step 4: Eseguire i test e la build.** Expected: PASS. Esito: `ctest -R "pillow_talk|fairy_ui"` 21/21, `the_stripper_tests` verde, 0 simboli `Steinberg::*` indefiniti nel modulo; render offscreen con i tre font e testi lunghi: testo dentro il nastro (troncato con i puntini se serve), nessun nastro sopra un controllo.
+- [x] **Step 5: Commit** `feat(pillow-talk): tape handwriting with vector fonts` (diviso: `feat(ui)` per le parti comuni, `feat(pillow-talk)` per posizioni e vista).
+  - Aperto: il campo di testo non limita i caratteri mentre si scrive (si taglia a 14 alla conferma).
 
 ---
 
