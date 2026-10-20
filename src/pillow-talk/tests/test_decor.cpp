@@ -5,6 +5,7 @@
  */
 #include "ui/decor.h"
 
+#include "fairy_ui/screws.h"
 #include "fairy_ui/tape_paper.h"
 
 #include <set>
@@ -82,6 +83,24 @@ void test_screws_independent_of_wear_level() {
     ASSERT_TRUE(a.screws[i].angleDeg == b.screws[i].angleDeg && a.screws[i].missing == b.screws[i].missing &&
                 a.screws[i].cross == b.screws[i].cross);
 }
+// The screws are the shared ones (fairy_ui/screws.h, the same as The Stripper's for the same seed), at kScrewPos scaled
+// to the panel. 4203449416, 1134715807 and 2027020070 are seeds where the former float version differed.
+void test_screws_are_the_shared_ones() {
+  const Rect panel{10, 20, 500, 314};
+  std::vector<uint32_t> seeds = {4203449416u, 1134715807u, 2027020070u, 1u, 3u, 7u, 555u};
+  for (uint32_t k = 0; k < 20000; ++k) seeds.push_back(k * 2654435761u);
+  for (uint32_t seed : seeds) {
+    const auto shared = FairyTapes::Ui::generateScrews(seed);
+    const WearLayout l = layoutFromSeed(seed, WearLevel::Light, panel);
+    ASSERT_TRUE(l.screws.size() == shared.size());
+    for (std::size_t i = 0; i < shared.size(); ++i) {
+      ASSERT_TRUE(l.screws[i].cross == shared[i].cross && l.screws[i].missing == shared[i].missing &&
+                  l.screws[i].angleDeg == static_cast<float>(shared[i].initialAngle));
+      ASSERT_TRUE(std::fabs(l.screws[i].x - (panel.x + kScrewPos[i][0] * 0.5f)) < 1e-3f &&
+                  std::fabs(l.screws[i].y - (panel.y + kScrewPos[i][1] * 0.5f)) < 1e-3f);
+    }
+  }
+}
 // Placement pinned (screws: the output of the former ui/wear.cpp, unchanged; tapes: re-pinned on 2026-10-21 when the slots
 // moved off the controls, Task 6, before any tape was drawn): a refactor must not move tapes or screws of existing instances.
 void test_layout_pinned() {
@@ -155,6 +174,7 @@ int main() {
   RUN_TEST(test_layout_inside_panel_and_one_screw_missing_at_most);
   RUN_TEST(test_layout_deterministic_and_seed_dependent);
   RUN_TEST(test_screws_independent_of_wear_level);
+  RUN_TEST(test_screws_are_the_shared_ones);
   RUN_TEST(test_layout_pinned);
   std::fprintf(stdout, "\n%d passed, %d failed.\n", g_passed, g_failed);
   return g_failed ? EXIT_FAILURE : EXIT_SUCCESS;

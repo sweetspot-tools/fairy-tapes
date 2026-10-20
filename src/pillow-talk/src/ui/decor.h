@@ -25,7 +25,8 @@ struct TapePlacement {
   int slot = 0;
 };
 
-// A corner screw. `missing`: only the empty hole is drawn.
+// A corner screw. `angleDeg`: the seeded initial angle (whole degrees, 0..180); the user's rotation (Decor::screwAngles)
+// is added on top. `missing`: only the empty hole is drawn.
 struct ScrewPlacement {
   float x = 0.f, y = 0.f, angleDeg = 0.f;
   bool cross = false;
@@ -40,7 +41,8 @@ struct WearLayout {
 // Base placement: kTapeSlots and kScrewPos in ui/layout.h (reference 1000 x 628 space); Rect comes from there too.
 
 // Pure and deterministic. Tapes: 0 (Off), 1-2 (Light), 2-3 (Heavy), always fully inside `panel`.
-// Screws: always 4 entries at the corners (scaled to `panel`), at most one missing.
+// Screws: always 4 entries at the corners (scaled to `panel`), at most one missing; kind, angle and the missing one from
+// FairyTapes::Ui::generateScrews (fairy_ui/screws.h), so they look as in The Stripper for the same seed.
 // The screw layout does not depend on `w` (changing Wear never moves screws).
 WearLayout layoutFromSeed(uint32_t seed, WearLevel w, const Rect& panel);
 

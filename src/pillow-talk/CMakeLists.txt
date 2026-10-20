@@ -132,6 +132,12 @@ target_include_directories(pillow_talk_decor_tests PRIVATE ${CMAKE_CURRENT_SOURC
 target_link_libraries(pillow_talk_decor_tests PRIVATE fairy_ui)
 add_test(NAME pillow_talk_decor_tests COMMAND pillow_talk_decor_tests)
 
+# Corner screws in the instance decor (pure, no VSTGUI): seeded angle + the user's rotation, specs for the views.
+add_executable(pillow_talk_screw_math_tests tests/test_screw_math.cpp)
+target_include_directories(pillow_talk_screw_math_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${VST3_SDK_PATH})
+target_link_libraries(pillow_talk_screw_math_tests PRIVATE fairy_ui)
+add_test(NAME pillow_talk_screw_math_tests COMMAND pillow_talk_screw_math_tests)
+
 # Writing on the paper tapes (pure, no VSTGUI): font preference, text per slot, ink kept inside the tape.
 add_executable(pillow_talk_tapes_tests tests/test_tapes.cpp)
 target_include_directories(pillow_talk_tapes_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${VST3_SDK_PATH})

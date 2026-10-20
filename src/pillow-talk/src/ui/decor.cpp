@@ -1,12 +1,16 @@
 // Pillow Talk GUI: tape and screw placement from the instance seed (look of docs/mockups/pillow_rack.html).
 #include "ui/decor.h"
 
+#include "fairy_ui/screws.h"
+
 #include <algorithm>
 #include <cmath>
 
 namespace FairyTapes::PillowTalk::Ui {
 
 namespace {
+
+static_assert(FairyTapes::Ui::kScrewCount == 4, "four corner screws");
 
 constexpr float kPi = 3.14159265358979f;
 
@@ -25,19 +29,15 @@ WearLayout layoutFromSeed(uint32_t seed, WearLevel w, const Rect& panel) {
   WearLayout out;
   const float kx = panel.w / kDecorDesignW, ky = panel.h / kDecorDesignH;
 
-  // Screws: independent of the wear level.
+  // Screws: the shared ones (fairy_ui/screws.h, the same look as The Stripper's for the same seed), independent of the
+  // wear level.
   {
-    Rng r(seed ^ 0xA5u);
-    bool cross[4];
-    float ang[4];
+    const auto specs = FairyTapes::Ui::generateScrews(seed);
     for (int i = 0; i < 4; ++i) {
-      cross[i] = r.next() >= 0.5f;
-      ang[i] = std::round(r.rnd(0.f, 180.f));
+      const auto& sp = specs[static_cast<std::size_t>(i)];
+      out.screws.push_back({panel.x + kScrewPos[i][0] * kx, panel.y + kScrewPos[i][1] * ky,
+                            static_cast<float>(sp.initialAngle), sp.cross, sp.missing});
     }
-    int missing = -1;
-    if (r.next() < 0.06f) missing = r.below(4);
-    for (int i = 0; i < 4; ++i)
-      out.screws.push_back({panel.x + kScrewPos[i][0] * kx, panel.y + kScrewPos[i][1] * ky, ang[i], cross[i], i == missing});
   }
 
   // Tapes: draw parameters for three slots always, so Light is a prefix of Heavy.
