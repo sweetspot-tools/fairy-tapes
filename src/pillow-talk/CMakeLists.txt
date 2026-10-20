@@ -153,6 +153,18 @@ target_include_directories(pillow_talk_prefs_tests PRIVATE ${CMAKE_CURRENT_SOURC
 target_link_libraries(pillow_talk_prefs_tests PRIVATE fairy_ui)
 add_test(NAME pillow_talk_prefs_tests COMMAND pillow_talk_prefs_tests)
 
+# Back panel contents (pure, no VSTGUI): CREDITS (components, licenses, version) and SETTINGS (the preview's items, the
+# current values from the preferences and the instance behaviour, what a choice changes).
+add_executable(pillow_talk_credits_tests tests/test_credits.cpp)
+target_include_directories(pillow_talk_credits_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(pillow_talk_credits_tests PRIVATE fairy_ui)
+add_test(NAME pillow_talk_credits_tests COMMAND pillow_talk_credits_tests)
+
+add_executable(pillow_talk_back_settings_tests tests/test_back_settings.cpp)
+target_include_directories(pillow_talk_back_settings_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${VST3_SDK_PATH})
+target_link_libraries(pillow_talk_back_settings_tests PRIVATE fairy_ui)
+add_test(NAME pillow_talk_back_settings_tests COMMAND pillow_talk_back_settings_tests)
+
 # Editor layout table (pure data, no VSTGUI): one control per parameter, no overlaps, LED colours.
 add_executable(pillow_talk_layout_tests tests/test_layout.cpp)
 target_include_directories(pillow_talk_layout_tests PRIVATE

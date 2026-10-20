@@ -36,6 +36,13 @@ struct Settings {
 // values are clamped to [0,1]; non-finite ones fall back to defaults. Always finite.
 Settings mapParams(const double* values, double bpm);
 
+// The tempo for one block: the host's when it says it is valid (and it is a positive number), otherwise the instance's
+// tempo fallback (Behaviour::tempoFallbackBpm in state.h); a fallback that is not a positive number gives kFallbackBpm.
+inline double tempoForBlock(bool hostTempoValid, double hostTempo, double fallbackBpm) {
+  if (hostTempoValid && hostTempo > 0.0 && hostTempo == hostTempo && hostTempo < 1e6) return hostTempo;
+  return fallbackBpm > 0.0 && fallbackBpm < 1e6 ? fallbackBpm : kFallbackBpm;
+}
+
 struct SidechainInput {
   const float* L;
   const float* R;

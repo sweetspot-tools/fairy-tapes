@@ -134,9 +134,8 @@ Steinberg::tresult PLUGIN_API Processor::process(Steinberg::Vst::ProcessData& da
     return Steinberg::kResultOk;
 
   const auto* ctx = data.processContext;
-  const double bpm = ctx && (ctx->state & Steinberg::Vst::ProcessContext::kTempoValid)
-                         ? ctx->tempo
-                         : kFallbackBpm;
+  const bool tempoValid = ctx && (ctx->state & Steinberg::Vst::ProcessContext::kTempoValid);
+  const double bpm = tempoForBlock(tempoValid, tempoValid ? ctx->tempo : 0.0, fallback_bpm_.load(std::memory_order_relaxed));
   engine_.setSettings(mapParams(param_value_, bpm));
 
   const float* inL = in.channelBuffers32[0];
@@ -176,6 +175,7 @@ Steinberg::tresult PLUGIN_API Processor::setState(Steinberg::IBStream* state) {
   {
     std::lock_guard<std::mutex> lk(decor_mutex_);
     decor_ = std::move(st.decor);
+    fallback_bpm_.store(decor_.behaviour.tempoFallbackBpm, std::memory_order_relaxed);
   }
   sendDecor();
   return Steinberg::kResultOk;
@@ -227,6 +227,7 @@ Steinberg::tresult PLUGIN_API Processor::notify(Steinberg::Vst::IMessage* messag
     std::lock_guard<std::mutex> lk(decor_mutex_);
     if (d.seed == 0) d.seed = decor_.seed;   // never clears the seed
     decor_ = std::move(d);
+    fallback_bpm_.store(decor_.behaviour.tempoFallbackBpm, std::memory_order_relaxed);
     return Steinberg::kResultOk;
   }
   return AudioEffect::notify(message);

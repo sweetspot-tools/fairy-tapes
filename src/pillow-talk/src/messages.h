@@ -1,7 +1,8 @@
 /**
  * Fairy Tapes · Pillow Talk — messages between controller and processor (instance decor).
  *
- *   "Decor"  both ways  attribute "decor": the decor blob of state.h (serializeDecor: seed, screw angles, tape texts)
+ *   "Decor"  both ways  attribute "decor": the decor blob of state.h (serializeDecor: seed, screw angles, tape texts,
+ *                       behaviour settings of the back)
  *
  * The processor owns the saved copy (getState/setState); the controller keeps the copy the editor reads and edits.
  * Processor -> controller after setState and on connect; controller -> processor after an editor edit or when the

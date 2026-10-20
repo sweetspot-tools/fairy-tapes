@@ -413,7 +413,8 @@ bool sameState(const PluginState& a, const PluginState& b) {
   if (a.decor.seed != b.decor.seed || a.decor.tapeTexts != b.decor.tapeTexts) return false;
   for (int i = 0; i < kNumScrews; ++i)
     if (a.decor.screwAngles[i] != b.decor.screwAngles[i]) return false;
-  return true;
+  const Behaviour &x = a.decor.behaviour, &y = b.decor.behaviour;
+  return x.displayWindow == y.displayWindow && x.displayPeaks == y.displayPeaks && x.tempoFallbackBpm == y.tempoFallbackBpm;
 }
 
 void test_state_roundtrip() {
@@ -424,8 +425,8 @@ void test_state_roundtrip() {
   defaultState(b);
   ASSERT_TRUE(deserializeState(bytes.data(), bytes.size(), b));
   ASSERT_TRUE(sameState(a, b));
-  ASSERT_TRUE(kStateVersion == 2);
-  ASSERT_TRUE((int32_t)detail::getLE(bytes.data(), 4) == 2);
+  ASSERT_TRUE(kStateVersion == 3);
+  ASSERT_TRUE((int32_t)detail::getLE(bytes.data(), 4) == 3);
 }
 
 void test_state_v1_loads_with_default_decor() {
@@ -448,7 +449,7 @@ void test_state_rejects_unknown_version_and_truncation() {
   PluginState untouched;
   defaultState(untouched);
   untouched.params[kMix] = 0.75;
-  for (int32_t v : {0, 3, -1}) {
+  for (int32_t v : {0, 4, -1}) {
     std::vector<uint8_t> other(bytes);
     other[0] = (uint8_t)v; other[1] = other[2] = other[3] = (uint8_t)(v < 0 ? 0xFF : 0);
     PluginState b = untouched;
@@ -556,13 +557,14 @@ void test_state_rejects_absurd_text_counts_and_lengths() {
   a.decor.tapeTexts.clear();
   std::vector<uint8_t> bytes;
   serializeState(a, bytes);
-  // The text count is the last uint32 of a blob without texts.
+  // The text count is the last uint32 before the behaviour block (v3) of a blob without texts.
+  const size_t count = bytes.size() - kBehaviourBytes - 4;
   std::vector<uint8_t> many(bytes);
-  many[many.size() - 4] = 0xFF; many[many.size() - 3] = 0xFF; many[many.size() - 2] = 0xFF; many[many.size() - 1] = 0x7F;
+  many[count] = 0xFF; many[count + 1] = 0xFF; many[count + 2] = 0xFF; many[count + 3] = 0x7F;
   PluginState b;
   ASSERT_TRUE(!deserializeState(many.data(), many.size(), b));
-  std::vector<uint8_t> longText(bytes);
-  longText[longText.size() - 4] = 1;
+  std::vector<uint8_t> longText(bytes.begin(), bytes.begin() + (long)count);
+  detail::putLE(longText, 1u, 4);
   detail::putLE(longText, 1u << 20, 4);   // one text of 1 MiB announced, nothing follows
   ASSERT_TRUE(!deserializeState(longText.data(), longText.size(), b));
 }
@@ -618,6 +620,117 @@ void test_decor_blob_roundtrip_and_sanitize() {
     ASSERT_TRUE(!deserializeDecor(blob.data(), cut, c));
     ASSERT_TRUE(c.seed == 7);
   }
+}
+
+// ---- State v3: behaviour settings of the back (display window, display peaks, tempo fallback) ----
+// A v2 blob: the v3 one with the version patched and the behaviour block dropped.
+std::vector<uint8_t> v2Bytes(const PluginState& s) {
+  std::vector<uint8_t> bytes;
+  serializeState(s, bytes);
+  bytes.resize(bytes.size() - kBehaviourBytes);
+  bytes[0] = 2; bytes[1] = bytes[2] = bytes[3] = 0;
+  return bytes;
+}
+
+void test_state_v3_roundtrips_behaviour() {
+  PluginState a = sampleState();
+  a.decor.behaviour.displayWindow = 2;
+  a.decor.behaviour.displayPeaks = 0;
+  a.decor.behaviour.tempoFallbackBpm = 96.f;
+  std::vector<uint8_t> bytes;
+  serializeState(a, bytes);
+  PluginState b;
+  ASSERT_TRUE(deserializeState(bytes.data(), bytes.size(), b));
+  ASSERT_TRUE(sameState(a, b));
+  ASSERT_TRUE(b.decor.behaviour.displayWindow == 2 && b.decor.behaviour.displayPeaks == 0);
+  ASSERT_TRUE(b.decor.behaviour.tempoFallbackBpm == 96.f);
+}
+
+void test_state_v2_loads_with_default_behaviour() {
+  PluginState a = sampleState();
+  a.decor.behaviour.displayWindow = 0;   // not in a v2 blob
+  const std::vector<uint8_t> bytes = v2Bytes(a);
+  PluginState b;
+  defaultState(b);
+  b.decor.behaviour.displayWindow = 2;
+  ASSERT_TRUE(deserializeState(bytes.data(), bytes.size(), b));
+  ASSERT_TRUE(b.decor.seed == a.decor.seed && b.decor.tapeTexts == a.decor.tapeTexts);
+  const Behaviour d;
+  ASSERT_TRUE(b.decor.behaviour.displayWindow == d.displayWindow && b.decor.behaviour.displayPeaks == d.displayPeaks);
+  ASSERT_TRUE(b.decor.behaviour.tempoFallbackBpm == d.tempoFallbackBpm);
+  // the defaults are the preview's: 6 s window, 1.5 s peaks, 120 BPM
+  ASSERT_TRUE(displayWindowSeconds(d.displayWindow) == 6.0 && displayPeakHoldSeconds(d.displayPeaks) == 1.5);
+  ASSERT_TRUE(d.tempoFallbackBpm == 120.f);
+  // a truncated behaviour block refuses a v3 state
+  std::vector<uint8_t> v3;
+  serializeState(a, v3);
+  for (size_t cut = v3.size() - kBehaviourBytes; cut < v3.size(); ++cut) {
+    PluginState c;
+    ASSERT_TRUE(!deserializeState(v3.data(), cut, c));
+  }
+}
+
+void test_behaviour_is_sanitized() {
+  PluginState a = sampleState();
+  a.decor.behaviour.displayWindow = 7;
+  a.decor.behaviour.displayPeaks = 0xFFFFFFFFu;
+  a.decor.behaviour.tempoFallbackBpm = std::nanf("");
+  std::vector<uint8_t> bytes;
+  serializeState(a, bytes);
+  PluginState b;
+  ASSERT_TRUE(deserializeState(bytes.data(), bytes.size(), b));
+  const Behaviour d;
+  ASSERT_TRUE(b.decor.behaviour.displayWindow == d.displayWindow && b.decor.behaviour.displayPeaks == d.displayPeaks);
+  ASSERT_TRUE(b.decor.behaviour.tempoFallbackBpm == 120.f);
+  for (float bpm : {INFINITY, -5.f, 0.f, 5.f, 1000.f}) {
+    Behaviour x;
+    x.tempoFallbackBpm = bpm;
+    sanitizeBehaviour(x);
+    ASSERT_TRUE(x.tempoFallbackBpm == 120.f);
+  }
+  Behaviour ok;
+  ok.tempoFallbackBpm = 90.f;
+  sanitizeBehaviour(ok);
+  ASSERT_TRUE(ok.tempoFallbackBpm == 90.f);
+  // the options of the back (pillow_rack.html): 3 / 6 / 12 s and OFF / 1.5 / 3 s
+  ASSERT_TRUE(kDisplayWindowCount == 3 && kDisplayPeaksCount == 3);
+  ASSERT_TRUE(displayWindowSeconds(0) == 3.0 && displayWindowSeconds(2) == 12.0 && displayWindowSeconds(9) == 6.0);
+  ASSERT_TRUE(displayPeakHoldSeconds(0) == 0.0 && displayPeakHoldSeconds(2) == 3.0 && displayPeakHoldSeconds(9) == 1.5);
+}
+
+void test_decor_message_carries_behaviour() {
+  Decor a = sampleState().decor;
+  a.behaviour.displayWindow = 0;
+  a.behaviour.tempoFallbackBpm = 140.f;
+  std::vector<uint8_t> blob;
+  serializeDecor(a, blob);
+  Decor b;
+  ASSERT_TRUE(deserializeDecor(blob.data(), blob.size(), b));
+  ASSERT_TRUE(b.behaviour.displayWindow == 0 && b.behaviour.tempoFallbackBpm == 140.f);
+}
+
+void test_tempo_for_block_uses_the_fallback() {
+  ASSERT_TRUE(tempoForBlock(true, 87.0, 120.0) == 87.0);      // the host's tempo
+  ASSERT_TRUE(tempoForBlock(false, 87.0, 100.0) == 100.0);    // no tempo from the host: the stored fallback
+  ASSERT_TRUE(tempoForBlock(true, 0.0, 100.0) == 100.0);      // a "valid" tempo of 0 or less is no tempo
+  ASSERT_TRUE(tempoForBlock(true, std::nan(""), 100.0) == 100.0);
+  ASSERT_TRUE(tempoForBlock(false, 0.0, std::nan("")) == kFallbackBpm);   // a bad fallback: 120
+  double p[kNumParams];
+  loadDefaults(p);
+  p[kTimeSync] = 1.0; p[kTimeNote] = 2.0 / 3.0;   // 1/4
+  ASSERT_APPROX(mapParams(p, tempoForBlock(false, 0.0, 60.0)).timeMs, 1000.0);
+}
+
+void test_history_resized_keeps_the_newest() {
+  FairyTapes::PillowTalk::Ui::History h(4);
+  for (int i = 1; i <= 4; ++i) h.push(i / 10.f, 1.f, 0.f);
+  const auto smaller = h.resized(2);
+  ASSERT_TRUE(smaller.size() == 2 && std::fabs(smaller.voice(0) - 0.3f) < 1e-6f && std::fabs(smaller.voice(1) - 0.4f) < 1e-6f);
+  const auto larger = h.resized(8);
+  ASSERT_TRUE(larger.size() == 4 && std::fabs(larger.voice(0) - 0.1f) < 1e-6f && std::fabs(larger.voice(3) - 0.4f) < 1e-6f);
+  ASSERT_TRUE(larger.capacity() == 8 && h.resized(0).size() == 0);
+  ASSERT_TRUE(FairyTapes::PillowTalk::Ui::scopePointsFor(6.0, 0.03) == 200 && FairyTapes::PillowTalk::Ui::scopePointsFor(3.0, 0.03) == 100 && FairyTapes::PillowTalk::Ui::scopePointsFor(12.0, 0.03) == 400);
+  ASSERT_TRUE(FairyTapes::PillowTalk::Ui::scopePointsFor(std::nan(""), 0.03) == 200 && FairyTapes::PillowTalk::Ui::scopePointsFor(1e9, 0.03) <= 2000 && FairyTapes::PillowTalk::Ui::scopePointsFor(6.0, 0.0) == 200);
 }
 
 // Fake IMessage / IAttributeList: only what messages.h uses.
@@ -1153,8 +1266,8 @@ void test_display_not_in_state() {
   defaultState(v);
   std::vector<uint8_t> bytes;
   serializeState(v, bytes);
-  // v2 without texts: v1 + seed + four angles + text count.
-  ASSERT_TRUE(bytes.size() == kStateSizeV1 + 4 + 4 * 4 + 4);
+  // v3 without texts: v1 + seed + four angles + text count + behaviour (window, peaks, tempo fallback).
+  ASSERT_TRUE(bytes.size() == kStateSizeV1 + 4 + 4 * 4 + 4 + 3 * 4);
 }
 
 void test_display_write_rate_limit() {
@@ -1506,6 +1619,12 @@ int main() {
   RUN_TEST(test_new_random_seed_is_non_zero_and_varies);
   RUN_TEST(test_decor_blob_roundtrip_and_sanitize);
   RUN_TEST(test_decor_message_roundtrip_and_rejects);
+  RUN_TEST(test_state_v3_roundtrips_behaviour);
+  RUN_TEST(test_state_v2_loads_with_default_behaviour);
+  RUN_TEST(test_behaviour_is_sanitized);
+  RUN_TEST(test_decor_message_carries_behaviour);
+  RUN_TEST(test_tempo_for_block_uses_the_fallback);
+  RUN_TEST(test_history_resized_keeps_the_newest);
   RUN_TEST(test_map_params_never_returns_non_finite);
   RUN_TEST(test_engine_ignores_non_finite_settings);
   RUN_TEST(test_note_index_matches_string_list);
