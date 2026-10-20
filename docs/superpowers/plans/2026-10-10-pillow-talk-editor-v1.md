@@ -172,6 +172,8 @@
 
 ### Task 8: Retro con Settings e Credits
 
+**Esito (2026-10-21): retro e flip sono comuni, in `shared/ui`.** Come per usura, nastro e viti, copia comune e guidata dai dati del retro e del flip dello Stripper (senza toccarne i file): `fairy_ui/back_panel.h` (puro: template fisso, `BackContent` con schede, voci scelta/stepper/pulsante con callback, note e crediti forniti dal plugin, controlli dei contenuti, a capo), `BackView`, `back_widgets.h`, `fairy_ui/flip_pose.h`, `FlipView` e `PanelFlip`, `drawPanelBase` in `draw_util`. Al posto di `src/ui/back_view.{h,cpp}` previsti: vista comune; Pillow Talk ha `src/ui/credits.h`, `src/ui/back_settings.h` (contenuti, applicazione delle scelte, `rerolledDecor`), `src/version.h`, lo stato v3 con le impostazioni di comportamento e l'editor. Dettagli nella spec §12; migrazione dello Stripper nella nota. Sotto, il testo originale con lo stato.
+
 **Files:**
 - Create: `src/pillow-talk/src/ui/back_view.{h,cpp}`, `src/pillow-talk/src/ui/credits.h`, `src/pillow-talk/tests/test_credits.cpp`
 - Modify: `src/pillow-talk/src/ui/editor.{h,cpp}`
@@ -179,10 +181,12 @@
 **Interfaces:**
 - Produces: la voce "BACK →" nell'intestazione; `BackView` con le schede SETTINGS (Appearance: Wear, Notes, Tape font, Values font, Look/Re-roll; Behaviour: Display window, Display peaks, Tempo fallback, come nella preview) e CREDITS (versione, GPL-3.0, componenti e licenze: VST 3 SDK, VSTGUI, i tre font, avvisi di legge); animazione di rotazione del pannello di circa 0,8 s (restringimento orizzontale con prospettiva, non un vero 3D) e ritorno con "← BACK"; `credits.h` con l'elenco dati (nome, autore, licenza). Le preferenze di aspetto vanno nel file del Task 5, quelle di comportamento nello stato.
 
-- [ ] **Step 1: Test:** ogni voce di `credits.h` ha nome, autore e licenza non vuoti; i tre font e VSTGUI/VST3 SDK sono presenti.
-- [ ] **Step 2: Eseguire, verificare il fallimento; implementare** `BackView`, collegare le preferenze (Wear cambia lo sfondo con la variante corrispondente allo stesso seme) e il comando Re-roll (nuovo seme, angoli delle viti e testi dei nastri azzerati).
-- [ ] **Step 3: Eseguire i test e la build.** Expected: PASS.
-- [ ] **Step 4: Commit** `feat(pillow-talk): back panel with settings and credits`.
+- [x] **Step 1: Test:** ogni voce di `credits.h` ha nome, autore e licenza non vuoti; i tre font e VSTGUI/VST3 SDK sono presenti.
+  - Esito: `tests/test_credits.cpp` (target `pillow_talk_credits_tests`: voci complete e uniche, VST 3 SDK MIT, VSTGUI BSD-3-Clause, Zeyada OFL-1.1, Rock Salt e Homemade Apple Apache-2.0, riga GPL-3.0, avviso del marchio VST, versione = `PILLOW_TALK_VERSION`); `tests/test_back_settings.cpp` (`pillow_talk_back_settings_tests`: voci, opzioni e ordine della preview, valori correnti, applicazione delle scelte, Re-roll); in `tests/test_pillow_talk.cpp` stato v3 (round trip, v2 con comportamento di default, sanificazione, messaggio, `tempoForBlock`, `History::resized`, `scopePointsFor`); in `tests/test_decor.cpp` nessun nastro sopra "BACK →". Comuni: `fairy_ui_back_panel_tests`, `fairy_ui_flip_tests` (portati dallo Stripper, più template e progresso), `fairy_ui_back_view_tests` (clic e callback senza finestra).
+- [x] **Step 2: Eseguire, verificare il fallimento; implementare** `BackView`, collegare le preferenze (Wear cambia lo sfondo con la variante corrispondente allo stesso seme) e il comando Re-roll (nuovo seme, angoli delle viti e testi dei nastri azzerati).
+  - Esito: compilazione fallita (header assenti, `kStateVersion` = 2, `Behaviour` assente). Collegati dal vivo Wear, Tape font, Values font (valori a mano con `SilkscreenView::setValueDrawer`), Re-roll, Display window, Display peaks, Tempo fallback (processor); Notes layer solo salvato.
+- [x] **Step 3: Eseguire i test e la build.** Expected: PASS. Esito: `ctest -R "pillow_talk|fairy_ui"` 29/29, `the_stripper_tests` verde, 0 simboli `Steinberg::*` indefiniti nel modulo; render offscreen del retro (SETTINGS, CREDITS, Wear e font diversi) e del flip a metà; 1000 cicli di costruzione e rimozione delle viste dell'editor senza crescita della memoria (`cycles=`).
+- [x] **Step 4: Commit** `feat(pillow-talk): back panel with settings and credits` (diviso: `feat(ui)` per retro e flip comuni, `feat(pillow-talk)` per stato v3 e contenuti, poi editor).
 
 ---
 
