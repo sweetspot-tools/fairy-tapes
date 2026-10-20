@@ -1,6 +1,11 @@
 // Fairy Tapes shared UI: drawing helpers for panels and popups (first written for The Stripper).
 #include "fairy_ui/draw_util.h"
 
+#include "fairy_ui/skin.h"
+
+#include "vstgui/lib/cbitmap.h"
+#include "vstgui/lib/cgradient.h"
+
 #include "vstgui/lib/cfont.h"
 #include "vstgui/lib/cgraphicspath.h"
 
@@ -13,6 +18,9 @@ namespace {
 constexpr CCoord kBoxRadius = 11;
 constexpr CCoord kTitleGap = 13;   // blank run on each side of a box title
 constexpr CCoord kBezier = 0.5523;
+constexpr CColor kPanelTint(0x16, 0x16, 0x17);
+constexpr CColor kPanelEdge(0x2c, 0x2c, 0x2f);
+constexpr CCoord kPanelRadius = 14;
 
 // Rounded box border, open at the title: starts at the right end of the gap and goes round to the left end.
 SharedPointer<CGraphicsPath> boxPath(CDrawContext* ctx, const CRect& r, bool titleOnTop, CCoord gapLeft,
@@ -48,6 +56,32 @@ SharedPointer<CGraphicsPath> boxPath(CDrawContext* ctx, const CRect& r, bool tit
 }
 
 } // namespace
+
+void drawPanelBase(CDrawContext* ctx, const CRect& r, const Skin* skin) {
+  const CPoint o = r.getTopLeft();
+  // Tint, then the optional grain tile, then the soft light (reflection at the top, shade at the bottom).
+  if (auto body = owned(ctx->createRoundRectGraphicsPath(r, kPanelRadius))) {
+    ctx->setFillColor(kPanelTint);
+    ctx->drawGraphicsPath(body, CDrawContext::kPathFilled);
+    if (CBitmap* tile = skin ? skin->bitmap(kPanelGrainTile) : nullptr) {
+      const CCoord tw = tile->getWidth(), th = tile->getHeight();
+      if (tw > 0 && th > 0) {
+        ctx->saveGlobalState();
+        ctx->setClipRect(r);
+        for (CCoord y = r.top; y < r.bottom; y += th)
+          for (CCoord x = r.left; x < r.right; x += tw) tile->draw(ctx, CRect(x, y, x + tw, y + th));
+        ctx->restoreGlobalState();
+      }
+    }
+    if (auto light = owned(CGradient::create(0., 1., CColor(255, 255, 255, 16), CColor(0, 0, 0, 40))))
+      ctx->fillLinearGradient(body, *light, CPoint(o.x, o.y), CPoint(o.x, r.bottom));
+  }
+  if (auto edge = owned(ctx->createRoundRectGraphicsPath(CRect(r).inset(1, 1), kPanelRadius - 1))) {
+    ctx->setFrameColor(kPanelEdge);
+    ctx->setLineWidth(2);
+    ctx->drawGraphicsPath(edge, CDrawContext::kPathStroked);
+  }
+}
 
 void drawTitledBox(CDrawContext* ctx, const CRect& box, const char* title, bool titleOnTop) {
   static const SharedPointer<CFontDesc> font = makeOwned<CFontDesc>("Arial", 14, kBoldFace);
