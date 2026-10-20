@@ -10,3 +10,6 @@
 [submodule "vendors/NeuralAmpModelerCore"]
 	path = vendors/NeuralAmpModelerCore
 	url = https://github.com/sdatkinson/NeuralAmpModelerCore.git
+[submodule "vendors/curl"]
+	path = vendors/curl
+	url = https://github.com/curl/curl.git
