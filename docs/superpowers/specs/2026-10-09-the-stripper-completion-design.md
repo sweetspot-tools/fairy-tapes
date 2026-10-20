@@ -43,7 +43,7 @@ Oggi `NamDrive::loadModel(path)` è sincrono e non c'è alcuna interfaccia per s
 Il clic sul campo del modello (Drive) apre un popup in stile rack (preview: `src/the-stripper/docs/mockups/stripper_model_browser.html`), con due schede:
 
 - **LOCAL:** elenco delle cartelle (aggiungi, rimuovi, riscansiona; scansione ricorsiva dei `.nam`, cartelle salvate nelle preferenze dell'utente) e elenco dei modelli con ricerca per nome, dimensione e tipo; il punto verde marca il modello caricato. Pulsanti LOAD, CANCEL e **NO MODEL** (scarica il modello e riporta il Drive in passthrough). La scansione gira fuori dal thread audio e dal thread dell'interfaccia.
-- **TONE3000:** scheda prevista dallo spec a parte (§10). Nella prima versione è assente o disabilitata.
+- **TONE3000:** scheda prevista dallo spec a parte (`2026-10-21-tone3000-integration-design.md`, §10). Nella prima versione è assente o disabilitata.
 - **Architettura:** le sorgenti stanno dietro un'interfaccia comune (`ModelSource`: elenco, ricerca, risoluzione del percorso locale del file); `LocalFolderSource` è la prima implementazione, Tone3000 sarà la seconda. Il caricamento passa sempre dal percorso asincrono (§3).
 - **Nessun modello:** il Drive è in passthrough (nessun gain applicato) e il suo controllo si attenua come un modulo spento; il campo mostra "No model". Nessun modello viene incorporato nel binario del plugin.
 
@@ -126,7 +126,7 @@ Doggystyle riusa `shared/nam_drive` e il caricamento asincrono: questo spec va i
 
 ## 10. Tone3000 (spec a parte)
 
-Riletto il 2026-10-20 su [termini API](https://www.tone3000.com/api/terms) (in vigore dal 7 luglio 2026) e [documentazione API](https://tone3000.com/api) (la pagina dei termini è stata letta tramite un riassunto, non il testo integrale: da rileggere prima del rilascio). Sostituisce la ricerca del 2026-10-10.
+**Spec dell'integrazione: `2026-10-21-tone3000-integration-design.md`.** Riletto il 2026-10-20 su [termini API](https://www.tone3000.com/api/terms) (in vigore dal 7 luglio 2026) e [documentazione API](https://tone3000.com/api) (la pagina dei termini è stata letta tramite un riassunto, non il testo integrale: da rileggere prima del rilascio). Sostituisce la ricerca del 2026-10-10.
 
 **Fatti verificati**
 - Il formato NAM (A1 e A2) è aperto e libero da implementare in ogni prodotto; i termini regolano solo l'accesso all'API e al catalogo.
