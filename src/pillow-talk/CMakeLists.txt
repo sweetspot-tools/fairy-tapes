@@ -130,6 +130,15 @@ target_include_directories(pillow_talk_decor_tests PRIVATE ${CMAKE_CURRENT_SOURC
 target_link_libraries(pillow_talk_decor_tests PRIVATE fairy_ui)
 add_test(NAME pillow_talk_decor_tests COMMAND pillow_talk_decor_tests)
 
+# User preferences file (pure C++, no SDK): defaults on missing or corrupt files, per-OS location.
+add_executable(pillow_talk_prefs_tests
+  tests/test_prefs.cpp
+  src/ui/prefs.cpp
+)
+target_include_directories(pillow_talk_prefs_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(pillow_talk_prefs_tests PRIVATE fairy_ui)
+add_test(NAME pillow_talk_prefs_tests COMMAND pillow_talk_prefs_tests)
+
 # Editor layout table (pure data, no VSTGUI): one control per parameter, no overlaps, LED colours.
 add_executable(pillow_talk_layout_tests tests/test_layout.cpp)
 target_include_directories(pillow_talk_layout_tests PRIVATE
@@ -182,4 +191,5 @@ if(NOT WIN32)
   target_link_libraries(pillow_talk_processor_level_test PRIVATE pluginterfaces ${CMAKE_DL_LIBS})
   add_test(NAME pillow_talk_processor_level_test COMMAND pillow_talk_processor_level_test)
   set_tests_properties(pillow_talk_processor_level_test PROPERTIES SKIP_RETURN_CODE 77)
+
 endif()
