@@ -126,13 +126,29 @@ Doggystyle riusa `shared/nam_drive` e il caricamento asincrono: questo spec va i
 
 ## 10. Tone3000 (spec a parte)
 
-Esito della ricerca del 2026-10-10 (pagine lette da un agente, riassunti non verificati sul testo integrale; da riconfermare prima di scrivere il codice):
+Riletto il 2026-10-20 su [termini API](https://www.tone3000.com/api/terms) (in vigore dal 7 luglio 2026) e [documentazione API](https://tone3000.com/api) (la pagina dei termini è stata letta tramite un riassunto, non il testo integrale: da rileggere prima del rilascio). Sostituisce la ricerca del 2026-10-10.
 
-- Esiste un'API REST ufficiale (beta) con login OAuth2 PKCE (serve un account dell'utente), limite predefinito di 100 richieste al minuto. Lo sviluppo è gratuito; il livello gratuito è solo non commerciale (open source incluso) con ricerca limitata; un prodotto a pagamento richiede un accordo commerciale.
-- Condizioni d'uso: vietati download in blocco, mirror e cache del catalogo; vietato incorporare modelli nel plugin; download solo su richiesta dell'utente. Obbligo di "Powered by TONE3000" con link e di mantenere nome dell'autore, metadati e licenza. Il campo `license` di ogni modello (t3k, cc-by, cc-by-sa, cc-by-nc, cc0, ...) è esposto dall'API.
-- Non documentato: cache locale dei file già scaricati dall'utente (e quindi l'uso offline); da chiedere al supporto.
-- Esiste un plugin ufficiale open source (MIT, JUCE, libcurl) come riferimento di integrazione.
-- Conseguenze: nessun modello nel binario; scheda TONE3000 con badge di licenza; thread di rete dedicato, mai il thread audio; chiavi secret mai nel client.
+**Fatti verificati**
+- Il formato NAM (A1 e A2) è aperto e libero da implementare in ogni prodotto; i termini regolano solo l'accesso all'API e al catalogo.
+- API REST v1 (può cambiare), login **OAuth 2.0 con PKCE** dell'utente, 100 richieste/min di default (limiti più alti su richiesta a support@tone3000.com). Chiave **pubblicabile** (`client_id`) nel client; la chiave **segreta** (`t3k_cs_...`) mai nel client, né in app, né in firmware.
+- **Piano gratuito: solo prodotti non commerciali** (open source, pedali fai-da-te, ricerca, strumenti di comunità), senza prodotto a pagamento o upsell. Comprende solo i flussi OAuth **`select_tone`** e **`load_tone`** (l'utente sceglie il tono nella pagina di TONE3000, la callback restituisce il `tone_id`) e gli elenchi limitati (preferiti, scaricati, creati, di tendenza, ultimi). **La ricerca (`GET /tones/search`) non è nel piano gratuito** ed è comunque molto limitata. Un prodotto a pagamento, o che ne accompagna uno, richiede un **accordo commerciale** e l'approvazione di TONE3000 prima della pubblicazione.
+- Scarico dei modelli: uno per volta tramite `model_url` con il token dell'utente; lo zip del tono intero è riservato ai partner approvati.
+- Campi esposti: `license` (`t3k`, `cc-by`, `cc-by-nc`, `cco`, ...), `gear` (`amp`, `amp-cab`, `pedal`, `cab`), `size` (`standard`, `lite`, `feather`, `nano`, `custom`), autore (`username`, `display_name`, `is_verified`), tag e marche, `format` (`nam`, `ir`), `architecture_version` (A1, A2, custom). La frequenza di campionamento non è documentata.
+- Vietati: scaricare in blocco, copiare, replicare o tenere in cache il catalogo; ospitare i toni su server propri o condividerli altrove; incorporare o preinstallare contenuti nel prodotto senza permesso scritto. Scaricare solo su richiesta dell'utente, per utente autenticato. Usare i token solo per l'utente che li ha concessi; cancellare i suoi dati se revoca l'accesso o lo chiede.
+- Obblighi di presentazione: "Powered by TONE3000" secondo le linee guida del marchio, con link a tone3000.com; logo non alterato, nessuna sottintesa approvazione; **nome dell'autore, metadati e licenza del tono sempre visibili** (compresa l'attribuzione richiesta dalla licenza del creatore); logo agli ingressi, marchio T3K nei punti compatti, sempre un percorso verso il catalogo completo.
+- Il caso del dispositivo senza browser (RFC 8628, codice da approvare su `/activate`) **supporta solo l'accesso base**, non la scelta del tono.
+
+**Conseguenze sul progetto**
+- Nessun modello nel binario; thread di rete dedicato, mai il thread audio; chiave segreta mai nel plugin.
+- Con il piano gratuito la scheda TONE3000 del popup non può avere una ricerca propria: è un pulsante **"Choose on TONE3000"** che apre il browser dell'utente (flusso `select_tone`) e riceve il `tone_id`; poi l'elenco dei modelli del tono, la scelta della taglia e lo scarico. Gli elenchi dei preferiti e dei toni scaricati sono permessi e coprono l'uso quotidiano. Con l'accordo commerciale si potrebbe aggiungere una ricerca vera.
+- Il file scaricato dall'utente su richiesta e salvato in una cartella locale **non è una cache del catalogo** (è il file di quell'utente), ma i termini non lo dicono: va chiesto al supporto, insieme all'uso offline.
+- Scheda con badge di licenza e nome dell'autore in ogni riga; i modelli con licenza non commerciale (`cc-by-nc`) vanno segnalati.
+
+**Da chiarire prima di scrivere il codice**
+1. **Fairy Tapes è non commerciale?** (decisione dell'utente) Se i plugin saranno venduti, o accompagnano un prodotto a pagamento, serve l'accordo commerciale e il via libera di TONE3000 prima della pubblicazione.
+2. **URI di ritorno per un plugin:** la documentazione cita i deep link di app native (`app://callback`) e un browser incorporato; un plugin VST3 non può registrare un protocollo né aprire un browser incorporato in modo affidabile. Da chiedere al supporto se è ammesso un ritorno su `http://127.0.0.1:<porta>` (server locale temporaneo, usuale per OAuth su desktop).
+3. File scaricati in una cartella locale e uso offline (vedi sopra).
+4. Frequenza di campionamento del modello non esposta: va letta dal file `.nam` dopo lo scarico.
 
 ## 11. Decisioni aperte (2026-10-10)
 
@@ -145,6 +161,6 @@ Esito della ricerca del 2026-10-10 (pagine lette da un agente, riassunti non ver
 - **Serigrafia dei blocchi (deciso 2026-10-14):** ogni riquadro con qualcosa di variabile ha una **piccola sigla in alto a sinistra** che dice cosa è montato in quel momento, e cambia con i selettori: **Filters** e **Equaliser** `4K-G` (Chan) / `4K-E` (Bus) (nei filtri cambia in realtà solo il Low Pass); **Compression** `OPTO-2A` (Voice), `FET-76` (Drums), `VCA-160` (Classic), `4K-G` (Bus); **Drive** `NAM` oppure `4K-G` / `4K-E` (la saturazione segue Chan/Bus); **Limiter** `B-PARTY`; **Gate** `D-NOISE`. Input, Output e Level non hanno sigla. Sono sigle abbreviate, scelte dall'utente, che richiamano (senza scriverli per esteso) i modelli d'ispirazione: **rischio marchi accettato dall'utente**, da ricontrollare prima del rilascio; nei Credits restano "in stile". Aspetto: **molto piccole** (7 px) e **molto sbiadite** (opacità circa 10%), che si intuiscano senza saltare all'occhio. Livello della serigrafia (si attenua col modulo, passa sotto l'usura). Fatto nella preview, nell'editor col restyle (Task 11).
 - **Titolo del riquadro (2026-10-14):** il riquadro si chiama **DRIVE** (non più "DRIVE · NAM"): contiene due motori; anche la riga sotto il titolo dice "DRIVE".
 - **Meter del gate (deciso 2026-10-14, fatto nel Task 16):** terza riga GR ("G") nel riquadro Level, tra GR e CLIP, con i dB di attenuazione del gate ricavati dal confronto dei picchi in/out del blocco (Denoise non espone la riduzione), con ballistica veloce (rilascio rapido e breve tenuta del picco) per vedere quando e con che velocità chiude. Nuovo parametro di meter `kMeterGrGate` in sola lettura, visibile, nella codifica SSL 360 Link (terza corsia sul UC1); si attenua con il Bypass globale come le altre righe GR. Limite: stima, meno precisa con segnali molto bassi.
-- **Tone3000:** spec a parte, dopo la verifica dei termini (§10).
+- **Tone3000:** termini riletti il 2026-10-20 (§10); restano da decidere se i plugin sono non commerciali e da chiedere al supporto l'URI di ritorno e la cache locale.
 - **Estrazione di un kit di interfaccia comune** (usura, nastro, viti, retro con Settings e Credits, controlli) in `shared/` per riusarlo negli altri plugin, con lo stesso materiale e la stessa texture. Da valutare quando si inizia il secondo plugin con editor.
 - **Licenze** di font e componenti da ricontrollare prima del rilascio; **build con CUDA** da verificare su una macchina con driver NVIDIA.
