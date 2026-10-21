@@ -73,14 +73,18 @@ Finestra scorrevole di circa 6 secondi, da destra a sinistra, con tre tracce: **
 
 ## 11. Decisioni aperte
 
-- **Formato delle immagini della skin** (filmstrip delle manopole, pulsanti, @2x) e copia degli asset nel bundle: da fissare con le grafiche definitive. Il linguaggio visivo comune è in `docs/DESIGN_SYSTEM.md` e va allineato all'editor attuale (pannello rack, livelli, usura, retro con Settings e Credits, testo in inglese).
-- Nota nei docs sul fatto che la traccia Voice si legge circa 4 dB sotto il picco (README e CONTROLS).
+Stato al 2026-10-21 (Task 1-8 dell'editor v1 chiusi, Task 9 in corso). Risolte e uscite da questa lista: formato delle immagini della skin (non c'è skin: editor tutto da codice, vedi §12 e `UI_ASSETS.md`), allineamento di `DESIGN_SYSTEM.md` all'editor, dati del blocco LEVEL (parametri 1003-1009, Task 1), preview del linguaggio comune (`pillow_rack.html`, layout confermato il 2026-10-10 e realizzato nel Task 4), nota sul fatto che la traccia Voice si legge circa 4 dB sotto il picco (ora in README e CONTROLS), dipendenze Linux nel README, preferenze (Task 5) e retro (Task 8). Il pulsante IN per modulo è deciso: non c'è (nessun parametro corrispondente), resta solo il Bypass globale.
+
+Ancora aperte:
+
+- **Verifica manuale in Reaper e Cubase** (a cura dell'utente, Task 9 step 3): aspetto contro la preview, apertura e chiusura ripetute, automazione e undo, Sync, display e meter con segnale vero, Wear, nastro, viti, flip del retro, preferenze, HiDPI; build e prova su Windows e macOS.
+- Da verificare in un host: che `setDirty` dopo una modifica del decor faccia salvare il progetto; che tutti gli host colleghino processor e controller prima di aprire l'editor (altrimenti il controller genera un seme suo e lo manda al processor, che lo adotta); se `kClearClips`, scritto con `performEdit`, compare nella cronologia di annullamento.
+- **NOTES LAYER** (cosa disegnare: nemmeno la preview lo mostra) e altri valori di **TEMPO FALLBACK** (la preview ne ha uno solo, 120 BPM); la scheda BUTTONS non serve a Pillow Talk.
+- Il campo di testo del nastro resta in Arial e non limita i caratteri mentre si scrive (si taglia a 14 alla conferma).
+- Colori di `MeterBar` (scala -60..+6 dB contro -60..0 della preview; riguarda anche The Stripper) e attenuazione di meter e LED di clip con il bypass (la preview li attenua, qui restano accesi come nello Stripper).
 - Arrotondamento di 1 px in `attached()` con fattori di scala non esatti; `attached()` che riporta successo dopo un `open()` fallito; supporto alla rotellina del mouse.
-- Polling a 30 ms contro scritture a 16 ms (alcuni estremi si perdono), reset dell'accumulatore alla riattivazione, visibilità dei simboli, `build.sh` su cartella pulita, dipendenze Linux nel README.
-- Verifica manuale in Reaper e Cubase (apertura e chiusura ripetute, automazione, undo, Sync, HiDPI, display con voce vera) e build su Windows e macOS.
-- **Preview del linguaggio grafico comune applicato a Pillow Talk:** `src/pillow-talk/docs/mockups/pillow_rack.html` (pannello rack orizzontale 1000 × 628: riquadro DUCKING con il display e Sidechain, riquadro LEVEL con i meter (IN e OUT stereo, riduzione della mandata e, come ultima riga come nello Stripper, i LED di clip IN e OUT), riquadro OUTPUT con Mix al centro e Bypass in alto a destra, riquadro DELAY con Time, Feedback, Tone, Saturation, Wow/Flutter e il gruppo Sync/note del Time, riquadro AUTO DUCK con Threshold, Depth, Hold, Release e il gruppo Sync/note dell'Hold; controlli in alluminio nero e sfondo a grana fine come The Stripper, retro con Settings e Credits). Sostituisce la disposizione verticale 480 × 560 dell'editor attuale: layout confermato il 2026-10-10.
-- **Pulsante IN per modulo:** `DESIGN_SYSTEM.md` lo prevede per ogni modulo, ma Pillow Talk ha solo il bypass globale (nessun parametro per attivare o disattivare Delay e Auto Duck). Nella preview non c'è. Da decidere: ometterlo oppure aggiungere parametri (per esempio "Duck on").
-- **Dati per il blocco LEVEL della preview:** il processor oggi pubblica solo voce, mandata ed eco (§7). Per i meter e i LED di clip servono in più i picchi stereo di ingresso e uscita e due indicatori di clip (picco a 0 dBFS o oltre, mantenuto 2 s, azzerato con un clic su un LED). Vanno aggiunti come parametri in sola lettura (ID da `kMeterBase`) con i relativi test, oppure il blocco LEVEL si omette dalla prima versione dell'editor.
+- Polling a 30 ms contro scritture a 16 ms (alcuni estremi si perdono), reset dell'accumulatore alla riattivazione, visibilità dei simboli, `build.sh` su cartella pulita.
+- Compatibilità delle licenze dei tre font (OFL-1.1, Apache-2.0) con la distribuzione sotto GPL-3.0: da ricontrollare prima del rilascio (nota in `shared/ui/assets/fonts/README.md`).
 
 ## 12. Editor v1: grafica comune (decisioni del 2026-10-10)
 

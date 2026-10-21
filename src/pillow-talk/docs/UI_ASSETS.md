@@ -1,50 +1,43 @@
-# Pillow Talk — Asset grafici dell'editor (skin)
+# Pillow Talk — Grafica dell'editor
 
-L'editor (480 x 560) disegna tutto da codice. Le immagini sono **opzionali**: se un file manca, l'elemento si disegna con il vettoriale di fallback. Il plugin funziona identico con o senza asset.
+L'editor (**1000 x 628** logici, host-scalato) è **interamente disegnato da codice**: non c'è skin PNG, né sfondo né immagini dei controlli. Il vecchio meccanismo di skin opzionale (`panel.png`, `knob_body.png`, `button_on/off.png`) e la finestra 480 x 560 non esistono più nell'editor di Pillow Talk.
 
-## Cartella
+Riferimento visivo: `docs/mockups/pillow_rack.html`. Linguaggio comune della suite: `docs/DESIGN_SYSTEM.md`. Tutto il testo visibile è in inglese.
 
-`Contents/Resources` del bundle (`PillowTalk.vst3/Contents/Resources/`). VSTGUI cerca i file lì, per nome, tramite `Skin` (`shared/ui`).
+## Livelli, dal fondo
 
-**Stato della build:** il CMake di Pillow Talk **non copia ancora nessun asset** nel bundle e non crea la cartella `Resources`. Per provare un'immagine oggi si copia a mano il file in `dist/PillowTalk.vst3/Contents/Resources/`. Il passo di copia dalla sorgente degli asset verso il bundle va aggiunto al CMake quando arrivano le grafiche definitive (posto previsto: una cartella di sorgenti degli asset in `src/pillow-talk/`, copiata in `Contents/Resources` dopo la build). Il bundle viene riscritto a ogni build: i file copiati a mano possono andare persi.
+1. `PanelView` (`src/ui/panel_view.{h,cpp}`): tinta `#161617`, grana, riquadri con bordo e titolo sul bordo inferiore (`drawTitledBox`), testi fissi e righe, da `src/ui/layout.h`.
+2. `SilkscreenView` (`fairy_ui/silkscreen_view.h`): serigrafia dei controlli (sigle, scale, valori), guidata dalla tabella di `layout.h`.
+3. `WearView` (`fairy_ui/wear_view.h`): usura vettoriale; lascia passare i clic.
+4. Nastri (`src/ui/tape_view.{h,cpp}`).
+5. Viti (`ScrewView`, `fairy_ui/screw_view.h`).
+6. Controlli (`RackKnob`, `RackToggle`, `RackChoice`), display del ducking (`DuckScope`), meter (`MeterBar`) e LED di clip (`ClipLed`).
+7. Retro e animazione di flip (`BackView`, `FlipView`/`PanelFlip`), sopra al resto.
 
-## File riconosciuti oggi
+Posizioni e dimensioni (riquadri, controlli, meter, LED, testi, nastri e viti) stanno in `src/ui/layout.h`, con test (`pillow_talk_layout_tests`): un controllo per parametro, tutto dentro il pannello, niente sovrapposizioni.
 
-Nomi in `shared/ui/include/fairy_ui/skin.h` (`SkinAsset`). Solo PNG.
+## Asset
 
-| File | Dove si usa | Dimensione |
-|------|-------------|------------|
-| `panel.png` | Sfondo dell'intero editor, al posto del corpo e del bordo disegnati | 480 x 560 px (1x) |
-| `knob_body.png` | Corpo di ogni manopola, al posto del cerchio vettoriale | cerchio di 34 x 34 px (raggio 17), disegnato nel rettangolo del corpo |
-| `button_on.png` | Pulsanti attivi (Sync, Sidechain, Bypass, nota selezionata) | disegnata nel rettangolo del pulsante (stessa immagine per tutti, quindi stirata) |
-| `button_off.png` | Pulsanti non attivi | come sopra |
+Un solo file: `shared/ui/assets/panel_grain.png`, la tile di grana del pannello (la stessa di The Stripper), copiata da un passo `POST_BUILD` in `PillowTalk.vst3/Contents/Resources/`. Se manca o non si carica, lo sfondo è a tinta unita `#161617` e l'editor si apre comunque. Il bundle viene riscritto a ogni build.
 
-Il codice disegna comunque sopra l'immagine: arco di valore e indicatore sulle manopole, etichette di manopole e pulsanti, titolo, testi di sezione e display. Il display del ducking non ha asset. I pulsanti delle note hanno dimensioni diverse da Sync, Sidechain e Bypass: una sola immagine on/off per tutti viene scalata e non è il formato definitivo.
+I font del nastro non sono file: i tracciati vettoriali dei glifi sono nell'header generato `shared/ui/include/fairy_ui/tape_glyphs.h`. Sorgenti, SHA-256 e licenze: `shared/ui/assets/fonts/README.md`. Rigenerare (serve `fontTools`):
 
-## Fallback
+```bash
+python3 shared/ui/tools/gen_tape_fonts.py --zeyada Zeyada.ttf --rocksalt RockSalt-Regular.ttf \
+  --homemade HomemadeApple-Regular.ttf --out shared/ui/include/fairy_ui/tape_glyphs.h
+python3 -m pytest shared/ui/tools/test_gen_tape_fonts.py
+```
 
-Senza il file l'elemento torna al disegno da codice, con i colori del mockup approvato:
+## Usura generata a runtime
 
-- pannello `#2a2926` con bordo `#4a463e`; testo `#e8e2d4`, secondario `#9a9384`;
-- corpo manopola e pulsante spento `#171614`, bordo `#6b675e`;
-- ambra (arco, pulsante attivo) `#d9a441`, testo sul pulsante attivo `#2a1d05`;
-- display `#0f0e0d`.
+Nessuna immagine di usura. Graffi, macchie e sporco sono un elenco di segni vettoriali prodotto da `generateWear(seme, livello)` (`fairy_ui/wear.h`, lo stesso generatore di The Stripper: stesso seme, stessi segni), una volta all'apertura dell'editor o al cambio di Wear, mai sul thread audio. Il seme (32 bit) è salvato nello stato; Wear (Off / Light / Heavy) è una preferenza dell'utente. Posizione dei nastri (0 con Off, 1-2 Light, 2-3 Heavy) e viti (quattro agli angoli, una può mancare) vengono dallo stesso seme (`src/ui/decor.{h,cpp}`, `layoutFromSeed`; viti da `fairy_ui/screws.h`).
 
-La cache (anche dei file mancanti) vive quanto l'oggetto `Editor` (`Skin skin_` è un suo membro) e `Editor::close()` non la svuota. Chiudere e riaprire l'editor basta se l'host distrugge la vista alla chiusura (lo fanno la maggior parte degli host); se l'host riusa lo stesso oggetto, bisogna ricaricare il plugin o il progetto.
+## HiDPI e vincoli
 
-## Sostituire un elemento alla volta
+- Dimensione logica fissa 1000 x 628: `checkSizeConstraint` forza questa dimensione per il fattore di scala. Su Windows e Linux l'host passa il fattore (`setContentScaleFactor`) e il frame VSTGUI si ingrandisce; su macOS la scala Retina è del sistema. Il disegno da codice resta nitido a ogni scala.
+- I controlli attenuati sono disegnati con opacità ridotta e restano operativi.
+- Testi e posizioni sono nel codice (`layout.h`, `editor.cpp`, `panel_view.cpp`).
 
-1. Copiare un solo file (per esempio `panel.png`) in `Contents/Resources`.
-2. Chiudere e riaprire l'editor (o ricaricare il plugin/progetto, vedi sopra): quell'elemento usa l'immagine, gli altri restano vettoriali.
-3. Per tornare al disegno da codice si rimuove il file.
+## Verifica senza host
 
-## Formati non ancora definiti
-
-I formati delle **filmstrip delle manopole** (numero di fotogrammi, dimensione, orientamento) e delle **immagini dei pulsanti** (stati, dimensioni per pulsante, stato attenuato) **non sono fissati**: si decidono insieme alle grafiche reali. Oggi `knob_body.png` è solo un corpo statico (l'arco e l'indicatore restano da codice) e non è una filmstrip. I nomi e le dimensioni in questa pagina possono cambiare.
-
-## Vincoli visivi
-
-- Dimensione logica fissa 480 x 560: l'utente non può ridimensionare l'editor (`checkSizeConstraint` forza 480 x 560 per il fattore di scala).
-- HiDPI: su Windows e Linux l'host passa il fattore di scala (`setContentScaleFactor`) e l'editor fa lo zoom del frame VSTGUI (finestra 480 x 560 per il fattore); su macOS la scala Retina è del sistema. Il disegno da codice resta nitido, un PNG a 1x viene ingrandito e può risultare sfocato. Il supporto a file `@2x` non è definito.
-- I controlli attenuati (Sync che spegne il ramo non in uso) sono disegnati con il 40 % di opacità sopra l'immagine; restano operativi.
-- Testi e posizioni dei controlli sono fissi nel codice (`src/pillow-talk/src/ui/editor.cpp`, `panel_view.cpp`): un pannello nuovo deve lasciare libere le stesse zone.
+`pillow_talk_render` (target `EXCLUDE_FROM_ALL`, `tools/render_editor.cpp`) disegna l'editor in un PNG con le stesse viste dell'host; opzioni in testa al sorgente e nel README del plugin.

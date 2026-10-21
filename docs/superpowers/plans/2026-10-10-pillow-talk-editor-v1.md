@@ -195,9 +195,9 @@
 **Files:**
 - Modify: `src/pillow-talk/README.md`, `src/pillow-talk/docs/CONTROLS.md`, `src/pillow-talk/docs/UI_ASSETS.md`, `README.md` radice, spec §10-12 (stato dei compiti e decisioni), questo piano (compiti spuntati)
 
-- [ ] **Step 1: Aggiornare i docs** al codice reale: layout, meter e LED di clip, Wear, nastro e viti, retro, preferenze (dove vivono), come rigenerare l'header dei font (`gen_tape_fonts.py`) e cosa genera l'usura a runtime, dipendenze di sistema per Linux.
-- [ ] **Step 2: Verifica finale**
+- [x] **Step 1: Aggiornare i docs** al codice reale: layout, meter e LED di clip, Wear, nastro e viti, retro, preferenze (dove vivono), come rigenerare l'header dei font (`gen_tape_fonts.py`) e cosa genera l'usura a runtime, dipendenze di sistema per Linux.
+- [x] **Step 2: Verifica finale** (2026-10-21: `ctest -R "pillow_talk|fairy_ui|the_stripper"` 45/45, 0 simboli `Steinberg::*` indefiniti nel modulo)
   Run: `cmake --build <scratch> --target pillow_talk pillow_talk_tests pillow_talk_factory_test fairy_ui_tests -j2 && ctest --test-dir <scratch> -R "pillow_talk|fairy_ui" --output-on-failure`
   Expected: PASS.
 - [ ] **Step 3: Verifica manuale in Reaper e Cubase** (a cura dell'utente): aspetto confrontato con la preview, apertura e chiusura 50 volte, automazione e undo, Sync, meter e clip con segnale vero, Wear Off/Light/Heavy, scrivere sul nastro, ruotare le viti, flip del retro, preferenze che persistono, HiDPI.
-- [ ] **Step 4: Commit** `docs(pillow-talk): editor v1 documentation`.
+- [x] **Step 4: Commit** `docs(pillow-talk): editor v1 documentation`.
