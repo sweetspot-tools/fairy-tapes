@@ -316,6 +316,16 @@ function btn(cx,cy,label,on,cb,ledCol){
   g._on=on;g._paint=function(o){led.setAttribute('fill',o?(ledCol||RED):'#3a1010');ps.paint(o);};
   g._paint(on);g.addEventListener('click',function(){cb(g);});return g;
 }
+/* exclusive choice (design system, 2026-10-21): the name on the face, the face lights amber on the active one, no LED */
+function choice(cx,cy,label,on,cb,w){w=w||34;var h=20,x=cx-w/2,y=cy-h/2;
+  var g=el('g',{style:'cursor:pointer'});
+  var bi=++CTRL;aluBtnGap(g,x,y,w,h,bi);var ps=pressShadow(g,x,y,w,h,2);
+  var r=el('rect',{x:x,y:y,width:w,height:h,rx:2,stroke:'#b8b8bb'},ps.face);aluBtnOverlay(ps.face,x,y,w,h,bi);
+  var t=txt(label,cx,cy+3.5,9,'#1a1a1c','middle',900,ps.face);
+  var lg=el('g',{},LY.scale);g._lg=lg;if(CUR){(CUR._x=CUR._x||[]).push(lg);}
+  g._on=on;g._paint=function(o){r.setAttribute('fill',o?AMBL:'#9a9ca1');t.setAttribute('fill',o?'#2a1d05':'#1a1a1c');ps.paint(o);};
+  g._paint(on);g.addEventListener('click',function(){cb(g);});return g;
+}
 function toggle(g){g._on=!g._on;g._paint(g._on);}
 /* knob: black cap, yellow ring, tick dots, end labels, yellow pointer */
 function knob(cx,cy,label,v,lo,hi,sub,opt){
@@ -360,10 +370,10 @@ var tone=withNum(function(v){var d=(v-0.5)*10;return (d>0?'+':'')+d.toFixed(1);}
 box(24,92,306,136,'DEVICE','bottom');
 reg(grp(),false);
 DEV.forEach(function(d,i){
-  var cx=[75,177,279][i%3],cy=i<3?131:191;
-  var bt=gbtn(btn(cx,cy,d[0],i===0,function(){
+  var cx=[87,177,267][i%3],cy=i<3?131:191;
+  var bt=gbtn(choice(cx,cy,d[0],i===0,function(){
     devBtns.forEach(function(x,j){x._on=(j===i);x._paint(x._on);});
-    MODELNAME=d[1];},YEL));devBtns.push(bt);});
+    MODELNAME=d[1];},64));devBtns.push(bt);});
 endGrp();
 function fitName(){}
 
@@ -401,12 +411,12 @@ gbtn(btn(940,184,'MONO',false,function(b){toggle(b);},YEL));
 /* ROW B */
 box(24,248,240,150,'MORPH','bottom');reg(grp(),false);knob(144,306,'MORPH',1,'CLEAN','FULL','',{def:1,fmt:pct,r:34});endGrp();
 box(270,248,706,150,'CHARACTER','bottom');var g1=grp();
-knob(330,318,'DRIVE',0.4,'0','10','',{def:0,fmt:num,r:22});
-knob(470,318,'TONE',0.5,'DARK','BRIGHT','',{def:0.5,fmt:tone,r:22});
+knob(354,318,'DRIVE',0.4,'0','10','',{def:0,fmt:num,r:22});
+knob(482,318,'TONE',0.5,'DARK','BRIGHT','',{def:0.5,fmt:tone,r:22});
 knob(610,318,'NOISE',0.3,'0','10','',{def:0,fmt:num,r:22});
-knob(750,318,'ROOM',0.2,'0','10','',{def:0,fmt:num,r:22});
-knob(890,318,'MIX',1,'DRY','WET','',{def:1,fmt:pct,r:22});
-endGrp();byp(948,278,g1);
+knob(738,318,'ROOM',0.2,'0','10','',{def:0,fmt:num,r:22});
+knob(866,318,'MIX',1,'DRY','WET','',{def:1,fmt:pct,r:22});
+endGrp();byp(948,284,g1);
 
 
 

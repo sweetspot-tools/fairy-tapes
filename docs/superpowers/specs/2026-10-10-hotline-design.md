@@ -47,8 +47,8 @@ Device, Morph, Gain, Mono, Bypass, Drive, Tone, Noise, Room, Mix, IN di CHARACTE
 
 Pannello rack orizzontale 1000 × 428 nel linguaggio comune. Materiale e texture sono quelli di The Stripper, uguali per tutti i plugin (decisione del 2026-10-10). Tutto il testo è in inglese. Preview di riferimento: `src/hotline/docs/mockups/hotline_rack.html` (derivata da `stripper_rack.html`).
 
-- **Riga 1:** DEVICE (sei pulsanti su due righe, un LED indica il dispositivo attivo; nessun nastro), LEVEL (meter IN e OUT stereo e LED di clip IN, DRV, OUT), OUTPUT (Gain, Bypass in alto a destra, Mono).
-- **Riga 2:** MORPH (manopola grande) e un solo blocco CHARACTER con Drive, Tone, Noise, Room e Mix.
+- **Riga 1:** DEVICE (sei pulsanti su due righe con il nome sulla faccia: il dispositivo attivo ha la faccia ambra, nessun LED — regola comune dei tre tipi di pulsante del 2026-10-21; pulsanti un po' più stretti, preview 2026-10-21; nessun nastro), LEVEL (meter IN e OUT stereo e LED di clip IN, DRV, OUT), OUTPUT (Gain, Bypass in alto a destra, Mono).
+- **Riga 2:** MORPH (manopola grande) e un solo blocco CHARACTER con Drive, Tone, Noise, Room e Mix (manopole un po' più ravvicinate e IN del blocco appena più in basso, preview 2026-10-21; editor da allineare).
 - **IN:** un solo pulsante IN per CHARACTER, che attenua tutti e cinque i controlli (Mix compreso). Il Bypass globale attenua tutto e fa passare il segnale identico, bit per bit.
 - Usura, viti, retro come da design system. La preview ha ancora il retro di The Stripper, non adattato.
 - **Retro, scheda DEVICES (deciso):** oltre a SETTINGS e CREDITS, il retro ha una scheda **DEVICES** che spiega cosa fa ciascun pulsante di Device e **quali valori impone** (frequenze di HPF e LPF, drive, risonanza del cono, crush, compander, rumore, room e relative note). La scheda è generata dalla stessa tabella dei dispositivi usata dal motore: i valori mostrati non possono divergere da quelli applicati.
