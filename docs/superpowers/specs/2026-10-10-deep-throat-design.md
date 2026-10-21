@@ -96,7 +96,7 @@ Segue `docs/DESIGN_SYSTEM.md` (rack orizzontale, materiali e grana di The Stripp
 
 - Intestazione con titolo e BACK; il Bypass globale sta nel riquadro OUTPUT (LED rosso).
 - **Riga 1:** INPUT (Gain), **SCOPE** (grafico con voce, guadagno del rider e banda dei respiri rilevati), LEVEL (ingresso, uscita, riduzione del compressore, clip LED come ultima riga), OUTPUT (Gain e Bypass).
-- **Riga 2:** MODE (selettore Speak / Sing / Puke, LED giallo), RIDER (Target, Range), BREATH (Amount, Sensitivity, Listen, LED di rilevamento, nome del rilevatore), EQ (Amount; HPF e Mud cut di sola lettura che seguono modalità e Amount).
-- **Riga 3:** DE-ESS (Amount, Freq, pulsante Listen), COMP (Amount, Mix, selettori Ratio e Dist con AUTO, selettore SC HPF), TONE (una manopola).
+- **Riga 2:** MODE (selettore Speak / Sing / Puke: tre pulsanti uno sopra l'altro con il nome sulla faccia, quello attivo a faccia ambra, nessun LED — regola comune del 2026-10-21; riquadro più stretto, lo spazio va a BREATH ed EQ; preview 2026-10-21, editor da allineare), RIDER (Target, Range), BREATH (Amount, Sensitivity, Listen, LED di rilevamento, nome del rilevatore), EQ (Amount; HPF e Mud cut di sola lettura che seguono modalità e Amount).
+- **Riga 3:** DE-ESS (Amount, Freq, pulsante Listen), COMP (Amount, Mix, selettori Ratio e Dist con AUTO, selettore SC HPF), TONE (una manopola). Preview 2026-10-21: DE-ESS più stretto (IN e LISTEN in colonna, con 36 px di margine a destra), COMP con MIX più staccato da AMOUNT e RATIO/DIST/SC HPF più vicini, TONE più largo; in riga 2 BREATH ed EQ più larghi grazie allo spazio tolto a MODE. Editor da allineare.
 - Ogni modulo con un controllo di segnale (RIDER, BREATH, EQ, DE-ESS, COMP, TONE) ha il pulsante IN; titoli dei riquadri in basso.
 - Retro: schede SETTINGS, CREDITS e **MODES**; MODES elenca i valori imposti da ciascuna modalità ed è generata dalla stessa tabella dei preset usata dal codice.
