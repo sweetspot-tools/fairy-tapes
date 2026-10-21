@@ -50,6 +50,25 @@ void test_scan_finds_nam_files_recursively() {
   CHECK(plexi && twin && fuzz);
 }
 
+void test_scan_lets_a_hook_decorate_each_model() {
+  TempDir t;
+  touch(t.root / "Plexi.nam", "1234");
+  touch(t.root / "Twin.nam");
+  touch(t.root / "Twin.t3k.json", "{}");                         // the file kept next to a model downloaded from TONE3000
+  std::vector<std::string> seen;
+  const auto found = scanFolders({t.root.string()}, 5000, 8, [&](ModelEntry& e) {
+    seen.push_back(e.name);
+    if (fs::exists(fs::path(e.path).replace_extension(".t3k.json"))) e.badge = "CC BY";
+  });
+  CHECK(found.size() == 2 && seen.size() == 2);
+  for (const auto& e : found) CHECK(e.badge == (e.name == "Twin.nam" ? "CC BY" : ""));
+  // the row text of the picker: the licence first when there is one
+  CHECK(modelRowMeta("", 2048) == "2 KB" && modelRowMeta("CC BY-NC", 2048) == "CC BY-NC \xC2\xB7 2 KB");
+  CHECK(modelRowMeta("", 3 * 1024 * 1024) == "3 MB");
+  // no hook: the same entries, no badge
+  for (const auto& e : scanFolders({t.root.string()})) CHECK(e.badge.empty());
+}
+
 void test_scan_is_sorted_by_name_ignoring_case() {
   TempDir t;
   touch(t.root / "zeta.nam");
@@ -136,6 +155,7 @@ void test_strip_tooltip() {
 
 int main() {
   test_scan_finds_nam_files_recursively();
+  test_scan_lets_a_hook_decorate_each_model();
   test_scan_is_sorted_by_name_ignoring_case();
   test_scan_tolerates_missing_and_duplicate_folders();
   test_scan_respects_limits();

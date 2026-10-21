@@ -4,6 +4,10 @@
 #include "ui/browser_widgets.h"
 #include "ui/tone3000_tab.h"
 #include "preferences.h"
+
+#ifdef FAIRY_HAS_TONE3000
+#include "tone3000/metadata.h"
+#endif
 #include "fairy_ui/draw_util.h"
 
 #include "vstgui/lib/cdrawcontext.h"
@@ -27,6 +31,15 @@ using FairyTapes::Ui::kWhite;
 using namespace VSTGUI;
 
 // Shared with the scan thread so the view can go away while a scan is still running.
+// The licence badge of a model downloaded from TONE3000, from the file kept next to it (only where the client is built).
+static void decorateModel(ModelEntry& e) {
+#ifdef FAIRY_HAS_TONE3000
+  if (const auto meta = Tone3000::readMeta(fromUtf8(e.path))) e.badge = Tone3000::licenseBadge(meta->license);
+#else
+  (void)e;
+#endif
+}
+
 struct ScanState {
   std::mutex mutex;
   std::vector<ModelEntry> result;
@@ -71,10 +84,6 @@ void saveSharedFolders(const std::vector<std::string>& folders) {
   prefs.modelFoldersConfigured = true;
   prefs.modelFolders = folders;
   savePreferences(file, prefs);
-}
-
-std::string sizeText(std::uint64_t bytes) {
-  return bytes >= 1024 * 1024 ? std::to_string(bytes / (1024 * 1024)) + " MB" : std::to_string((bytes + 1023) / 1024) + " KB";
 }
 
 SharedPointer<CFontDesc> bold(CCoord size, bool italic = false) {
@@ -261,7 +270,7 @@ void ModelBrowser::rescan() {
   const std::string& tones = tone3000_.tonesFolder;   // models saved from TONE3000 are found here without adding the folder
   if (!tones.empty() && std::find(folders.begin(), folders.end(), tones) == folders.end()) folders.push_back(tones);
   std::thread([state, folders] {
-    std::vector<ModelEntry> found = scanFolders(folders);
+    std::vector<ModelEntry> found = scanFolders(folders, 5000, 8, decorateModel);
     std::lock_guard<std::mutex> lock(state->mutex);
     if (!state->cancelled) state->result = std::move(found);
     state->done = true;
@@ -302,7 +311,7 @@ void ModelBrowser::applyFilter() {
   int selected = -1;
   for (std::size_t i = 0; i < shown_.size(); ++i) {
     const ModelEntry& m = shown_[i];
-    rows.push_back({displayName(m.name), sizeText(m.bytes), m.path == loadedPath_});
+    rows.push_back({displayName(m.name), modelRowMeta(m.badge, m.bytes), m.path == loadedPath_});
     if (m.path == selectedPath_) selected = static_cast<int>(i);
   }
   modelList_->setEmptyText(folders_.empty() ? "Add a folder with your .nam models." : (scanning_ ? "" : "No models found."));

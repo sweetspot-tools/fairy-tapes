@@ -27,6 +27,7 @@ struct ModelEntry {
   std::string path;     // absolute path, UTF-8
   std::string folder;   // the configured folder it was found under
   std::uint64_t bytes = 0;
+  std::string badge;    // licence badge of a model downloaded from TONE3000 ("CC BY"), empty for any other
 };
 
 // UTF-8 <-> std::filesystem::path (C++20 u8string() returns std::u8string).
@@ -48,8 +49,11 @@ inline bool hasNamExtension(const std::filesystem::path& p) { return lowerAscii(
 // Recursive scan of the folders for .nam files, sorted by name (case-insensitive). Missing folders and unreadable
 // entries are skipped, directory symlinks are not followed, the same file is listed once. `maxDepth` counts the
 // levels below each folder (0 = only the folder itself).
+//
+// `decorate` (optional) is called with every entry before sorting, so the caller can add what only it knows (the licence badge
+// from the file kept next to a TONE3000 download).
 inline std::vector<ModelEntry> scanFolders(const std::vector<std::string>& folders, std::size_t maxEntries = 5000,
-                                           int maxDepth = 8) {
+                                           int maxDepth = 8, const std::function<void(ModelEntry&)>& decorate = {}) {
   namespace fs = std::filesystem;
   std::vector<ModelEntry> out;
   std::set<std::string> seen;
@@ -78,6 +82,7 @@ inline std::vector<ModelEntry> scanFolders(const std::vector<std::string>& folde
       m.folder = folder;
       m.bytes = static_cast<std::uint64_t>(it->file_size(e2));
       if (e2) m.bytes = 0;
+      if (decorate) decorate(m);
       out.push_back(std::move(m));
     }
   }
@@ -86,6 +91,12 @@ inline std::vector<ModelEntry> scanFolders(const std::vector<std::string>& folde
     return la != lb ? la < lb : a.path < b.path;
   });
   return out;
+}
+
+// Size text of a row ("38 KB", "3 MB"), preceded by the licence badge when the model has one ("CC BY · 38 KB").
+inline std::string modelRowMeta(const std::string& badge, std::uint64_t bytes) {
+  const std::string size = bytes >= 1024 * 1024 ? std::to_string(bytes / (1024 * 1024)) + " MB" : std::to_string((bytes + 1023) / 1024) + " KB";
+  return badge.empty() ? size : badge + " \xC2\xB7 " + size;
 }
 
 // Entries whose name contains `query` (trimmed, case-insensitive), optionally only those of one folder.
