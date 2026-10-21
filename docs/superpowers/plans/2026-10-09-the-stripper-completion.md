@@ -10,6 +10,15 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-09-the-stripper-completion-design.md`
 
+## Prove a cura dell'utente (fuori dai compiti del piano, ancora da fare)
+
+Il piano è chiuso dal punto di vista del codice (2026-10-21, decisione dell'utente: queste prove non fanno parte dei compiti). Restano da eseguire su macchine o con account che qui non ci sono:
+
+- [ ] **Host (Reaper, Cubase):** aprire e chiudere l'editor 50 volte; automazione dei parametri; cambio di Strip Mode; caricamento di un `.nam` valido, di un file inesistente e di un file di testo; giro del pannello, scrittura sul nastro, campo dei valori (focus e tastiera), viti, popup dei modelli, segni di richiamo (Alt/Ctrl + doppio clic), Bell attenuato in Bus.
+- [ ] **TONE3000, flusso vero:** registrare l'app su tone3000.com, mettere il `client_id` in `src/tone3000_config.h`, compilare con `-DFAIRY_ENABLE_TONE3000=ON`, provare accesso, scelta del tono, scarico e caricamento; chiedere al supporto le tre cose elencate in `2026-10-21-tone3000-integration-design.md` §8.
+- [ ] **Sistemi:** compilazione e prova su Windows e macOS (Schannel o OpenSSL, apertura del browser, ritorno su loopback).
+- [ ] **CUDA e NAM INFERENCE:** build con CUDA su una macchina con driver NVIDIA, icona GPU nel pulsante NAM, impostazione Auto/GPU/CPU (ancora attenuata).
+
 ## Stato dei compiti (2026-10-10)
 
 - [x] Task 1 — `NamDrive` in `shared/nam_drive` (commit `5805520`, adattato a NAM v0.6.0 in `10cb131`; 49 test su 49; CUDA non verificato)
@@ -268,7 +277,7 @@ git commit -m "feat(the-stripper): add VSTGUI4 integration and code-drawn contro
 - [x] **Step 5: Verifica build e test.** (2026-10-21: 32 test verdi, bundle compilato con `the_stripper`.)
   Run: `cmake --build build --target the_stripper the_stripper_tests && ctest --test-dir build -R the_stripper --output-on-failure && ls "dist/TheStripper.vst3"`
   Expected: build senza errori, test PASS, bundle presente.
-- [ ] **Step 6: Verifica manuale in Reaper e Cubase** (a cura dell'utente, **unico passo rimasto aperto del piano**: serve un host; lo Stripper è compilato e i test passano, ma apertura e chiusura dell'editor, automazione, giro del pannello, scrittura sul nastro, campo dei valori, viti e popup non sono stati visti in un host). **Fatto al suo posto, senza editor:** il `validator` dell'SDK VST3 (compilato a parte in una cartella scratch) su `TheStripper.vst3`: 47 prove superate, 0 fallite (fabbrica, parametri, stato salvato e ricaricato, elaborazione, bypass, blocchi variabili); non apre l'interfaccia: aprire e chiudere l'editor 50 volte; automazione dei parametri; cambio di Strip Mode; caricamento di un `.nam` valido, di un file inesistente e di un file di testo.
+- [x] **Step 6: Verifica manuale in Reaper e Cubase:** non è lavoro di codice e richiede un host; spostata (2026-10-21, decisione dell'utente) nelle "Prove a cura dell'utente" in cima al piano. Fatto qui il `validator` dell'SDK VST3: 47 prove superate, 0 fallite (senza editor).
 - [x] **Step 7: Commit** (fatto a più riprese, uno per compito)
 
 ```bash
