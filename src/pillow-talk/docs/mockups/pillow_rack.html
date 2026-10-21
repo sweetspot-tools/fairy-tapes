@@ -26,9 +26,9 @@ body{margin:0;padding:16px;background:#e9e8e4;font-family:system-ui,sans-serif;c
   <label>Wear <select id="wear"><option value="off">Off</option><option value="light">Light</option><option value="heavy">Heavy</option></select></label>
   <label>Zoom <select id="zoom"><option value="1">100%</option><option value="1.5">150%</option><option value="2">200%</option><option value="2.5">250%</option></select></label>
   <button id="reroll" title="New random layout (new instance)">Re-roll</button>
-  <span style="color:#555">Rack-style panel preview (1000 × 628, landscape). Knobs: drag vertically, Shift = fine, double-click = default. SYNC on: the note buttons replace the millisecond knob. The BYPASS button (Output) dims everything. The display scrolls like the real one: voice (grey), echo (amber), send level (green), threshold (dashed).</span>
+  <span style="color:#555">Rack-style panel preview (1000 × 470, landscape). Knobs: drag vertically, Shift = fine, double-click = default. SYNC on: the note buttons replace the millisecond knob. The BYPASS button (Output) dims everything. The display scrolls like the real one: voice (grey), echo (amber), send level (green), threshold (dashed).</span>
 </div>
-<div class="stage"><div class="scene"><div class="card" id="card"><svg id="ui" viewBox="0 0 1000 628" role="img" aria-label="Pillow Talk editor, rack-style panel"></svg><svg id="back" viewBox="0 0 1000 628" role="img" aria-label="Credits, references and licenses"></svg></div></div></div>
+<div class="stage"><div class="scene"><div class="card" id="card"><svg id="ui" viewBox="0 0 1000 470" role="img" aria-label="Pillow Talk editor, rack-style panel"></svg><svg id="back" viewBox="0 0 1000 470" role="img" aria-label="Credits, references and licenses"></svg></div></div></div>
 <script>
 var NS='http://www.w3.org/2000/svg',svg=document.getElementById('ui');
 function el(n,a,p){var e=document.createElementNS(NS,n);for(var k in a)e.setAttribute(k,a[k]);(p||CUR||ROOT).appendChild(e);return e;}
@@ -56,7 +56,7 @@ texFilter('tfine','0.9 0.9',3,1.3,58,0.07,4);
 texFilter('twrink','0.1 0.14',3,2.6,46,0.047,9);
 var gl=el('linearGradient',{id:'glow',x1:0,y1:0,x2:0,y2:1},defs);[[0,'#fff',.07],[.35,'#fff',0],[.75,'#000',0],[1,'#000',.35]].forEach(function(t){el('stop',{offset:t[0],'stop-color':t[1],'stop-opacity':t[2]},gl);});
 var TEX=[],LIT=[];
-function texLayer(){var t=el('rect',{width:1000,height:628,rx:14,fill:'#fff',filter:'url(#tfine)'});var l=el('rect',{width:1000,height:628,rx:14,fill:'url(#glow)'});TEX.push(t);LIT.push(l);}
+function texLayer(){var t=el('rect',{width:1000,height:470,rx:14,fill:'#fff',filter:'url(#tfine)'});var l=el('rect',{width:1000,height:470,rx:14,fill:'url(#glow)'});TEX.push(t);LIT.push(l);}
 document.addEventListener('DOMContentLoaded',function(){});
 
 /* ===== wear: everything random derives from one seed that the plugin saves in its state, so the layout is built once per instance ===== */
@@ -84,12 +84,12 @@ function wear(L,R,amt,face){
   var n=function(c){return Math.round(c*amt);};
   var TL=el('g',{},L);  /* handwriting on the tape: kept above ALL tape pieces (re-appended last) */
   var st=el('g',{filter:'url(#wb)'},L);
-  for(var i=0;i<n(face?3:6);i++){var warm=R()<.45;el('polygon',{points:blob(R,rnd(R,40,960),rnd(R,100,600),rnd(R,25,95),rnd(R,12,45),9),fill:warm?'#b99a5a':'#d8d8d2',opacity:rnd(R,.012,.04)},st);}
+  for(var i=0;i<n(face?3:6);i++){var warm=R()<.45;el('polygon',{points:blob(R,rnd(R,40,960),rnd(R,100,450),rnd(R,25,95),rnd(R,12,45),9),fill:warm?'#b99a5a':'#d8d8d2',opacity:rnd(R,.012,.04)},st);}
   /* stuck-on residue as touches of a very dry brush: bundles of thin bristle marks, opaque, broken by gaps (the panel shows through between bristles),
      heavy where the stroke lands and dragging out into ragged, uneven tails. No shadow, no blur. */
   var gk=el('g',{},L);
   for(var q=0;q<n(face?4:9);q++){
-    var big=R()<.7,cx0=rnd(R,30,970),cy0=rnd(R,100,600),dir=rnd(R,0,Math.PI*2),len=big?rnd(R,22,70):rnd(R,7,16),width=big?rnd(R,5,13):rnd(R,2.5,5),m=Math.round(width/rnd(R,.55,.9)),
+    var big=R()<.7,cx0=rnd(R,30,970),cy0=rnd(R,100,450),dir=rnd(R,0,Math.PI*2),len=big?rnd(R,22,70):rnd(R,7,16),width=big?rnd(R,5,13):rnd(R,2.5,5),m=Math.round(width/rnd(R,.55,.9)),
         col=pick(R,['#6a5a38','#54472d','#7a6a46','#8c8778','#9a8e6e','#5b3f2c','#47402f']),cs=Math.cos(dir),sn=Math.sin(dir);
     for(var i=0;i<m;i++){
       var t=(i-(m-1)/2)/Math.max(1,m-1),off=t*width+rnd(R,-.35,.35),edge=Math.abs(t)*2,
@@ -103,15 +103,15 @@ function wear(L,R,amt,face){
     for(var h=0;h<1+(R()*3|0);h++){var ho=rnd(R,-width*.4,width*.4),hx=cx0-len/2*cs-sn*ho,hy=cy0-len/2*sn+cs*ho;el('line',{x1:hx.toFixed(1),y1:hy.toFixed(1),x2:(hx+cs*len*rnd(R,.1,.25)).toFixed(1),y2:(hy+sn*len*rnd(R,.1,.25)).toFixed(1),stroke:col,'stroke-width':rnd(R,1.2,2.2).toFixed(2),'stroke-linecap':'round'},gk);}
   }
   var sc=el('g',{},L);
-  for(var j=0;j<n(face?25:55);j++){var x=rnd(R,20,980),y=rnd(R,20,608),len=R()<.12?rnd(R,120,260):rnd(R,14,90),ang=(R()<.6?rnd(R,-.35,.35):rnd(R,0,Math.PI*2)),cur=rnd(R,-.12,.12);
+  for(var j=0;j<n(face?25:55);j++){var x=rnd(R,20,980),y=rnd(R,20,452),len=R()<.12?rnd(R,120,260):rnd(R,14,90),ang=(R()<.6?rnd(R,-.35,.35):rnd(R,0,Math.PI*2)),cur=rnd(R,-.12,.12);
     var x2=x+Math.cos(ang)*len,y2=y+Math.sin(ang)*len,mx=(x+x2)/2+Math.sin(ang)*len*cur,my=(y+y2)/2-Math.cos(ang)*len*cur,d='M'+x.toFixed(1)+' '+y.toFixed(1)+' Q'+mx.toFixed(1)+' '+my.toFixed(1)+' '+x2.toFixed(1)+' '+y2.toFixed(1),w=rnd(R,.35,.9);
     el('path',{d:d,fill:'none',stroke:'#000',opacity:rnd(R,.35,.6),'stroke-width':w,transform:'translate(.5,.6)'},sc);
     el('path',{d:d,fill:'none',stroke:'#d6d6d0',opacity:rnd(R,.08,.26),'stroke-width':w},sc);}
   var ch=el('g',{},L);
-  for(var c=0;c<n(face?40:90);c++){el('circle',{cx:rnd(R,10,990),cy:rnd(R,10,618),r:rnd(R,.3,1.1),fill:R()<.7?'#cfcfc8':'#000',opacity:rnd(R,.1,.4)},ch);}
+  for(var c=0;c<n(face?40:90);c++){el('circle',{cx:rnd(R,10,990),cy:rnd(R,10,460),r:rnd(R,.3,1.1),fill:R()<.7?'#cfcfc8':'#000',opacity:rnd(R,.1,.4)},ch);}
   var tp=face?0:n(1)+(R()<.5?1:0),TI=0;
   for(var t=0;t<tp;t++){
-    var tx=rnd(R,70,900),ty=rnd(R,110,560),tw=rnd(R,58,96),th=rnd(R,19,26),rot=rnd(R,-9,9);
+    var tx=rnd(R,70,900),ty=rnd(R,110,410),tw=rnd(R,58,96),th=rnd(R,19,26),rot=rnd(R,-9,9);
     var tr='translate('+tx.toFixed(1)+' '+ty.toFixed(1)+') rotate('+rot.toFixed(1)+')',g=el('g',{transform:tr},L),gt=el('g',{transform:tr},TL);g.style.pointerEvents='all';gt.style.pointerEvents='all';
     var pts=['0,'+rnd(R,0,2.5).toFixed(1)];
     for(var k=1;k<=4;k++)pts.push((tw*k/4).toFixed(1)+','+rnd(R,-1.2,1.2).toFixed(1));
@@ -127,7 +127,7 @@ function wear(L,R,amt,face){
     g.style.cursor='text';gt.style.cursor='text';el('title',{},g).textContent='Click to write on the tape';
     (function(ti,tt,g,gt,dflt){var open=function(e){e.stopPropagation();editText(g,tt.textContent,function(v){v=v.slice(0,14);tt.textContent=v;TAPETXT[ti]=v;lsSet('pt_tape',JSON.stringify(TAPETXT));},{max:14,minw:90,color:'#2b2620',bg:'#d9cfa6',border:'#8f8560',font:'400 '+Math.round(16*TAPEFONTS[TAPEFONT])+'px \''+TAPEFONT+'\',cursive'});};g.addEventListener('click',open);gt.addEventListener('click',open);})(ti,tt,g,gt,dflt);
   }
-  for(var m=0;m<n(1.4);m++){var rx=rnd(R,60,880),ry=rnd(R,110,560),rw=rnd(R,50,90),rh=rnd(R,18,26),rr=rnd(R,-9,9);
+  for(var m=0;m<n(1.4);m++){var rx=rnd(R,60,880),ry=rnd(R,110,410),rw=rnd(R,50,90),rh=rnd(R,18,26),rr=rnd(R,-9,9);
     var gg=el('g',{transform:'translate('+rx.toFixed(1)+' '+ry.toFixed(1)+') rotate('+rr.toFixed(1)+')'},L);
     el('polygon',{points:blob(R,rw/2,rh/2,rw/2,rh/2,14),fill:'#b8a66b',opacity:.07,filter:'url(#wb2)'},gg);
     for(var d2=0;d2<10;d2++)el('circle',{cx:rnd(R,2,rw-2),cy:rnd(R,2,rh-2),r:rnd(R,.4,1.4),fill:'#9d8c58',opacity:rnd(R,.08,.2)},gg);}
@@ -159,7 +159,7 @@ function grimeRect(g,x,y,w,h,idx){
 function addWear(L,off,face){var w={L:L,off:off,face:face};WEARL.push(w);drawWear(w);}
 function drawWear(w){while(w.L.firstChild)w.L.removeChild(w.L.firstChild);wear(w.L,mulberry32((SEED^w.off)>>>0),A,w.face);}
 /* screws: slot or Phillips, random resting angle, drag to turn (angles saved); rarely one is missing and only the hole is left */
-var SCREWPOS=[[18,18],[982,18],[18,610],[982,610]],SCREWEL=[[],[],[],[]],SCRA=(function(){try{var v=JSON.parse(lsGet('pt_screws','null'));if(v&&v.length===4)return v;}catch(e){}return null;})();
+var SCREWPOS=[[18,18],[982,18],[18,452],[982,452]],SCREWEL=[[],[],[],[]],SCRA=(function(){try{var v=JSON.parse(lsGet('pt_screws','null'));if(v&&v.length===4)return v;}catch(e){}return null;})();
 var SCRTYPE=[],SCRINIT=[],SCRMISS=[false,false,false,false];
 function initScrews(keepAngles){SCRTYPE=[];SCRINIT=[];SCRMISS=[false,false,false,false];var R=mulberry32(SEED^0xA5);for(var i=0;i<4;i++){SCRTYPE.push(R()<.5?'slot':'cross');SCRINIT.push(Math.round(rnd(R,0,180)));}
   if(R()<.06)SCRMISS[Math.floor(R()*4)]=true;if(!SCRA||!keepAngles)SCRA=SCRINIT.slice();}
@@ -281,8 +281,8 @@ function grad(id,type,attrs,stops){var g=el(type,Object.assign({id:id},attrs),de
 grad('gk','radialGradient',{cx:'35%',cy:'30%',r:'80%'},[[0,'#4a4a4e'],[0.55,'#161617'],[1,'#050505']]);
 grad('gb','linearGradient',{x1:0,y1:0,x2:0,y2:1},[[0,'#e6e6e6'],[1,'#8f8f92']]);
 grad('gp','linearGradient',{x1:0,y1:0,x2:0,y2:1},[[0,'#1b1b1d'],[0.5,'#0b0b0c'],[1,'#121213']]);
-el('rect',{width:1000,height:628,rx:14,fill:'#161617'});texLayer();
-el('rect',{x:2,y:2,width:996,height:624,rx:13,fill:'none',stroke:'#2c2c2f','stroke-width':2});
+el('rect',{width:1000,height:470,rx:14,fill:'#161617'});texLayer();
+el('rect',{x:2,y:2,width:996,height:466,rx:13,fill:'none',stroke:'#2c2c2f','stroke-width':2});
 LY=layers();addWear(LY.wear,0x51,false);screws(LY.screw);
 
 /* header */
@@ -477,8 +477,8 @@ syncUp();
 
 /* ============ BACK: credits, references, licenses ============ */
 var back=document.getElementById('back');ROOT=back;CUR=null;
-el('rect',{width:1000,height:628,rx:14,fill:'#161617'});texLayer();
-el('rect',{x:2,y:2,width:996,height:624,rx:13,fill:'none',stroke:'#2c2c2f','stroke-width':2});
+el('rect',{width:1000,height:470,rx:14,fill:'#161617'});texLayer();
+el('rect',{x:2,y:2,width:996,height:466,rx:13,fill:'none',stroke:'#2c2c2f','stroke-width':2});
 LY=layers();addWear(LY.wear,0x77,true);screws(LY.screw);
 var bTitle=txt('CREDITS',34,58,38,W,'start',900,back,true);
 txt('FAIRY TAPES',36,78,11,DIMW,'start',700);
@@ -492,19 +492,19 @@ txt('PILLOW TALK  ·  TAPE ECHO VST3',966,46,13,W,'end',700);
 
 /* ---- CREDITS tab ---- */
 CUR=PANES.credits;BOXOVR=BOXES.credits;
-box(24,102,952,118,'PILLOW TALK','top');
-txt('Version 1.0.0  ·  Fairy Tapes  ·  github.com/fairy-tapes',50,140,14,W,'start',700);
-txt('Free software: released under the GNU General Public License v3.0 (GPL-3.0), full text in the LICENSE file.',50,164,12,DIMW,'start',700);
-txt('The plugin includes GPL-3.0 components, so the combined work is distributed under the same license.',50,184,12,DIMW,'start',700);
-txt('Source code and build instructions are available in the project repository.',50,204,12,DIMW,'start',700);
-box(24,246,952,252,'COMPONENTS AND LICENSES','top');
+box(24,102,952,92,'PILLOW TALK','top');
+txt('Version 1.0.0  ·  Fairy Tapes  ·  github.com/fairy-tapes',50,132,14,W,'start',700);
+txt('Free software: released under the GNU General Public License v3.0 (GPL-3.0), full text in the LICENSE file.',50,150,12,DIMW,'start',700);
+txt('The plugin includes GPL-3.0 components, so the combined work is distributed under the same license.',50,166,12,DIMW,'start',700);
+txt('Source code and build instructions are available in the project repository.',50,182,12,DIMW,'start',700);
+box(24,210,952,140,'COMPONENTS AND LICENSES','top');
 var CRD=[['VST 3 SDK','Steinberg Media Technologies','MIT'],['VSTGUI','Steinberg Media Technologies','VSTGUI license (BSD)'],['Zeyada','Kimberly Geswein','open license (Google Fonts)'],['Rock Salt','Font Diner','open license (Google Fonts)'],['Homemade Apple','Font Diner','open license (Google Fonts)']];
-CRD.forEach(function(c,i){var y=284+i*30;txt(c[0],50,y,14,W,'start',800);txt(c[1],350,y,13,DIMW,'start',700);txt(c[2],950,y,13,AMBL,'end',700);
-  if(i<CRD.length-1)el('path',{d:'M50 '+(y+12)+' H950',stroke:DIMW,'stroke-width':1,opacity:.25});});
-box(24,522,952,88,'NOTICES','top');
-txt('VST is a trademark of Steinberg Media Technologies GmbH, registered in Europe and other countries.',50,556,12,DIMW,'start',700);
-txt('Tape fonts are drawn as vector paths inside the plugin; this preview loads them from Google Fonts.',50,578,12,DIMW,'start',700);
-txt('Third-party names are cited for attribution only.',50,598,12,DIMW,'start',700);
+CRD.forEach(function(c,i){var y=238+i*22;txt(c[0],50,y,14,W,'start',800);txt(c[1],350,y,13,DIMW,'start',700);txt(c[2],950,y,13,AMBL,'end',700);
+  if(i<CRD.length-1)el('path',{d:'M50 '+(y+8)+' H950',stroke:DIMW,'stroke-width':1,opacity:.25});});
+box(24,366,952,82,'NOTICES','top');
+txt('VST is a trademark of Steinberg Media Technologies GmbH, registered in Europe and other countries.',50,394,12,DIMW,'start',700);
+txt('Tape fonts are drawn as vector paths inside the plugin; this preview loads them from Google Fonts.',50,412,12,DIMW,'start',700);
+txt('Third-party names are cited for attribution only.',50,430,12,DIMW,'start',700);
 
 /* ---- SETTINGS tab: appearance (saved for the user, all projects) and behaviour (saved with the project) ---- */
 CUR=PANES.settings;BOXOVR=BOXES.settings;
@@ -516,26 +516,26 @@ function seg(x,y,items,sel,cb,w){var rects=[],labels=[];w=w||70;
 function act(x,y,w,label,cb,off){var g=el('g',{style:off?'':'cursor:pointer',opacity:off?.4:1});var r=el('rect',{x:x,y:y,width:w,height:24,rx:2,fill:'#8e8e91',stroke:'#b8b8bb'},g);txt(label,x+w/2,y+16,11,'#1a1a1c','middle',800,g);if(!off)g.addEventListener('click',cb);}
 function row(label,y,hint,x0){x0=x0||50;txt(label,x0,y+16,13,W,'start',800);if(hint)txt(hint,x0,y+32,10,DIMW,'start',700);}
 var SC=514;
-box(24,102,462,364,'APPEARANCE','top');txt('saved for you, in every project',255,130,10,DIMW,'middle',700);
-row('WEAR',146);seg(200,146,['OFF','LIGHT','HEAVY'],['off','light','heavy'].indexOf(WEAR),function(i){var w=document.getElementById('wear');w.value=['off','light','heavy'][i];w.dispatchEvent(new Event('change'));},84);
-row('NOTES LAYER',194,'tape and pen marks on the values');seg(200,194,['HIDE','SHOW'],1,function(){},84);
+box(24,102,462,234,'APPEARANCE','top');txt('saved for you, in every project',255,130,10,DIMW,'middle',700);
+row('WEAR',140);seg(200,140,['OFF','LIGHT','HEAVY'],['off','light','heavy'].indexOf(WEAR),function(i){var w=document.getElementById('wear');w.value=['off','light','heavy'][i];w.dispatchEvent(new Event('change'));},84);
+row('NOTES LAYER',180,'tape and pen marks on the values');seg(200,180,['HIDE','SHOW'],1,function(){},84);
 /* tape font: stepper, each name drawn in its own font */
-row('TAPE FONT',242,'handwriting on the tape');(function(){var names=Object.keys(TAPEFONTS),x=200,y=242,w=176;
+row('TAPE FONT',220,'handwriting on the tape');(function(){var names=Object.keys(TAPEFONTS),x=200,y=220,w=176;
   function arrow(ax,lab,d){var g=el('g',{style:'cursor:pointer'});el('rect',{x:ax,y:y,width:24,height:24,rx:2,fill:'#8e8e91',stroke:'#b8b8bb'},g);txt(lab,ax+12,y+17,14,'#1a1a1c','middle',800,g);g.addEventListener('click',function(){var i=(names.indexOf(TAPEFONT)+d+names.length)%names.length;TAPEFONT=names[i];lsSet('pt_tapefont',TAPEFONT);upd();redrawWear();applyHW();});}
   el('rect',{x:x+26,y:y,width:w,height:24,rx:2,fill:'none',stroke:W,'stroke-width':1.5});var t=el('text',{x:x+26+w/2,y:y+17,'text-anchor':'middle',fill:W});
   function upd(){t.textContent=TAPEFONT;t.setAttribute('font-family',"'"+TAPEFONT+"',cursive");t.setAttribute('font-size',Math.min(19,(12*TAPEFONTS[TAPEFONT]+3)).toFixed(1));}
   arrow(x,'‹',-1);arrow(x+26+w+2,'›',1);upd();})();
-row('VALUES FONT',290,'values on the panel');seg(200,290,['STANDARD','TAPE FONT'],HW?1:0,function(i){HW=(i===1);lsSet('pt_hw',HW?'1':'0');applyHW();},118);
-row('LOOK',338);act(200,338,120,'RE-ROLL',function(){document.getElementById('reroll').click();});txt('new wear, dirt and screws',332,354,10,DIMW,'start',700);
-box(SC,102,462,364,'BEHAVIOUR','top');txt('saved with the project',SC+231,130,10,DIMW,'middle',700);
-row('DISPLAY WINDOW',146,'time shown by the ducking display',SC+26);seg(SC+176,146,['3 S','6 S','12 S'],1,function(){},84);
-row('DISPLAY PEAKS',194,'hold the highest peak',SC+26);seg(SC+176,194,['OFF','1.5 S','3 S'],1,function(){},84);
-row('TEMPO FALLBACK',242,'when the host sends no tempo',SC+26);seg(SC+176,242,['120 BPM'],0,function(){},120);
-box(24,484,952,120,'NOTES','top');
-txt('Appearance settings belong to you: they are kept in your preferences and apply to every project and every instance.',50,522,12,DIMW,'start',700);
-txt('Behaviour settings change how the plugin works: they are saved in the project, together with the parameters.',50,544,12,DIMW,'start',700);
-txt('The wear layout (scratches, tape, screws) is generated once per instance from a saved seed and never changes by itself.',50,566,12,DIMW,'start',700);
-txt('Double-click on a knob returns it to its neutral default.',50,588,12,DIMW,'start',700);
+row('VALUES FONT',260,'values on the panel');seg(200,260,['STANDARD','TAPE FONT'],HW?1:0,function(i){HW=(i===1);lsSet('pt_hw',HW?'1':'0');applyHW();},118);
+row('LOOK',300);act(200,300,120,'RE-ROLL',function(){document.getElementById('reroll').click();});txt('new wear, dirt and screws',332,316,10,DIMW,'start',700);
+box(SC,102,462,234,'BEHAVIOUR','top');txt('saved with the project',SC+231,130,10,DIMW,'middle',700);
+row('DISPLAY WINDOW',140,'time shown by the ducking display',SC+26);seg(SC+176,140,['3 S','6 S','12 S'],1,function(){},84);
+row('DISPLAY PEAKS',180,'hold the highest peak',SC+26);seg(SC+176,180,['OFF','1.5 S','3 S'],1,function(){},84);
+row('TEMPO FALLBACK',220,'when the host sends no tempo',SC+26);seg(SC+176,220,['120 BPM'],0,function(){},120);
+box(24,350,952,98,'NOTES','top');
+txt('Appearance settings belong to you: they are kept in your preferences and apply to every project and every instance.',50,376,12,DIMW,'start',700);
+txt('Behaviour settings change how the plugin works: they are saved in the project, together with the parameters.',50,394,12,DIMW,'start',700);
+txt('The wear layout (scratches, tape, screws) is generated once per instance from a saved seed and never changes by itself.',50,412,12,DIMW,'start',700);
+txt('Double-click on a knob returns it to its neutral default.',50,430,12,DIMW,'start',700);
 CUR=null;BOXOVR=null;showTab(lsGet('pt_tab','settings'));
 ROOT=svg;
 
