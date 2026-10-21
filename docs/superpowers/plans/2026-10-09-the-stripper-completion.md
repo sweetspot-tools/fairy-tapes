@@ -268,7 +268,7 @@ git commit -m "feat(the-stripper): add VSTGUI4 integration and code-drawn contro
 - [x] **Step 5: Verifica build e test.** (2026-10-21: 32 test verdi, bundle compilato con `the_stripper`.)
   Run: `cmake --build build --target the_stripper the_stripper_tests && ctest --test-dir build -R the_stripper --output-on-failure && ls "dist/TheStripper.vst3"`
   Expected: build senza errori, test PASS, bundle presente.
-- [ ] **Step 6: Verifica manuale in Reaper e Cubase** (a cura dell'utente, **unico passo rimasto aperto del piano**: serve un host; lo Stripper è compilato e i test passano, ma apertura e chiusura dell'editor, automazione, giro del pannello, scrittura sul nastro, campo dei valori, viti e popup non sono stati visti in un host): aprire e chiudere l'editor 50 volte; automazione dei parametri; cambio di Strip Mode; caricamento di un `.nam` valido, di un file inesistente e di un file di testo.
+- [ ] **Step 6: Verifica manuale in Reaper e Cubase** (a cura dell'utente, **unico passo rimasto aperto del piano**: serve un host; lo Stripper è compilato e i test passano, ma apertura e chiusura dell'editor, automazione, giro del pannello, scrittura sul nastro, campo dei valori, viti e popup non sono stati visti in un host). **Fatto al suo posto, senza editor:** il `validator` dell'SDK VST3 (compilato a parte in una cartella scratch) su `TheStripper.vst3`: 47 prove superate, 0 fallite (fabbrica, parametri, stato salvato e ricaricato, elaborazione, bypass, blocchi variabili); non apre l'interfaccia: aprire e chiudere l'editor 50 volte; automazione dei parametri; cambio di Strip Mode; caricamento di un `.nam` valido, di un file inesistente e di un file di testo.
 - [x] **Step 7: Commit** (fatto a più riprese, uno per compito)
 
 ```bash
