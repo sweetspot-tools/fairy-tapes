@@ -55,4 +55,6 @@ Le regole visive condivise sono in **`docs/DESIGN_SYSTEM.md`** (pannello rack, l
 - Stato e decisioni di The Stripper: `docs/superpowers/specs/2026-10-09-the-stripper-completion-design.md` e `.../plans/2026-10-09-the-stripper-completion.md`.
 - Pillow Talk: `docs/superpowers/specs/2026-10-08-pillow-talk-design.md`; Doggystyle: `2026-10-09-doggystyle-design.md`.
 - Deep Throat: spec `docs/superpowers/specs/2026-10-10-deep-throat-design.md`, piano `docs/superpowers/plans/2026-10-10-deep-throat.md`, README `src/deep-throat/README.md`.
-- Componenti condivisi: `shared/gpu_nam`, `shared/nam_drive`.
+- Happy Ending (mastering): spec `docs/superpowers/specs/2026-10-21-happy-ending-design.md`, preview `src/happy-ending/docs/mockups/happy_ending_rack.html`.
+- Pagina con tutte le preview: `docs/mockups/index.html` (da un server locale con radice nel repo).
+- Componenti condivisi: `shared/gpu_nam`, `shared/nam_drive`, `shared/inflator`.
