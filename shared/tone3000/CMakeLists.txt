@@ -51,14 +51,16 @@ function(fairy_add_curl)
 endfunction()
 fairy_add_curl()
 
-add_library(tone3000 STATIC src/http_policy.cpp src/http_curl.cpp src/pkce.cpp src/metadata.cpp src/api.cpp)
+add_library(tone3000 STATIC src/http_policy.cpp src/http_curl.cpp src/pkce.cpp src/metadata.cpp src/api.cpp src/loopback.cpp src/oauth.cpp)
 target_include_directories(tone3000 PUBLIC ${TONE3000_DIR}/include)
 # nlohmann/json (single header, MIT) as shipped with the NAM core
 target_include_directories(tone3000 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../vendors/NeuralAmpModelerCore/Dependencies)
 target_link_libraries(tone3000 PUBLIC libcurl_static)
 if(WIN32)
-  target_link_libraries(tone3000 PUBLIC bcrypt)
+  target_link_libraries(tone3000 PUBLIC bcrypt ws2_32 shell32)
 endif()
+find_package(Threads REQUIRED)
+target_link_libraries(tone3000 PUBLIC Threads::Threads)
 set_target_properties(tone3000 PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_compile_features(tone3000 PUBLIC cxx_std_20)
 
@@ -77,3 +79,9 @@ add_test(NAME tone3000_basics_tests COMMAND tone3000_basics_tests)
 add_executable(tone3000_api_tests tests/test_api.cpp)
 target_link_libraries(tone3000_api_tests PRIVATE tone3000)
 add_test(NAME tone3000_api_tests COMMAND tone3000_api_tests)
+
+# OAuth 2.0 + PKCE: pure parts, the loopback receiver on a real socket, and the whole flow with a fake browser and server.
+add_executable(tone3000_oauth_tests tests/test_oauth.cpp)
+target_link_libraries(tone3000_oauth_tests PRIVATE tone3000)
+add_test(NAME tone3000_oauth_tests COMMAND tone3000_oauth_tests)
+set_tests_properties(tone3000_oauth_tests PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 120)
