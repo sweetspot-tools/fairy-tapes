@@ -17,7 +17,8 @@ Il piano è chiuso dal punto di vista del codice (2026-10-21, decisione dell'ute
 - [ ] **Host (Reaper, Cubase):** aprire e chiudere l'editor 50 volte; automazione dei parametri; cambio di Strip Mode; caricamento di un `.nam` valido, di un file inesistente e di un file di testo; giro del pannello, scrittura sul nastro, campo dei valori (focus e tastiera), viti, popup dei modelli, segni di richiamo (Alt/Ctrl + doppio clic), Bell attenuato in Bus.
 - [ ] **TONE3000, flusso vero:** registrare l'app su tone3000.com, mettere il `client_id` in `src/tone3000_config.h`, compilare con `-DFAIRY_ENABLE_TONE3000=ON`, provare accesso, scelta del tono, scarico e caricamento; chiedere al supporto le tre cose elencate in `2026-10-21-tone3000-integration-design.md` §8.
 - [ ] **Sistemi:** compilazione e prova su Windows e macOS (Schannel o OpenSSL, apertura del browser, ritorno su loopback).
-- [ ] **CUDA e NAM INFERENCE:** build con CUDA su una macchina con driver NVIDIA, icona GPU nel pulsante NAM, impostazione Auto/GPU/CPU (ancora attenuata).
+- [ ] **CUDA e NAM INFERENCE:** build con CUDA su una macchina con driver NVIDIA, impostazione Auto/GPU/CPU (ancora attenuata).
+- [ ] **Editor da allineare alla preview (2026-10-21):** pulsanti delle scelte esclusive con il nome sulla faccia (CHAN/BUS, VOICE/DRUMS/CLASSIC, NAM/4K); CHAN/BUS e VOICE/DRUMS/CLASSIC in colonna, lontani dagli IN; NAM/4K staccati dall'IN; togliere l'icona GPU dal pulsante NAM (`ui/gpu_chip_view`). Vedi spec §11.
 
 ## Stato dei compiti (2026-10-10)
 

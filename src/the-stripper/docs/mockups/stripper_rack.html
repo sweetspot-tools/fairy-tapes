@@ -318,6 +318,16 @@ function btn(cx,cy,label,on,cb,ledCol){
   g._on=on;g._paint=function(o){led.setAttribute('fill',o?(ledCol||RED):'#3a1010');ps.paint(o);};
   g._paint(on);g.addEventListener('click',function(){cb(g);});return g;
 }
+/* exclusive choice (design system, 2026-10-21): the name on the face, the face lights amber on the active one, no LED */
+function choice(cx,cy,label,on,cb,w){w=w||34;var h=20,x=cx-w/2,y=cy-h/2;
+  var g=el('g',{style:'cursor:pointer'});
+  var bi=++CTRL;aluBtnGap(g,x,y,w,h,bi);var ps=pressShadow(g,x,y,w,h,2);
+  var r=el('rect',{x:x,y:y,width:w,height:h,rx:2,stroke:'#b8b8bb'},ps.face);aluBtnOverlay(ps.face,x,y,w,h,bi);
+  var t=txt(label,cx,cy+3.5,9,'#1a1a1c','middle',900,ps.face);
+  var lg=el('g',{},LY.scale);g._lg=lg;if(CUR){(CUR._x=CUR._x||[]).push(lg);}
+  g._on=on;g._paint=function(o){r.setAttribute('fill',o?AMBL:'#9a9ca1');t.setAttribute('fill',o?'#2a1d05':'#1a1a1c');ps.paint(o);};
+  g._paint(on);g.addEventListener('click',function(){cb(g);});return g;
+}
 function toggle(g){g._on=!g._on;g._paint(g._on);}
 /* small silkscreen tag at the top left of a box: what is mounted on the block right now (updates with the selectors) */
 var TAGS=[];
@@ -397,12 +407,12 @@ function dbN(d){return Math.max(0,Math.min(N,Math.round((d+60)/(66/(N-1))+0.5)))
 
 /* output */
 box(790,92,186,170,'OUTPUT','bottom');
-reg(grp(),false);knob(842,168,'GAIN',0.5,'-20','+20','',{def:0.5,fmt:db(20),r:22});endGrp();
+reg(grp(),false);knob(854,168,'GAIN',0.5,'-20','+20','',{def:0.5,fmt:db(20),r:22});endGrp();
 var chan,mix,modeBtns=[];
 function setMode(m){chan._on=m==='c';mix._on=m==='m';chan._paint(chan._on);mix._paint(mix._on);
   modeBtns.forEach(function(b){b.style.opacity=m==='c'?1:0.25;b.style.pointerEvents=m==='c'?'auto':'none';if(b._lg)b._lg._mm=(m==='c'?1:0.25);});MODS.forEach(paint);if(TAGS.length)refreshTags();}
-chan=gbtn(btn(910,220,'CHAN',true,function(){setMode('c');refreshTags();},YEL));
-mix=gbtn(btn(950,220,'BUS',false,function(){setMode('m');},YEL));
+chan=gbtn(choice(940,198,'CHAN',true,function(){setMode('c');refreshTags();},34));
+mix=gbtn(choice(940,224,'BUS',false,function(){setMode('m');},34));
 btn(940,130,'BYPASS',false,function(b){toggle(b);GB=b._on;MODS.forEach(paint);GBTN.forEach(function(x){x.style.opacity=GB?DIM:1;if(x._lg)x._lg.style.opacity=GB?DIM:1;});});
 
 /* ============ ROW B : EQ ============ */
@@ -438,17 +448,17 @@ function bellBtn(cx,cy){
 /* ============ ROW C ============ */
 boxTag(40,302,series);endGrp();byp(940,320,gEq);
 ROOT=el('g',{transform:'translate(0,-32)'},svg);OFFY=-32;
-box(24,484,372,146,'COMPRESSION','bottom');var gCm=grp();
-knob(86,552,'AMOUNT',0.45,'0','10','',{def:0,fmt:pct});
+box(24,484,342,146,'COMPRESSION','bottom');var gCm=grp();
+knob(80,552,'AMOUNT',0.45,'0','10','',{def:0,fmt:pct});
 knob(170,552,'MIX',1,'DRY','WET','',{def:1,fmt:pct});
 ['VOICE','DRUMS','CLASSIC'].forEach(function(n,i){
-  var b=btn(264+i*48,588,n,i===0,function(){modeBtns.forEach(function(m,j){m._on=(j===i);m._paint(m._on);});refreshTags();},YEL);modeBtns.push(b);});
-boxTag(40,506,function(){if(!chan._on)return '4K-G';var k=0;modeBtns.forEach(function(m,j){if(m._on)k=j;});return ['OPTO-2A','FET-76','VCA-160'][k];});endGrp();byp(360,522,gCm);
-box(402,484,300,146,'DRIVE','bottom');var gDr=grp();
+  var b=choice(262,530+i*26,n,i===0,function(){modeBtns.forEach(function(m,j){m._on=(j===i);m._paint(m._on);});refreshTags();},44);modeBtns.push(b);});
+boxTag(40,506,function(){if(!chan._on)return '4K-G';var k=0;modeBtns.forEach(function(m,j){if(m._on)k=j;});return ['OPTO-2A','FET-76','VCA-160'][k];});endGrp();byp(330,522,gCm);
+box(372,484,300,146,'DRIVE','bottom');var gDr=grp();
 var DRVK={},namOn=true,DV={nam:0.3,sat:0.2};
-knob(458,552,'DRIVE',0.3,'0','10','',{def:0,fmt:num,r:21,api:DRVK});
+knob(428,552,'DRIVE',0.3,'0','10','',{def:0,fmt:num,r:21,api:DRVK});
 /* model name: a fixed strip of tape written in the tape font; the name is cut by measured width (never by character count) and ends with an ellipsis */
-var nam=el('g',{style:'cursor:pointer'}),NX=508,NY=578,NW=174,NH=28,MODELNAME=lsGet('st_model','JCM_clean_v2.nam'),GPUC='#6b6347';
+var nam=el('g',{style:'cursor:pointer'}),NX=478,NY=578,NW=174,NH=28,MODELNAME=lsGet('st_model','JCM_clean_v2.nam'),GPUC='#6b6347';
 el('title',{},nam).textContent='Click to choose a NAM model';
 (function(){var R=mulberry32(SEED^0x99),pts=['0,'+rnd(R,0,2).toFixed(1)],k,q;
   for(k=1;k<=6;k++)pts.push((NW*k/6).toFixed(1)+','+rnd(R,-1,1).toFixed(1));
@@ -472,18 +482,13 @@ var engBtns=[];
 function setEngine(on){DV[namOn?'nam':'sat']=DRVK.get();namOn=on;DRVK.set(DV[namOn?'nam':'sat']);
   engBtns[0]._on=on;engBtns[1]._on=!on;engBtns.forEach(function(b){b._paint(b._on);});
   nam.style.pointerEvents=namOn?'auto':'none';nam.style.cursor=namOn?'pointer':'default';fitName();refreshTags();}
-var namBtn=btn(586,522,'NAM',true,function(){if(!namOn)setEngine(true);},YEL);
-var satBtn=btn(626,522,'4K',false,function(){if(namOn)setEngine(false);},YEL);engBtns=[namBtn,satBtn];
-/* GPU chip inside the NAM button: shown only while the plug-in runs the model on the GPU */
-(function(){var c=el('g',{transform:'translate(576.2 512.2) scale(.7)'},namBtn);el('title',{},c).textContent='NAM runs on the GPU';var C='#68686c',i;
-  for(i=0;i<3;i++){el('rect',{x:9+i*4,y:5,width:1.4,height:2.6,fill:C},c);el('rect',{x:9+i*4,y:20.4,width:1.4,height:2.6,fill:C},c);el('rect',{x:5,y:10+i*3.6,width:2.6,height:1.4,fill:C},c);el('rect',{x:20.4,y:10+i*3.6,width:2.6,height:1.4,fill:C},c);}
-  el('rect',{x:7.6,y:7.8,width:12.8,height:12.4,rx:1.3,fill:'none',stroke:C,'stroke-width':1.3},c);el('rect',{x:11.5,y:11.8,width:5,height:4.5,fill:C},c);
-  window.GPUCHIP=c;
-  /* the button face sinks 1.5 px when lit: the chip follows it so it stays centred on the face */
-  var op=namBtn._paint;namBtn._paint=function(o){op(o);c.setAttribute('transform','translate(576 '+(512+(o?1.5:0))+') scale(.7)');};namBtn._paint(namBtn._on);})();
-boxTag(418,506,function(){return namOn?'NAM':series();});endGrp();byp(666,522,gDr);
-box(708,484,132,146,'LIMITER','bottom');
-var gLi=grp();knob(766,552,'POUND',0.4,'0','10','',{def:0.5,fmt:num});boxTag(724,506,function(){return 'B-PARTY';});endGrp();byp(811,522,gLi);
+var namBtn=choice(526,522,'NAM',true,function(){if(!namOn)setEngine(true);},34);
+var satBtn=choice(566,522,'4K',false,function(){if(namOn)setEngine(false);},34);engBtns=[namBtn,satBtn];
+/* GPU icon on the NAM button removed (2026-10-21); placeholder kept for the GPU checkbox of the bar */
+window.GPUCHIP=el('g',{});
+boxTag(388,506,function(){return namOn?'NAM':series();});endGrp();byp(636,522,gDr);
+box(678,484,162,146,'LIMITER','bottom');
+var gLi=grp();knob(752,552,'POUND',0.4,'0','10','',{def:0.5,fmt:num});boxTag(694,506,function(){return 'B-PARTY';});endGrp();byp(811,522,gLi);
 box(846,484,130,146,'GATE','bottom');
 var gGa=grp();knob(903,552,'THRESH',0.2,'-∞','0','',{def:0,fmt:thfmt});boxTag(862,506,function(){return 'D-NOISE';});endGrp();byp(947,522,gGa);
 ROOT=svg;OFFY=0;
