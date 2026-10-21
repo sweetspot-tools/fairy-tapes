@@ -105,6 +105,15 @@ void test_back_view_items_and_tabs() {
   v->forget();
 }
 
+void test_text_link_alignment() {
+  TextLink link(CRect(0, 0, 100, 20), "Powered by");
+  CHECK(!link.leftAligned());                       // right-aligned like the tab links by default
+  link.setLeftAligned(true);
+  CHECK(link.leftAligned());
+  link.setLeftAligned(false);
+  CHECK(!link.leftAligned());
+}
+
 void test_panel_flip_refuses_without_views() {
   PanelFlip none;
   CHECK(!none.start(true) && !none.running() && !none.showingBack() && !none.tick());
@@ -125,6 +134,7 @@ int main() {
   test_segment_row_reports_changes_only();
   test_stepper_and_button();
   test_back_view_items_and_tabs();
+  test_text_link_alignment();
   test_panel_flip_refuses_without_views();
   if (g_failed) { std::fprintf(stderr, "%d check(s) failed\n", g_failed); return 1; }
   std::puts("test_back_view: ok");

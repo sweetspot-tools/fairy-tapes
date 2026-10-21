@@ -156,69 +156,6 @@ inline std::vector<HelpEntry> helpEntries() {
   return out;
 }
 
-// ---- Word wrapping and text checks --------------------------------------------------------------------------------
-// True when the string is well-formed UTF-8 (no truncated or stray continuation bytes).
-inline bool decodeValid(const std::string& s) {
-  for (std::size_t i = 0; i < s.size();) {
-    const unsigned char c = static_cast<unsigned char>(s[i]);
-    const std::size_t len = c < 0x80 ? 1 : (c >> 5) == 0x6 ? 2 : (c >> 4) == 0xE ? 3 : (c >> 3) == 0x1E ? 4 : 0;
-    if (len == 0 || i + len > s.size()) return false;
-    for (std::size_t k = 1; k < len; ++k)
-      if ((static_cast<unsigned char>(s[i + k]) & 0xC0) != 0x80) return false;
-    i += len;
-  }
-  return true;
-}
-
-// Breaks `text` into lines no wider than `maxWidth` (`measure` gives the pixel width of a string), at spaces; a word wider than
-// a line is cut (never in the middle of a UTF-8 sequence). Nothing is dropped.
-inline std::vector<std::string> wrapText(const std::string& text, double maxWidth, const std::function<double(const std::string&)>& measure) {
-  std::vector<std::string> lines;
-  std::vector<std::string> words;
-  {
-    std::string w;
-    for (char c : text) {
-      if (c == ' ' || c == '\n') {
-        if (!w.empty()) words.push_back(w);
-        w.clear();
-      } else {
-        w.push_back(c);
-      }
-    }
-    if (!w.empty()) words.push_back(w);
-  }
-  std::string line;
-  auto flush = [&] {
-    if (!line.empty()) lines.push_back(line);
-    line.clear();
-  };
-  for (const std::string& word : words) {
-    const std::string candidate = line.empty() ? word : line + " " + word;
-    if (measure(candidate) <= maxWidth) {
-      line = candidate;
-      continue;
-    }
-    flush();
-    std::string rest = word;
-    while (!rest.empty() && measure(rest) > maxWidth) {   // a word wider than the line: cut it by measured width
-      std::size_t cut = rest.size();
-      while (cut > 0) {
-        do { --cut; } while (cut > 0 && (static_cast<unsigned char>(rest[cut]) & 0xC0) == 0x80);
-        if (cut == 0 || measure(rest.substr(0, cut)) <= maxWidth) break;
-      }
-      if (cut == 0) {   // not even one character fits: take one anyway so the text still ends
-        cut = 1;
-        while (cut < rest.size() && (static_cast<unsigned char>(rest[cut]) & 0xC0) == 0x80) ++cut;
-      }
-      lines.push_back(rest.substr(0, cut));
-      rest = rest.substr(cut);
-    }
-    line = rest;
-  }
-  flush();
-  return lines;
-}
-
 // ---- Settings: options and their mapping to the preferences ---------------------------------------------------------
 inline int wearIndex(const Preferences& p) { return static_cast<int>(p.wear); }
 inline void setWearIndex(Preferences& p, int i) {
@@ -268,7 +205,13 @@ inline void setReleaseIndex(Preferences& p, int i) {
 }
 
 // ---- Tabs ----------------------------------------------------------------------------------------------------------
-inline const char* tabLabel(BackTab t) { return t == BackTab::Credits ? "CREDITS" : t == BackTab::Buttons ? "BUTTONS" : "SETTINGS"; }
-inline BackTab tabAfterClick(BackTab /*current*/, BackTab clicked) { return clicked; }
+// The tabs of the back in the order they are shown; the preference stores the BackTab, the shared BackView an index.
+constexpr BackTab kBackTabOrder[] = {BackTab::Settings, BackTab::Buttons, BackTab::Credits};
+inline int backTabIndex(BackTab t) {
+  for (int i = 0; i < 3; ++i)
+    if (kBackTabOrder[i] == t) return i;
+  return 0;
+}
+inline BackTab backTabOfIndex(int i) { return kBackTabOrder[i < 0 ? 0 : i > 2 ? 2 : i]; }
 
 } // namespace FairyTapes::TheStripper::Ui

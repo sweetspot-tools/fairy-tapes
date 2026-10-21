@@ -160,6 +160,12 @@ void TextLink::setText(std::string text) {
   invalid();
 }
 
+void TextLink::setLeftAligned(bool left) {
+  if (left_ == left) return;
+  left_ = left;
+  invalid();
+}
+
 void TextLink::draw(CDrawContext* ctx) {
   ctx->saveGlobalState();
   ctx->setDrawMode(kAntiAliasing | kNonIntegralMode);
@@ -167,7 +173,7 @@ void TextLink::draw(CDrawContext* ctx) {
   ctx->setFont(bold(11));
   ctx->setFontColor(active_ ? kWhite : kDimWhite);
   const CCoord w = ctx->getStringWidth(text_.c_str());
-  ctx->drawString(text_.c_str(), CPoint(r.right - 2 - w, r.bottom - 6));
+  ctx->drawString(text_.c_str(), CPoint(left_ ? r.left + 2 : r.right - 2 - w, r.bottom - 6));
   ctx->restoreGlobalState();
   setDirty(false);
 }

@@ -1,8 +1,8 @@
 // The Stripper GUI: the TONE3000 tab of the model picker. Layout from src/the-stripper/docs/mockups/stripper_model_browser.html.
 #include "ui/tone3000_tab.h"
 
-#include "ui/back_widgets.h"
 #include "ui/browser_widgets.h"
+#include "ui/tape_font_id.h"
 #include "fairy_ui/draw_util.h"
 
 #include "vstgui/lib/cdrawcontext.h"
@@ -12,6 +12,7 @@
 
 namespace FairyTapes::TheStripper::Ui {
 
+using FairyTapes::Ui::TextLink;
 using FairyTapes::Ui::drawTitledBox;
 using FairyTapes::Ui::kAmber;
 using FairyTapes::Ui::kDimWhite;

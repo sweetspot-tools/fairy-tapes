@@ -4,7 +4,9 @@
 #include "controller.h"
 #include "ui/editor.h"
 #include "ui/back_panel.h"
-#include "ui/back_view.h"
+#include "ui/back_content.h"
+#include "ui/buttons_tab.h"
+#include "fairy_ui/back_view.h"
 #include "ui/model_browser.h"
 
 #include "pluginterfaces/base/ipluginbase.h"
@@ -98,7 +100,10 @@ struct EditorPreview {
       FairyTapes::Ui::Skin skin;
       Preferences prefs = loadPreferences(preferencesPath("TheStripper"));
       prefs.backTab = static_cast<BackTab>(backTab);
-      auto* back = new BackView(VSTGUI::CRect(0, 0, Editor::kWidth, Editor::kHeight), &skin, prefs, BackView::Callbacks{});
+      auto* back = new FairyTapes::Ui::BackView(VSTGUI::CRect(0, 0, Editor::kWidth, Editor::kHeight), &skin,
+                                                makeBackContent(prefs, ctl.recallMode(), BackActions{}), FairyTapes::Ui::BackView::Callbacks{},
+                                                backTabIndex(prefs.backTab));
+      back->setCustomDrawer(1, drawButtonsTab);
       back->setWear(FairyTapes::Ui::generateWear(ctl.wearSeed() ^ 0x77u, prefs.wear));
       root->removeAll(true);
       root->addView(back);

@@ -53,9 +53,7 @@ add_library(the_stripper MODULE
   src/tone3000_service.cpp
   src/ui/model_strip.cpp
   src/ui/tape_piece_view.cpp
-  src/ui/back_widgets.cpp
-  src/ui/back_view.cpp
-  src/ui/flip_view.cpp
+  src/ui/buttons_tab.cpp
   src/ui/recall_marks_view.cpp
   src/ui/gpu_chip_view.cpp
   src/dsp/compression_stub.cpp
@@ -214,17 +212,11 @@ target_include_directories(the_stripper_tape_pieces_tests PRIVATE ${CMAKE_CURREN
 target_link_libraries(the_stripper_tape_pieces_tests PRIVATE fairy_ui)
 add_test(NAME the_stripper_tape_pieces_tests COMMAND the_stripper_tape_pieces_tests)
 
-# Back of the panel: credits, button help, settings options, word wrap (header-only, no VSTGUI).
+# Back of the panel: credits, button help, settings options, the content given to the common back view (header-only, no VSTGUI).
 add_executable(the_stripper_back_panel_tests tests/test_back_panel.cpp)
 target_include_directories(the_stripper_back_panel_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${VST3_SDK_PATH} ${VST3_SDK_PLUGINTERFACES}/base)
 target_link_libraries(the_stripper_back_panel_tests PRIVATE fairy_ui)
 add_test(NAME the_stripper_back_panel_tests COMMAND the_stripper_back_panel_tests)
-
-# The pose of the turning panel (header-only, no VSTGUI).
-add_executable(the_stripper_flip_tests tests/test_flip.cpp)
-target_include_directories(the_stripper_flip_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-add_test(NAME the_stripper_flip_tests COMMAND the_stripper_flip_tests)
-
 
 # Typed values: parsing and the inverse of the display (header-only, no VSTGUI).
 add_executable(the_stripper_value_text_tests tests/test_value_text.cpp)
@@ -242,7 +234,7 @@ add_executable(the_stripper_render EXCLUDE_FROM_ALL tools/render_editor.cpp ${VS
   src/ui/browser_widgets.cpp
   src/ui/model_browser.cpp
   src/ui/tone3000_tab.cpp src/tone3000_service.cpp
-  src/ui/model_strip.cpp src/ui/tape_piece_view.cpp src/ui/back_widgets.cpp src/ui/back_view.cpp src/ui/flip_view.cpp src/ui/recall_marks_view.cpp src/ui/gpu_chip_view.cpp)
+  src/ui/model_strip.cpp src/ui/tape_piece_view.cpp src/ui/buttons_tab.cpp src/ui/recall_marks_view.cpp src/ui/gpu_chip_view.cpp)
 target_include_directories(the_stripper_render PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/../../shared/tone3000/include ${VST3_SDK_PATH} ${VST3_SDK_BASE}/source ${VST3_SDK_PLUGINTERFACES}/base ${VST3_SDK_PLUGINTERFACES}/vst ${VST3_SDK_PUBLIC}/source ${VST3_SDK_PUBLIC}/source/vst)
 target_link_libraries(the_stripper_render PRIVATE sdk pluginterfaces fairy_ui fairy_ui_widgets)
 

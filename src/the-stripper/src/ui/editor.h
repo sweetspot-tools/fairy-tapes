@@ -10,6 +10,8 @@
 #include "ui/layout.h"
 #include "ui/tape_kit.h"
 
+#include "fairy_ui/flip_view.h"
+
 #include "fairy_ui/skin.h"
 
 #include "public.sdk/source/vst/vstguieditor.h"
@@ -34,6 +36,7 @@ class SilkscreenView;
 class MeterBar;
 class ClipLed;
 class ScrewView;
+class BackView;
 }
 
 namespace FairyTapes::TheStripper {
@@ -42,8 +45,6 @@ class Controller;
 
 namespace FairyTapes::TheStripper::Ui {
 
-class BackView;
-class FlipView;
 class ModelBrowser;
 class ModelStrip;
 class RecallMarksView;
@@ -102,7 +103,6 @@ private:
   void screwsTurned();                            // a screw was turned: save the four angles
   void rebuildPieces();                           // the pieces of tape of the current seed, in their place in the layers
   void startFlip(bool toBack);
-  void finishFlip();
   void changePreference(const std::function<void(Preferences&)>& mutate);
   void editValue(const ControlSpec& spec);   // opens the text field over the printed value of a knob
   void closeValueEdit();
@@ -122,11 +122,8 @@ private:
   std::array<FairyTapes::Ui::ClipLed*, kClipCount> clips_{};
   std::chrono::steady_clock::time_point lastTick_{};
   VSTGUI::CViewContainer* front_ = nullptr;          // the front of the panel (all views of createViews), owned by the frame
-  BackView* backView_ = nullptr;                     // the back, owned by the frame (hidden until the panel is turned)
-  FlipView* flip_ = nullptr;                         // the turn in progress, owned by the frame
-  VSTGUI::CView* flipFrom_ = nullptr;
-  VSTGUI::CView* flipTo_ = nullptr;
-  std::chrono::steady_clock::time_point flipStart_{};
+  FairyTapes::Ui::BackView* backView_ = nullptr;     // the back, owned by the frame (hidden until the panel is turned)
+  FairyTapes::Ui::PanelFlip flip_;                   // the turn of the panel (snapshots, FlipView, timing), shared/ui
   Preferences prefs_;
   FairyTapes::Ui::WearView* wearView_ = nullptr;     // owned by front_
   FairyTapes::Ui::SilkscreenView* silk_ = nullptr;   // owned by the frame

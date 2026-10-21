@@ -7,6 +7,8 @@
 #include "tone3000_actions.h"
 #include "ui/tone3000_view.h"
 
+#include "fairy_ui/back_widgets.h"
+
 #include "vstgui/lib/cviewcontainer.h"
 
 #include <functional>
@@ -17,7 +19,6 @@ namespace FairyTapes::TheStripper::Ui {
 
 class PushButton;
 class ListBox;
-class TextLink;
 
 class Tone3000Tab : public VSTGUI::CViewContainer {
 public:
@@ -53,7 +54,7 @@ private:
   PushButton *signIn_ = nullptr, *signOut_ = nullptr, *cancel_ = nullptr, *choose_ = nullptr, *prev_ = nullptr, *next_ = nullptr;
   PushButton* download_ = nullptr;
   ListBox *toneList_ = nullptr, *modelList_ = nullptr;
-  TextLink *powered_ = nullptr, *catalog_ = nullptr, *toneLink_ = nullptr;
+  FairyTapes::Ui::TextLink *powered_ = nullptr, *catalog_ = nullptr, *toneLink_ = nullptr;
 };
 
 } // namespace FairyTapes::TheStripper::Ui

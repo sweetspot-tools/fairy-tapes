@@ -27,11 +27,7 @@ using namespace VSTGUI;
 
 namespace {
 
-constexpr CColor kTint(0x16, 0x16, 0x17);
-constexpr CColor kEdge(0x2c, 0x2c, 0x2f);
-constexpr char kGrainTile[] = "panel_grain.png";   // optional 256 x 256 tile (tools/gen_panel_grain.py)
 
-constexpr CCoord kPanelRadius = 14;
 
 } // namespace
 
@@ -45,36 +41,12 @@ PanelView::PanelView(const CRect& size, const FairyTapes::Ui::Skin* skin)
   setMouseEnabled(false);
 }
 
-void drawPanelBase(CDrawContext* ctx, const CRect& r, const FairyTapes::Ui::Skin* skin) {
-  const CPoint o = r.getTopLeft();
-  // Tint, then the optional grain tile, then the soft light (reflection at the top, shade at the bottom).
-  if (auto body = owned(ctx->createRoundRectGraphicsPath(r, kPanelRadius))) {
-    ctx->setFillColor(kTint);
-    ctx->drawGraphicsPath(body, CDrawContext::kPathFilled);
-    if (CBitmap* tile = skin ? skin->bitmap(kGrainTile) : nullptr) {
-      const CCoord tw = tile->getWidth(), th = tile->getHeight();
-      if (tw > 0 && th > 0) {
-        ctx->setClipRect(r);
-        for (CCoord y = r.top; y < r.bottom; y += th)
-          for (CCoord x = r.left; x < r.right; x += tw) tile->draw(ctx, CRect(x, y, x + tw, y + th));
-      }
-    }
-    if (auto light = owned(CGradient::create(0., 1., CColor(255, 255, 255, 16), CColor(0, 0, 0, 40))))
-      ctx->fillLinearGradient(body, *light, CPoint(o.x, o.y), CPoint(o.x, r.bottom));
-  }
-  if (auto edge = owned(ctx->createRoundRectGraphicsPath(CRect(r).inset(1, 1), kPanelRadius - 1))) {
-    ctx->setFrameColor(kEdge);
-    ctx->setLineWidth(2);
-    ctx->drawGraphicsPath(edge, CDrawContext::kPathStroked);
-  }
-}
-
 void PanelView::draw(CDrawContext* ctx) {
   ctx->saveGlobalState();
   ctx->setDrawMode(kAntiAliasing | kNonIntegralMode);
   const CRect& r = getViewSize();
   const CPoint o = r.getTopLeft();
-  drawPanelBase(ctx, r, skin_);
+  FairyTapes::Ui::drawPanelBackground(ctx, r, skin_);
 
   // Header
   ctx->setFont(titleFont_);

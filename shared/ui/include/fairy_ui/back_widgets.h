@@ -60,6 +60,8 @@ public:
   void setActive(bool active);
   bool active() const { return active_; }
   void setText(std::string text);
+  void setLeftAligned(bool left);   // text starts at the left edge instead of ending at the right one (footers, link rows)
+  bool leftAligned() const { return left_; }
   std::function<void()> onClick;
 
   void draw(VSTGUI::CDrawContext* context) override;
@@ -69,6 +71,7 @@ public:
 private:
   std::string text_;
   bool active_ = false;
+  bool left_ = false;
 };
 
 // A grey push button with a dark caption.

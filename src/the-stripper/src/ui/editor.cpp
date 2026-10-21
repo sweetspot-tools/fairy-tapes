@@ -2,15 +2,16 @@
 #include "ui/editor.h"
 
 #include "controller.h"
-#include "ui/back_view.h"
-#include "ui/back_widgets.h"
-#include "ui/flip_view.h"
 #include "ui/model_browser.h"
 #include "ui/model_source.h"
 #include "ui/model_strip.h"
 #include "ui/silkscreen_items.h"
 #include "ui/recall_marks.h"
+#include "ui/back_content.h"
+#include "ui/buttons_tab.h"
 #include "ui/gpu_chip_view.h"
+#include "fairy_ui/back_view.h"
+#include "fairy_ui/back_widgets.h"
 #include "ui/recall_marks_view.h"
 #include "fairy_ui/screw_view.h"
 #include "ui/tape_piece_view.h"
@@ -173,26 +174,30 @@ bool PLUGIN_API Editor::open(void* parent, const PlatformType& platformType) {
   createViews(front_);
   frame->addView(front_);
   {
-    BackView::Callbacks cb;
-    cb.back = [this] { startFlip(false); };
-    cb.changePreference = [this](const std::function<void(Preferences&)>& mutate) { changePreference(mutate); };
-    cb.reroll = [this] {
+    BackActions act;
+    act.changePreference = [this](const std::function<void(Preferences&)>& mutate) { changePreference(mutate); };
+    act.reroll = [this] {
       ctl_->rerollWear();   // a new seed: new wear, dirt and writing
       placeScrews(false);
       rebuildPieces();
       applyAppearance(prefs_);
     };
-    cb.manageFolders = [this] { openBrowser(); };
-    cb.openTone3000 = [this] { openBrowser(true); };
-    cb.recallModeChanged = [this](int mode) { ctl_->setRecallMode(mode); };
-    cb.markNow = [this] {
+    act.manageFolders = [this] { openBrowser(); };
+    act.openTone3000 = [this] { openBrowser(true); };
+    act.recallModeChanged = [this](int mode) { ctl_->setRecallMode(mode); };
+    act.markNow = [this] {
       ctl_->markRecallNow();
       updateRecallMarks();
     };
-    backView_ = new BackView(CRect(0, 0, kWidth, kHeight), &skin_, prefs_, std::move(cb));
+    FairyTapes::Ui::BackView::Callbacks cb;
+    cb.back = [this] { startFlip(false); };
+    cb.tabChanged = [this](int tab) { changePreference([tab](Preferences& p) { p.backTab = backTabOfIndex(tab); }); };
+    backView_ = new FairyTapes::Ui::BackView(CRect(0, 0, kWidth, kHeight), &skin_, makeBackContent(prefs_, ctl_->recallMode(), act),
+                                             std::move(cb), backTabIndex(prefs_.backTab));
+    backView_->setCustomDrawer(1, drawButtonsTab);   // the BUTTONS tab
     backView_->setVisible(false);
-    backView_->setRecallMode(ctl_->recallMode());
     frame->addView(backView_);
+    flip_ = FairyTapes::Ui::PanelFlip(frame, front_, backView_);
     applyAppearance(prefs_);   // the back's wear
   }
   if (scale_ != 1.0) frame->setZoom(scale_);   // VSTGUIEditor::attached then reports the scaled size
@@ -224,9 +229,8 @@ void PLUGIN_API Editor::close() {
   marks_ = nullptr;
   screws_.fill(nullptr);
   front_ = nullptr;
+  flip_.reset();   // the views go away with the frame
   backView_ = nullptr;
-  flip_ = nullptr;
-  flipFrom_ = flipTo_ = nullptr;
   wearView_ = nullptr;
   silk_ = nullptr;
   pieces_.fill(nullptr);
@@ -342,7 +346,8 @@ void Editor::createViews(CViewContainer* parent) {
   }
 
   // The way to the back of the panel: a small text at the right of the header, like the other silkscreen.
-  auto* back = new TextLink(CRect(kWidth - 34 - 90, 62, kWidth - 34, 84), "BACK  \xE2\x86\x92");
+  const auto link = FairyTapes::Ui::frontBackLinkBox();   // the same place as "<- BACK" on the back of the panel
+  auto* back = new FairyTapes::Ui::TextLink(CRect(link.x, link.y, link.x + link.w, link.y + link.h), "BACK  \xE2\x86\x92");
   back->onClick = [this] { startFlip(true); };
   parent->addView(back);
 
@@ -456,55 +461,21 @@ void Editor::changePreference(const std::function<void(Preferences&)>& mutate) {
   mutate(p);
   savePreferences(file, p);
   applyAppearance(p);
-  if (backView_) backView_->setPreferences(p);
+  if (backView_)
+    for (const auto& r : backRowValues(p)) backView_->setSelected(r.key, r.index);
 }
 
-// Turns the panel: snapshots both sides, hides them and shows the turn (flip_) until it is done.
+// Turns the panel (the common PanelFlip snapshots both sides, shows the turn and then the new side).
 void Editor::startFlip(bool toBack) {
-  if (!frame || !front_ || !backView_ || flip_) return;
+  if (!frame || !front_ || !backView_) return;
   closeTapeEdit();
   if (browser_) browserClosing_ = true;
-  CView* from = toBack ? static_cast<CView*>(front_) : static_cast<CView*>(backView_);
-  CView* to = toBack ? static_cast<CView*>(backView_) : static_cast<CView*>(front_);
-  auto snap = [&](CView* v) -> SharedPointer<CBitmap> {
-    auto off = COffscreenContext::create(CPoint(kWidth, kHeight), 1.0);
-    if (!off) return nullptr;
-    off->beginDraw();
-    v->draw(off);
-    off->endDraw();
-    return SharedPointer<CBitmap>(off->getBitmap());
-  };
-  SharedPointer<CBitmap> a = snap(from), b = snap(to);
-  if (!a || !b) {   // no offscreen drawing: swap the sides without the turn
-    from->setVisible(false);
-    to->setVisible(true);
-    frame->invalid();
-    return;
-  }
-  from->setVisible(false);
-  to->setVisible(false);
-  flipFrom_ = from;
-  flipTo_ = to;
-  flip_ = new FlipView(CRect(0, 0, kWidth, kHeight), a, b);
-  flipStart_ = std::chrono::steady_clock::now();
-  frame->addView(flip_);
-}
-
-void Editor::finishFlip() {
-  if (!flip_) return;
-  if (frame) frame->removeView(flip_, true);
-  flip_ = nullptr;
-  if (flipTo_) flipTo_->setVisible(true);
-  if (flipFrom_) flipFrom_->setVisible(false);
-  flipFrom_ = flipTo_ = nullptr;
-  if (frame) frame->invalid();
+  flip_.start(toBack);
 }
 
 void Editor::onTimer() {
-  if (flip_) {   // the turn of the panel
-    const double t = std::chrono::duration<double>(std::chrono::steady_clock::now() - flipStart_).count() / kFlipSeconds;
-    if (t >= 1.0) finishFlip();
-    else flip_->setProgress(t);
+  if (flip_.running()) {   // the turn of the panel
+    flip_.tick();
     return;
   }
   if (browserClosing_) {   // the popup asked to close from inside its own mouse handler: remove it now
@@ -541,7 +512,7 @@ void Editor::updateModel() {
 
 // A click on the value under a knob: a text field with the number; Enter or leaving it confirms, Escape cancels.
 void Editor::editValue(const ControlSpec& spec) {
-  if (!frame || valueEdit_ || tapeEdit_ || browser_ || flip_) return;
+  if (!frame || valueEdit_ || tapeEdit_ || browser_ || flip_.running()) return;
   const ParamID id = spec.id == kDriveAmount ? driveParam_ : spec.id;   // the shared Drive knob edits the engine in use
   NormalizedControl* knobView = controls_[spec.id];
   if (!knobView) return;
