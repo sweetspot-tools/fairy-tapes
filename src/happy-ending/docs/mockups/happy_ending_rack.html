@@ -1,10 +1,11 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><title>Happy Ending preview — rack</title>
+<link href="https://fonts.googleapis.com/css2?family=Zeyada&family=Rock+Salt&family=Homemade+Apple&display=swap" rel="stylesheet">
 <style>
 html,body{-webkit-user-select:none;user-select:none}
 body{margin:0;padding:16px;background:#e9e8e4;font-family:system-ui,sans-serif;color:#222}
 .bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:0 0 12px;font-size:13px}
-.stage{background:#d8d6d0;border-radius:12px;padding:12px;max-width:1040px;margin:auto}
+.stage{background:#d8d6d0;border-radius:12px;padding:12px;max-width:1320px;margin:auto}
 svg{width:100%;height:auto;display:block;touch-action:none}
 .scene{perspective:2200px}
 .card{position:relative;transform-style:preserve-3d;transition:transform .8s cubic-bezier(.5,.1,.2,1)}
@@ -24,16 +25,33 @@ svg{width:100%;height:auto;display:block;touch-action:none}
   <button id="exF">Example: final clip</button>
   <button id="exM">Example: metalhead</button>
   <button id="flat">Flat</button>
+  <label>Wear <select id="wear"><option value="off">Off</option><option value="light">Light</option><option value="heavy">Heavy</option></select></label>
+  <button id="reroll" title="New random layout (new instance)">Re-roll</button>
   <label>Program <select id="prog"><option value="loud" selected>Loud kick &amp; hats</option><option value="quiet">Quiet</option></select></label>
-  <span style="color:#555">Sketch of stage 1 only (simplified controls, no wear). Stepped knobs: drag vertically (Shift = fine), wheel = one step, double-click = default. M/S cycles ST → MID → SIDE on each band: the screen shows one stereo curve, or separate MID and SIDE curves as soon as a band works on M or S. On SIDE the high pass switches to a mono-bass scale (Off, 60–200 Hz). LISTEN solos one bell; while it is on, the other bands are locked. A band (or the stage) switched off locks its controls; only its IN button stays live. Bells narrow as their gain grows (Q-coupling). VIBE EQ: LOW does the boost-and-cut trick in one knob, TILT darkens or brightens around the mids, DYN pulls the LOW or AIR boost back on loud program; the amber ACT LED shows how much (dashed line on the screen = the static setting). GLUE: SSL-style bus compressor in parallel (its GR row is now in LEVEL), MIX 50 % by default; the screen scrolls the program level (grey), the compressor's gain reduction (amber) and the net reduction after MIX (dashed); WARM softens the attack. CLIP: soft clipper, level matched (quiet parts pass unchanged, peaks are rounded); the dot on the screen follows the program peaks against the dashed no-clip line, the amber CLIP LEDs show the dB taken off. LIMIT: look-ahead limiter on sample peaks; MODERN / PUNCH / DYNAMIC are styles of the same engine; SET forces a squash and locks everything but RELEASE until you press it again. FINAL: INFLATE (EFFECT, CURVE) or a safety CLIP pushed by up to +2 dB; only the controls of the selected mode are shown. METALHEAD: off by default; a brickwall limiter after FINAL, PUSH drives into the output CEILING. Top row as in every plugin: INPUT gain, LEVEL (IN/OUT peak meters, a clip LED per module in signal order, LUFS short-term and integrated — click to reset) and OUTPUT gain with the global BYPASS, which dims and locks every stage while the meters stay lit.</span>
+  <span style="color:#555">Wear, tape and screws as in every plugin of the suite (one seed per instance; click a piece of tape to write on it, drag a screw to turn it). Stepped knobs: drag vertically (Shift = fine), wheel = one step, double-click = default. M/S cycles ST → MID → SIDE on each band: the screen shows one stereo curve, or separate MID and SIDE curves as soon as a band works on M or S. On SIDE the high pass switches to a mono-bass scale (Off, 60–200 Hz). LISTEN solos one bell; while it is on, the other bands are locked. A band (or the stage) switched off locks its controls; only its IN button stays live. Bells narrow as their gain grows (Q-coupling). VIBE EQ: LOW does the boost-and-cut trick in one knob, TILT darkens or brightens around the mids, DYN pulls the LOW or AIR boost back on loud program; the amber ACT LED shows how much (dashed line on the screen = the static setting). GLUE: SSL-style bus compressor in parallel (its GR row is now in LEVEL), MIX 50 % by default; the screen scrolls the program level (grey), the compressor's gain reduction (amber) and the net reduction after MIX (dashed); WARM softens the attack. CLIP: soft clipper, level matched (quiet parts pass unchanged, peaks are rounded); the dot on the screen follows the program peaks against the dashed no-clip line, the amber CLIP LEDs show the dB taken off. LIMIT: look-ahead limiter on sample peaks; MODERN / PUNCH / DYNAMIC are styles of the same engine; SET forces a squash and locks everything but RELEASE until you press it again. FINAL: INFLATE (EFFECT, CURVE) or a safety CLIP pushed by up to +2 dB; only the controls of the selected mode are shown. METALHEAD: off by default; a brickwall limiter after FINAL, PUSH drives into the output CEILING. Top row as in every plugin: INPUT gain, LEVEL (IN/OUT peak meters, a clip LED per module in signal order, LUFS short-term and integrated — click to reset) and OUTPUT gain with the global BYPASS, which dims and locks every stage while the meters stay lit.</span>
 </div>
-<div class="stage"><div class="scene"><div class="card" id="card"><svg id="ui" viewBox="0 0 1000 1256" role="img" aria-label="Mastering plugin: input, level, output and seven stages"></svg><svg id="back" viewBox="0 0 1000 1256" role="img" aria-label="Settings and credits"></svg></div></div></div>
+<div class="stage"><div class="scene"><div class="card" id="card"><svg id="ui" viewBox="0 0 1280 934" role="img" aria-label="Mastering plugin: input, level, output and seven stages"></svg><svg id="back" viewBox="0 0 1280 934" role="img" aria-label="Settings and credits"></svg></div></div></div>
 <script>
 var NS='http://www.w3.org/2000/svg',svg=document.getElementById('ui');
 function el(n,a,p){var e=document.createElementNS(NS,n);for(var k in a)e.setAttribute(k,a[k]);(p||svg).appendChild(e);return e;}
 var W='#f4f4f0',DIMW='#c9c9c2',AMBL='#f0b429',RED='#e8392b',YEL='#f2c21b',SIDEC='#7fc0ff';
 var FONT="'Arial Narrow','Helvetica Neue',Helvetica,Arial,sans-serif";
 function txt(s,x,y,sz,col,anchor,w,p,it){var t=el('text',{x:x,y:y,'font-size':sz,fill:col||W,'text-anchor':anchor||'middle','font-weight':w||700,'font-family':FONT,'font-style':it?'italic':'normal'},p);t.textContent=s;return t;}
+/* values font, as in The Stripper: values under the knobs and selectors in STANDARD or in the tape font (default),
+   with the tape font scaled so its digits match the standard ones (x1.3) */
+/* settings persistence: localStorage when the page allows it, otherwise window.name (survives reloads in the same tab, e.g. in a data: preview) */
+function nameStore(){try{var o=JSON.parse(window.name||'{}');return(o&&typeof o==='object')?o:{};}catch(e){return {};}}
+function lsGet(k,d){try{var v=localStorage.getItem(k);if(v!==null)return v;}catch(e){}var o=nameStore();return(k in o)?o[k]:d;}
+function lsSet(k,v){try{localStorage.setItem(k,v);}catch(e){}var o=nameStore();o[k]=String(v);try{window.name=JSON.stringify(o);}catch(e){}}
+function lsDel(k){try{localStorage.removeItem(k);}catch(e){}var o=nameStore();delete o[k];try{window.name=JSON.stringify(o);}catch(e){}}
+var TAPEFONTS={'Zeyada':1.45,'Rock Salt':.78,'Homemade Apple':.8};
+var TAPEFONT=lsGet('he_tapefont','Zeyada');if(!(TAPEFONT in TAPEFONTS))TAPEFONT='Zeyada';
+var HWTXT=[],HW=lsGet('he_hw','1')==='1',NORM={};
+function digitAscent(weight,family){var c=document.createElement('canvas').getContext('2d');c.font=weight+' 100px '+family;return c.measureText('0123456789').actualBoundingBoxAscent/100||.7;}
+function computeNorm(){var a0=digitAscent('bold',FONT);Object.keys(TAPEFONTS).forEach(function(f){NORM[f]=a0/digitAscent('normal',"'"+f+"',cursive")*1.3;});}
+function applyHW(){var f="'"+TAPEFONT+"',cursive",k=NORM[TAPEFONT]||TAPEFONTS[TAPEFONT];
+  HWTXT.forEach(function(h){var t=h[0];if(HW){t.setAttribute('font-family',f);t.setAttribute('font-size',(h[1]*k).toFixed(1));t.setAttribute('font-weight',400);}else{t.setAttribute('font-family',FONT);t.setAttribute('font-size',h[1]);t.setAttribute('font-weight',700);}});}
+(document.fonts&&document.fonts.load?Promise.all(Object.keys(TAPEFONTS).map(function(n){return document.fonts.load("20px '"+n+"'","0123 Hz dB");})):Promise.resolve()).then(function(){computeNorm();applyHW();}).catch(function(){});
 function polar(cx,cy,r,deg){var a=deg*Math.PI/180;return [cx+r*Math.cos(a),cy-r*Math.sin(a)];}
 
 /* ===== panel: same material and texture as The Stripper ===== */
@@ -47,21 +65,196 @@ var defs=el('defs',{});
   var bs=el('filter',{id:'bs',x:'-60%',y:'-60%',width:'220%',height:'240%'},defs);el('feGaussianBlur',{stdDeviation:1.8},bs);
   var g=el('radialGradient',{id:'sheen',cx:'33%',cy:'28%',r:'85%'},defs);[[0,'#fff',.13],[.45,'#fff',.02],[1,'#000',.38]].forEach(function(t){el('stop',{offset:t[0],'stop-color':t[1],'stop-opacity':t[2]},g);});
   var gl=el('linearGradient',{id:'glow',x1:0,y1:0,x2:0,y2:1},defs);[[0,'#fff',.07],[.35,'#fff',0],[.75,'#000',0],[1,'#000',.35]].forEach(function(t){el('stop',{offset:t[0],'stop-color':t[1],'stop-opacity':t[2]},gl);});
-  var cp=el('clipPath',{id:'scr'},defs);el('rect',{x:44,y:116,width:862,height:168,rx:4},cp);
+  var cp=el('clipPath',{id:'scr'},defs);el('rect',{x:798,y:116,width:388,height:248,rx:4},cp);
 })();
-var PH=1256;
-el('rect',{width:1000,height:PH,rx:14,fill:'#161617'});
-el('rect',{width:1000,height:PH,rx:14,fill:'#fff',filter:'url(#tfine)'});
-el('rect',{width:1000,height:PH,rx:14,fill:'url(#glow)'});
-el('rect',{x:2,y:2,width:996,height:PH-4,rx:13,fill:'none',stroke:'#2c2c2f','stroke-width':2});
-[[18,18],[982,18],[18,PH-18],[982,PH-18]].forEach(function(p,i){var cx=p[0],cy=p[1];
-  el('circle',{cx:cx,cy:cy,r:6.6,fill:'#2b2b2e',stroke:'#4c4c50','stroke-width':1});el('circle',{cx:cx,cy:cy,r:4.6,fill:'#202022',opacity:.7});
-  el('rect',{x:cx-5,y:cy-1.1,width:10,height:2.2,rx:.6,fill:'#050505',transform:'rotate('+(25+i*41)+' '+cx+' '+cy+')'});});
+var PH=934;   /* bottom row 46 px lower (PUSH at the height of the CLIP DRIVE, knobs raised), VIBE EQ / GLUE row 44 px lower (GLUE selectors bottom right, lower knobs raised),
+   service row 12 px lower (CLIP LEDs, TARGET and CEIL raised) */
+
+/* ===== wear, tape, screws and worn controls: the same code as Pillow Talk (from The Stripper), sized for this panel =====
+   the panel is about 2.8 times the area of Pillow Talk's, so the counts scale with it (KW) */
+var PW=1280,KW=PW*PH/(1000*470);
+var TAPETXT=(function(){try{var o=JSON.parse(lsGet('he_tape','{}'));return(o&&typeof o==='object')?o:{};}catch(e){return {};}})();
+(function(){var f=el('filter',{id:'bp',x:'-60%',y:'-60%',width:'220%',height:'240%'},defs);el('feGaussianBlur',{stdDeviation:.9},f);})();
+/* ===== wear: everything random derives from one seed that the plugin saves in its state, so the layout is built once per instance ===== */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+var SEED=+lsGet('he_seed',0);if(!SEED){SEED=(Math.random()*4294967295)>>>0;lsSet('he_seed',SEED);}
+var WEAR=lsGet('he_wear','light'),A={off:0,light:1,heavy:2.2}[WEAR];
+var CTRL=0;function crng(){return mulberry32((SEED^Math.imul(++CTRL,2654435761))>>>0);}
+function rnd(R,a,b){return a+R()*(b-a);}
+function pick(R,arr){return arr[Math.floor(R()*arr.length)];}
+(function(){var rg=el('filter',{id:'rgh',x:'-40%',y:'-40%',width:'180%',height:'180%'},defs);el('feTurbulence',{type:'fractalNoise',baseFrequency:'0.22',numOctaves:2,seed:7,result:'n'},rg);el('feDisplacementMap',{in:'SourceGraphic',in2:'n',scale:2.6,xChannelSelector:'R',yChannelSelector:'G'},rg);
+  var f=el('filter',{id:'wb',x:'-30%',y:'-30%',width:'160%',height:'160%'},defs);el('feGaussianBlur',{stdDeviation:4},f);
+  var g=el('filter',{id:'wb2',x:'-10%',y:'-30%',width:'120%',height:'160%'},defs);el('feGaussianBlur',{stdDeviation:1.1},g);
+  var h=el('filter',{id:'wb3'},defs);el('feGaussianBlur',{stdDeviation:.6},h);})();
+function blob(R,cx,cy,rx,ry,n){var pts=[];for(var i=0;i<n;i++){var a=i/n*Math.PI*2,k=rnd(R,.55,1.15);pts.push((cx+Math.cos(a)*rx*k).toFixed(1)+','+(cy+Math.sin(a)*ry*k).toFixed(1));}return pts.join(' ');}
+function wear(L,R,amt,face){
+  if(!amt)return;
+  L.style.pointerEvents='none';
+  var n=function(c){return Math.round(c*amt*KW);};
+  var TL=el('g',{},L);  /* handwriting on the tape: kept above ALL tape pieces (re-appended last) */
+  var st=el('g',{filter:'url(#wb)'},L);
+  for(var i=0;i<n(face?3:6);i++){var warm=R()<.45;el('polygon',{points:blob(R,rnd(R,40,PW-40),rnd(R,100,PH-20),rnd(R,25,95),rnd(R,12,45),9),fill:warm?'#b99a5a':'#d8d8d2',opacity:rnd(R,.012,.04)},st);}
+  /* stuck-on residue as touches of a very dry brush: bundles of thin bristle marks, opaque, broken by gaps (the panel shows through between bristles),
+     heavy where the stroke lands and dragging out into ragged, uneven tails. No shadow, no blur. */
+  var gk=el('g',{},L);
+  for(var q=0;q<n(face?4:9);q++){
+    var big=R()<.7,cx0=rnd(R,30,PW-30),cy0=rnd(R,100,PH-20),dir=rnd(R,0,Math.PI*2),len=big?rnd(R,22,70):rnd(R,7,16),width=big?rnd(R,5,13):rnd(R,2.5,5),m=Math.round(width/rnd(R,.55,.9)),
+        col=pick(R,['#6a5a38','#54472d','#7a6a46','#8c8778','#9a8e6e','#5b3f2c','#47402f']),cs=Math.cos(dir),sn=Math.sin(dir);
+    for(var i=0;i<m;i++){
+      var t=(i-(m-1)/2)/Math.max(1,m-1),off=t*width+rnd(R,-.35,.35),edge=Math.abs(t)*2,
+          l=len*rnd(R,.45,1)*(1-edge*.35),s0=-len/2+rnd(R,0,len*.28)+edge*len*.08,
+          x1=cx0-sn*off+cs*s0,y1=cy0+cs*off+sn*s0,x2=x1+cs*l,y2=y1+sn*l,
+          bend=rnd(R,-1.6,1.6),mx=(x1+x2)/2-sn*bend,my=(y1+y2)/2+cs*bend,
+          dash=R()<.55?[rnd(R,3,16),rnd(R,.8,4),rnd(R,2,9),rnd(R,1,5),rnd(R,6,20),rnd(R,1,6)].map(function(v){return v.toFixed(1);}).join(' '):null;
+      var at={d:'M'+x1.toFixed(1)+' '+y1.toFixed(1)+' Q'+mx.toFixed(1)+' '+my.toFixed(1)+' '+x2.toFixed(1)+' '+y2.toFixed(1),fill:'none',stroke:R()<.14?'#16120a':col,'stroke-width':(rnd(R,.45,1.15)*(1-edge*.3)).toFixed(2),'stroke-linecap':R()<.5?'butt':'round'};
+      if(dash)at['stroke-dasharray']=dash;el('path',at,gk);}
+    /* heavier loading at the start of the touch */
+    for(var h=0;h<1+(R()*3|0);h++){var ho=rnd(R,-width*.4,width*.4),hx=cx0-len/2*cs-sn*ho,hy=cy0-len/2*sn+cs*ho;el('line',{x1:hx.toFixed(1),y1:hy.toFixed(1),x2:(hx+cs*len*rnd(R,.1,.25)).toFixed(1),y2:(hy+sn*len*rnd(R,.1,.25)).toFixed(1),stroke:col,'stroke-width':rnd(R,1.2,2.2).toFixed(2),'stroke-linecap':'round'},gk);}
+  }
+  var sc=el('g',{},L);
+  for(var j=0;j<n(face?25:55);j++){var x=rnd(R,20,PW-20),y=rnd(R,20,PH-18),len=R()<.12?rnd(R,120,260):rnd(R,14,90),ang=(R()<.6?rnd(R,-.35,.35):rnd(R,0,Math.PI*2)),cur=rnd(R,-.12,.12);
+    var x2=x+Math.cos(ang)*len,y2=y+Math.sin(ang)*len,mx=(x+x2)/2+Math.sin(ang)*len*cur,my=(y+y2)/2-Math.cos(ang)*len*cur,d='M'+x.toFixed(1)+' '+y.toFixed(1)+' Q'+mx.toFixed(1)+' '+my.toFixed(1)+' '+x2.toFixed(1)+' '+y2.toFixed(1),w=rnd(R,.35,.9);
+    el('path',{d:d,fill:'none',stroke:'#000',opacity:rnd(R,.35,.6),'stroke-width':w,transform:'translate(.5,.6)'},sc);
+    el('path',{d:d,fill:'none',stroke:'#d6d6d0',opacity:rnd(R,.08,.26),'stroke-width':w},sc);}
+  var ch=el('g',{},L);
+  for(var c=0;c<n(face?40:90);c++){el('circle',{cx:rnd(R,10,PW-10),cy:rnd(R,10,PH-10),r:rnd(R,.3,1.1),fill:R()<.7?'#cfcfc8':'#000',opacity:rnd(R,.1,.4)},ch);}
+  var tp=face?0:n(1)+(R()<.5?1:0),TI=0;
+  for(var t=0;t<tp;t++){
+    var tx=rnd(R,70,PW-100),ty=rnd(R,110,PH-60),tw=rnd(R,58,96),th=rnd(R,19,26),rot=rnd(R,-9,9);
+    var tr='translate('+tx.toFixed(1)+' '+ty.toFixed(1)+') rotate('+rot.toFixed(1)+')',g=el('g',{transform:tr},L),gt=el('g',{transform:tr},TL);g.style.pointerEvents='all';gt.style.pointerEvents='all';
+    var pts=['0,'+rnd(R,0,2.5).toFixed(1)];
+    for(var k=1;k<=4;k++)pts.push((tw*k/4).toFixed(1)+','+rnd(R,-1.2,1.2).toFixed(1));
+    for(var q=0;q<=5;q++)pts.push((tw+rnd(R,-3,3)).toFixed(1)+','+(th*q/5).toFixed(1));
+    for(var k2=4;k2>=0;k2--)pts.push((tw*k2/4).toFixed(1)+','+(th+rnd(R,-1.2,1.2)).toFixed(1));
+    for(var q2=4;q2>=1;q2--)pts.push(rnd(R,-3,3).toFixed(1)+','+(th*q2/5).toFixed(1));
+    el('polygon',{points:pts.join(' '),fill:'#000',opacity:.5,transform:'translate(.8 1.6)',filter:'url(#wb3)'},g);
+    el('polygon',{points:pts.join(' '),fill:'#d9cfa6',opacity:.8},g);
+    for(var f=0;f<5;f++)el('line',{x1:rnd(R,0,tw*.3),x2:rnd(R,tw*.6,tw),y1:rnd(R,2,th-2),y2:rnd(R,2,th-2),stroke:'#8f8560',opacity:rnd(R,.08,.2),'stroke-width':.5},g);
+    var ti=TI++,dflt=R()<.45?pick(R,['MASTER','v3 FINAL','-9 LUFS?','REF','VINYL','CD','7/12','keep!']):'';
+    var tt=el('text',{x:tw/2,y:th*.68,'text-anchor':'middle','font-size':(rnd(R,11,14)*TAPEFONTS[TAPEFONT]).toFixed(1),'font-family':"'"+TAPEFONT+"',cursive",'font-weight':400,fill:'#2b2620',opacity:.95,transform:'rotate('+rnd(R,-3,3).toFixed(1)+' '+(tw/2)+' '+(th/2)+')'},gt);
+    tt.textContent=(ti in TAPETXT)?TAPETXT[ti]:dflt;
+    g.style.cursor='text';gt.style.cursor='text';el('title',{},g).textContent='Click to write on the tape';
+    (function(ti,tt,g,gt,dflt){var open=function(e){e.stopPropagation();editText(g,tt.textContent,function(v){v=v.slice(0,14);tt.textContent=v;TAPETXT[ti]=v;lsSet('he_tape',JSON.stringify(TAPETXT));},{max:14,minw:90,color:'#2b2620',bg:'#d9cfa6',border:'#8f8560',font:'400 '+Math.round(16*TAPEFONTS[TAPEFONT])+'px \''+TAPEFONT+'\',cursive'});};g.addEventListener('click',open);gt.addEventListener('click',open);})(ti,tt,g,gt,dflt);
+  }
+  for(var m=0;m<n(1.4);m++){var rx=rnd(R,60,PW-120),ry=rnd(R,110,PH-60),rw=rnd(R,50,90),rh=rnd(R,18,26),rr=rnd(R,-9,9);
+    var gg=el('g',{transform:'translate('+rx.toFixed(1)+' '+ry.toFixed(1)+') rotate('+rr.toFixed(1)+')'},L);
+    el('polygon',{points:blob(R,rw/2,rh/2,rw/2,rh/2,14),fill:'#b8a66b',opacity:.07,filter:'url(#wb2)'},gg);
+    for(var d2=0;d2<10;d2++)el('circle',{cx:rnd(R,2,rw-2),cy:rnd(R,2,rh-2),r:rnd(R,.4,1.4),fill:'#9d8c58',opacity:rnd(R,.08,.2)},gg);}
+  L.appendChild(TL);
+}
+var GRIME=[],WEARL=[],SCRL=[];
+function ctrlSeed(i){return (SEED^Math.imul(i,2654435761))>>>0;}
+function addWear(L,off,face){var w={L:L,off:off,face:face};WEARL.push(w);drawWear(w);}
+function drawWear(w){while(w.L.firstChild)w.L.removeChild(w.L.firstChild);wear(w.L,mulberry32((SEED^w.off)>>>0),A,w.face);}
+/* screws: slot or Phillips, random resting angle, drag to turn (angles saved); rarely one is missing and only the hole is left */
+var SCREWPOS=[[18,18],[PW-18,18],[18,PH-18],[PW-18,PH-18]],SCREWEL=[[],[],[],[]],SCRA=(function(){try{var v=JSON.parse(lsGet('he_screws','null'));if(v&&v.length===4)return v;}catch(e){}return null;})();
+var SCRTYPE=[],SCRINIT=[],SCRMISS=[false,false,false,false];
+function initScrews(keepAngles){SCRTYPE=[];SCRINIT=[];SCRMISS=[false,false,false,false];var R=mulberry32(SEED^0xA5);for(var i=0;i<4;i++){SCRTYPE.push(R()<.5?'slot':'cross');SCRINIT.push(Math.round(rnd(R,0,180)));}
+  if(R()<.06)SCRMISS[Math.floor(R()*4)]=true;if(!SCRA||!keepAngles)SCRA=SCRINIT.slice();}
+initScrews(true);
+function applyScrews(){for(var i=0;i<4;i++)SCREWEL[i].forEach(function(e){e.setAttribute('transform','rotate('+SCRA[i]+' '+SCREWPOS[i][0]+' '+SCREWPOS[i][1]+')');});}
+function screws(L){
+  if(SCRL.indexOf(L)<0)SCRL.push(L);
+  SCREWPOS.forEach(function(P,i){var cx=P[0],cy=P[1];
+    if(SCRMISS[i]){el('circle',{cx:cx,cy:cy,r:5.2,fill:'#060606',stroke:'#2e2e31','stroke-width':1.2},L);el('circle',{cx:cx,cy:cy+.8,r:3.6,fill:'#000',opacity:.9},L);return;}
+    var sg=el('g',{style:'cursor:grab'},L);
+    el('circle',{cx:cx,cy:cy+1.8,r:6.5,fill:'#000',opacity:.8,filter:'url(#bp)'},sg);
+    el('circle',{cx:cx,cy:cy,r:6.6,fill:'#2b2b2e',stroke:'#4c4c50','stroke-width':1},sg);
+    el('circle',{cx:cx,cy:cy,r:4.6,fill:'#202022',opacity:.7},sg);
+    var rg=el('g',{},sg);SCREWEL[i].push(rg);
+    if(SCRTYPE[i]==='slot'){el('rect',{x:cx-5,y:cy-1.1,width:10,height:2.2,rx:.6,fill:'#050505'},rg);el('line',{x1:cx-5,y1:cy+1.5,x2:cx+5,y2:cy+1.5,stroke:'#5c5c60','stroke-width':.5,opacity:.6},rg);}
+    else{el('rect',{x:cx-4.8,y:cy-1,width:9.6,height:2,rx:.6,fill:'#050505'},rg);el('rect',{x:cx-1,y:cy-4.8,width:2,height:9.6,rx:.6,fill:'#050505'},rg);}
+    var hit=el('circle',{cx:cx,cy:cy,r:11,fill:'transparent'},sg),a0=0,p0=0,drag=false;
+    function ang(e){var sv=sg.ownerSVGElement,pt=sv.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;var q=pt.matrixTransform(sv.getScreenCTM().inverse());return Math.atan2(q.y-cy,q.x-cx)*180/Math.PI;}
+    hit.addEventListener('pointerdown',function(e){e.stopPropagation();drag=true;a0=SCRA[i];p0=ang(e);hit.setPointerCapture(e.pointerId);sg.style.cursor='grabbing';});
+    hit.addEventListener('pointermove',function(e){if(!drag)return;SCRA[i]=a0+(ang(e)-p0);applyScrews();});
+    hit.addEventListener('pointerup',function(){if(!drag)return;drag=false;sg.style.cursor='grab';lsSet('he_screws',JSON.stringify(SCRA.map(function(v){return Math.round(v*10)/10;})));});
+  });applyScrews();
+}
+
+/* inline editor: a small input placed over an SVG element; Enter or blur commits, Escape cancels */
+function editText(target,initial,commit,o){o=o||{};var r=target.getBoundingClientRect(),i=document.createElement('input');i.type='text';i.value=initial;if(o.max)i.maxLength=o.max;
+  var sv=target.ownerSVGElement,k=(sv&&sv.getScreenCTM)?sv.getScreenCTM().a:1,fs=Math.max(11,Math.min(24,13*k)),h=Math.round(fs+10),w=Math.round(Math.max((o.minw||64)*Math.min(k,2),r.width+20,fs*.62*(o.max||10)+20)),left=Math.max(4,Math.min(innerWidth-w-4,r.left+r.width/2-w/2)),top=Math.max(4,r.top+r.height/2-h/2);i.style.cssText='position:fixed;z-index:50;box-sizing:border-box;text-align:center;outline:0;border:1px solid '+(o.border||'#f0b429')+';background:'+(o.bg||'#050505')+';color:'+(o.color||'#f0b429')+';font:'+(o.font||'700 '+fs+'px Arial')+';height:'+h+'px;width:'+w+'px;left:'+left+'px;top:'+top+'px;border-radius:3px;padding:0 4px';
+  var done=false;function fin(ok){if(done)return;done=true;var v=i.value;if(i.parentNode)i.parentNode.removeChild(i);if(ok)commit(v);}
+  i.addEventListener('keydown',function(e){e.stopPropagation();if(e.key==='Enter')fin(true);else if(e.key==='Escape')fin(false);});
+  i.addEventListener('blur',function(){fin(true);});document.body.appendChild(i);i.focus();i.select();}
+/* ===== controls: turned aluminium with a black anodised finish (The Stripper) =====
+   Worn edges sit on the finger side (lower right); grime gathers at the base of each knob and in the gap around each button;
+   specks are either dirt (browns) or scratched paint (greys). All of it is crisp and opaque, and follows the Wear setting live. */
+function litNoise(id,freq,oct,scale,elev,k,dark,seed){var f=el('filter',{id:id,x:0,y:0,width:'100%',height:'100%','color-interpolation-filters':'sRGB'},defs);
+  el('feTurbulence',{type:'fractalNoise',baseFrequency:freq,numOctaves:oct,seed:seed,result:'n'},f);
+  var l=el('feDiffuseLighting',{in:'n',surfaceScale:scale,diffuseConstant:1,'lighting-color':'#fff',result:'l'},f);el('feDistantLight',{azimuth:235,elevation:elev},l);
+  el('feColorMatrix',{in:'l',type:'matrix',values:dark?'0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  '+(-k)+' 0 0 0 '+(0.5*k):'0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  '+k+' 0 0 0 '+(-0.5*k)},f);}
+litNoise('grL',0.85,3,1.6,55,1.5,false,3);litNoise('grD',0.85,3,1.6,55,1.6,true,3);
+litNoise('pitL',0.35,2,2.2,50,1.2,false,11);litNoise('pitD',0.35,2,2.2,50,1.3,true,11);
+/* texture and wear on the controls sit lightly over the base colour: every texture layer is semi-transparent (TV) */
+var TV=.25;
+function AC(){return A;}
+var ALU={base:'#232427',hi:'#3c3d41',bare:'#c9cbd0',inlay:'#d4d1c5'};
+function speck(g,x,y,rad,R){var kind=R(),col=kind<.5?['#6a5a38','#54472d','#3a2f1d','#7a6a46','#4a3d27'][R()*5|0]:['#8d8d90','#a2a2a6','#6f6f73','#b4b4b8'][R()*4|0];el('circle',{cx:x,cy:y,r:rad,fill:col},g);}
+function sblobG(R,cx,cy,rx,ry,k){var P=[],i;for(i=0;i<k;i++){var an=i/k*Math.PI*2,m=rnd(R,.62,1.18);P.push([cx+Math.cos(an)*rx*m,cy+Math.sin(an)*ry*m]);}
+  var d='M'+P[0][0].toFixed(1)+' '+P[0][1].toFixed(1);for(i=0;i<k;i++){var p0=P[(i+k-1)%k],p1=P[i],p2=P[(i+1)%k],p3=P[(i+2)%k];d+=' C'+(p1[0]+(p2[0]-p0[0])/6).toFixed(1)+' '+(p1[1]+(p2[1]-p0[1])/6).toFixed(1)+' '+(p2[0]-(p3[0]-p1[0])/6).toFixed(1)+' '+(p2[1]-(p3[1]-p1[1])/6).toFixed(1)+' '+p2[0].toFixed(1)+' '+p2[1].toFixed(1);}return d+'Z';}
+function arcPath(cx,cy,r,a0,a1){var p0=[cx+Math.cos(a0)*r,cy+Math.sin(a0)*r],p1=[cx+Math.cos(a1)*r,cy+Math.sin(a1)*r];return 'M'+p0[0].toFixed(2)+' '+p0[1].toFixed(2)+' A'+r+' '+r+' 0 '+((a1-a0)>Math.PI?1:0)+' 1 '+p1[0].toFixed(2)+' '+p1[1].toFixed(2);}
+function dynGroup(parent,fn){var q=el('g',{opacity:(parent&&parent._noTV)?1:TV},parent);GRIME.push(function(){while(q.firstChild)q.removeChild(q.firstChild);fn(q);});GRIME[GRIME.length-1]();return q;}
+function aluKnob(g,cx,cy,R,idx){
+  var s=R/56,Zf=Math.max(.35,s),Z=function(v){return v*Zf;},m=ALU,seed=ctrlSeed(idx);
+  /* grime where the knob meets the panel: ragged opaque patches, more of them toward the bottom, plus specks */
+  dynGroup(g,function(q){if(!A)return;var r=mulberry32(seed^0x11),rg=el('g',{filter:'url(#rgh)'},q),i;
+    for(i=0;i<Math.round(26*AC());i++){var a=rnd(r,0,6.2832),down=.35+.65*Math.pow(Math.sin(a)*.5+.5,1.5);if(r()>down)continue;var d=rnd(r,1.04,1.3)*R;el('path',{d:sblobG(r,cx+Math.cos(a)*d,cy+Math.sin(a)*d,Z(rnd(r,2,8)),Z(rnd(r,1.2,3.6)),7),fill:r()<.7?'#0c0a07':'#17130d'},rg);}
+    for(i=0;i<Math.round(14*AC());i++){var a2=rnd(r,0,6.28),d2=rnd(r,1.04,1.34)*R;speck(q,cx+Math.cos(a2)*d2,cy+Math.sin(a2)*d2,Z(rnd(r,.4,1.1)),r);}});
+  el('circle',{cx:cx+R*.05,cy:cy+R*.16,r:R*1.02,fill:'#000',opacity:.85,filter:'url(#ks)'},g);                                   /* contact shadow */
+  el('circle',{cx:cx,cy:cy,r:R*1.1,fill:'#0e0e0f'},g);el('circle',{cx:cx,cy:cy,r:R*1.1,fill:'none',stroke:m.hi,'stroke-width':Z(1.1),opacity:.55,transform:'translate(-.6 -.7)'},g);   /* skirt */
+  el('circle',{cx:cx,cy:cy,r:R,fill:m.base},g);
+  var cp=el('clipPath',{id:'ka'+idx},defs);el('circle',{cx:cx,cy:cy,r:R},cp);
+  var body=el('g',{'clip-path':'url(#ka'+idx+')',opacity:TV},g);
+  dynGroup(body,function(q){if(!A)return;[['grL','#fff',.09*AC()],['grD','#000',.22],['pitL','#fff',.07*AC()],['pitD','#000',.2]].forEach(function(f){el('rect',{x:cx-R,y:cy-R,width:2*R,height:2*R,fill:f[1],filter:'url(#'+f[0]+')',opacity:f[2]},q);});});
+  var nr=Math.round(36*Math.max(.5,s));for(var q=1;q<=nr;q++){el('circle',{cx:cx,cy:cy,r:R*q/nr*.97,fill:'none',stroke:(q%2?'#fff':'#000'),'stroke-width':Z(.5),opacity:q%2?.06:.12},body);}   /* turning marks */
+  el('circle',{cx:cx,cy:cy,r:R*.93,fill:'none',stroke:'#8f9196','stroke-width':Z(2.2),opacity:.45,transform:'translate(-.5 -.6)'},body);   /* chamfer */
+  el('circle',{cx:cx,cy:cy,r:R,fill:'url(#sheen)',opacity:.7},g);
+  /* worn edge: chipped bands (crisp outer edge, ragged inner boundary) on the finger side, bare metal showing; tiny dents */
+  dynGroup(g,function(q){if(!A)return;var r=mulberry32(seed^0x33),bias=.78+rnd(r,-.25,.25),wg=el('g',{filter:'url(#rgh)'},q),i,k;
+    for(i=0;i<Math.round(40*AC());i++){var a3=rnd(r,0,6.2832),wt=Math.pow(Math.cos((a3-bias)/2),2),p=.05+.6*wt;if(r()>p)continue;var len=rnd(r,.03,.14)*(.5+wt),steps=3+(len*40|0),pts=[];
+      for(k=0;k<=steps;k++){var an=a3+len*k/steps;pts.push((cx+Math.cos(an)*R*.997).toFixed(2)+','+(cy+Math.sin(an)*R*.997).toFixed(2));}
+      for(k=steps;k>=0;k--){var an2=a3+len*k/steps,dp=(k===0||k===steps)?.004:rnd(r,.01,.075)*(.45+wt);pts.push((cx+Math.cos(an2)*R*(1-dp)).toFixed(2)+','+(cy+Math.sin(an2)*R*(1-dp)).toFixed(2));}
+      el('polygon',{points:pts.join(' '),fill:m.bare,opacity:rnd(r,.6,.95)},wg);}
+    for(i=0;i<Math.round(4*AC());i++){var a4=rnd(r,0,6.2832),px=cx+Math.cos(a4)*R*.985,py=cy+Math.sin(a4)*R*.985;el('circle',{cx:px,cy:py,r:Z(rnd(r,.8,1.6)),fill:'#050505'},q);el('circle',{cx:px-.4*s,cy:py-.5*s,r:Z(.7),fill:m.bare,opacity:.7},q);}});
+  el('circle',{cx:cx,cy:cy,r:R-.5,fill:'none',stroke:'#fff','stroke-width':Z(.8),opacity:.08,transform:'translate(-.5 -.6)'},g);el('circle',{cx:cx,cy:cy,r:R-.3,fill:'none',stroke:'#000','stroke-width':Z(1),opacity:.6,transform:'translate(.5 .7)'},g);
+  /* residue and specks on the cap (dirt = browns, scratched paint = greys) */
+  dynGroup(g,function(q){if(!A)return;var r=mulberry32(seed^0x44),rs=el('g',{filter:'url(#rgh)','clip-path':'url(#ka'+idx+')'},q),i;
+    for(i=0;i<Math.round(3*AC());i++){var a5=rnd(r,0,6.28),d5=rnd(r,.25,.8)*R,col=['#34302a','#2a251d','#3d3a36','#2f2a20'][r()*4|0];el('path',{d:sblobG(r,cx+Math.cos(a5)*d5,cy+Math.sin(a5)*d5,R*rnd(r,.06,.2),R*rnd(r,.04,.12),8),fill:col,transform:'rotate('+rnd(r,0,180).toFixed(0)+' '+(cx+Math.cos(a5)*d5)+' '+(cy+Math.sin(a5)*d5)+')'},rs);}
+    for(i=0;i<Math.round(16*AC());i++){var a6=rnd(r,0,6.28),d6=Math.sqrt(r())*R*.95;speck(q,cx+Math.cos(a6)*d6,cy+Math.sin(a6)*d6,Z(rnd(r,.3,.9)),r);}});
+  /* pointer: a groove with an inlay that is worn through in places; drawn pointing right and rotated by the caller */
+  var pg=el('g',{},g);pg._noTV=true;
+  el('line',{x1:cx+R*.3,y1:cy,x2:cx+R*.86,y2:cy,stroke:'#000','stroke-width':Z(4.6),'stroke-linecap':'round',opacity:.28},pg);
+  /* inlay: a clean mark; wear = a few dull stretches (the grey-black of the cap showing through the cream) and one or two tiny nicks */
+  dynGroup(pg,function(q){var r=mulberry32(seed^0x55),ih=Z(3.2),i,n;
+    el('rect',{x:cx+R*.3,y:cy-ih/2,width:R*.56,height:ih,rx:ih*.2,fill:m.inlay},q);
+    for(i=0,n=A?3+(r()*2|0):0;i<n;i++){var c0=rnd(r,.06,.8),w=rnd(r,.12,.32);el('rect',{x:cx+R*(.3+.56*c0),y:cy-ih/2,width:R*.56*Math.min(w,1-c0),height:ih,fill:m.base,opacity:rnd(r,.4,.62)},q);}
+    for(i=0,n=A?2+(r()*2|0):0;i<n;i++){var k0=rnd(r,.1,.9);el('rect',{x:cx+R*(.3+.56*k0),y:cy-ih/2,width:R*.56*Math.min(rnd(r,.03,.06),1-k0),height:ih,fill:'#0c0c0d'},q);}});
+  return pg;
+}
+function aluBtnGap(g,x,y,w,h,idx){dynGroup(g,function(q){if(!A)return;var r=mulberry32(ctrlSeed(idx)^0x22);el('rect',{x:x-1.6,y:y-1.6,width:w+3.2,height:h+3.2,rx:3.6,fill:'#0b0a08',filter:'url(#rgh)'},q);
+  for(var i=0;i<Math.round(14*AC());i++){var side=r()<.5,px=side?x+rnd(r,-3,w+3):(r()<.5?x-rnd(r,1,3.5):x+w+rnd(r,1,3.5)),py=side?(r()<.5?y-rnd(r,1,3.5):y+h+rnd(r,1,3.5)):y+rnd(r,-3,h+3);speck(q,px,py,rnd(r,.3,.9),r);}});}
+function aluBtnOverlay(face,x,y,w,h,idx){
+  var cp=el('clipPath',{id:'ba'+idx},defs);el('rect',{x:x,y:y,width:w,height:h,rx:2},cp);var body=el('g',{'clip-path':'url(#ba'+idx+')',opacity:TV},face);
+  dynGroup(body,function(q){if(!A)return;[['grL','#fff',.45*Math.min(1,AC())],['grD','#000',.45],['pitD','#000',.3]].forEach(function(f){el('rect',{x:x,y:y,width:w,height:h,fill:f[1],filter:'url(#'+f[0]+')',opacity:f[2]},q);});});
+  el('rect',{x:x+.6,y:y+.6,width:w-1.2,height:h-1.2,rx:1.8,fill:'none',stroke:'#fff','stroke-width':1,opacity:.28,transform:'translate(-.3 -.4)'},face);
+  el('rect',{x:x+.5,y:y+.5,width:w-1,height:h-1,rx:1.8,fill:'none',stroke:'#000','stroke-width':1.2,opacity:.4,transform:'translate(.7 .9)'},face);
+  dynGroup(face,function(q){if(!A)return;var r=mulberry32(ctrlSeed(idx)^0x66),wg=el('g',{filter:'url(#rgh)'},q),bare='#e0e2e6',i;
+    [[x,y],[x+w,y],[x,y+h],[x+w,y+h]].forEach(function(cn,ci){if(r()>(ci===3?.95:ci===2?.65:.45)*Math.min(1,AC()+.2))return;var sx=cn[0]===x?1:-1,sy=cn[1]===y?1:-1,L=rnd(r,w*.1,w*.3);el('path',{d:'M'+(cn[0]+sx*L).toFixed(1)+' '+cn[1].toFixed(1)+' Q'+cn[0].toFixed(1)+' '+cn[1].toFixed(1)+' '+cn[0].toFixed(1)+' '+(cn[1]+sy*L*.8).toFixed(1),fill:'none',stroke:bare,'stroke-width':rnd(r,.9,1.8),'stroke-linecap':'butt'},wg);});
+    for(i=0;i<Math.round(4*AC());i++){var ex=x+rnd(r,w*.05,w*.95),L2=rnd(r,w*.06,w*.22);el('line',{x1:ex,y1:y+h-.5,x2:ex+L2,y2:y+h-.5,stroke:bare,'stroke-width':rnd(r,.6,1.1),opacity:.9},wg);}
+    for(i=0;i<Math.round(3*AC());i++){var sx0=x+rnd(r,0,w),sy0=y+rnd(r,0,h);el('line',{x1:sx0,y1:sy0,x2:sx0+rnd(r,-w*.4,w*.4),y2:sy0+rnd(r,-h*.3,h*.3),stroke:'#fff',opacity:rnd(r,.12,.3),'stroke-width':.3},q);}
+    for(i=0;i<Math.round(8*AC());i++)speck(q,x+rnd(r,1,w-1),y+rnd(r,1,h-1),rnd(r,.25,.7),r);});
+}
+el('rect',{width:1280,height:PH,rx:14,fill:'#161617'});
+el('rect',{width:1280,height:PH,rx:14,fill:'#fff',filter:'url(#tfine)'});
+el('rect',{width:1280,height:PH,rx:14,fill:'url(#glow)'});
+el('rect',{x:2,y:2,width:1276,height:PH-4,rx:13,fill:'none',stroke:'#2c2c2f','stroke-width':2});
 
 /* header */
 txt('HAPPY ENDING',34,58,38,W,'start',900,svg,true);
 txt('FAIRY TAPES',36,78,11,DIMW,'start',700);
-txt('MASTER BUS  ·  FINE EQ  ·  VIBE EQ  ·  GLUE  ·  CLIP  ·  LIMIT  ·  FINAL  ·  METALHEAD',966,46,13,W,'end',700);
+txt('MASTER BUS  ·  FINE EQ  ·  VIBE EQ  ·  GLUE  ·  CLIP  ·  LIMIT  ·  FINAL  ·  METALHEAD',1246,46,13,W,'end',700);
 
 /* section box: the border is broken for the title, never covered */
 /* front-panel boxes carry the title on the BOTTOM border; only back-side boxes (settings, credits) have it on top (design system) */
@@ -73,19 +266,19 @@ var STAGEMARK=el('g',{});
 /* screens of CLIP / LIMIT / FINAL and the stage LED rows are gone from the stages: their meters live in LEVEL (GR block) */
 var HID=el('g',{style:'display:none'});
 /* the curve screen has a box of its own, without a title (shows the FINE EQ and the VIBE EQ curves) */
-el('rect',{x:24,y:100,width:952,height:200,rx:11,fill:'none',stroke:W,'stroke-width':2});
-box(24,320,952,280,'FINE EQ','bottom');
+el('rect',{x:782,y:100,width:474,height:280,rx:11,fill:'none',stroke:W,'stroke-width':2});
+box(24,100,752,280,'FINE EQ','bottom');
 
 /* ===== model ===== */
 var GAINS=[];for(var gi=-8;gi<=8;gi++)GAINS.push(gi/2);
 var QS=[0.5,1,2,5],QN=['Wide','Medium','Narrow','Surgical'],MSN=['ST','MID','SIDE'];
 var BANDS=[
-  {name:'HIGH PASS',type:'hp',freqs:[0,20,25,30,40],fd:0},
+  {name:'HI PASS',type:'hp',freqs:[0,20,25,30,40],fd:0},
   {name:'LOW SHELF',type:'ls',freqs:[30,50,70,100,150,200,300],fd:3},
-  {name:'LOW MID',type:'pk',freqs:[100,125,160,200,250,315,400,500,630,800],fd:4},
+  {name:'LO MID',type:'pk',freqs:[100,125,160,200,250,315,400,500,630,800],fd:4},
   {name:'MID',type:'pk',freqs:[400,500,630,800,1000,1250,1600,2000,2500,3150],fd:4},
-  {name:'HIGH MID',type:'pk',freqs:[1600,2000,2500,3150,4000,5000,6300,8000,10000,12500],fd:4},
-  {name:'HIGH SHELF',type:'hs',freqs:[3000,5000,8000,10000,12000,16000,20000],fd:4}];
+  {name:'HI MID',type:'pk',freqs:[1600,2000,2500,3150,4000,5000,6300,8000,10000,12500],fd:4},
+  {name:'HI SHELF',type:'hs',freqs:[3000,5000,8000,10000,12000,16000,20000],fd:4}];
 var G={on:true,listen:-1};
 function flat(){BANDS.forEach(function(b){b.fi=b.fd;b.gi=8;b.qi=1;b.on=true;b.ms=0;});G.on=true;G.listen=-1;}
 flat();
@@ -107,7 +300,7 @@ function sumDb(target,f){var d=0;if(!G.on)return 0;BANDS.forEach(function(b){if(
 function anyMS(){return G.on&&BANDS.some(function(b){return b.on&&b.ms!==0;});}
 
 /* ===== screen (read only) ===== */
-var SX=44,SY=116,SW=862,SH=168;
+var SX=798,SY=116,SW=388,SH=248;
 function fx(f){return SX+SW*Math.log(f/20)/Math.log(1000);}
 function dy(db){db=Math.max(-7.5,Math.min(7.5,db));return SY+SH/2-db*(SH/2-6)/7;}
 el('rect',{x:SX,y:SY,width:SW,height:SH,rx:4,fill:'#070708',stroke:'#3a3a3d','stroke-width':1.2});
@@ -151,13 +344,9 @@ function knob(cx,cy,label,steps,fmt,end,state,key,def,p,Rk){
   function S(){return typeof steps==='function'?steps():steps;}
   function E(){return typeof end==='function'?end():end;}
   var ex=(R+8)*0.7071,e0=txt('',cx-ex-3,cy+ex+9,7.5,W,'end',700,g),e1=txt('',cx+ex+3,cy+ex+9,7.5,W,'start',700,g);
-  txt(label,cx,cy+R+22,11,W,'middle',800,g);var vt=txt('',cx,cy+R+36,10,AMBL,'middle',700,g);
+  txt(label,cx,cy+R+22,11,W,'middle',800,g);var vt=txt('',cx,cy+R+36,10,AMBL,'middle',700,g);HWTXT.push([vt,10]);
   var k=el('g',{style:'cursor:ns-resize'},g);
-  el('circle',{cx:cx+R*.05,cy:cy+R*.16,r:R*1.02,fill:'#000',opacity:.85,filter:'url(#ks)'},k);
-  el('circle',{cx:cx,cy:cy,r:R*1.1,fill:'#0e0e0f'},k);el('circle',{cx:cx,cy:cy,r:R,fill:'#232427'},k);
-  for(var q=1;q<=14;q++)el('circle',{cx:cx,cy:cy,r:R*q/14*.97,fill:'none',stroke:q%2?'#fff':'#000','stroke-width':.4,opacity:q%2?.05:.1},k);
-  el('circle',{cx:cx,cy:cy,r:R,fill:'url(#sheen)',opacity:.7},k);
-  var pg=el('g',{},k);el('rect',{x:cx+R*.3,y:cy-1.4,width:R*.56,height:2.8,rx:.6,fill:'#d4d1c5'},pg);
+  var pg=aluKnob(k,cx,cy,R,++CTRL);el('circle',{cx:cx,cy:cy,r:R*1.12,fill:'none','data-h':1},k);   /* data-h: the wear layer is cut out here */
   var hit=el('circle',{cx:cx,cy:cy,r:R+12,fill:'transparent'},k);
   function draw(){var st=S(),n=st.length;if(state[key]>n-1)state[key]=n-1;
     while(dots.firstChild)dots.removeChild(dots.firstChild);
@@ -175,11 +364,11 @@ function knob(cx,cy,label,steps,fmt,end,state,key,def,p,Rk){
 /* on/off buttons light red, value or mode selectors light yellow (design system) */
 function button(cx,cy,label,ledCol,get,click,p,sub){
   var g=el('g',{style:'cursor:pointer'},p);
+  var bi=++CTRL;aluBtnGap(g,cx-12,cy-11,24,22,bi);
   var sh=el('rect',{x:cx-12,y:cy-11,width:24,height:22,rx:2,fill:'#000',opacity:.9,filter:'url(#bs)'},g),face=el('g',{},g);
-  el('rect',{x:cx-12,y:cy-11,width:24,height:22,rx:2,fill:'#9a9ca1',stroke:'#b8b8bb'},face);
-  el('rect',{x:cx-11.4,y:cy-10.4,width:22.8,height:20.8,rx:1.8,fill:'none',stroke:'#fff','stroke-width':1,opacity:.28},face);
+  el('rect',{x:cx-12,y:cy-11,width:24,height:22,rx:2,fill:'#9a9ca1',stroke:'#b8b8bb','data-h':1},face);aluBtnOverlay(face,cx-12,cy-11,24,22,bi);
   txt(label,cx,cy-17,10,W,'middle',800,g);
-  var led=el('circle',{cx:cx,cy:cy+21,r:3.4,stroke:'#000','stroke-width':.6},g),st=sub?txt('',cx,cy+37,9.5,AMBL,'middle',700,g):null;
+  var led=el('circle',{cx:cx,cy:cy+21,r:3.4,stroke:'#000','stroke-width':.6},g),st=sub?txt('',cx,cy+37,9.5,AMBL,'middle',700,g):null;if(st)HWTXT.push([st,9.5]);
   function paint(){var on=get();led.setAttribute('fill',on?ledCol:(ledCol===RED?'#3a1010':'#3a3210'));sh.setAttribute('transform','translate(0,'+(on?1.5:4)+')');face.setAttribute('transform','translate(0,'+(on?1.5:0)+')');if(st)st.textContent=sub();}
   g.addEventListener('click',function(){click();refresh();});BTNS.push(paint);paint();return g;}
 function paintAll(){BTNS.forEach(function(f){f();});}
@@ -190,35 +379,41 @@ var GV={view:'eq'},CPK=null,FPK=null;
 var VIEWS=[['eq','EQ'],['glue','GLUE'],['clip','CLIP'],['limit','LIMIT'],['final','FINAL']];
 /* exclusive choices (design system, 2026-10-21): name on the face, the face lights amber on the active one, no LED */
 function choiceBtn(cx,cy,label,get,click,p,w){w=w||34;var g=el('g',{style:'cursor:pointer'},p);
+  var bi=++CTRL;aluBtnGap(g,cx-w/2,cy-10,w,20,bi);
   var sh=el('rect',{x:cx-w/2,y:cy-10,width:w,height:20,rx:2,fill:'#000',opacity:.9,filter:'url(#bs)'},g),face=el('g',{},g);
-  var r=el('rect',{x:cx-w/2,y:cy-10,width:w,height:20,rx:2,stroke:'#b8b8bb'},face);el('rect',{x:cx-w/2+.6,y:cy-9.4,width:w-1.2,height:18.8,rx:1.8,fill:'none',stroke:'#fff','stroke-width':1,opacity:.28},face);
+  var r=el('rect',{x:cx-w/2,y:cy-10,width:w,height:20,rx:2,stroke:'#b8b8bb','data-h':1},face);aluBtnOverlay(face,cx-w/2,cy-10,w,20,bi);
   var t=txt(label,cx,cy+3.5,8.5,'#1a1a1c','middle',900,face);
   function paint(){var on=get();r.setAttribute('fill',on?AMBL:'#8e8e91');t.setAttribute('fill',on?'#2a1d05':'#1a1a1c');sh.setAttribute('transform','translate(0,'+(on?1.5:4)+')');face.setAttribute('transform','translate(0,'+(on?1.5:0)+')');}
   g.addEventListener('click',function(){click();refresh();});BTNS.push(paint);paint();}
 function viewBtn(cx,cy,key,label){var g=el('g',{style:'cursor:pointer'});el('title',{},g).textContent='Show '+label+' on the screen';
+  var bi=++CTRL;aluBtnGap(g,cx-17,cy-9,34,18,bi);
   var sh=el('rect',{x:cx-17,y:cy-9,width:34,height:18,rx:2,fill:'#000',opacity:.9,filter:'url(#bs)'},g),face=el('g',{},g);
-  var r=el('rect',{x:cx-17,y:cy-9,width:34,height:18,rx:2,stroke:'#b8b8bb'},face);el('rect',{x:cx-16.4,y:cy-8.4,width:32.8,height:16.8,rx:1.8,fill:'none',stroke:'#fff','stroke-width':1,opacity:.28},face);
+  var r=el('rect',{x:cx-17,y:cy-9,width:34,height:18,rx:2,stroke:'#b8b8bb','data-h':1},face);aluBtnOverlay(face,cx-17,cy-9,34,18,bi);
   var t=txt(label,cx,cy+3.5,8.5,'#1a1a1c','middle',900,face);
   function paint(){var on=GV.view===key;r.setAttribute('fill',on?AMBL:'#8e8e91');t.setAttribute('fill',on?'#2a1d05':'#1a1a1c');sh.setAttribute('transform','translate(0,'+(on?1.5:4)+')');face.setAttribute('transform','translate(0,'+(on?1.5:0)+')');}
   g.addEventListener('click',function(){GV.view=key;refresh();});BTNS.push(paint);paint();}
-VIEWS.forEach(function(v,i){viewBtn(941,134+i*33,v[0],v[1]);});
-button(947,358,'IN',RED,function(){return G.on;},function(){G.on=!G.on;},svg);
+VIEWS.forEach(function(v,i){viewBtn(1221,140+i*44,v[0],v[1]);});
+button(747,138,'IN',RED,function(){return G.on;},function(){G.on=!G.on;},svg);
 
 /* bands */
 var bandsG=el('g',{});
 /* band headers as in The Stripper: thin line with the band name above (no vertical separators) */
-BANDS.forEach(function(b,i){var cx=108+144*i,g=el('g',{},bandsG);b.g=g;
-  el('path',{d:'M'+(cx-66)+' 342 H'+(cx+66),stroke:DIMW,'stroke-width':1,opacity:.5},g);txt(b.name,cx,336,10,DIMW,'middle',800,g);
-  if(b.type==='hp')knob(cx,376,'FREQ',function(){return fq(b);},fmtHP,function(){return ['Off',String(fq(b)[fq(b).length-1])];},b,'fi',b.fd,g);
-  else{knob(cx-38,376,'FREQ',b.freqs,fmtF,[shortF(b.freqs[0]),shortF(b.freqs[b.freqs.length-1])],b,'fi',b.fd,g);
-       knob(cx+38,376,'GAIN',GAINS,fmtG,['-4','+4'],b,'gi',8,g);}
-  if(b.type==='pk')knob(cx,458,'Q',[0,1,2,3],function(v){return QN[v];},['W','S'],b,'qi',1,g);
-  var pk=b.type==='pk',x0=pk?cx-36:cx-18;
-  b.inG=button(x0,546,'IN',RED,function(){return b.on;},function(){b.on=!b.on;},bandsG);
-  button(x0+36,546,'M/S',YEL,function(){return b.ms!==0;},function(){b.ms=(b.ms+1)%3;},g,function(){return MSN[b.ms];});
-  if(pk)button(x0+72,546,'LISTEN',RED,function(){return G.listen===i;},function(){G.listen=G.listen===i?-1:i;},g);});
+/* bands on one row as in The Stripper: header line with the name, FREQ/GAIN on top, Q under the bells, buttons at the bottom.
+   The high pass has one knob, so its column is narrower; the shelves set GAIN high and FREQ low on a diagonal (FREQ on the Q row) to save width;
+   HIGH SHELF has the diagonal the other way (FREQ high, GAIN low); LOW MID and HIGH MID are flipped (Q on top, FREQ/GAIN below) */
+var CXS=[78,174,292,420,548,666];
+BANDS.forEach(function(b,i){var cx=CXS[i],sh=b.type!=='hp'&&b.type!=='pk',hw=b.type==='hp'?34:sh?46:56,inv=i===2||i===4,hs=i===5,g=el('g',{},bandsG);b.g=g;
+  el('path',{d:'M'+(cx-hw)+' 122 H'+(cx+hw),stroke:DIMW,'stroke-width':1,opacity:.5},g);txt(b.name,cx,116,10,DIMW,'middle',800,g);
+  if(b.type==='hp')knob(cx,156,'FREQ',function(){return fq(b);},fmtHP,function(){return ['Off',String(fq(b)[fq(b).length-1])];},b,'fi',b.fd,g);
+  else{knob(cx-(sh?22:34),((sh&&!hs)||inv)?238:156,'FREQ',b.freqs,fmtF,[shortF(b.freqs[0]),shortF(b.freqs[b.freqs.length-1])],b,'fi',b.fd,g);
+       knob(cx+(sh?14:34),(inv||hs)?238:156,'GAIN',GAINS,fmtG,['-4','+4'],b,'gi',8,g);}
+  if(b.type==='pk')knob(cx,inv?156:238,'Q',[0,1,2,3],function(v){return QN[v];},['W','S'],b,'qi',1,g);
+  var pk=b.type==='pk',x0=pk?cx-34:cx-17,dx=34;
+  b.inG=button(x0,326,'IN',RED,function(){return b.on;},function(){b.on=!b.on;},bandsG);
+  button(x0+dx,326,'M/S',YEL,function(){return b.ms!==0;},function(){b.ms=(b.ms+1)%3;},g,function(){return MSN[b.ms];});
+  if(pk)button(x0+2*dx,326,'LISTEN',RED,function(){return G.listen===i;},function(){G.listen=G.listen===i?-1:i;},g);});
 
-function refresh(){KNOBS.forEach(function(d){d();});paintAll();REDRAW();}
+function refresh(){KNOBS.forEach(function(d){d();});paintAll();REDRAW();if(HCPP)cutHoles();}
 function setB(i,o){Object.assign(BANDS[i],o);}
 document.getElementById('flat').onclick=function(){flat();vflat();gflat();kflat();lflat();fflat();mflat();ioflat();refresh();};
 document.getElementById('exST').onclick=function(){flat();
@@ -227,7 +422,7 @@ document.getElementById('exMS').onclick=function(){flat();
   setB(0,{fi:4,ms:2});setB(1,{fi:3,gi:10,ms:1});setB(3,{fi:8,gi:6,qi:0,ms:1});setB(5,{fi:5,gi:11,ms:2});refresh();};
 /* ===== stage 2: VIBE EQ — a reduced Pultec-style program EQ; every control drives the same circuit ===== */
 var VIBEMARK=el('g',{});
-box(24,600,484,204,'VIBE EQ','bottom');
+box(24,600,624,160,'VIBE EQ','bottom');
 var ZERO10=[0,1,2,3,4,5,6,7,8,9,10],TILTS=[];for(var ti=-6;ti<=6;ti++)TILTS.push(ti/2);
 var LFQ=[20,30,60,100],AFQ=[5000,8000,10000,12000,16000];
 var V={};
@@ -266,30 +461,31 @@ var vG=el('g',{});
 /* DYN works like the Bell buttons of The Stripper's equaliser: a small button at the right end of the group header, its face lights amber when on;
    the amber ACT LED sits just left of it on the same line */
 function headBtn(cx,cy,label,get,click,p){var g=el('g',{style:'cursor:pointer'},p);el('title',{},g).textContent='Dynamic boost: pulls the boost back on loud program';
+  var bi=++CTRL;aluBtnGap(g,cx-13,cy-9,26,18,bi);
   var sh=el('rect',{x:cx-13,y:cy-9,width:26,height:18,rx:2,fill:'#000',opacity:.9,filter:'url(#bs)'},g),face=el('g',{},g);
-  var r=el('rect',{x:cx-13,y:cy-9,width:26,height:18,rx:2,stroke:'#b8b8bb'},face);el('rect',{x:cx-12.4,y:cy-8.4,width:24.8,height:16.8,rx:1.8,fill:'none',stroke:'#fff','stroke-width':1,opacity:.28},face);
+  var r=el('rect',{x:cx-13,y:cy-9,width:26,height:18,rx:2,stroke:'#b8b8bb','data-h':1},face);aluBtnOverlay(face,cx-13,cy-9,26,18,bi);
   var t=txt(label,cx,cy+3.5,9,'#1a1a1c','middle',900,face);
   function paint(){var on=get();r.setAttribute('fill',on?AMBL:'#8e8e91');t.setAttribute('fill',on?'#2a1d05':'#1a1a1c');sh.setAttribute('transform','translate(0,'+(on?1.5:4)+')');face.setAttribute('transform','translate(0,'+(on?1.5:0)+')');}
   g.addEventListener('click',function(){click();refresh();});BTNS.push(paint);paint();}
 var ledL,ledA;
-[['LOW',70,134,'L'],['AIR',212,276,'A']].forEach(function(h){var a=h[1]-36,b=h[2]+36,e=b-48;
+[['LOW',80,154,'L'],['AIR',262,336,'A']].forEach(function(h){var a=h[1]-36,b=h[2]+36,e=b-48;
   el('path',{d:'M'+a+' 644 H'+e,stroke:DIMW,'stroke-width':1,opacity:.5},vG);txt(h[0],(a+e)/2,638,10,DIMW,'middle',800,vG);
   var led=el('circle',{cx:b-40,cy:644,r:4,stroke:'#000','stroke-width':.6,fill:'#33260a'},vG);el('title',{},led).textContent='ACT: the boost is being pulled back';
   if(h[3]==='L'){ledL=led;headBtn(b-15,644,'DYN',function(){return V.dynL;},function(){V.dynL=!V.dynL;},vG);}
   else{ledA=led;headBtn(b-15,644,'DYN',function(){return V.dynA;},function(){V.dynA=!V.dynA;},vG);}});
-knob(70,676,'FREQ',LFQ,fmtF,['20','100'],V,'lf',2,vG);
-knob(132,718,'LOW',ZERO10,String,['0','10'],V,'low',0,vG);
-knob(372,660,'TILT',TILTS,fmtTilt,['DARK','BRIGHT'],V,'tilt',6,vG,24);
-knob(212,676,'FREQ',AFQ,fmtF,['5k','16k'],V,'af',3,vG);
-knob(274,718,'AIR',ZERO10,String,['0','10'],V,'air',0,vG);
+knob(80,670,'FREQ',LFQ,fmtF,['20','100'],V,'lf',2,vG);
+knob(154,692,'LOW',ZERO10,String,['0','10'],V,'low',0,vG);
+knob(470,654,'TILT',TILTS,fmtTilt,['DARK','BRIGHT'],V,'tilt',6,vG,24);
+knob(262,670,'FREQ',AFQ,fmtF,['5k','16k'],V,'af',3,vG);
+knob(336,692,'AIR',ZERO10,String,['0','10'],V,'air',0,vG);
 /* TUBE: the 12AX7 make-up stage after the whole EQ network (the stage output), set apart from the AIR group, near the IN column */
-knob(456,716,'TUBE',ZERO10,String,['0','10'],V,'drive',2,vG);
+knob(574,692,'TUBE',ZERO10,String,['0','10'],V,'drive',2,vG);
 /* DYN: on/off (red LED); next to it the trigger LED, amber like the GR rows of The Stripper (gain reduction), lit as much as the boost is being pulled back */
 var ACTOFF='#33260a';
 function trig(cx,cy){txt('ACT',cx,cy-17,8.5,W,'middle',800,vG);return el('circle',{cx:cx,cy:cy,r:4.2,stroke:'#000','stroke-width':.6,fill:ACTOFF},vG);}
 /* (DYN moved to the LOW header) */   /* DYN centred under its pair of knobs, ACT beside it */
 /* (DYN moved to the AIR header) */
-button(479,638,'IN',RED,function(){return V.on;},function(){V.on=!V.on;},svg);
+button(619,638,'IN',RED,function(){return V.on;},function(){V.on=!V.on;},svg);
 function mix(a,b,k){var pa=parseInt(a.slice(1),16),pb=parseInt(b.slice(1),16),r=function(sh){return Math.round(((pa>>sh)&255)*(1-k)+((pb>>sh)&255)*k);};return 'rgb('+r(16)+','+r(8)+','+r(0)+')';}
 /* simulated program: kick on the beat (low band), hats on the off-beats (air band), 120 BPM; fixed threshold, fast attack, slower release */
 var T0=performance.now();
@@ -302,7 +498,7 @@ function tick(now){var t=(now-T0)/1000,eL=.15,eA=.15;
 document.getElementById('prog').onchange=function(e){SIM.mode=e.target.value;};
 document.getElementById('exV').onclick=function(){vflat();Object.assign(V,{lf:2,low:6,af:3,air:5,tilt:5,drive:4,dynL:true,dynA:true});refresh();};
 /* ===== stage 3: GLUE — SSL-style bus compressor (MultiCompBus) in parallel, stepped controls ===== */
-box(514,600,462,204,'GLUE','bottom');
+box(654,600,602,160,'GLUE','bottom');
 var THR=[];for(var th=-20;th<=0;th++)THR.push(th);
 var RAT=[1.5,2,4],ATK=[0.1,0.3,1,3,10,30],REL=[0.1,0.3,0.6,1.2,0],SCF=[0,60,90,150],MKP=[],MIXS=[];
 for(var mk=0;mk<=12;mk++)MKP.push(mk/2);for(var mx=0;mx<=20;mx++)MIXS.push(mx*5);
@@ -311,15 +507,15 @@ function gflat(){Object.assign(C,{on:true,thr:10,rat:1,atk:3,rel:4,scf:1,mkp:0,m
 gflat();
 var gG=el('g',{});
 /* compressor knobs on the left, MIX big at the top right next to IN and WARM; right column: IN, WARM, then the RATIO / SC HPF selectors at the bottom right */
-knob(568,662,'THRESH',THR,function(v){return v+' dB';},['-20','0'],C,'thr',10,gG);
-button(897,758,'RATIO',YEL,function(){return C.rat!==1;},function(){C.rat=(C.rat+1)%RAT.length;},gG,function(){return RAT[C.rat]+':1';});
-knob(634,714,'ATTACK',ATK,function(v){return v+' ms';},['.1','30'],C,'atk',3,gG);
-knob(700,662,'RELEASE',REL,function(v){return v?v+' s':'Auto';},['.1','A'],C,'rel',4,gG);
-button(947,758,'SC HPF',YEL,function(){return C.scf!==1;},function(){C.scf=(C.scf+1)%SCF.length;},gG,function(){return SCF[C.scf]?SCF[C.scf]+' Hz':'Off';});
-knob(766,714,'MAKEUP',MKP,function(v){return '+'+v.toFixed(1)+' dB';},['0','+6'],C,'mkp',0,gG);
-knob(852,656,'MIX',MIXS,function(v){return v+' %';},['DRY','WET'],C,'mix',10,gG,24);
-button(947,698,'WARM',RED,function(){return C.warm;},function(){C.warm=!C.warm;},gG);
-button(947,638,'IN',RED,function(){return C.on;},function(){C.on=!C.on;},svg);
+knob(714,656,'THRESH',THR,function(v){return v+' dB';},['-20','0'],C,'thr',10,gG);
+button(1179,708,'RATIO',YEL,function(){return C.rat!==1;},function(){C.rat=(C.rat+1)%RAT.length;},gG,function(){return RAT[C.rat]+':1';});
+knob(784,688,'ATTACK',ATK,function(v){return v+' ms';},['.1','30'],C,'atk',3,gG);
+knob(854,656,'RELEASE',REL,function(v){return v?v+' s':'Auto';},['.1','A'],C,'rel',4,gG);
+button(1227,708,'SC HPF',YEL,function(){return C.scf!==1;},function(){C.scf=(C.scf+1)%SCF.length;},gG,function(){return SCF[C.scf]?SCF[C.scf]+' Hz':'Off';});
+knob(924,688,'MAKEUP',MKP,function(v){return '+'+v.toFixed(1)+' dB';},['0','+6'],C,'mkp',0,gG);
+knob(1004,650,'MIX',MIXS,function(v){return v+' %';},['DRY','WET'],C,'mix',10,gG,24);
+button(1131,708,'WARM',RED,function(){return C.warm;},function(){C.warm=!C.warm;},gG);
+button(1227,638,'IN',RED,function(){return C.on;},function(){C.on=!C.on;},svg);
 /* GR row: amber LEDs, red from 10 dB (same convention as The Stripper) */
 var GRS=[1,2,3,4,6,8,10,12],grLeds=[];
 txt('GR',448,1044,11,YEL,'middle',800,HID);
@@ -354,7 +550,7 @@ document.getElementById('exG').onclick=function(){gflat();Object.assign(C,{thr:6
 /* ===== stage 4: CLIP — soft clipper (Airwindows ClipSoftly family), level matched: small signals pass at unity, peaks are rounded ===== */
 var CLIPMARK=el('g',{});
 /* the four small stages side by side on one row, as the bottom row of The Stripper */
-box(24,1040,160,170,'CLIP','bottom');
+box(24,1040,220,124,'CLIP','bottom');
 var DRV=[];for(var dv=0;dv<=12;dv++)DRV.push(dv/2);
 var K={};function kflat(){Object.assign(K,{on:true,drv:4});}kflat();
 var CSX=44,CSY=1150,CSW=150,CSH=146;
@@ -371,13 +567,13 @@ var kG=el('g',{});
 function clipRedraw(){while(CCUR.firstChild)CCUR.removeChild(CCUR.firstChild);kG.style.opacity=K.on?1:.35;kG.style.pointerEvents=K.on?'':'none';
   var d='';for(var i=0;i<=120;i++){var x=i/120*1.05;d+=(i?' L':'M')+ccx(x).toFixed(1)+' '+ccy(clipOut(x)).toFixed(1);}
   el('path',{d:d,fill:'none',stroke:AMBL,'stroke-width':1.8},CCUR);}
-knob(100,1118,'DRIVE',DRV,function(v){return '+'+v.toFixed(1)+' dB';},['0','+6'],K,'drv',4,kG,22);
-txt('level matched',100,1192,9,DIMW,'middle',700,kG);
+knob(104,1090,'DRIVE',DRV,function(v){return '+'+v.toFixed(1)+' dB';},['0','+6'],K,'drv',4,kG,22);
+txt('level',215,1132,9,DIMW,'middle',700,kG);txt('matched',215,1144,9,DIMW,'middle',700,kG);   /* under IN, on two lines */
 var CLS=[.5,1,1.5,2,3,4,6],clLeds=[];
 txt('CLIP',420,1214,11,YEL,'middle',800,HID);
 CLS.forEach(function(d,i){var x=456+i*30;txt(String(d),x,1196,8,DIMW,'middle',700,HID);clLeds.push(el('circle',{cx:x,cy:1210,r:4,fill:d>=3?'#3a1010':'#33260a',stroke:'#000','stroke-width':.6},HID));});
 txt('dB taken off the peaks',456,1236,10,DIMW,'start',700,HID);
-button(155,1078,'IN',RED,function(){return K.on;},function(){K.on=!K.on;},svg);
+button(215,1078,'IN',RED,function(){return K.on;},function(){K.on=!K.on;},svg);
 var KS={sh:0};
 function clipTick(now){var t=(now-T0)/1000;
   var kick=SIM.mode==='loud'?Math.exp(-(t%.5)/.09):0,hat=SIM.mode==='loud'?.5*Math.exp(-((t+.25)%.25)/.05):0;
@@ -388,7 +584,7 @@ function clipTick(now){var t=(now-T0)/1000;
 document.getElementById('exK').onclick=function(){kflat();Object.assign(K,{drv:4});refresh();};
 
 /* ===== stage 5: LIMIT — our own look-ahead limiter on sample peaks (no true peak), three styles of the same engine ===== */
-box(190,1040,326,170,'LIMIT','bottom');
+box(250,1040,385,124,'LIMIT','bottom');
 var THRS=[],CEILS=[-0.1,-0.3,-0.5,-1.0],STYLES=['MODERN','PUNCH','DYN'];
 /* RELEASE is a trim around the style's own release: centre detent = as the style wants, each step a third of an octave faster or slower.
    Base releases: MODERN fast and fixed, PUNCH medium, DYNAMIC slow and program dependent */
@@ -403,7 +599,7 @@ var ltr=el('g',{'clip-path':'url(#lscr)'},HID),llP=el('path',{fill:'#8e8e93',opa
 txt('LEVEL',LSX+10,LSY+15,9,'#8e8e93','start',800,HID);txt('GR',LSX+52,LSY+15,9,AMBL,'start',800,HID);txt('CEILING',LSX+72,LSY+15,9,W,'start',800,HID).setAttribute('opacity',.6);
 function llY(db){return LSY+LSH-(Math.max(-24,Math.min(0,db))+24)/24*(LSH-24);}
 function lgY(db){return LSY+22+Math.min(8,db)/8*(LSH-34);}
-/* layout: the three knobs on one row at the left; actions at the top right (SET, IN), style selectors at the bottom right.
+/* layout: THRESH and RELEASE at the left, SET on the upper-right diagonal of RELEASE, IN top right, the style selectors centred between SET and IN, and in the height of the box.
    groups: everything but RELEASE locks during SET */
 var lG=el('g',{}),rG=el('g',{}),sG=el('g',{}),liG=el('g',{}),tG=el('g',{});
 /* SET: the threshold glides down to the forced value and back (LS.k 0…1); the THRESH knob shows it, locked but not dimmed.
@@ -412,20 +608,20 @@ var SETTHR=-8,LS={gr:0,k:0};
 var THV={get thr(){return LS.k>.001?Lm.thr+(THRS.length-1-Lm.thr)*LS.k:Lm.thr;},set thr(v){Lm.thr=v;}};
 function thrNow(){return THRS[Lm.thr]+(SETTHR-THRS[Lm.thr])*LS.k;}
 var THRDRAW=KNOBS.length;
-knob(244,1118,'THRESH',THRS,function(){var v=thrNow();return (v<-.04?'−':'')+Math.abs(v).toFixed(1)+' dB';},['0','-4'],THV,'thr',4,tG);
+knob(304,1090,'THRESH',THRS,function(){var v=thrNow();return (v<-.04?'−':'')+Math.abs(v).toFixed(1)+' dB';},['0','-4'],THV,'thr',4,tG);
 /* CEILING moved to OUTPUT (one output ceiling for LIMIT, FINAL and METALHEAD) */
-knob(336,1118,'RELEASE',RTRIM,function(){return Math.round(relMs())+' ms';},['FAST','SLOW'],Lm,'rel',4,rG);
-button(437,1078,'SET',RED,function(){return Lm.cal;},function(){Lm.cal=!Lm.cal;},sG);
-STYLES.forEach(function(n,i){choiceBtn(487,1128+i*26,n,function(){return Lm.style===i;},function(){Lm.style=i;},lG,44);});
-button(487,1078,'IN',RED,function(){return Lm.on;},function(){Lm.on=!Lm.on;},liG);
+knob(390,1090,'RELEASE',RTRIM,function(){return Math.round(relMs())+' ms';},['FAST','SLOW'],Lm,'rel',4,rG);
+button(458,1078,'SET',RED,function(){return Lm.cal;},function(){Lm.cal=!Lm.cal;},sG);
+STYLES.forEach(function(n,i){choiceBtn(532,1076+i*26,n,function(){return Lm.style===i;},function(){Lm.style=i;},lG,44);});
+button(606,1078,'IN',RED,function(){return Lm.on;},function(){Lm.on=!Lm.on;},liG);
 var GRL=[.5,1,1.5,2,2.5,3,4,6],lgLeds=[];
 txt('GR',400,1524,11,YEL,'middle',800,HID);
 GRL.forEach(function(d,i){var x=432+i*30;txt(String(d),x,1506,8,DIMW,'middle',700,HID);lgLeds.push(el('circle',{cx:x,cy:1520,r:4,fill:d>=3?'#3a1010':'#33260a',stroke:'#000','stroke-width':.6},HID));});
 txt('aim for 2–3 dB at most',432,1546,10,DIMW,'start',700,HID);
 /* SET overlay: shown over the box, lets the clicks through */
 var calO=el('g',{style:'pointer-events:none;display:none'});
-txt('SET THE',440,1146,18,YEL,'middle',900,calO,true);txt('RELEASE',440,1166,18,YEL,'middle',900,calO,true);   /* over the dimmed style buttons */
-txt('turn RELEASE · press again',440,1186,8,W,'middle',700,calO);
+txt('SET THE',532,1095,18,YEL,'middle',900,calO,true);txt('RELEASE',532,1115,18,YEL,'middle',900,calO,true);   /* over the dimmed style buttons */
+txt('press SET again',532,1133,8,W,'middle',700,calO);
 
 
 function limTick(now){var dt=Math.min(.05,(now-(LS.last||now))/1000);LS.last=now;var t=(now-T0)/1000;
@@ -446,7 +642,7 @@ function limTick(now){var dt=Math.min(.05,(now-(LS.last||now))/1000);LS.last=now
 document.getElementById('exL').onclick=function(){lflat();Object.assign(Lm,{style:1,thr:4,ceil:1,rel:4});refresh();};
 
 /* ===== stage 6: FINAL — INFLATE (our port of ZLInflator, shared/inflator) or CLIP (Airwindows ClipOnly2 safety clip, 0…+2 dB) ===== */
-box(522,1040,284,170,'FINAL','bottom');
+box(641,1040,340,124,'FINAL','bottom');
 var EFFS=[],CRVS=[0,25,50,75,100],DRV6=[0,.5,1,1.5,2];for(var ef=0;ef<=10;ef++)EFFS.push(ef*10);
 var F6={};function fflat(){Object.assign(F6,{on:true,mode:0,eff:5,crv:1,drv:4});}fflat();
 /* inflator maths, same as shared/inflator/inflator.h: quartic + quadratic shapers blended 50/50, wet/dry by EFFECT */
@@ -466,14 +662,14 @@ function fcx(x){return FSX+10+x/FMAX*(FSW-20);}function fcy(y){return FSY+FSH-10
 var FCUR=el('g',{'clip-path':'url(#fscr)'},HID),fdot=el('circle',{r:3.6,fill:'#070708',stroke:W,'stroke-width':1.5},HID);
 var infG=el('g',{}),clpG=el('g',{});
 txt('INFLATE',315,1622,11,DIMW,'middle',800,HID);txt('CLIP',480,1622,11,DIMW,'middle',800,HID);
-knob(596,1118,'EFFECT',EFFS,function(v){return v+' %';},['0','100'],F6,'eff',5,infG);
-knob(676,1118,'CURVE',CRVS,function(v){return v+' %';},['0','100'],F6,'crv',1,infG);
-knob(636,1118,'DRIVE',DRV6,function(v){return '+'+v.toFixed(1)+' dB';},['0','+2'],F6,'drv',4,clpG);
+knob(707,1090,'EFFECT',EFFS,function(v){return v+' %';},['0','100'],F6,'eff',5,infG);
+knob(793,1090,'CURVE',CRVS,function(v){return v+' %';},['0','100'],F6,'crv',1,infG);
+knob(750,1090,'DRIVE',DRV6,function(v){return '+'+v.toFixed(1)+' dB';},['0','+2'],F6,'drv',4,clpG);
 var CL6=[.25,.5,1,1.5,2],cl6Leds=[];
 CL6.forEach(function(d,i){var x=566+i*26;txt(String(d),x,1650,8,DIMW,'middle',700,HID);cl6Leds.push(el('circle',{cx:x,cy:1664,r:4,fill:'#33260a',stroke:'#000','stroke-width':.6},HID));});
 txt('dB clipped',566,1686,10,DIMW,'start',700,HID);
-['INFLATE','CLIP'].forEach(function(n,i){choiceBtn(777,1144+i*26,n,function(){return F6.mode===i;},function(){F6.mode=i;},svg,44);});
-button(777,1078,'IN',RED,function(){return F6.on;},function(){F6.on=!F6.on;},svg);
+['INFLATE','CLIP'].forEach(function(n,i){choiceBtn(878,1089+i*26,n,function(){return F6.mode===i;},function(){F6.mode=i;},svg,44);});
+button(952,1078,'IN',RED,function(){return F6.on;},function(){F6.on=!F6.on;},svg);
 function finalRedraw(){while(FCUR.firstChild)FCUR.removeChild(FCUR.firstChild);
   /* only the controls of the selected mode are on the panel: EFFECT + CURVE for INFLATE, DRIVE for CLIP */
   [[infG,0],[clpG,1]].forEach(function(p){p[0].style.display=F6.mode===p[1]?'':'none';p[0].style.opacity=F6.on?1:.35;p[0].style.pointerEvents=F6.on?'':'none';});
@@ -490,17 +686,17 @@ function finalTick(now){var t=(now-T0)/1000;
 document.getElementById('exF').onclick=function(){fflat();Object.assign(F6,{mode:1,drv:4});refresh();};
 
 /* ===== stage 7: METALHEAD — optional brickwall digital limiter after FINAL, off by default; our own engine (no block tag) ===== */
-box(812,1040,164,170,'METALHEAD','bottom');
+box(987,1040,269,124,'METALHEAD','bottom');
 var PUSH=[];for(var pu=0;pu<=12;pu++)PUSH.push(pu/2);
 var MH={};function mflat(){Object.assign(MH,{on:false,push:4});}mflat();
 var mG=el('g',{});
-knob(884,1130,'PUSH',PUSH,function(v){return '+'+v.toFixed(1)+' dB';},['0','+6'],MH,'push',4,mG,22);
+knob(1101,1090,'PUSH',PUSH,function(v){return '+'+v.toFixed(1)+' dB';},['0','+6'],MH,'push',4,mG,22);
 var MGR=[1,2,3,4,6,8,10,12],mLeds=[];
 txt('GR',400,1884,11,YEL,'middle',800,HID);
 MGR.forEach(function(d,i){var x=432+i*30;txt(String(d),x,1866,8,DIMW,'middle',700,HID);mLeds.push(el('circle',{cx:x,cy:1880,r:4,fill:d>=6?'#3a1010':'#33260a',stroke:'#000','stroke-width':.6},HID));});
-txt('SHAME ON YOU',828,1062,7,DIMW,'start',700,mG).setAttribute('opacity','.10');   /* same lettering as the block tags */
+txt('SHAME ON YOU',1003,1062,7,DIMW,'start',700,mG).setAttribute('opacity','.10');   /* same lettering as the block tags */
 txt('brickwall after FINAL · ceiling shared with LIMIT',432,1934,10,DIMW,'start',700,HID);
-button(947,1078,'IN',RED,function(){return MH.on;},function(){MH.on=!MH.on;},svg);
+button(1227,1078,'IN',RED,function(){return MH.on;},function(){MH.on=!MH.on;},svg);
 var MS={gr:0};
 function metalTick(now){var dt=Math.min(.05,(now-(MS.last||now))/1000);MS.last=now;
   mG.style.opacity=MH.on?1:.35;mG.style.pointerEvents=MH.on?'':'none';
@@ -510,20 +706,20 @@ function metalTick(now){var dt=Math.min(.05,(now-(MS.last||now))/1000);MS.last=n
 document.getElementById('exM').onclick=function(){mflat();Object.assign(MH,{on:true,push:8});refresh();};
 
 /* ===== the stages move below the service row INPUT · LEVEL · OUTPUT (same row as the other plugins of the suite) ===== */
-var SMALL=el('g',{transform:'translate(0,-196)'});
+var SMALL=el('g',{transform:'translate(0,-460)'});
 (function(){var n=CLIPMARK.nextSibling;while(n&&n!==SMALL){var nx=n.nextSibling;SMALL.appendChild(n);n=nx;}})();
-var VG2=el('g',{transform:'translate(0,20)'});
+var VG2=el('g',{transform:'translate(0,-200)'});
 (function(){var n=VIBEMARK.nextSibling;while(n&&n!==CLIPMARK){var nx=n.nextSibling;VG2.appendChild(n);n=nx;}})();
-var STAGES=el('g',{transform:'translate(0,222)'});
+var STAGES=el('g',{transform:'translate(0,210)'});
 (function(){var n=STAGEMARK.nextSibling;while(n&&n!==STAGES){var nx=n.nextSibling;STAGES.appendChild(n);n=nx;}})();
 var GB=false,IO={},GAINIO=[];for(var gq=-24;gq<=24;gq++)GAINIO.push(gq/2);
-function ioflat(){Object.assign(IO,{gin:24,gout:24});GB=false;}ioflat();
+function ioflat(){Object.assign(IO,{gin:24,gout:24});GB=false;if(window.LD)Object.assign(LD,{l:0,applied:0,tg:0,flash:0});}ioflat();
 function fmtDb(v){return (v>0?'+':v<0?'−':'')+Math.abs(v).toFixed(1)+' dB';}
-box(24,92,150,210,'INPUT','bottom');
-var ioIn=el('g',{});knob(99,188,'GAIN',GAINIO,fmtDb,['-12','+12'],IO,'gin',24,ioIn,22);
+box(24,92,130,198,'INPUT','bottom');
+var ioIn=el('g',{});knob(89,188,'GAIN',GAINIO,fmtDb,['-12','+12'],IO,'gin',24,ioIn,22);
 /* LEVEL: peak meters IN / OUT and clip LEDs as in The Stripper, plus the loudness readout (LUFS, no true peak) */
-box(180,92,610,210,'LEVEL','bottom');
-var LX=262,STEP=18,NL=15,OFFL='#2a2a2c',GRN='#37d04a';
+box(160,92,652,198,'LEVEL','bottom');
+var LX=242,STEP=24,NL=15,OFFL='#2a2a2c',GRN='#37d04a';
 function ledRow(y,label){txt(label,LX-12,y+4,11,W,'end',800);var a=[];for(var i=0;i<NL;i++)a.push(el('circle',{cx:LX+i*STEP,cy:y,r:3.4,fill:OFFL,stroke:'#000','stroke-width':.6}));return a;}
 function dbCol(i){var d=-60+i*(66/(NL-1));return d>=0?RED:(d>=-9?YEL:(d>=-18?'#9fe03a':GRN));}
 var rIL=ledRow(114,'L'),rIR=ledRow(128,'R'),rOL=ledRow(156,'L'),rOR=ledRow(170,'R');
@@ -532,29 +728,39 @@ txt('IN',LX-34,124,11,YEL,'middle',800);txt('OUT',LX-34,166,11,YEL,'middle',800)
 /* clip LEDs: one per module, in signal order (as in The Stripper); a click on any of them clears all.
    The stage LEDs dim with the global bypass and with their own IN; IN and OUT always stay lit */
 var CLN=['IN','FEQ','VEQ','GLU','CLP','LIM','FIN','MTL','OUT'],clipOn=CLN.map(function(){return 0;}),clipD=[],clipG=[];
-CLN.forEach(function(n,i){var x=LX+4+i*36,g=el('g',{style:'cursor:pointer'});el('title',{},g).textContent='Click to clear all';
-  clipD.push(el('circle',{cx:x,cy:276,r:3.4,fill:OFFL,stroke:'#000','stroke-width':.6},g));txt(n,x+7,280,9,W,'start',800,g);
+CLN.forEach(function(n,i){var x=LX+4+i*44,g=el('g',{style:'cursor:pointer'});el('title',{},g).textContent='Click to clear all';
+  clipD.push(el('circle',{cx:x,cy:264,r:3.4,fill:OFFL,stroke:'#000','stroke-width':.6},g));txt(n,x+7,268,9,W,'start',800,g);
   g.addEventListener('click',function(){clipOn=clipOn.map(function(){return 0;});});clipG.push(g);});
-txt('CLIP',LX-34,280,11,YEL,'middle',800);
+txt('CLIP',LX-34,268,11,YEL,'middle',800);
 /* GR block: gain reduction (or dB taken off the peaks) of every dynamic stage, 0–12 dB, amber, red near the top (as in The Stripper) */
 var GRN5=[['G','glue'],['C','clip'],['L','limit'],['F','final'],['M','metalhead']],grRows=[],grRowG=[];
 GRN5.forEach(function(r,k){var y=194+k*13,g=el('g',{});el('title',{},g).textContent='Gain reduction: '+r[1];txt(r[0],LX-12,y+4,10,W,'end',800,g);var a=[];for(var i=0;i<NL;i++)a.push(el('circle',{cx:LX+i*STEP,cy:y,r:3.2,fill:OFFL,stroke:'#000','stroke-width':.6},g));grRows.push(a);grRowG.push(g);});
 txt('GR',LX-34,224,11,YEL,'middle',800);
 function setGr(a,d){var n=Math.max(0,Math.min(NL,Math.round(d/12*NL)));a.forEach(function(c,i){c.setAttribute('fill',i<n?(i>11?RED:AMBL):OFFL);});}
-el('rect',{x:600,y:108,width:176,height:172,rx:4,fill:'#070708',stroke:'#3a3a3d','stroke-width':1.2});
-txt('LUFS',614,128,11,YEL,'start',800);
-txt('SHORT-TERM',614,154,9,DIMW,'start',800);var stT=txt('',762,172,26,AMBL,'end',800);
+el('rect',{x:640,y:108,width:156,height:128,rx:4,fill:'#070708',stroke:'#3a3a3d','stroke-width':1.2});
+txt('LUFS',652,124,10,YEL,'start',800);
+txt('SHORT',652,146,8,DIMW,'start',800);var stT=txt('',786,150,22,AMBL,'end',800);
 var intG=el('g',{style:'cursor:pointer'});el('title',{},intG).textContent='Click to reset the integrated loudness';
-el('rect',{x:604,y:190,width:168,height:80,fill:'transparent'},intG);
-txt('INTEGRATED',614,206,9,DIMW,'start',800,intG);var inT=txt('',762,224,20,AMBL,'end',800,intG);txt('click to reset',614,250,8,DIMW,'start',700,intG);
+el('rect',{x:642,y:160,width:152,height:32,fill:'transparent'},intG);
+txt('INTEGRATED',652,172,8,DIMW,'start',800,intG);var inT=txt('',786,186,15,AMBL,'end',800,intG);txt('click to reset',652,184,7,DIMW,'start',700,intG);
+txt('TO TARGET',652,210,8,DIMW,'start',800);var tgT=txt('',786,226,13,W,'end',800),tgL=el('circle',{cx:658,cy:222,r:3.4,fill:OFFL,stroke:'#000','stroke-width':.6});el('title',{},tgL).textContent='Within 0.5 LU of the target';
 var LU={st:-20,sum:0,n:0,f:0,pi:[-60,-60],po:[-60,-60]};intG.addEventListener('click',function(){LU.sum=0;LU.n=0;LU.f=0;});
-box(796,92,180,210,'OUTPUT','bottom');
-var ioOut=el('g',{});knob(856,188,'GAIN',GAINIO,fmtDb,['-12','+12'],IO,'gout',24,ioOut,22);
-button(947,130,'BYPASS',RED,function(){return GB;},function(){GB=!GB;},svg);
-var ceilG=el('g',{});button(947,240,'CEIL',YEL,function(){return Lm.ceil!==1;},function(){Lm.ceil=(Lm.ceil+1)%CEILS.length;},ceilG,function(){return CEILS[Lm.ceil].toFixed(1)+' dB';});
+/* LOUDNESS block (between LEVEL and OUTPUT): one knob drives the stages that make level, in order CLIP (up to +1.5 dB), LIMIT (up to −3 dB) and FINAL;
+   MATCH (action, top right) sets LOUDNESS once to centre the TARGET (selector, bottom right). Preview: the macro moves the stage knobs; how it lives with them is an open decision */
+var LOUDS=[];for(var lq=0;lq<=20;lq++)LOUDS.push(lq/2);var TGS=[-14,-11,-9,-7],LD={l:0,applied:0,tg:0,flash:0};
+box(818,92,212,198,'LOUDNESS','bottom');
+var ldG=el('g',{});knob(890,188,'LOUDNESS',LOUDS,function(v){return v.toFixed(1);},['0','10'],LD,'l',0,ldG,24);
+button(1001,130,'MATCH',RED,function(){return LD.flash>0;},function(){var gap=TGS[LD.tg]-LU.st;LD.l=Math.max(0,Math.min(20,LD.l+Math.round(gap/0.75)));LD.flash=40;},ldG);
+button(1001,238,'TARGET',YEL,function(){return LD.tg!==0;},function(){LD.tg=(LD.tg+1)%TGS.length;},ldG,function(){return TGS[LD.tg]+' LUFS';});
+function applyLoud(){if(LD.l===LD.applied)return;LD.applied=LD.l;var v=LOUDS[LD.l],cl=function(x){return Math.max(0,Math.min(1,x));},a=cl(v/3.33),b=cl((v-3.33)/3.33),c=cl((v-6.67)/3.33);
+  K.drv=Math.round(3*a);Lm.thr=Math.round(6*b);if(F6.mode===1)F6.drv=Math.round(4*c);else F6.eff=Math.round(6*c);KNOBS.forEach(function(d){d();});}
+box(1036,92,220,198,'OUTPUT','bottom');
+var ioOut=el('g',{});knob(1110,188,'GAIN',GAINIO,fmtDb,['-12','+12'],IO,'gout',24,ioOut,22);
+button(1227,130,'BYPASS',RED,function(){return GB;},function(){GB=!GB;},svg);
+var ceilG=el('g',{});button(1227,238,'CEIL',YEL,function(){return Lm.ceil!==1;},function(){Lm.ceil=(Lm.ceil+1)%CEILS.length;},ceilG,function(){return CEILS[Lm.ceil].toFixed(1)+' dB';});
 var FINEMAX=0,VIBEMAX=0;
 function stageMax(){FINEMAX=0;VIBEMAX=0;for(var i=0;i<=48;i++){var f=20*Math.pow(1000,i/48);FINEMAX=Math.max(FINEMAX,sumDb(0,f),sumDb(1,f),sumDb(2,f));VIBEMAX=Math.max(VIBEMAX,vibeDb(f,0,0));}}
-function ioRedraw(){stageMax();STAGES.style.opacity=GB?.35:1;STAGES.style.pointerEvents=GB?'none':'';[ioIn,ioOut,ceilG].forEach(function(g){g.style.opacity=GB?.35:1;g.style.pointerEvents=GB?'none':'';});}
+function ioRedraw(){applyLoud();stageMax();STAGES.style.opacity=GB?.35:1;STAGES.style.pointerEvents=GB?'none':'';[ioIn,ioOut,ceilG,ldG].forEach(function(g){g.style.opacity=GB?.35:1;g.style.pointerEvents=GB?'none':'';});}
 function setLeds(a,d){var n=Math.max(0,Math.min(NL,Math.round((d+60)/(66/(NL-1))+.5)));a.forEach(function(c,i){c.setAttribute('fill',i<n?dbCol(i):OFFL);});}
 function levelTick(now){var t=(now-T0)/1000;
   var kick=SIM.mode==='loud'?Math.exp(-(t%.5)/.09):0,hat=SIM.mode==='loud'?.5*Math.exp(-((t+.25)%.25)/.05):0;
@@ -573,68 +779,70 @@ function levelTick(now){var t=(now-T0)/1000;
   [[GS.gr,C.on],[KS.sh,K.on],[LS.gr,Lm.on],[FS.sh,F6.on],[MS.gr,MH.on]].forEach(function(v,k){var live=!GB&&v[1];setGr(grRows[k],live?v[0]:0);grRowG[k].style.opacity=live?1:.35;});
   /* loudness: a smoothed estimate from the output peaks (about 9 dB of crest factor), integrated = running mean since reset */
   LU.st+=(LU.po[0]-9-LU.st)*.02;if(++LU.f>90){LU.sum+=LU.st;LU.n++;}   /* let the short-term estimate settle before integrating */
-  stT.textContent=LU.st.toFixed(1);inT.textContent=LU.n>0?(LU.sum/LU.n).toFixed(1):'—';}
+  stT.textContent=LU.st.toFixed(1);inT.textContent=LU.n>0?(LU.sum/LU.n).toFixed(1):'—';
+  var gap=LU.st-TGS[LD.tg];tgT.textContent=(gap>0?'+':'')+gap.toFixed(1);tgL.setAttribute('fill',Math.abs(gap)<=.5?GRN:OFFL);
+  if(LD.flash>0&&--LD.flash===0)paintAll();}
 
 /* ===== BACK: the same template as every plugin of the suite (stripper_rack.html); only the contents change =====
    big title = current tab, FAIRY TAPES under it, plugin line at the top right, tab links SETTINGS / BUTTONS / CREDITS and ← BACK on one row */
 var BK=document.getElementById('back'),CARD=document.getElementById('card');
-el('rect',{width:1000,height:PH,rx:14,fill:'#161617'},BK);el('rect',{width:1000,height:PH,rx:14,fill:'#fff',filter:'url(#tfine)'},BK);el('rect',{width:1000,height:PH,rx:14,fill:'url(#glow)'},BK);
-el('rect',{x:2,y:2,width:996,height:PH-4,rx:13,fill:'none',stroke:'#2c2c2f','stroke-width':2},BK);
-[[18,18],[982,18],[18,PH-18],[982,PH-18]].forEach(function(p,i){var cx=p[0],cy=p[1];
-  el('circle',{cx:cx,cy:cy,r:6.6,fill:'#2b2b2e',stroke:'#4c4c50','stroke-width':1},BK);el('circle',{cx:cx,cy:cy,r:4.6,fill:'#202022',opacity:.7},BK);
-  el('rect',{x:cx-5,y:cy-1.1,width:10,height:2.2,rx:.6,fill:'#050505',transform:'rotate('+(70+i*29)+' '+cx+' '+cy+')'},BK);});
+el('rect',{width:1280,height:PH,rx:14,fill:'#161617'},BK);el('rect',{width:1280,height:PH,rx:14,fill:'#fff',filter:'url(#tfine)'},BK);el('rect',{width:1280,height:PH,rx:14,fill:'url(#glow)'},BK);
+el('rect',{x:2,y:2,width:1276,height:PH-4,rx:13,fill:'none',stroke:'#2c2c2f','stroke-width':2},BK);
 var bTitle=txt('SETTINGS',34,58,38,W,'start',900,BK,true);
 txt('FAIRY TAPES',36,78,11,DIMW,'start',700,BK);
-txt('HAPPY ENDING  ·  MASTERING VST3',966,46,13,W,'end',700,BK);
+txt('HAPPY ENDING  ·  MASTERING VST3',1246,46,13,W,'end',700,BK);
 var PANES={credits:el('g',{},BK),settings:el('g',{},BK),buttons:el('g',{},BK)},TABEL={},LASTTAB='settings';
 function tabLink(label,key,x){var g=el('g',{style:'cursor:pointer'},BK);el('rect',{x:x-84,y:66,width:86,height:18,fill:'transparent'},g);TABEL[key]=txt(label,x,78,11,DIMW,'end',700,g);g.addEventListener('click',function(){showTab(key);});}
-tabLink('SETTINGS','settings',690);tabLink('BUTTONS','buttons',780);tabLink('CREDITS','credits',870);
-var bk=el('g',{style:'cursor:pointer'},BK);el('rect',{x:896,y:66,width:76,height:18,fill:'transparent'},bk);txt('←  BACK',966,78,11,DIMW,'end',700,bk);
+tabLink('SETTINGS','settings',970);tabLink('BUTTONS','buttons',1060);tabLink('CREDITS','credits',1150);
+var bk=el('g',{style:'cursor:pointer'},BK);el('rect',{x:1176,y:66,width:76,height:18,fill:'transparent'},bk);txt('←  BACK',1246,78,11,DIMW,'end',700,bk);
 bk.addEventListener('click',function(){CARD.classList.remove('flipped');});
 function showTab(k){LASTTAB=k;bTitle.textContent=k.toUpperCase();Object.keys(PANES).forEach(function(t){PANES[t].style.display=t===k?'':'none';TABEL[t].setAttribute('fill',t===k?W:DIMW);});}
 /* front: BACK → opens the last tab used */
 (function(){var g=el('g',{style:'cursor:pointer'},svg);el('title',{},g).textContent='Turn the panel around: settings and credits';
-  el('rect',{x:882,y:66,width:86,height:18,fill:'transparent'},g);txt('BACK  →',966,78,11,DIMW,'end',700,g);
+  el('rect',{x:1162,y:66,width:86,height:18,fill:'transparent'},g);txt('BACK  →',1246,78,11,DIMW,'end',700,g);
   g.addEventListener('click',function(){showTab(LASTTAB);CARD.classList.add('flipped');});})();
 
 /* ---- CREDITS tab ---- */
 var P=PANES.credits;
-box(24,102,952,100,'HAPPY ENDING','top',P);
+box(24,102,1232,100,'HAPPY ENDING','top',P);
 txt('Version 0.1 (sketch)  ·  Fairy Tapes  ·  github.com/fairy-tapes',50,136,14,W,'start',700,P);
 txt('Free software: released under the GNU General Public License v3.0 (GPL-3.0), full text in the LICENSE file.',50,158,12,DIMW,'start',700,P);
 txt('The plugin includes GPL-3.0 components, so the combined work is distributed under the same license.',50,176,12,DIMW,'start',700,P);
 txt('Source code and build instructions are available in the project repository.',50,194,12,DIMW,'start',700,P);
-box(24,220,952,292,'COMPONENTS AND LICENSES','top',P);
+box(24,220,1232,292,'COMPONENTS AND LICENSES','top',P);
 var CRD=[['Multi-Q (Fine EQ, Vibe EQ) · Multi-Comp (Glue)','Dusk Audio','GPL-3.0'],['Airwindows (ClipSoftly: Clip · ClipOnly2: Final)','Chris Johnson','MIT'],['ZLInflator (Final: Inflate)','ZL Audio (zsliu98)','GPL-3.0'],['VST 3 SDK','Steinberg Media Technologies','MIT'],['VSTGUI','Steinberg Media Technologies','BSD-3-Clause'],
   ['Zeyada (tape font)','Kimberly Geswein','OFL-1.1'],['Rock Salt (tape font)','Font Diner','Apache-2.0'],['Homemade Apple (tape font)','Font Diner','Apache-2.0']];
-CRD.forEach(function(c,i){var y=254+i*22;txt(c[0],50,y,13,W,'start',800,P);txt(c[1],350,y,12,DIMW,'start',700,P);txt(c[2],950,y,12,AMBL,'end',700,P);
-  if(i<CRD.length-1)el('path',{d:'M50 '+(y+7)+' H950',stroke:DIMW,'stroke-width':1,opacity:.25},P);});
-box(24,530,952,80,'NOTICES','top',P);
+CRD.forEach(function(c,i){var y=254+i*22;txt(c[0],50,y,13,W,'start',800,P);txt(c[1],350,y,12,DIMW,'start',700,P);txt(c[2],1230,y,12,AMBL,'end',700,P);
+  if(i<CRD.length-1)el('path',{d:'M50 '+(y+7)+' H1230',stroke:DIMW,'stroke-width':1,opacity:.25},P);});
+box(24,530,1232,80,'NOTICES','top',P);
 txt('VST is a trademark of Steinberg Media Technologies GmbH, registered in Europe and other countries.',50,556,12,DIMW,'start',700,P);
 txt('Third-party names are cited for attribution only.',50,574,12,DIMW,'start',700,P);
 
 /* ---- SETTINGS tab: appearance (saved for the user, all projects) and behaviour (saved with the project) ---- */
 P=PANES.settings;
-function seg(x,y,items,sel,w){var rects=[],labels=[];w=w||70;
+function seg(x,y,items,sel,w,cb){var rects=[],labels=[];w=w||70;
   items.forEach(function(it,i){var g=el('g',{style:'cursor:pointer'},P);var r=el('rect',{x:x+i*w,y:y,width:w-3,height:24,rx:2,'stroke-width':1.5,stroke:W},g);var t=txt(it,x+i*w+(w-3)/2,y+16,11,W,'middle',800,g);rects.push(r);labels.push(t);
-    g.addEventListener('click',function(){paint(i);});});
+    g.addEventListener('click',function(){paint(i);if(cb)cb(i);});});
   function paint(k){rects.forEach(function(r,i){r.setAttribute('fill',i===k?W:'none');labels[i].setAttribute('fill',i===k?'#111':W);});}
   paint(sel);}
-function act(x,y,w,label){var g=el('g',{style:'cursor:pointer'},P);el('rect',{x:x,y:y,width:w,height:24,rx:2,fill:'#8e8e91',stroke:'#b8b8bb'},g);txt(label,x+w/2,y+16,11,'#1a1a1c','middle',800,g);}
+function act(x,y,w,label,cb){var g=el('g',{style:'cursor:pointer'},P);if(cb)g.addEventListener('click',cb);el('rect',{x:x,y:y,width:w,height:24,rx:2,fill:'#8e8e91',stroke:'#b8b8bb'},g);txt(label,x+w/2,y+16,11,'#1a1a1c','middle',800,g);}
 function row(label,y,hint,x0){x0=x0||50;txt(label,x0,y+16,13,W,'start',800,P);if(hint)txt(hint,x0,y+32,10,DIMW,'start',700,P);}
-var SC=514;
-box(24,102,462,364,'APPEARANCE','top',P);txt('saved for you, in every project',255,130,10,DIMW,'middle',700,P);
-row('WEAR',146);seg(200,146,['OFF','LIGHT','HEAVY'],1,84);
+var SC=654;
+box(24,102,602,364,'APPEARANCE','top',P);txt('saved for you, in every project',325,130,10,DIMW,'middle',700,P);
+row('WEAR',146);seg(200,146,['OFF','LIGHT','HEAVY'],['off','light','heavy'].indexOf(WEAR),84,function(i){setWear(['off','light','heavy'][i]);});
 row('NOTES LAYER',194,'tape and pen marks on the values');seg(200,194,['HIDE','SHOW'],1,84);
-row('TAPE FONT',242,'handwriting on the tape');act(200,242,24,'‹');el('rect',{x:226,y:242,width:176,height:24,rx:2,fill:'none',stroke:W,'stroke-width':1.5},P);
-  (function(){var t=el('text',{x:314,y:259,'text-anchor':'middle',fill:W,'font-size':18,'font-family':"'Zeyada',cursive"},P);t.textContent='Zeyada';})();act(404,242,24,'›');
-row('VALUES FONT',290,'values and model name');seg(200,290,['STANDARD','TAPE FONT'],1,118);
+row('TAPE FONT',242,'handwriting on the tape');el('rect',{x:226,y:242,width:176,height:24,rx:2,fill:'none',stroke:W,'stroke-width':1.5},P);
+  (function(){var names=Object.keys(TAPEFONTS),t=el('text',{x:314,y:259,'text-anchor':'middle',fill:W},P);
+    function upd(){t.textContent=TAPEFONT;t.setAttribute('font-family',"'"+TAPEFONT+"',cursive");t.setAttribute('font-size',Math.min(19,(12*TAPEFONTS[TAPEFONT]+3)).toFixed(1));}
+    function step(d){var i=(names.indexOf(TAPEFONT)+d+names.length)%names.length;TAPEFONT=names[i];lsSet('he_tapefont',TAPEFONT);upd();applyHW();redrawWear();}
+    act(200,242,24,'‹',function(){step(-1);});act(404,242,24,'›',function(){step(1);});upd();})();
+row('VALUES FONT',290,'values and model name');seg(200,290,['STANDARD','TAPE FONT'],HW?1:0,118,function(i){HW=(i===1);lsSet('he_hw',HW?'1':'0');applyHW();});
 row('METER HOLD',338);seg(200,338,['OFF','1.5 S','3 S','INF'],1,63);
 row('METER RELEASE',386);seg(200,386,['SLOW','NORMAL','FAST'],1,84);
-row('LOOK',434);act(200,434,120,'RE-ROLL');txt('new wear, dirt and screws',332,450,10,DIMW,'start',700,P);
-box(SC,102,462,364,'BEHAVIOUR','top',P);txt('saved with the project',SC+231,130,10,DIMW,'middle',700,P);
+row('LOOK',434);act(200,434,120,'RE-ROLL',function(){reroll();});txt('new wear, dirt and screws',332,450,10,DIMW,'start',700,P);
+box(SC,102,602,364,'BEHAVIOUR','top',P);txt('saved with the project',SC+301,130,10,DIMW,'middle',700,P);
 txt('No behaviour settings decided yet.',SC+26,162,12,DIMW,'start',700,P);
-box(24,484,952,120,'NOTES','top',P);
+box(24,484,1232,120,'NOTES','top',P);
 txt('Appearance settings belong to you: they are kept in your preferences and apply to every project and every instance.',50,522,12,DIMW,'start',700,P);
 txt('Behaviour settings change how the plugin works: they are saved in the project, together with the parameters.',50,544,12,DIMW,'start',700,P);
 txt('The wear layout (scratches, tape, screws) is generated once per instance from a saved seed and never changes by itself.',50,566,12,DIMW,'start',700,P);
@@ -642,7 +850,7 @@ txt('Double-click on a knob returns it to its neutral default.',50,588,12,DIMW,'
 
 /* ---- BUTTONS tab: what the buttons that impose settings do (in the plugin: generated from the same table the code uses) ---- */
 P=PANES.buttons;
-box(24,102,952,644,'WHAT THE BUTTONS DO','top',P);
+box(24,102,1232,700,'WHAT THE BUTTONS DO','top',P);
 (function(){var E=[
   ['BYPASS',['Bypasses the whole plug-in.'],['The output equals the input. Every stage dims and locks; only BYPASS, the level meters and the LUFS readout','stay live. No parameter value is changed.']],
   ['IN',['Puts a band or a whole stage in or out of the signal path.'],['Off: the band or stage is bypassed and its controls dim and lock; only its IN stays live. Knob values are not changed.']],
@@ -654,6 +862,7 @@ box(24,102,952,644,'WHAT THE BUTTONS DO','top',P);
   ['WARM',['Softens the attack of the GLUE compressor.'],['Threshold, ratio and the other knobs keep their values.']],
   ['MODERN / PUNCH / DYN',['Chooses the style of the limiter: one engine, three tunings.'],['MODERN: clean, fast release. PUNCH: lets a touch of the transient through. DYN (dynamic): slower, program-dependent','release that keeps the breathing. Each style has its own release; the RELEASE knob is a trim around it (centre = as the style wants) and keeps its position, so changing style moves the starting point. THRESH keeps its value.']],
   ['METALHEAD IN',['Switches on the optional last stage, off by default.'],['A brickwall digital limiter after FINAL for extreme loudness: PUSH drives into the output CEILING. Shame on you.']],
+  ['LOUDNESS / TARGET / MATCH',['LOUDNESS drives the stages that make level: CLIP first, then LIMIT, then FINAL.'],['TARGET chooses the loudness to aim for (−14, −11, −9 or −7 LUFS); the LUFS screen shows the gap and lights green within','0.5 LU. MATCH, pressed on the loudest part, sets LOUDNESS once to centre the target; it never moves by itself.']],
   ['CEILING',['Output ceiling for delivery (OUTPUT): −0.1, −0.3, −0.5 or −1.0 dB.'],['The highest peak that leaves the plug-in: LIMIT, the FINAL clip and inflate, and METALHEAD all stay under it.','−0.1 / −0.3 for loud masters and CD, −1.0 for streaming (no true-peak detection, so keep the margin).']],
   ['INFLATE / CLIP',['Chooses the FINAL stage: the inflator or the safety clip.'],['INFLATE adds loudness by rounding the waveform (EFFECT, CURVE). CLIP pushes into a clean clipper just under','0 dBFS (DRIVE up to +2 dB). Only the controls of the selected mode are shown; both keep their values.']],
   ['SET',['Guided setting of the limiter release (LIMIT).'],['Forces a heavy squash and locks every LIMIT control except RELEASE, so you can hear the pumping while you turn it.','Press SET again to restore the threshold and unlock. It switches off when the editor closes and is never saved.']]],y=142;
@@ -663,11 +872,11 @@ showTab('settings');
 var TAGL=[],fTagG=el('g',{},SMALL);
 function boxTag(x,y,fn,p){var t=txt('',x,y,7,DIMW,'start',700,p);t.setAttribute('opacity','.10');TAGL.push([t,fn]);t.textContent=fn();return t;}
 function refreshTags(){TAGL.forEach(function(g){g[0].textContent=g[1]();});fTagG.style.opacity=F6.on?1:.35;}
-boxTag(40,342,function(){return 'MULTI-Q';},bandsG);
+boxTag(40,122,function(){return 'MULTI-Q';},bandsG);
 boxTag(40,622,function(){return 'TUBE-1A';},vG);
-boxTag(530,622,function(){return '4K-G';},gG);
+boxTag(670,622,function(){return '4K-G';},gG);
 boxTag(40,1062,function(){return 'C-SOFTLY';},kG);
-boxTag(538,1062,function(){return F6.mode===0?'ZL-INFL':'C-ONLY2';},fTagG);
+boxTag(657,1062,function(){return F6.mode===0?'ZL-INFL':'C-ONLY2';},fTagG);
 /* draws the selected view on the shared screen (EQ is drawn by redraw() and vibeRedraw()) */
 function viewTick(){var eq=GV.view==='eq';[grid,CURVES,LEG,VIBEC,VLEG].forEach(function(g){g.style.display=eq?'':'none';});
   while(VIEWG.firstChild)VIEWG.removeChild(VIEWG.firstChild);while(VIEWL.firstChild)VIEWL.removeChild(VIEWL.firstChild);
@@ -694,6 +903,24 @@ function viewTick(){var eq=GV.view==='eq';[grid,CURVES,LEG,VIBEC,VLEG].forEach(f
   var pk=cl?CPK:FPK;if(pk!=null)el('circle',{cx:X(Math.min(M,pk)),cy:Y(Math.min(M,Math.abs(f(pk)))),r:3.6,fill:'#070708',stroke:W,'stroke-width':1.5},VIEWG);
   legend(cl?[['TRANSFER',AMBL],['NO CLIP',W,'3 3']]:[['TRANSFER',AMBL],['NO CHANGE',W,'3 3'],['CEILING',W,'4 4']]);}
 function REDRAW(){redraw();vibeRedraw();clipRedraw();finalRedraw();refreshTags();ioRedraw();}
-REDRAW();requestAnimationFrame(tick);
+/* wear and screws above the silkscreen and the values (levels 4 and 5); controls and LEDs stay above the wear:
+   the wear layer is clipped around every knob, button face and LED (outer rect clockwise, holes counter-clockwise) */
+var WEARF=el('g',{}),SCRF=el('g',{});addWear(WEARF,0x51,false);screws(SCRF);
+var WEARB=el('g',{},BK),SCRB=el('g',{},BK);addWear(WEARB,0x77,true);screws(SCRB);
+var HCPP=el('path',{},el('clipPath',{id:'wearcut'},defs));WEARF.setAttribute('clip-path','url(#wearcut)');
+function cutHoles(){var base=WEARF.getCTM();if(!base)return;var inv=base.inverse(),d='M0 0 H'+PW+' V'+PH+' H0 Z';
+  svg.querySelectorAll('[data-h],circle[stroke="#000"][stroke-width="0.6"]').forEach(function(e){if(!e.getBoundingClientRect().width)return;var m=e.getCTM();if(!m)return;m=inv.multiply(m);
+    if(e.tagName==='circle'){var r=(+e.getAttribute('r')+.8)*m.a,x=m.a*+e.getAttribute('cx')+m.e,y=m.d*+e.getAttribute('cy')+m.f;
+      d+=' M'+(x+r).toFixed(1)+' '+y.toFixed(1)+' A'+r.toFixed(1)+' '+r.toFixed(1)+' 0 1 0 '+(x-r).toFixed(1)+' '+y.toFixed(1)+' A'+r.toFixed(1)+' '+r.toFixed(1)+' 0 1 0 '+(x+r).toFixed(1)+' '+y.toFixed(1)+' Z';}
+    else{var x0=m.a*+e.getAttribute('x')+m.e,y0=m.d*+e.getAttribute('y')+m.f,w=+e.getAttribute('width')*m.a,h=+e.getAttribute('height')*m.d;
+      d+=' M'+x0.toFixed(1)+' '+y0.toFixed(1)+' V'+(y0+h).toFixed(1)+' H'+(x0+w).toFixed(1)+' V'+y0.toFixed(1)+' Z';}});
+  HCPP.setAttribute('d',d);}
+function redrawWear(){WEARL.forEach(drawWear);GRIME.forEach(function(f){f();});}
+function setWear(v){WEAR=v;A={off:0,light:1,heavy:2.2}[WEAR];lsSet('he_wear',WEAR);document.getElementById('wear').value=WEAR;redrawWear();}
+function reroll(){SEED=(Math.random()*4294967295)>>>0;lsSet('he_seed',SEED);lsDel('he_screws');lsDel('he_tape');TAPETXT={};SCRA=null;initScrews(false);
+  SCRL.forEach(function(L){while(L.firstChild)L.removeChild(L.firstChild);});SCREWEL=[[],[],[],[]];SCRL.forEach(function(L){screws(L);});redrawWear();}
+document.getElementById('wear').value=WEAR;document.getElementById('wear').onchange=function(){setWear(this.value);};
+document.getElementById('reroll').onclick=reroll;
+REDRAW();cutHoles();requestAnimationFrame(tick);
 </script>
 </body></html>

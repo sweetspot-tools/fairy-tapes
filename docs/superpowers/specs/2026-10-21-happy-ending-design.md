@@ -27,7 +27,8 @@ Successo: su un mix finito, con pochi gesti (un ritocco di EQ, un po' di colla, 
   - meter di picco IN e OUT stereo (stessa scala e colori di The Stripper);
   - blocco **GR** con cinque righe ambra, 0-12 dB, rosse in cima: **G** glue, **C** clip, **L** limit, **F** final, **M** metalhead; ogni riga si attenua con l'IN del suo stadio e con il BYPASS;
   - **LED di clip per modulo**, in ordine di segnale: IN, FEQ, VEQ, GLU, CLP, LIM, FIN, MTL, OUT (sigle provvisorie); un clic su uno li azzera tutti; quelli degli stadi si attenuano con il BYPASS e con il loro IN;
-  - lettura **LUFS** short-term e integrata (clic per azzerare l'integrata).
+  - lettura **LUFS** su uno schermo piccolo accanto ai LED: short-term, integrata (clic per azzerare) e **TO TARGET** (scarto dal target, LED verde entro ±0,5 LU); la riga dei LED di clip continua sotto lo schermo.
+- **LOUDNESS** (blocco tra LEVEL e OUTPUT, deciso 2026-10-21): manopola LOUDNESS 0-10 a passi di 0,5; **MATCH** (azione, in alto a destra); **TARGET** −14 / −11 / −9 / −7 LUFS (selettore a ciclo, in basso a destra). Sta tra LEVEL e OUTPUT perché legge i LUFS accanto e agisce sugli ultimi stadi prima dell'uscita. INPUT e OUTPUT sono più stretti per farle posto.
 - **OUTPUT:** GAIN ±12 dB, **BYPASS** (attenua e blocca tutto tranne meter e LUFS; uscita = ingresso), **CEIL**: ceiling d'uscita unico −0,1 / −0,3 / −0,5 / −1,0 dB (default −0,3), selettore a clic con LED giallo e valore scritto sotto. Vale per LIMIT, FINAL (clip e inflate) e METALHEAD.
 
 ## 4. Schermo condiviso
@@ -106,7 +107,11 @@ Gli schermi propri di VIBE, GLUE, CLIP, LIMIT e FINAL sono stati tolti: le loro 
 
 - Regole comuni di `docs/DESIGN_SYSTEM.md`: titoli dei riquadri sul bordo basso, IN nell'angolo in alto a destra, selettori di modo in basso a destra, sigla del motore esterno in alto a sinistra, tre tipi di pulsante (scelte esclusive a faccia accesa ambra; acceso/spento con LED rosso; selettori a ciclo con LED giallo e valore sotto), retro con il template di The Stripper.
 - **Sigle dei blocchi (provvisorie):** FINE EQ `MULTI-Q`, VIBE EQ `TUBE-1A`, GLUE `4K-G`, CLIP `C-SOFTLY`, FINAL `ZL-INFL` / `C-ONLY2`; LIMIT e METALHEAD sono motori nostri e non hanno sigla.
-- **Pannello attuale:** 1000 × 1256 (righe: servizio; schermo; FINE EQ; VIBE EQ e GLUE affiancati; CLIP, LIMIT, FINAL e METALHEAD affiancati). Più alto degli altri plugin: vedi §11.
+- **Pannello attuale (2026-10-22):** 1280 × 934, su quattro righe: servizio (INPUT, LEVEL, LOUDNESS, OUTPUT); FINE EQ con lo schermo delle curve accanto (viste EQ, GLUE, CLIP, LIMIT, FINAL); VIBE EQ e GLUE affiancati; CLIP, LIMIT, FINAL e METALHEAD affiancati su tutta la larghezza. Compattato dall'utente riga per riga (prima 1000 × 1256, poi 1280 × 1036); per ora non si riesce a fare di meglio (§11).
+- **FINE EQ:** bande su una fila come in The Stripper, con le manopole alternate su due quote per incastrare le bande vicine: HI PASS una manopola; LOW SHELF e HI SHELF con FREQ e GAIN in diagonale (LOW SHELF: GAIN in alto, FREQ in basso; HI SHELF al contrario); LO MID e HI MID ribaltate (Q in alto al centro, FREQ e GAIN sotto); MID con FREQ e GAIN in alto e Q sotto. Etichette abbreviate: HI PASS, LOW SHELF, LO MID, MID, HI MID, HI SHELF.
+- **GLUE:** IN da solo in alto a destra; WARM, RATIO e SC HPF in fila in basso a destra, a partire dalla colonna dell'IN.
+- **LIMIT:** THRESH e RELEASE a sinistra, SET sulla diagonale in alto a destra di RELEASE, IN in alto a destra, stili MODERN / PUNCH / DYN in colonna tra SET e IN, centrati anche in altezza. **FINAL:** EFFECT e CURVE (o DRIVE) a sinistra, INFLATE / CLIP tra le manopole e IN, centrati in altezza. **CLIP:** la scritta "level matched" sta sotto l'IN, su due righe.
+- **Valori, usura e viti come negli altri plugin:** valori in TAPE FONT (selezionabile dal retro), graffi, macchie, residui, nastro scrivibile e viti girevoli da un seme per istanza; usura sopra serigrafia e valori, sotto manopole, pulsanti e LED.
 - **Retro:** SETTINGS (Appearance comune; Behaviour per ora vuota), BUTTONS (spiega BYPASS, IN, M/S, LISTEN, DYN, viste, RATIO/SC HPF, WARM, stili, SET, CEILING, INFLATE/CLIP, METALHEAD), CREDITS.
 - Testo dell'editor in inglese.
 
@@ -143,8 +148,8 @@ Scritti prima del codice, devono prima fallire:
 ## 11. Decisioni aperte
 
 - **Principio a due livelli** (davanti i comandi musicali, il dettaglio a un clic) e layout "panoramica più dettaglio": proposto, non deciso; oggi tutti i comandi stanno sul pannello.
-- **Macro LOUDNESS e comandi singoli:** lo stile decide anche la distribuzione / una manopola CHARACTER tra clip e limiter / ritocchi ± nel dettaglio di ogni stadio. Da decidere anche dove sta sul pannello, insieme a target LUFS e MATCH (non ancora nella preview).
-- **Dimensioni del pannello:** 1000 × 1256 non sta su uno schermo 1080p a 1:1; da decidere tra scala circa 80 %, disposizione orizzontale (come gli altri plugin) o ulteriori compattazioni.
+- **Macro LOUDNESS e comandi singoli:** lo stile decide anche la distribuzione / una manopola CHARACTER tra clip e limiter / ritocchi ± nel dettaglio di ogni stadio. Nella preview la LOUDNESS sposta le manopole dei tre stadi (solo per vederne l'effetto).
+- **Dimensioni del pannello:** 1280 × 934 dopo le compattazioni del 2026-10-22 (prima 1000 × 1256); su uno schermo 1080p a 1:1 sta a fatica con la barra dell'host. Da decidere se basta o se serve una scala (circa 90 %) o il principio a due livelli.
 - **Oversampling** per CLIP, FINAL e TUBE (aliasing delle armoniche): da decidere.
 - **Valori da tarare a orecchio:** soglie e tempi del DYN del VIBE, basi di release degli stili, soglia forzata di SET.
 - **Revisione finale** degli stadi con tutta la catena davanti, in particolare FINE EQ (l'utente vuole tornarci) e GLUE.
