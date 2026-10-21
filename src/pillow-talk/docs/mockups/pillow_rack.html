@@ -314,6 +314,16 @@ function btn(cx,cy,label,on,cb,ledCol){
   g._on=on;g._paint=function(o){led.setAttribute('fill',o?(ledCol||RED):'#3a1010');ps.paint(o);};
   g._paint(on);g.addEventListener('click',function(){cb(g);});return g;
 }
+/* exclusive choice (design system, 2026-10-21): the name on the face, the face lights amber on the active one, no LED */
+function choice(cx,cy,label,on,cb,w){w=w||34;var h=20,x=cx-w/2,y=cy-h/2;
+  var g=el('g',{style:'cursor:pointer'});
+  var bi=++CTRL;aluBtnGap(g,x,y,w,h,bi);var ps=pressShadow(g,x,y,w,h,2);
+  var r=el('rect',{x:x,y:y,width:w,height:h,rx:2,stroke:'#b8b8bb'},ps.face);aluBtnOverlay(ps.face,x,y,w,h,bi);
+  var t=txt(label,cx,cy+3.5,9,'#1a1a1c','middle',900,ps.face);
+  var lg=el('g',{},LY.scale);g._lg=lg;if(CUR){(CUR._x=CUR._x||[]).push(lg);}
+  g._on=on;g._paint=function(o){r.setAttribute('fill',o?AMBL:'#9a9ca1');t.setAttribute('fill',o?'#2a1d05':'#1a1a1c');ps.paint(o);};
+  g._paint(on);g.addEventListener('click',function(){cb(g);});return g;
+}
 function toggle(g){g._on=!g._on;g._paint(g._on);}
 /* knob: black cap, yellow ring, tick dots, end labels, yellow pointer */
 function knob(cx,cy,label,v,lo,hi,sub,opt){
@@ -443,7 +453,7 @@ knob(484,352,'WOW/FLUTTER',P.wow,'0','10','',{def:.2,fmt:F.pct,onchg:onk('wow')}
 endGrp();reg(gDl,false);
 el('path',{d:'M560 306 H940',stroke:DIMW,'stroke-width':1,opacity:.5});txt('TIME SYNC',750,300,10,DIMW,'middle',800);
 var gTs=grp();var bTS=btn(604,352,'SYNC',false,function(b){toggle(b);TS=b._on;syncUp();},RED);endGrp();reg(gTs,false);
-var gTn=grp(),tnB=[];['1/16','1/8','1/4','1/2'].forEach(function(n,i){tnB.push(btn(700+i*64,352,n,i===TN,function(){TN=i;tnB.forEach(function(m,j){m._on=(j===i);m._paint(m._on);});recompute();},YEL));});endGrp();var mTn=reg(gTn,false);
+var gTn=grp(),tnB=[];['1/16','1/8','1/4','1/2'].forEach(function(n,i){tnB.push(choice(700+i*64,352,n,i===TN,function(){TN=i;tnB.forEach(function(m,j){m._on=(j===i);m._paint(m._on);});recompute();},48));});endGrp();var mTn=reg(gTn,false);
 
 /* ============ ROW C : AUTO DUCK ============ */
 ROOT=el('g',{transform:'translate(0,-32)'},svg);OFFY=-32;
@@ -456,7 +466,7 @@ var gHd=grp();knob(300,552,'HOLD',P.hold,'50','1k','',{def:.5,fmt:F.hold,onchg:o
 var gRl=grp();knob(392,552,'RELEASE',P.rel,'50','2k','',{def:.5,fmt:F.rel,onchg:onk('rel')});endGrp();reg(gRl,false);
 el('path',{d:'M560 506 H940',stroke:DIMW,'stroke-width':1,opacity:.5});txt('HOLD SYNC',750,500,10,DIMW,'middle',800);
 var gHs=grp();var bHS=btn(604,552,'SYNC',false,function(b){toggle(b);HS=b._on;syncUp();},RED);endGrp();reg(gHs,false);
-var gHn=grp(),hnB=[];['1/16','1/8','1/4','1/2'].forEach(function(n,i){hnB.push(btn(700+i*64,552,n,i===HN,function(){HN=i;hnB.forEach(function(m,j){m._on=(j===i);m._paint(m._on);});recompute();},YEL));});endGrp();var mHn=reg(gHn,false);
+var gHn=grp(),hnB=[];['1/16','1/8','1/4','1/2'].forEach(function(n,i){hnB.push(choice(700+i*64,552,n,i===HN,function(){HN=i;hnB.forEach(function(m,j){m._on=(j===i);m._paint(m._on);});recompute();},48));});endGrp();var mHn=reg(gHn,false);
 ROOT=svg;OFFY=0;
 function syncUp(){mTm.off=TS;mTn.off=!TS;mHd.off=HS;mHn.off=!HS;[mTm,mTn,mHd,mHn].forEach(paint);recompute();}
 syncUp();
