@@ -100,13 +100,21 @@ La bozza della richiesta si prepara a parte; **non si contatta il supporto da qu
 - Test con mutazioni sulle parti che garantiscono sicurezza (verifica di `state`, pulizia dei percorsi, limite di dimensione).
 - **Non verificabile senza l'app registrata e un account:** il flusso vero con TONE3000, il ritorno su loopback, lo scarico di un modello vero, i limiti di velocità reali. Si dichiara in ogni resoconto.
 
-## 11. Piano di massima (da trasformare in piano in `docs/superpowers/plans/`)
+## 11. Piano di massima e stato (2026-10-21)
 
-1. PKCE, limitatore, pulizia dei nomi, file laterale (puro, con test).
-2. `Tone3000Api` con i parsing (test su file di esempio). **`HttpClient` e implementazione libcurl: fatti il 2026-10-21** (`shared/tone3000`: URL e regola dei redirect, 5 test sul client con un server di prova su loopback, HTTPS vero verificato su `www.tone3000.com`, certificato scaduto rifiutato).
-3. Macchina a stati OAuth + server locale + apertura del browser (finti).
-4. `TokenStore`, `Worker`.
-5. ~~Sottomodulo libcurl e `http_curl.cpp`~~ (fatto il 2026-10-21, vedi sopra).
-6. Scheda TONE3000 nel popup e mockup aggiornato, con badge di licenza e "Powered by TONE3000".
-7. Credits e impostazioni (cartella, SIGN OUT) nel retro; documentazione.
-8. Prova con l'app registrata (a cura dell'utente) e verifica del flusso vero.
+Tutto in `shared/tone3000/` (nessuna dipendenza da VSTGUI), 5 test eseguibili (`tone3000_*_tests`), compilazione e prova solo su Linux.
+
+1. **Fatto.** PKCE (SHA-256 con i vettori noti, esempio RFC 7636), limitatore di richieste, pulizia dei nomi dei file, scrittura atomica (anche privata, 0600), file laterale `.t3k.json`.
+2. **Fatto.** `Tone3000Api` (tono, modelli, elenchi, utente, scarico) e i lettori JSON su risposte di esempio con i campi documentati; ID e testi da fuori trattati come dati.
+3. **Fatto.** Flusso OAuth: `OAuthFlow`, ricevitore su `127.0.0.1` (`LoopbackServer`: solo loopback, controllo dell'intestazione Host, `state` verificato in tempo costante, le richieste con `state` sbagliato non chiudono il login), URL, risposta del token, apertura del browser solo sulla pagina di login. Provato su un socket vero con un browser finto, compreso il controllo che il verificatore inviato al token sia quello della sfida nell'URL.
+4. **Fatto.** `TokenStore` (login in un file 0600, cancellato dal SIGN OUT) e `Tone3000Client` (thread di lavoro, snapshot a versioni, rinnovo del token prima della scadenza e su 401, scarico in `.part` con controllo "sembra un NAM" e file laterale, un modello già scaricato non si riscarica).
+5. **Fatto.** libcurl (sottomodulo 8.23.0) e `http_curl.cpp`.
+6. **Da fare.** Scheda TONE3000 nel popup (e mockup), con badge di licenza e "Powered by TONE3000"; attende la registrazione dell'app (`client_id`) e le risposte del supporto.
+7. **Da fare.** CREDITS e impostazioni nel retro (cartella dei toni, SIGN OUT); documentazione.
+8. **A cura dell'utente.** Prova con l'app registrata e verifica del flusso vero.
+
+**Scoperte durante la scrittura (da tenere presenti):**
+- I campi dell'API sono quelli della documentazione (`Tone`, `Model`, `User`, pagine `data/page/page_size/total/total_pages`); **gli elenchi `trending` e `latest` non hanno pagine**; il corpo degli errori non è documentato, per questo il client mostra solo testi propri.
+- `model_url` richiede il token: il client lo manda **solo se l'host è quello dell'API**; un reindirizzamento verso un altro host https (un deposito di file) si segue **senza** `Authorization` né `Cookie`. Se `model_url` fosse su un altro host, si scarica senza token: da verificare con una prova vera.
+- Il piano gratuito nomina solo i flussi OAuth e gli elenchi; gli esempi della documentazione per `select_tone` chiamano anche `GET /tones/{id}` e `GET /models`, che i termini non nominano: **va chiesto al supporto** (domanda 3, §8).
+- Con `cancel` si ferma il comando in corso e si scartano quelli in coda; un login annullato non è un errore.

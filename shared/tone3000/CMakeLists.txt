@@ -51,7 +51,7 @@ function(fairy_add_curl)
 endfunction()
 fairy_add_curl()
 
-add_library(tone3000 STATIC src/http_policy.cpp src/http_curl.cpp src/pkce.cpp src/metadata.cpp src/api.cpp src/loopback.cpp src/oauth.cpp)
+add_library(tone3000 STATIC src/http_policy.cpp src/http_curl.cpp src/pkce.cpp src/metadata.cpp src/api.cpp src/loopback.cpp src/oauth.cpp src/token_store.cpp src/client.cpp)
 target_include_directories(tone3000 PUBLIC ${TONE3000_DIR}/include)
 # nlohmann/json (single header, MIT) as shipped with the NAM core
 target_include_directories(tone3000 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../vendors/NeuralAmpModelerCore/Dependencies)
@@ -85,3 +85,9 @@ add_executable(tone3000_oauth_tests tests/test_oauth.cpp)
 target_link_libraries(tone3000_oauth_tests PRIVATE tone3000)
 add_test(NAME tone3000_oauth_tests COMMAND tone3000_oauth_tests)
 set_tests_properties(tone3000_oauth_tests PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 120)
+
+# Stored login and the worker behind the interface, against a fake server and a fake browser login (no network).
+add_executable(tone3000_client_tests tests/test_client.cpp)
+target_link_libraries(tone3000_client_tests PRIVATE tone3000)
+add_test(NAME tone3000_client_tests COMMAND tone3000_client_tests)
+set_tests_properties(tone3000_client_tests PROPERTIES TIMEOUT 120)
