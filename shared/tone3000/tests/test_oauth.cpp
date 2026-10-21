@@ -201,6 +201,7 @@ HttpResponse okTokens() {
 struct FakeBrowser {
   std::string url;
   std::string answerTemplate;   // what comes back; {STATE} is replaced with the state of the URL
+  const std::atomic<bool>* after = nullptr;   // when set, the answer waits until this turns true
   std::thread worker;
   bool operator()(const std::string& u) {
     url = u;
@@ -210,6 +211,7 @@ struct FakeBrowser {
       const int port = std::stoi(redirect.substr(redirect.rfind(':') + 1));
       std::string target = answerTemplate;
       for (std::size_t p; (p = target.find("{STATE}")) != std::string::npos;) target.replace(p, 7, state);
+      while (after && !after->load()) std::this_thread::sleep_for(std::chrono::milliseconds(2));
       get(port, target);
     });
     return true;
@@ -241,6 +243,8 @@ void test_flow_ignores_a_wrong_state_and_goes_on() {
   FakeBrowser browser;
   browser.answerTemplate = "/callback?code=AUTHCODE&state={STATE}";
   bool bogusRefused = false;
+  std::atomic<bool> bogusDone{false};
+  browser.after = &bogusDone;                    // the real answer comes only after the forged one was dealt with
   std::thread bogus;
   OAuthFlow flow(cfg(), http, [&](const std::string& u) {
     // a local program that sends a callback with a made-up state before the real browser answers (the server only
@@ -249,6 +253,7 @@ void test_flow_ignores_a_wrong_state_and_goes_on() {
       const std::string redirect = queryValue("/x?" + u.substr(u.find('?') + 1), "redirect_uri");
       const int port = std::stoi(redirect.substr(redirect.rfind(':') + 1));
       bogusRefused = get(port, "/callback?code=EVIL&state=guess").find("400") != std::string::npos;
+      bogusDone = true;
     });
     return browser(u);
   });
