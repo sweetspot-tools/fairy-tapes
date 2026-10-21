@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fairy Tapes — preview</title>
+<style>
+:root{--bg:#e9e8e4;--card:#d8d6d0;--ink:#222;--dim:#666;--panel:#161617}
+*{box-sizing:border-box}
+body{margin:0;padding:24px 16px 40px;background:var(--bg);color:var(--ink);font-family:system-ui,sans-serif}
+h1{margin:0 auto 4px;max-width:1240px;font-size:22px}
+p.sub{margin:0 auto 20px;max-width:1240px;color:var(--dim);font-size:13px}
+h2{margin:28px auto 10px;max-width:1240px;font-size:15px;color:#444}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:16px;max-width:1240px;margin:0 auto;align-items:stretch}
+.card{display:flex;flex-direction:column;background:var(--card);border-radius:12px;padding:10px;cursor:zoom-in;transition:transform .15s,box-shadow .15s}
+.card:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(0,0,0,.15)}
+.thumb{position:relative;width:100%;aspect-ratio:1000/640;overflow:hidden;border-radius:12px;background:var(--panel)}
+.thumb iframe{position:absolute;top:0;left:0;width:1000px;height:640px;border:0;transform-origin:0 0;pointer-events:none}
+.meta{display:flex;justify-content:space-between;align-items:baseline;margin-top:auto;padding-top:8px;font-size:13px}   /* names line up at the bottom of equal-height cards */
+.meta b{font-size:14px}.meta span{color:var(--dim)}
+.overlay{position:fixed;inset:0;background:rgba(10,10,11,.82);display:none;flex-direction:column;z-index:10}
+.overlay.on{display:flex}
+.bar{display:flex;align-items:center;gap:14px;padding:10px 16px;color:#eee;font-size:14px}
+.bar b{flex:1}.bar a,.bar button{color:#eee;background:#333;border:1px solid #555;border-radius:6px;padding:5px 10px;font:inherit;font-size:13px;text-decoration:none;cursor:pointer}
+.frame{flex:1;margin:0 16px 16px;overflow:auto}
+.frame iframe{display:block;border:0;pointer-events:none;transform-origin:0 0}
+</style></head><body>
+<h1>Fairy Tapes · preview dei plugin</h1>
+<p class="sub">Clic su una scheda per vederla a grandezza piena (Esc o clic fuori per chiudere); si vede solo il pannello, fermo e non cliccabile; per usarlo si apre la pagina in una scheda. Va aperta da un server locale con radice nel repo, non come file.</p>
+<div id="main" class="grid"></div>
+<h2>Dettagli di The Stripper</h2>
+<div id="detail" class="grid"></div>
+<div class="overlay" id="ov"><div class="bar"><b id="ovt"></b><a id="ovl" target="_blank" rel="noopener">Apri in una scheda</a><button id="ovc">Chiudi</button></div><div class="frame"><iframe id="ovf" title="Preview"></iframe></div></div>
+<script>
+/* one entry per preview: title, note, path from the repo root */
+var MAIN=[
+  ['The Stripper','channel strip','src/the-stripper/docs/mockups/stripper_rack.html'],
+  ['Pillow Talk','tape echo con ducking','src/pillow-talk/docs/mockups/pillow_rack.html'],
+  ['Hotline','telefono / radio','src/hotline/docs/mockups/hotline_rack.html'],
+  ['Deep Throat','voce','src/deep-throat/docs/mockups/deep_throat_rack.html'],
+  ['Mastering (bozza)','solo in locale, fuori da git','.superpowers/brainstorm/mastering/mastering_fine_eq.html']];
+var DETAIL=[
+  ['Controls lab','materiali dei controlli','src/the-stripper/docs/mockups/stripper_controls_lab.html'],
+  ['Meters','meter e clip','src/the-stripper/docs/mockups/stripper_meters.html'],
+  ['Model browser','popup dei modelli','src/the-stripper/docs/mockups/stripper_model_browser.html']];
+var ROOT='../../';
+/* the previews are shown still: once the page has drawn, its timers and animation frames are stopped (same origin) */
+/* only the panel is shown: the control bar and the notes of each preview are hidden, the panel fills the frame width (PW) */
+var PW=1000,ONLY='body>*:not(.stage){display:none!important}body{margin:0!important;padding:0!important;background:transparent!important}'
+  +'.stage{width:auto!important;max-width:none!important;margin:0!important;padding:0!important;background:transparent!important;border-radius:0!important}';
+function panelHeight(w){var st=w.document.querySelector('.stage');return st?Math.ceil(st.getBoundingClientRect().height):w.document.documentElement.scrollHeight;}
+function freeze(f,cb){f.addEventListener('load',function(){setTimeout(function(){try{var w=f.contentWindow,top=w.setTimeout(function(){},0);for(var i=0;i<=top;i++){w.clearTimeout(i);w.clearInterval(i);}w.requestAnimationFrame=function(){return 0;};
+  if(w.document.querySelector('.stage')){var css=w.document.createElement('style');css.textContent=ONLY;w.document.head.appendChild(css);}if(cb)cb(w);}catch(e){}},700);});}
+function card(e,host){var c=document.createElement('div');c.className='card';c.title='Apri '+e[0];
+  c.innerHTML='<div class="thumb"><iframe loading="lazy" tabindex="-1" title="'+e[0]+'"></iframe></div><div class="meta"><b></b><span></span></div>';
+  c.querySelector('b').textContent=e[0];c.querySelector('span').textContent=e[1];
+  var f=c.querySelector('iframe');f.src=ROOT+e[2];
+  c.addEventListener('click',function(){open(e);});host.appendChild(c);
+  /* scale the 1100 px wide page down to the card, after the card is laid out and whenever it resizes */
+  var th=c.querySelector('.thumb');function fit(){var sh=f._sh||640;f.style.width=PW+'px';f.style.height=sh+'px';f.style.transform='scale('+(th.clientWidth/PW)+')';}
+  freeze(f,function(w){f._sh=panelHeight(w);th.style.aspectRatio=PW+'/'+f._sh;fit();});
+  fit();new ResizeObserver(fit).observe(th);}
+var ov=document.getElementById('ov'),ovf=document.getElementById('ovf');
+/* the zoomed view is still too; the frame grows to the page height and the overlay scrolls */
+var frame=document.querySelector('.frame');
+freeze(ovf,function(w){var sw=PW,sh=panelHeight(w),k=Math.min(1.5,(frame.clientWidth-2)/sw);
+  ovf.style.width=sw+'px';ovf.style.height=sh+'px';ovf.style.transform='scale('+k+')';ovf.style.marginBottom=(-(sh*(1-k)))+'px';ovf.style.marginRight=(-(sw*(1-k)))+'px';});
+function open(e){ovf.style.width=PW+'px';ovf.style.height='900px';document.getElementById('ovt').textContent=e[0];document.getElementById('ovl').href=ROOT+e[2];ovf.src=ROOT+e[2];ov.classList.add('on');}
+function close(){ov.classList.remove('on');ovf.src='about:blank';['width','height','transform','marginBottom','marginRight'].forEach(function(k){ovf.style[k]='';});}
+document.getElementById('ovc').onclick=close;
+ov.addEventListener('click',function(ev){if(ev.target===ov)close();});
+addEventListener('keydown',function(ev){if(ev.key==='Escape')close();});
+MAIN.forEach(function(e){card(e,document.getElementById('main'));});
+DETAIL.forEach(function(e){card(e,document.getElementById('detail'));});
+</script>
+</body></html>
