@@ -29,6 +29,7 @@
 - [x] Task 15 — Drive NAM / 4K (2026-10-14, icona GPU nel pulsante NAM il 2026-10-21; dettagli nella sezione del Task 15).
 - [x] Task 16 — meter del gate (dettagli nella sezione del Task 16).
 - [x] Task 17 — adozione del kit comune di Pillow Talk (2026-10-21): cherry-pick dal suo branch `feat/pillow-talk` delle sole parti `shared/ui` (tessera di grana, font e generatore dei glifi, regole del testo, carta e disegno del nastro, viti). Lo Stripper ora usa `fairy_ui/screws.h` + `ScrewView` (`onTurned` a fine trascinamento), `tape_font.h` (con `truncateToWidth`), `tape_label.h` (`sanitizeTapeText`), `tape_paper.h` (`makeTapePaper`, stessa sequenza di numeri casuali), `tape_draw.h` (`drawTapePaper`, `drawTapeText`) e `shared/ui/assets/panel_grain.png`; restano suoi `TapePiece`/`generateTapePieces`, `TapePieceView`, `tapeFontIdOf` (`ui/tape_font_id.h`, `ui/tape_kit.h`) e `value_text.h`. Tolti `ui/screws.h`, `screw_view.*`, `tape_font.h`, `tape_glyphs.h`, `tape_text.*`, `tools/gen_tape_fonts.py` e il suo test, `assets/fonts/`, `assets/panel_grain.png`; i test dei font e delle viti vivono in `shared/ui`. **Verifica: 19 render prima e dopo (16 semi, retro Settings e Credits, segni di richiamo) identici byte per byte; 32 test verdi.** **Cambia una regola:** il testo sul nastro è ora quello comune (solo ASCII stampabile, al più 14 caratteri, spazi ai bordi tolti) invece di `clampTapeText` (che teneva l'UTF-8); i font disegnano comunque solo ASCII. I commit di Pillow Talk restano nel suo branch finché non lo mergia: al merge git riconosce le patch identiche.
+- [x] Task 18 — scheda TONE3000 del popup dei modelli (2026-10-21), sul client comune `shared/tone3000` (spec `2026-10-21-tone3000-integration-design.md`, piano di massima §11): `ui/tone3000_tab` + `ui/tone3000_view.h` (testi puri, test `the_stripper_tone3000_view_tests`), schede LOCAL/TONE3000 in `ModelBrowser`, `Controller::tone3000Actions()` + `Tone3000Service` (client creato alla prima apertura, `FAIRY_HAS_TONE3000` solo con OpenSSL), `tone3000_config.h` con `kTone3000ClientId` **vuoto**: finché l'app non è registrata la scheda dice che TONE3000 non è configurato e non parte nessuna richiesta. CREDITS con libcurl e OpenSSL, avviso "Powered by TONE3000", pulsante TONE3000 → OPEN... nel retro, anteprima aggiornata, `the_stripper_render ... tone3000=<stato>` per vedere gli stati con dati inventati. **Non verificato:** tutto il flusso vero (serve l'app registrata e un account), l'apertura del browser su Windows e macOS, il ritorno su loopback, lo scarico di un modello vero.
 
 ## Global Constraints
 
@@ -69,7 +70,7 @@
 - [x] **Step 2: Spostare i file con `git mv`**, cambiare il namespace in `FairyTapes::Shared::DSP` e creare la libreria `nam_drive` (modellata su `shared/gpu_nam/CMakeLists.txt`). Spostare `NAM_SOURCES` e `NAM_INCLUDE_DIRS` dal CMake dello Stripper a quello della libreria.
 - [x] **Step 3: Aggiornare lo Stripper** perché colleghi `nam_drive` (plugin e test) e usi il nuovo namespace in `processor.{h,cpp}` e nei test.
 - [x] **Step 4: Ricompilare e rieseguire i test** (comando dello Step 1). Expected: PASS identico alla baseline.
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit** (fatto: `5805520` e seguenti)
 
 ```bash
 git add shared/nam_drive src/the-stripper

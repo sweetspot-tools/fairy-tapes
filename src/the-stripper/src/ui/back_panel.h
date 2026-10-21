@@ -43,6 +43,8 @@ constexpr CreditEntry kCredits[] = {
     {"Zeyada (tape font)", "Kimberly Geswein", "OFL-1.1"},
     {"Rock Salt (tape font)", "Font Diner", "Apache-2.0"},
     {"Homemade Apple (tape font)", "Font Diner", "Apache-2.0"},
+    {"libcurl (TONE3000 login and downloads)", "Daniel Stenberg and contributors", "curl license"},
+    {"OpenSSL (Linux and macOS builds)", "The OpenSSL Project Authors", "Apache-2.0"},
 };
 constexpr int kCreditCount = static_cast<int>(sizeof(kCredits) / sizeof(kCredits[0]));
 
@@ -52,7 +54,7 @@ constexpr const char* kLicenseLine3 = "Source code and build instructions are av
 
 constexpr const char* kNotices[] = {
     "VST is a trademark of Steinberg Media Technologies GmbH, registered in Europe and other countries.",
-    ".nam models belong to their authors and each carries its own license.",
+    ".nam models belong to their authors; those from TONE3000 carry the license shown with each model. Powered by TONE3000.",
     "Third-party names are cited for attribution only.",
 };
 

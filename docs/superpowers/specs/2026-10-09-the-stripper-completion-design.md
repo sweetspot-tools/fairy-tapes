@@ -43,7 +43,7 @@ Oggi `NamDrive::loadModel(path)` è sincrono e non c'è alcuna interfaccia per s
 Il clic sul campo del modello (Drive) apre un popup in stile rack (preview: `src/the-stripper/docs/mockups/stripper_model_browser.html`), con due schede:
 
 - **LOCAL:** elenco delle cartelle (aggiungi, rimuovi, riscansiona; scansione ricorsiva dei `.nam`, cartelle salvate nelle preferenze dell'utente) e elenco dei modelli con ricerca per nome, dimensione e tipo; il punto verde marca il modello caricato. Pulsanti LOAD, CANCEL e **NO MODEL** (scarica il modello e riporta il Drive in passthrough). La scansione gira fuori dal thread audio e dal thread dell'interfaccia.
-- **TONE3000:** scheda prevista dallo spec a parte (`2026-10-21-tone3000-integration-design.md`, §10). Nella prima versione è assente o disabilitata.
+- **TONE3000 (2026-10-21):** scheda implementata (Task 18) secondo lo spec a parte `2026-10-21-tone3000-integration-design.md`: accesso, elenchi propri e tono scelto sul sito, modelli con autore e licenza, scarico di un modello alla volta; senza l'app registrata (`kTone3000ClientId` vuoto) o senza OpenSSL la scheda dice che non è configurata.
 - **Architettura:** le sorgenti stanno dietro un'interfaccia comune (`ModelSource`: elenco, ricerca, risoluzione del percorso locale del file); `LocalFolderSource` è la prima implementazione, Tone3000 sarà la seconda. Il caricamento passa sempre dal percorso asincrono (§3).
 - **Nessun modello:** il Drive è in passthrough (nessun gain applicato) e il suo controllo si attenua come un modulo spento; il campo mostra "No model". Nessun modello viene incorporato nel binario del plugin.
 

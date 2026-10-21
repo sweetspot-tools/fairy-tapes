@@ -10,9 +10,11 @@
 #include "pluginterfaces/base/funknown.h"
 #include "messages.h"
 #include "state.h"
+#include "tone3000_actions.h"
 #include "pluginterfaces/vst/ivsteditcontroller.h"
 #include "pluginterfaces/vst/ivstmessage.h"
 #include "pluginterfaces/vst/ivsthostapplication.h"
+#include <memory>
 #include <mutex>
 #include <vector>
 
@@ -21,12 +23,13 @@ namespace FairyTapes::TheStripper {
 namespace Ui {
 struct EditorPreview;
 }
+class Tone3000Service;
 
 // IEditController already inherits from IPluginBase; avoid duplicate base.
 class Controller : public Steinberg::Vst::IEditController, public Steinberg::Vst::IConnectionPoint {
 public:
   Controller();
-  ~Controller() { FUNKNOWN_DTOR }
+  ~Controller();
 
   // IPluginBase
   Steinberg::tresult PLUGIN_API initialize(Steinberg::FUnknown* context) override;
@@ -90,6 +93,9 @@ public:
   std::string modelError() const;   // why the last load failed, empty otherwise
   bool modelGpu() const;            // the loaded model runs on the GPU
   int modelState() const;           // 0 idle, 1 loading, 2 loaded, 3 failed
+  // What the TONE3000 tab of the picker can ask for. The service (and its thread) is created on the first call; without it
+  // the actions say "not configured".
+  Tone3000Actions tone3000Actions();
 
   DECLARE_FUNKNOWN_METHODS
 
@@ -109,6 +115,7 @@ private:
   std::string modelPath_;
   mutable std::mutex modelMutex_;   // notify() may arrive on a worker thread
   ModelStatus modelStatus_;
+  std::unique_ptr<Tone3000Service> tone3000_;
   Steinberg::IPtr<Steinberg::Vst::IConnectionPoint> peer_;
   Steinberg::IPtr<Steinberg::Vst::IHostApplication> host_;
   Steinberg::IPtr<Steinberg::Vst::IComponentHandler> component_handler_;

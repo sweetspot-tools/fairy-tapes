@@ -29,10 +29,6 @@ std::string clean(const Json& j, const char* key) {
   return s;
 }
 
-std::string lower(std::string s) {
-  for (char& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-  return s;
-}
 } // namespace
 
 std::filesystem::path sidecarPathFor(const std::filesystem::path& modelFile) {
@@ -75,36 +71,6 @@ bool writeMeta(const std::filesystem::path& modelFile, const ModelMeta& meta) {
 std::optional<ModelMeta> readMeta(const std::filesystem::path& modelFile) {
   const auto text = readFileLimited(sidecarPathFor(modelFile), kMaxMetaFileBytes);
   return text ? metaFromJson(*text) : std::nullopt;
-}
-
-bool isNonCommercialLicense(const std::string& license) {
-  const std::string l = lower(license);
-  return l.find("-nc") != std::string::npos;
-}
-
-std::string licenseBadge(const std::string& license) {
-  const std::string l = lower(license);
-  if (l.empty()) return "?";
-  if (l == "t3k") return "T3K";
-  if (l == "cco" || l == "cc0") return "CC0";
-  if (l.rfind("cc-", 0) == 0) {
-    std::string out = "CC";
-    std::string part;
-    for (std::size_t i = 3; i <= l.size(); ++i) {
-      if (i == l.size() || l[i] == '-') {
-        std::string up;
-        for (char c : part) up += static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-        out += (out == "CC" ? " " : "-") + up;
-        part.clear();
-      } else {
-        part += l[i];
-      }
-    }
-    return out;
-  }
-  std::string up;
-  for (char c : license) up += static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-  return up.size() > 12 ? up.substr(0, 12) : up;
 }
 
 } // namespace FairyTapes::Tone3000

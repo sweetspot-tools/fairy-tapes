@@ -151,7 +151,7 @@ void TextLink::draw(CDrawContext* ctx) {
   const CRect& r = getViewSize();
   ctx->setFont(bold(11));
   ctx->setFontColor(active_ ? kWhite : kDimWhite);
-  ctx->drawString(text_.c_str(), CRect(r.left, r.top, r.right, r.bottom - 2), kRightText);
+  ctx->drawString(text_.c_str(), CRect(r.left, r.top, r.right, r.bottom - 2), left_ ? kLeftText : kRightText);
   ctx->restoreGlobalState();
   setDirty(false);
 }

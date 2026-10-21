@@ -95,7 +95,7 @@ private:
   void syncDriveKnob();    // the Drive knob shows kDriveAmount (NAM on) or kEqSaturation (NAM off)
   void updateMeters();
   void updateModel();      // model strip and Drive dimming from the controller's model status
-  void openBrowser();
+  void openBrowser(bool tone3000Tab = false);
   void applyAppearance(const Preferences& prefs);   // wear, fonts, meter settings: live, from the back panel
   void updateRecallMarks();                       // current and recalled values of the knobs, for the pen marks
   void placeScrews(bool useSavedAngles);          // the four screws of the current seed, at their saved angles or the initial ones

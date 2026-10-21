@@ -2,6 +2,7 @@
 #include "ui/model_browser.h"
 
 #include "ui/browser_widgets.h"
+#include "ui/tone3000_tab.h"
 #include "preferences.h"
 #include "fairy_ui/draw_util.h"
 
@@ -85,8 +86,8 @@ constexpr double kFoldersX = 20, kFoldersW = 230, kModelsX = 264, kModelsW = 476
 
 } // namespace
 
-ModelBrowser::ModelBrowser(const CRect& frameSize, std::string loadedPath)
-: CViewContainer(frameSize), loadedPath_(std::move(loadedPath)), folders_(sharedFolders()) {
+ModelBrowser::ModelBrowser(const CRect& frameSize, std::string loadedPath, Tone3000Actions tone3000)
+: CViewContainer(frameSize), loadedPath_(std::move(loadedPath)), folders_(sharedFolders()), tone3000_(std::move(tone3000)) {
   build();
   rescan();
 }
@@ -117,6 +118,16 @@ void ModelBrowser::build() {
   auto* close = new PushButton(at(kPopupWidth - 20 - 26, 21, 26, 22), "X");
   close->onClick = [this] { if (onClose) onClose(); };
   addView(close);
+
+  // LOCAL and TONE3000 tabs, next to the title
+  localTabButton_ = new PushButton(at(250, 22, 64, 22), "LOCAL");
+  localTabButton_->setFontSize(11);
+  localTabButton_->onClick = [this] { showTab(false); };
+  addView(localTabButton_);
+  toneTabButton_ = new PushButton(at(320, 22, 90, 22), "TONE3000");
+  toneTabButton_->setFontSize(11);
+  toneTabButton_->onClick = [this] { showTab(true); };
+  addView(toneTabButton_);
 
   // Folders
   folderList_ = new ListBox(at(kFoldersX + 10, kBoxTop + 16, kFoldersW - 20, 218));
@@ -162,7 +173,32 @@ void ModelBrowser::build() {
   loadButton_->setEnabled(false);
   addView(loadButton_);
 
+  localViews_ = {folderList_, add, removeButton_, rescanButton, search_, modelList_, loadButton_};
+
+  tab_ = new Tone3000Tab(p, tone3000_);
+  tab_->onLoad = [this](const std::string& path) {
+    if (onLoad) onLoad(path);
+    if (onClose) onClose();
+  };
+  addView(tab_);
+
   refreshFolders();
+  applyTab();
+}
+
+void ModelBrowser::showTab(bool tone3000) {
+  if (tone3000Tab_ == tone3000) return;
+  tone3000Tab_ = tone3000;
+  applyTab();
+}
+
+void ModelBrowser::applyTab() {
+  for (CView* v : localViews_) v->setVisible(!tone3000Tab_);
+  tab_->setVisible(tone3000Tab_);
+  localTabButton_->setSelected(!tone3000Tab_);
+  toneTabButton_->setSelected(tone3000Tab_);
+  if (tone3000Tab_) tab_->poll();
+  invalid();
 }
 
 void ModelBrowser::drawBackgroundRect(CDrawContext* ctx, const CRect&) {
@@ -186,17 +222,19 @@ void ModelBrowser::drawBackgroundRect(CDrawContext* ctx, const CRect&) {
   auto box = [&](double x, double w, const char* title) {
     drawTitledBox(ctx, CRect(p.left + x, p.top + kBoxTop, p.left + x + w, p.top + kBoxTop + kBoxHeight), title, true);
   };
-  box(kFoldersX, kFoldersW, "FOLDERS");
-  box(kModelsX, kModelsW, "MODELS");
+  if (!tone3000Tab_) {
+    box(kFoldersX, kFoldersW, "FOLDERS");
+    box(kModelsX, kModelsW, "MODELS");
 
-  ctx->setFont(bold(11));
-  ctx->setFontColor(kDimWhite);
-  ctx->drawString(status_.c_str(), CPoint(p.left + kModelsX + 16, p.top + kBoxTop + kBoxHeight - 10));
-  const std::string path = selectedPath_.empty() ? "No selection" : selectedPath_;
-  const std::string shown = truncateToWidth(path, kPopupWidth - 40 - 84 * 2 - 10 - 20,
-                                            [ctx](const std::string& s) { return ctx->getStringWidth(s.c_str()); });
-  ctx->setFont(bold(12));
-  ctx->drawString(shown.c_str(), CPoint(p.left + 20, p.top + kPopupHeight - 27));
+    ctx->setFont(bold(11));
+    ctx->setFontColor(kDimWhite);
+    ctx->drawString(status_.c_str(), CPoint(p.left + kModelsX + 16, p.top + kBoxTop + kBoxHeight - 10));
+    const std::string path = selectedPath_.empty() ? "No selection" : selectedPath_;
+    const std::string shown = truncateToWidth(path, kPopupWidth - 40 - 84 * 2 - 10 - 20,
+                                              [ctx](const std::string& s) { return ctx->getStringWidth(s.c_str()); });
+    ctx->setFont(bold(12));
+    ctx->drawString(shown.c_str(), CPoint(p.left + 20, p.top + kPopupHeight - 27));
+  }
   ctx->restoreGlobalState();
 }
 
@@ -219,7 +257,9 @@ void ModelBrowser::rescan() {
   scanning_ = true;
   status_ = "Scanning...";
   invalid();
-  const std::vector<std::string> folders = folders_;
+  std::vector<std::string> folders = folders_;
+  const std::string& tones = tone3000_.tonesFolder;   // models saved from TONE3000 are found here without adding the folder
+  if (!tones.empty() && std::find(folders.begin(), folders.end(), tones) == folders.end()) folders.push_back(tones);
   std::thread([state, folders] {
     std::vector<ModelEntry> found = scanFolders(folders);
     std::lock_guard<std::mutex> lock(state->mutex);
@@ -229,6 +269,7 @@ void ModelBrowser::rescan() {
 }
 
 void ModelBrowser::poll() {
+  if (tone3000Tab_ && tab_) tab_->poll();
   if (!scanning_ || !scan_) return;
   std::lock_guard<std::mutex> lock(scan_->mutex);
   if (!scan_->done) return;

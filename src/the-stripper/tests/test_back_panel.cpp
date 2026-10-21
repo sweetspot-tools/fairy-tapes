@@ -36,6 +36,8 @@ void test_credits_list_every_component_with_its_license() {
   // the three tape fonts (their licenses oblige us to say so)
   CHECK(contains(all, "Zeyada") && contains(all, "OFL-1.1"));
   CHECK(contains(all, "Rock Salt") && contains(all, "Homemade Apple") && contains(all, "Apache-2.0"));
+  // the network part of the TONE3000 tab (libcurl is built in; OpenSSL is what it uses outside Windows)
+  CHECK(contains(all, "libcurl") && contains(all, "curl license") && contains(all, "OpenSSL"));
   std::set<std::string> names;
   for (const auto& c : kCredits) CHECK(names.insert(c.component).second);   // no component twice
 }
@@ -46,6 +48,7 @@ void test_notices_and_license_text() {
   for (const char* n : kNotices) notices += n;
   CHECK(contains(notices, "trademark") && contains(notices, "Steinberg"));   // the VST trademark notice
   CHECK(contains(notices, ".nam"));                                         // the models carry their own licenses
+  CHECK(contains(notices, "Powered by TONE3000"));                           // a condition of the TONE3000 API terms
   CHECK(contains(std::string(kLicenseLine), "GPL-3.0"));
 }
 

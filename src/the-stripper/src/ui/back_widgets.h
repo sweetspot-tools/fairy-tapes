@@ -52,6 +52,7 @@ public:
   TextLink(const VSTGUI::CRect& size, std::string text);
   void setActive(bool active);
   void setText(std::string text);
+  void setLeftAligned(bool left) { left_ = left; }   // default: right-aligned at the right edge of the view
   std::function<void()> onClick;
 
   void draw(VSTGUI::CDrawContext* context) override;
@@ -61,6 +62,7 @@ public:
 private:
   std::string text_;
   bool active_ = false;
+  bool left_ = false;
 };
 
 } // namespace FairyTapes::TheStripper::Ui

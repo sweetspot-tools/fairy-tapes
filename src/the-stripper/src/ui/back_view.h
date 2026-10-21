@@ -32,6 +32,7 @@ public:
     std::function<void(const std::function<void(Preferences&)>& mutate)> changePreference;       // the editor saves and applies
     std::function<void()> reroll;                                                                // RE-ROLL
     std::function<void()> manageFolders;                                                         // MODEL FOLDERS
+    std::function<void()> openTone3000;                                                          // TONE3000: the picker on its TONE3000 tab
     std::function<void(int mode)> recallModeChanged;                                             // RECALL MARKS: 0 = Auto, 1 = Manual
     std::function<void()> markNow;                                                               // MARK NOW
   };

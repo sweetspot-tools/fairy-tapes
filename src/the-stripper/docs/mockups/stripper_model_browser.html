@@ -35,7 +35,7 @@ body{margin:0;padding:16px;background:#e9e8e4;font-family:system-ui,sans-serif;c
 .field{display:flex;align-items:center;gap:8px;background:#050505;border:1px solid var(--line);border-radius:4px;padding:6px 10px;margin-bottom:10px;font-size:13px;color:var(--amb)}
 .field input{flex:1;background:none;border:0;outline:0;color:var(--amb);font:inherit}
 .chips{display:flex;gap:6px;margin-bottom:8px}
-.chip{border:1px solid var(--line);border-radius:12px;padding:2px 10px;font-size:11px;cursor:pointer;color:var(--dim)}
+.chip{border:1px solid var(--line);border-radius:12px;padding:2px 8px;font-size:10px;white-space:nowrap;cursor:pointer;color:var(--dim)}
 .chip.on{border-color:var(--amb);color:var(--amb)}
 .lic{border:1px solid var(--line);border-radius:3px;padding:0 5px;font-size:10px;color:var(--dim)}
 .lic.ok{border-color:var(--grn);color:var(--grn)}
@@ -46,7 +46,7 @@ body{margin:0;padding:16px;background:#e9e8e4;font-family:system-ui,sans-serif;c
 .status{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dim);margin-bottom:10px}
 .small{font-size:11px;color:var(--dim);margin-top:6px}
 </style></head><body>
-<p class="note">NAM model picker popup preview, same rack-panel style. Both tabs (Local and Tone3000) are navigable; data is sample data. The Tone3000 tab is only a draft: it depends on API and terms of use still to be verified.</p>
+<p class="note">NAM model picker popup preview, same rack-panel style. Both tabs (Local and Tone3000) are navigable; data is sample data. The TONE3000 tab follows the free tier of the API (docs/superpowers/specs/2026-10-21-tone3000-integration-design.md): sign in, your own lists, a tone chosen on the website, one model at a time, with author and license always shown; there is no catalog search.</p>
 <div class="stage"><div class="pop">
   <div class="head"><h1>MODEL BROWSER</h1><span class="sp"></span><span class="btn off" id="unload" style="pointer-events:auto;opacity:1" title="Unload the model: Drive passes the signal through">NO MODEL</span><span class="x" title="Close">✕</span></div>
   <div class="tabs"><button class="tab on" data-t="loc">LOCAL</button><button class="tab" data-t="net">TONE3000</button></div>
@@ -64,15 +64,35 @@ body{margin:0;padding:16px;background:#e9e8e4;font-family:system-ui,sans-serif;c
     </div>
   </div>
 
-  <!-- TONE3000 -->
+  <!-- TONE3000 (free tier: sign in, your lists, a tone chosen on the website, one model at a time) -->
   <div id="net" class="hide">
-    <div class="status"><span class="dot on"></span><span>Signed in as <b style="color:var(--w)">sample_user</b></span><span class="btn sm" style="margin-left:auto">SIGN OUT</span></div>
-    <div class="box"><span class="t">CATALOG</span>
-      <div class="field"><span>⌕</span><input placeholder="Search Tone3000" value="crunch"></div>
-      <div class="chips"><span class="chip on">ALL</span><span class="chip">AMP</span><span class="chip">PEDAL</span><span class="chip">RIG</span><span class="chip" style="margin-left:auto">FREE LICENSES ONLY</span></div>
-      <div class="list" id="net-list" style="height:200px"></div>
-      <div class="small">Offline: the tab shows only models already downloaded. Downloaded models go to the local “Tone3000” folder and also appear in the Local tab.</div>
+    <div id="net-out" style="text-align:center;padding:62px 0 0;height:300px">
+      <div style="font-size:18px">Sign in to TONE3000</div>
+      <div class="small" style="margin:8px 0 22px;font-size:12px">Choose a tone from your account or from the website and load it into the Drive.</div>
+      <span class="btn" id="signin" style="padding:7px 40px">SIGN IN</span>
     </div>
+    <div id="net-in" class="hide">
+      <div class="status"><span>Signed in as <b style="color:var(--w)">Jane Doe</b></span><span class="btn sm" id="signout" style="margin-left:auto">SIGN OUT</span></div>
+      <div class="row2" style="grid-template-columns:392px 1fr;gap:12px">
+        <div class="box"><span class="t">TONES</span>
+          <div class="chips" id="kinds" style="gap:4px;flex-wrap:nowrap"><span class="chip on">FAVORITES</span><span class="chip">DOWNLOADED</span><span class="chip">CREATED</span><span class="chip">TRENDING</span><span class="chip">LATEST</span></div>
+          <div class="list" id="net-list" style="height:170px"></div>
+          <div style="display:flex;gap:6px;margin-top:8px;align-items:center"><span class="btn sm">&lt;</span><span class="btn sm">&gt;</span><span class="small" style="margin:0 0 0 4px">page 1 of 3</span><span class="btn sm" style="margin-left:auto" title="Opens TONE3000 in your browser: pick a tone there and it comes back here">CHOOSE ON TONE3000</span></div>
+        </div>
+        <div class="box"><span class="t">MODELS</span>
+          <div id="net-none" class="small" style="margin-top:60px;text-align:center;font-size:12px">Choose a tone to see its models.</div>
+          <div id="net-tone" class="hide">
+            <div style="font-size:13px">Fender Twin Reverb 65</div>
+            <div style="font-size:11px;color:var(--dim);margin:2px 0">by Jane Doe (verified) · CC BY-NC</div>
+            <div style="font-size:10px;color:var(--red);margin-bottom:6px">Non-commercial license (check before commercial use)</div>
+            <div class="list" id="net-models" style="height:112px"></div>
+            <div class="small" id="net-status" style="min-height:14px"></div>
+            <div style="display:flex;align-items:center;margin-top:4px"><span class="small" style="margin:0">View on TONE3000</span><span class="btn sm off" id="dl" style="margin-left:auto">DOWNLOAD &amp; LOAD</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="foot" style="margin-top:6px;white-space:nowrap"><span style="font-size:12px"><b>Powered by TONE3000</b></span><span class="small" style="margin:0 0 0 14px">Browse the full catalog</span><span class="small" style="margin:0 0 0 auto">No catalog search in the free tier</span></div>
   </div>
 
   <div class="foot"><span class="dot"></span><span class="path" id="path">No selection</span><span class="btn" id="cancel">CANCEL</span><span class="btn off" id="load">LOAD</span></div>
@@ -90,8 +110,18 @@ function drawModels(){var q=$('q').value.toLowerCase(),src=curFolder?FOLDERS[cur
   $('count').textContent=src.length+' models · the green dot marks the loaded one';
   $('models').querySelectorAll('.item').forEach(function(e){e.onclick=function(){sel=e.dataset.n;$('path').textContent=e.dataset.p;$('load').classList.remove('off');drawModels();};});}
 $('q').oninput=drawModels;
-var NET=[['Crunch_70s_Marshall','Amp','CC-BY','ok','12k'],['BritCrunch_full','Rig','CC0','ok','8k'],['Crunch_pedal_mod','Pedal','CC-BY-NC','no','5k'],['Vox_crunchy','Amp','CC-BY','ok','3k'],['Mesa_crunch_hi','Amp','Not specified','no','2k']];
-$('net-list').innerHTML=NET.map(function(m){return '<div class="item"><span>'+m[0]+'</span><span class="lic '+m[3]+'">'+m[2]+'</span><span class="meta">'+m[1]+' · ↓ '+m[4]+'</span><span class="btn sm">DOWNLOAD</span></div>';}).join('');
+var NET=[['Fender Twin Reverb 65','Jane Doe · CC BY-NC'],['JCM800 crunch','Marco R. · CC BY-NC'],['Plexi 1959 bright','Luca · T3K'],['Vox AC30 chime','A. Rossi · CC0'],['Mesa Rectifier','Dan · CC BY-SA'],['Dumble style OD','Sam · CC BY'],['Princeton clean','Jo · CC BY']];
+var MODELS=[['Twin standard','STANDARD · A2'],['Twin lite','LITE · A1'],['Twin nano','NANO · A2']],curTone=-1,curModel=-1;
+function drawNet(){$('net-list').innerHTML=NET.map(function(m,i){return '<div class="item'+(i===curTone?' sel':'')+'" data-i="'+i+'"><span>'+m[0]+'</span><span class="meta">'+m[1]+'</span></div>';}).join('');
+  $('net-list').querySelectorAll('.item').forEach(function(e){e.onclick=function(){curTone=+e.dataset.i;curModel=-1;drawNet();drawNetModels();$('net-none').classList.add('hide');$('net-tone').classList.remove('hide');};});}
+function drawNetModels(){$('net-models').innerHTML=MODELS.map(function(m,i){return '<div class="item'+(i===curModel?' sel':'')+'" data-i="'+i+'"><span>'+m[0]+'</span><span class="meta">'+m[1]+'</span></div>';}).join('');
+  $('dl').classList.toggle('off',curModel<0);
+  $('net-models').querySelectorAll('.item').forEach(function(e){e.onclick=function(){curModel=+e.dataset.i;drawNetModels();};});}
+$('signin').onclick=function(){$('net-out').classList.add('hide');$('net-in').classList.remove('hide');};
+$('signout').onclick=function(){$('net-in').classList.add('hide');$('net-out').classList.remove('hide');curTone=-1;$('net-none').classList.remove('hide');$('net-tone').classList.add('hide');drawNet();};
+$('dl').onclick=function(){if(curModel<0)return;$('net-status').textContent='Downloading... 1.5 MB';setTimeout(function(){$('net-status').textContent='Saved. Loading the model...';},900);};
+document.querySelectorAll('#kinds .chip').forEach(function(c){c.onclick=function(){document.querySelectorAll('#kinds .chip').forEach(function(x){x.classList.toggle('on',x===c);});};});
+drawNet();drawNetModels();
 document.querySelectorAll('.tab').forEach(function(b){b.onclick=function(){document.querySelectorAll('.tab').forEach(function(x){x.classList.toggle('on',x===b)});$('loc').classList.toggle('hide',b.dataset.t!=='loc');$('net').classList.toggle('hide',b.dataset.t!=='net');};});
 drawFolders();drawModels();
 </script></body></html>

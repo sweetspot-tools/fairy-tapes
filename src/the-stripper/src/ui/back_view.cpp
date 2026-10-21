@@ -109,8 +109,8 @@ void BackView::build(const Preferences& prefs) {
   auto* folders = new PushButton(box(690, 290, 120, 24), "MANAGE...");
   folders->onClick = [this] { if (cb_.manageFolders) cb_.manageFolders(); };
   add(folders);
-  auto* tone = new PushButton(box(690, 338, 120, 24), "SIGN IN");
-  tone->setEnabled(false);
+  auto* tone = new PushButton(box(690, 338, 120, 24), "OPEN...");
+  tone->onClick = [this] { if (cb_.openTone3000) cb_.openTone3000(); };
   add(tone);
 }
 
@@ -184,14 +184,13 @@ void BackView::drawSettings(CDrawContext* ctx) {
   row("RECALL MARKS", 194, "auto: set at every load", 540);
   row("MARK NOW", 242, "set the marks to the current values", 540);
   row("MODEL FOLDERS", 290, "where the picker looks for models", 540);
-  row("TONE3000", 338, "", 540);
-  text(ctx, "coming later", 822, 354, 10, kDimWhite);
+  row("TONE3000", 338, "sign in and download models", 540);
 
   drawTitledBox(ctx, box(24, 484, 952, 120), "NOTES", true);
   text(ctx, "Appearance settings belong to you: they are kept in your preferences and apply to every project and every instance.", 50, 522, 12, kDimWhite);
   text(ctx, "Behaviour settings change how the plugin works: they are saved in the project, together with the parameters.", 50, 544, 12, kDimWhite);
   text(ctx, "The wear (scratches, tape, screws) is made once per instance from a saved seed and never changes by itself.", 50, 566, 12, kDimWhite);
-  text(ctx, "Double-click on a knob returns it to its default.", 50, 588, 12, kDimWhite);
+  text(ctx, "Double-click on a knob returns it to its default; Alt + double-click returns it to the recalled value (the blue mark).", 50, 588, 12, kDimWhite);
 }
 
 void BackView::drawButtons(CDrawContext* ctx) {
@@ -223,11 +222,11 @@ void BackView::drawCredits(CDrawContext* ctx) {
   ctx->setFrameColor(CColor(kDimWhite.red, kDimWhite.green, kDimWhite.blue, 64));
   ctx->setLineWidth(1);
   for (int i = 0; i < kCreditCount; ++i) {
-    const double y = 254 + i * 22;
+    const double y = 252 + i * 20;
     text(ctx, kCredits[i].component, 50, y, 13, kWhite);
     text(ctx, kCredits[i].author, 350, y, 12, kDimWhite);
     text(ctx, kCredits[i].license, 950, y, 12, kAmber, kRightText);
-    if (i < kCreditCount - 1) ctx->drawLine(CPoint(50, y + 7), CPoint(950, y + 7));
+    if (i < kCreditCount - 1) ctx->drawLine(CPoint(50, y + 6), CPoint(950, y + 6));
   }
 
   drawTitledBox(ctx, box(24, 530, 952, 80), "NOTICES", true);

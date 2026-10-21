@@ -1,5 +1,5 @@
 // Developer tool: draws the editor offscreen into a PNG, no host or window needed.
-//   the_stripper_render out.png [bypass] [bus] [eq-off] [nam-off] [recall] [moved] [meters] [seed=<n>] [model=<file>] [gpu] [model-error=<text>] [browser] [back-settings|back-buttons|back-credits]
+//   the_stripper_render out.png [bypass] [bus] [eq-off] [nam-off] [recall] [moved] [meters] [seed=<n>] [model=<file>] [gpu] [tone3000=unconfigured|signedout|signingin|list|tone|nc|download|error|ir|busy] [model-error=<text>] [browser] [back-settings|back-buttons|back-credits]
 // Used to check the look of the code-drawn GUI on a machine without a plugin host.
 #include "controller.h"
 #include "ui/editor.h"
@@ -38,7 +38,56 @@ struct EditorPreview {
 
   static void setGpu(Controller& ctl) { ctl.modelStatus_.gpu = true; }
 
-  static bool render(Controller& ctl, const char* path, bool browser, int backTab) {
+  // The TONE3000 tab of the picker with a made-up state: `tab` names it (see main), nothing touches the network.
+  static Tone3000Actions fakeActions(const char* tab) {
+    using namespace FairyTapes::Tone3000;
+    const std::string t = tab;
+    Tone3000Actions a;
+    a.configured = t != "unconfigured";
+    ClientState s;
+    auto tone = [] {
+      Tone x;
+      x.id = "42"; x.title = "Fender Twin Reverb 65"; x.license = "cc-by"; x.gear = "amp"; x.format = "nam";
+      x.url = "https://www.tone3000.com/tones/fender-twin-42";
+      x.author.username = "jane"; x.author.displayName = "Jane Doe"; x.author.verified = true;
+      return x;
+    };
+    int nextId = 50;
+    auto list = [&](const char* title, const char* who, const char* lic) {
+      Tone x = tone();
+      x.id = std::to_string(nextId++);
+      x.title = title; x.author.displayName = who; x.author.verified = false; x.license = lic;
+      return x;
+    };
+    if (t == "signedout" || t == "unconfigured") s.phase = ClientState::Phase::SignedOut;
+    else if (t == "signingin") { s.phase = ClientState::Phase::SigningIn; s.busy = true; s.busyText = "Waiting for the browser..."; }
+    else {
+      s.phase = ClientState::Phase::SignedIn;
+      s.userName = "Jane Doe";
+      s.listLoaded = true;
+      s.listKind = ListKind::Favorited;
+      s.list = {tone(), list("JCM800 crunch", "Marco R.", "cc-by-nc"), list("Plexi 1959 bright", "Luca", "t3k"), list("Vox AC30 chime", "A. Rossi", "cc0"),
+                list("Mesa Rectifier", "Dan", "cc-by-sa"), list("Dumble style OD", "Sam", "cc-by"), list("Princeton clean", "Jo", "cc-by")};
+      s.listPage = 1; s.listTotalPages = 3;
+      if (t != "list") {
+        s.tone = tone();
+        Model m1, m2, m3;
+        m1.id = "100"; m1.name = "Twin standard"; m1.size = "standard"; m1.architecture = "A2";
+        m2.id = "101"; m2.name = "Twin lite"; m2.size = "lite"; m2.architecture = "A1";
+        m3.id = "102"; m3.name = "Twin nano"; m3.size = "nano"; m3.architecture = "A2";
+        s.models = {m1, m2, m3};
+        if (t == "nc") { s.tone->license = "cc-by-nc"; }
+        if (t == "download") { s.download = ClientState::DownloadPhase::Running; s.downloadBytes = 3 * 1024 * 1024 / 2; s.busy = true; s.busyText = "Downloading the model..."; }
+        if (t == "error") { s.download = ClientState::DownloadPhase::Failed; s.downloadMessage = "The model file is too big"; }
+        if (t == "ir") s.tone->format = "ir";
+      }
+      if (t == "busy") { s.busy = true; s.busyText = "Loading the models..."; }
+    }
+    a.snapshot = [s] { return s; };
+    return a;
+  }
+
+  static bool render(Controller& ctl, const char* path, bool browser, int backTab, const char* tab = nullptr) {
     Editor ed(&ctl);
     auto root = VSTGUI::makeOwned<VSTGUI::CViewContainer>(VSTGUI::CRect(0, 0, Editor::kWidth, Editor::kHeight));
     ed.createViews(root);
@@ -55,8 +104,9 @@ struct EditorPreview {
       root->addView(back);
     }
     if (browser) {
-      auto* popup = new ModelBrowser(VSTGUI::CRect(0, 0, Editor::kWidth, Editor::kHeight), ctl.modelPath());
+      auto* popup = new ModelBrowser(VSTGUI::CRect(0, 0, Editor::kWidth, Editor::kHeight), ctl.modelPath(), tab ? fakeActions(tab) : Tone3000Actions{});
       root->addView(popup);
+      if (tab) popup->showTab(true);
       for (int i = 0; i < 400; ++i) {   // wait for the folder scan
         popup->poll();
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
@@ -89,6 +139,7 @@ int main(int argc, char** argv) {
   VSTGUI::init(nullptr);
   Controller ctl;
   bool browser = false;
+  const char* tab = nullptr;
   int backTab = -1;
   ctl.initialize(nullptr);
   for (int i = 2; i < argc; ++i) {
@@ -97,6 +148,7 @@ int main(int argc, char** argv) {
     else if (!std::strcmp(argv[i], "nam-off")) { ctl.setParamNormalized(kDriveNamOn, 0.0); ctl.setParamNormalized(kEqSaturation, 0.4); }
     else if (!std::strcmp(argv[i], "eq-off")) ctl.setParamNormalized(kBypassEQ, 1.0);
     else if (!std::strcmp(argv[i], "browser")) browser = true;
+    else if (!std::strncmp(argv[i], "tone3000=", 9)) { browser = true; tab = argv[i] + 9; }
     else if (!std::strcmp(argv[i], "back-settings")) backTab = 0;
     else if (!std::strcmp(argv[i], "back-credits")) backTab = 1;
     else if (!std::strcmp(argv[i], "back-buttons")) backTab = 2;
@@ -117,5 +169,5 @@ int main(int argc, char** argv) {
       for (const auto& e : v) ctl.setParamNormalized(static_cast<Steinberg::Vst::ParamID>(e[0]), e[1]);
     }
   }
-  return Ui::EditorPreview::render(ctl, argv[1], browser, backTab) ? 0 : 1;
+  return Ui::EditorPreview::render(ctl, argv[1], browser, backTab, tab) ? 0 : 1;
 }
