@@ -88,7 +88,7 @@ La bozza della richiesta si prepara a parte; **non si contatta il supporto da qu
 
 ## 9. Decisioni aperte
 
-- Come distribuire OpenSSL su Linux e macOS (statico o in bundle) e relative licenze nei CREDITS (OpenSSL Apache-2.0, curl).
+- Come distribuire OpenSSL su Linux e macOS (statico o in bundle). **Intanto il client è opt-in** (`-DFAIRY_ENABLE_TONE3000=ON`, default OFF): collegato com'è, il plugin chiede `libssl.so.3` e `libcrypto.so.3` all'apertura e non si carica se mancano (verificato con `ldd`); spento, nessuna dipendenza. Le licenze di curl e OpenSSL sono già nei CREDITS.
 - URI di ritorno (loopback o flusso del dispositivo), dalla risposta del supporto (§4, §8).
 - Cartella dei toni scaricati: predefinita o scelta dall'utente (§5).
 - Posizione grafica della scheda e dell'avanzamento dello scarico: da definire con un mockup in `src/the-stripper/docs/mockups/stripper_model_browser.html` (aggiungere la scheda TONE3000).
