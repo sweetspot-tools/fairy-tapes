@@ -53,10 +53,10 @@ void exerciseEditorView(Steinberg::FUnknown* obj) {
     if (!view) break;
     Steinberg::ViewRect r{};
     CHECK(view->getSize(&r) == Steinberg::kResultOk);
-    CHECK(r.getWidth() == 480 && r.getHeight() == 560);
+    CHECK(r.getWidth() == 1000 && r.getHeight() == 628);
     Steinberg::ViewRect asked(0, 0, 900, 300);
     CHECK(view->checkSizeConstraint(&asked) == Steinberg::kResultTrue);
-    CHECK(asked.getWidth() == 480 && asked.getHeight() == 560);
+    CHECK(asked.getWidth() == 1000 && asked.getHeight() == 628);
     CHECK(view->canResize() == Steinberg::kResultFalse);
     CHECK(view->isPlatformTypeSupported(Steinberg::kPlatformTypeX11EmbedWindowID) == Steinberg::kResultTrue);
     if (i == 0) {  // content scale before attach: getSize and the size constraint follow it
@@ -66,13 +66,13 @@ void exerciseEditorView(Steinberg::FUnknown* obj) {
         CHECK(scale->setContentScaleFactor(2.0f) == Steinberg::kResultTrue);
         Steinberg::ViewRect s{};
         CHECK(view->getSize(&s) == Steinberg::kResultOk);
-        CHECK(s.getWidth() == 960 && s.getHeight() == 1120);
+        CHECK(s.getWidth() == 2000 && s.getHeight() == 1256);
         Steinberg::ViewRect c(0, 0, 100, 100);
         CHECK(view->checkSizeConstraint(&c) == Steinberg::kResultTrue);
-        CHECK(c.getWidth() == 960 && c.getHeight() == 1120);
+        CHECK(c.getWidth() == 2000 && c.getHeight() == 1256);
         CHECK(scale->setContentScaleFactor(-1.0f) == Steinberg::kResultTrue);  // sanitized to 1
         CHECK(view->getSize(&s) == Steinberg::kResultOk);
-        CHECK(s.getWidth() == 480 && s.getHeight() == 560);
+        CHECK(s.getWidth() == 1000 && s.getHeight() == 628);
         scale->release();
       }
     }

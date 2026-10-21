@@ -8,11 +8,15 @@
 #include "dsp/tape_echo.h"
 #include "engine.h"
 #include "state.h"
+#include "messages.h"
 #include "fairy_ui/knob_math.h"
 #include "ui/editor_size.h"
 #include "ui/history.h"
 #include <algorithm>
 #include <atomic>
+#include <cstring>
+#include <map>
+#include <string>
 #include <cmath>
 #include <limits>
 #include <cstdio>
@@ -380,52 +384,400 @@ void test_echo_reprepare_at_new_rate() {
 
 
 // ---- State -----------------------------------------------------------------
+// A v1 blob (int32 version 1 + kNumParams doubles), as written before the editor v1.
+std::vector<uint8_t> v1Bytes(const double* p) {
+  std::vector<uint8_t> out;
+  detail::putLE(out, 1u, 4);
+  for (int i = 0; i < (int)kNumParams; ++i) {
+    uint64_t bits;
+    std::memcpy(&bits, &p[i], sizeof bits);
+    detail::putLE(out, bits, 8);
+  }
+  return out;
+}
+
+PluginState sampleState() {
+  PluginState s;
+  defaultState(s);
+  for (int i = 0; i < (int)kNumParams; ++i) s.params[i] = (i + 1) / 17.0;
+  s.decor.seed = 0xC0FFEEu;
+  const float angles[kNumScrews] = {0.f, 45.5f, 180.f, 359.f};
+  for (int i = 0; i < kNumScrews; ++i) s.decor.screwAngles[i] = angles[i];
+  s.decor.tapeTexts = {"VOX DUB", "", "take 3"};
+  return s;
+}
+
+bool sameState(const PluginState& a, const PluginState& b) {
+  for (int i = 0; i < (int)kNumParams; ++i)
+    if (a.params[i] != b.params[i]) return false;
+  if (a.decor.seed != b.decor.seed || a.decor.tapeTexts != b.decor.tapeTexts) return false;
+  for (int i = 0; i < kNumScrews; ++i)
+    if (a.decor.screwAngles[i] != b.decor.screwAngles[i]) return false;
+  const Behaviour &x = a.decor.behaviour, &y = b.decor.behaviour;
+  return x.displayWindow == y.displayWindow && x.displayPeaks == y.displayPeaks && x.tempoFallbackBpm == y.tempoFallbackBpm;
+}
+
 void test_state_roundtrip() {
-  double a[kNumParams], b[kNumParams];
-  for (int i = 0; i < (int)kNumParams; ++i) { a[i] = (i + 1) / 17.0; b[i] = -1.0; }
+  const PluginState a = sampleState();
   std::vector<uint8_t> bytes;
   serializeState(a, bytes);
-  ASSERT_TRUE(bytes.size() == kStateSize);
+  PluginState b;
+  defaultState(b);
   ASSERT_TRUE(deserializeState(bytes.data(), bytes.size(), b));
-  for (int i = 0; i < (int)kNumParams; ++i) ASSERT_TRUE(a[i] == b[i]);
+  ASSERT_TRUE(sameState(a, b));
+  ASSERT_TRUE(kStateVersion == 3);
+  ASSERT_TRUE((int32_t)detail::getLE(bytes.data(), 4) == 3);
+}
+
+void test_state_v1_loads_with_default_decor() {
+  double p[kNumParams];
+  for (int i = 0; i < (int)kNumParams; ++i) p[i] = (i + 1) / 19.0;
+  const std::vector<uint8_t> bytes = v1Bytes(p);
+  ASSERT_TRUE(bytes.size() == kStateSizeV1);
+  PluginState s = sampleState();
+  ASSERT_TRUE(deserializeState(bytes.data(), bytes.size(), s));
+  for (int i = 0; i < (int)kNumParams; ++i) ASSERT_TRUE(s.params[i] == p[i]);
+  ASSERT_TRUE(s.decor.seed == 0);   // missing seed: the caller generates one (ensureSeed)
+  for (int i = 0; i < kNumScrews; ++i) ASSERT_TRUE(s.decor.screwAngles[i] == 0.f);
+  ASSERT_TRUE(s.decor.tapeTexts.empty());
 }
 
 void test_state_rejects_unknown_version_and_truncation() {
-  double a[kNumParams], b[kNumParams];
-  for (int i = 0; i < (int)kNumParams; ++i) { a[i] = 0.25; b[i] = 0.75; }
+  const PluginState a = sampleState();
   std::vector<uint8_t> bytes;
   serializeState(a, bytes);
-  std::vector<uint8_t> future(bytes);
-  future[0] = (uint8_t)(kStateVersion + 1);
-  ASSERT_TRUE(!deserializeState(future.data(), future.size(), b));
-  ASSERT_TRUE(!deserializeState(bytes.data(), bytes.size() - 1, b));
-  for (int i = 0; i < (int)kNumParams; ++i) ASSERT_TRUE(b[i] == 0.75);
+  PluginState untouched;
+  defaultState(untouched);
+  untouched.params[kMix] = 0.75;
+  for (int32_t v : {0, 4, -1}) {
+    std::vector<uint8_t> other(bytes);
+    other[0] = (uint8_t)v; other[1] = other[2] = other[3] = (uint8_t)(v < 0 ? 0xFF : 0);
+    PluginState b = untouched;
+    ASSERT_TRUE(!deserializeState(other.data(), other.size(), b));
+    ASSERT_TRUE(sameState(b, untouched));
+  }
+  for (size_t cut = 0; cut < bytes.size(); ++cut) {   // every truncation of a v2 blob is refused
+    PluginState b = untouched;
+    ASSERT_TRUE(!deserializeState(bytes.data(), cut, b));
+    ASSERT_TRUE(sameState(b, untouched));
+  }
+  PluginState b = untouched;
+  ASSERT_TRUE(!deserializeState(nullptr, 100, b));
 }
 
-void test_state_rejects_non_finite_values() {
+void test_state_rejects_non_finite_params() {
   const double bad[] = {std::nan(""), INFINITY, -INFINITY};
   for (double v : bad) {
-    double a[kNumParams], b[kNumParams];
-    for (int i = 0; i < (int)kNumParams; ++i) { a[i] = 0.25; b[i] = 0.75; }
-    a[kTone] = v;
+    PluginState a = sampleState();
+    a.params[kTone] = v;
     std::vector<uint8_t> bytes;
     serializeState(a, bytes);
+    PluginState b;
+    defaultState(b);
+    b.params[kTone] = 0.75;
     ASSERT_TRUE(!deserializeState(bytes.data(), bytes.size(), b));
-    for (int i = 0; i < (int)kNumParams; ++i) ASSERT_TRUE(b[i] == 0.75);
+    ASSERT_TRUE(b.params[kTone] == 0.75);
+    double p[kNumParams];
+    loadDefaults(p);
+    p[kMix] = v;
+    const std::vector<uint8_t> old = v1Bytes(p);
+    ASSERT_TRUE(!deserializeState(old.data(), old.size(), b));
   }
 }
 
 void test_state_clamps_out_of_range_values() {
-  double a[kNumParams], b[kNumParams];
-  for (int i = 0; i < (int)kNumParams; ++i) a[i] = 0.5;
-  a[kMix] = 5.0;
-  a[kFeedback] = -1.0;
+  PluginState a = sampleState();
+  a.params[kMix] = 5.0;
+  a.params[kFeedback] = -1.0;
   std::vector<uint8_t> bytes;
   serializeState(a, bytes);
+  PluginState b;
   ASSERT_TRUE(deserializeState(bytes.data(), bytes.size(), b));
-  ASSERT_TRUE(b[kMix] == 1.0);
-  ASSERT_TRUE(b[kFeedback] == 0.0);
-  ASSERT_TRUE(b[kTone] == 0.5);
+  ASSERT_TRUE(b.params[kMix] == 1.0);
+  ASSERT_TRUE(b.params[kFeedback] == 0.0);
+  ASSERT_TRUE(b.params[kTone] == a.params[kTone]);
+}
+
+void test_state_sanitizes_screw_angles() {
+  ASSERT_TRUE(sanitizeScrewAngle(std::nanf("")) == 0.f);
+  ASSERT_TRUE(sanitizeScrewAngle(INFINITY) == 0.f);
+  ASSERT_TRUE(sanitizeScrewAngle(-INFINITY) == 0.f);
+  ASSERT_TRUE(sanitizeScrewAngle(370.f) == 10.f);
+  ASSERT_TRUE(sanitizeScrewAngle(-90.f) == 270.f);
+  ASSERT_TRUE(sanitizeScrewAngle(360.f) == 0.f);
+  ASSERT_TRUE(sanitizeScrewAngle(1e30f) >= 0.f && sanitizeScrewAngle(1e30f) < 360.f);
+  // In a stored state: non-finite angles become 0, the rest is normalized; the state still loads.
+  PluginState a = sampleState();
+  a.decor.screwAngles[0] = std::nanf("");
+  a.decor.screwAngles[1] = INFINITY;
+  a.decor.screwAngles[2] = -45.f;
+  std::vector<uint8_t> bytes;
+  serializeState(a, bytes);
+  PluginState b;
+  ASSERT_TRUE(deserializeState(bytes.data(), bytes.size(), b));
+  ASSERT_TRUE(b.decor.screwAngles[0] == 0.f && b.decor.screwAngles[1] == 0.f);
+  ASSERT_TRUE(b.decor.screwAngles[2] == 315.f && b.decor.screwAngles[3] == 359.f);
+}
+
+void test_tape_text_sanitize() {
+  ASSERT_TRUE(kMaxTapeChars == 14);
+  ASSERT_TRUE(sanitizeTapeText("hello") == "hello");
+  ASSERT_TRUE(sanitizeTapeText("  padded  ") == "padded");
+  ASSERT_TRUE(sanitizeTapeText("a\tb\nc\x7f" "d\x01") == "abcd");
+  ASSERT_TRUE(sanitizeTapeText("caff\xC3\xA8 latte") == "caff latte");   // non-ASCII bytes dropped
+  ASSERT_TRUE(sanitizeTapeText("0123456789ABCDEFGHIJ") == "0123456789ABCD");
+  ASSERT_TRUE(sanitizeTapeText(std::string("ab\0cd", 5)) == "abcd");
+  ASSERT_TRUE(sanitizeTapeText("") == "");
+  ASSERT_TRUE(sanitizeTapeText("     ") == "");
+  ASSERT_TRUE(sanitizeTapeText("1234567890123 X") == "1234567890123");   // cut at 14, then trailing space trimmed
+  for (int c = 0; c < 256; ++c) {
+    const std::string out = sanitizeTapeText(std::string(1, (char)c));
+    ASSERT_TRUE(out.size() <= 1);
+    if (!out.empty()) ASSERT_TRUE(c > 0x20 && c < 0x7f);
+  }
+}
+
+void test_state_sanitizes_tape_texts() {
+  PluginState a = sampleState();
+  a.decor.tapeTexts = {"a very long tape text indeed", "bad\x01\x02 chars", "\xff\xfe", "4", "5", "6", "7", "8"};
+  std::vector<uint8_t> bytes;
+  serializeState(a, bytes);
+  PluginState b;
+  ASSERT_TRUE(deserializeState(bytes.data(), bytes.size(), b));
+  ASSERT_TRUE((int)b.decor.tapeTexts.size() == kMaxTapeTexts);
+  ASSERT_TRUE(b.decor.tapeTexts[0] == "a very long ta");
+  ASSERT_TRUE(b.decor.tapeTexts[1] == "bad chars");
+  ASSERT_TRUE(b.decor.tapeTexts[2].empty());
+  ASSERT_TRUE(b.decor.tapeTexts[5] == "6");
+  for (const auto& t : b.decor.tapeTexts) ASSERT_TRUE((int)t.size() <= kMaxTapeChars);
+}
+
+void test_state_rejects_absurd_text_counts_and_lengths() {
+  PluginState a = sampleState();
+  a.decor.tapeTexts.clear();
+  std::vector<uint8_t> bytes;
+  serializeState(a, bytes);
+  // The text count is the last uint32 before the behaviour block (v3) of a blob without texts.
+  const size_t count = bytes.size() - kBehaviourBytes - 4;
+  std::vector<uint8_t> many(bytes);
+  many[count] = 0xFF; many[count + 1] = 0xFF; many[count + 2] = 0xFF; many[count + 3] = 0x7F;
+  PluginState b;
+  ASSERT_TRUE(!deserializeState(many.data(), many.size(), b));
+  std::vector<uint8_t> longText(bytes.begin(), bytes.begin() + (long)count);
+  detail::putLE(longText, 1u, 4);
+  detail::putLE(longText, 1u << 20, 4);   // one text of 1 MiB announced, nothing follows
+  ASSERT_TRUE(!deserializeState(longText.data(), longText.size(), b));
+}
+
+void test_state_seed_zero_gets_a_new_seed_that_is_saved() {
+  PluginState a = sampleState();
+  a.decor.seed = 0;
+  std::vector<uint8_t> bytes;
+  serializeState(a, bytes);
+  PluginState b;
+  ASSERT_TRUE(deserializeState(bytes.data(), bytes.size(), b));
+  ASSERT_TRUE(b.decor.seed == 0);
+  ASSERT_TRUE(ensureSeed(b.decor));          // generated once...
+  const uint32_t seed = b.decor.seed;
+  ASSERT_TRUE(seed != 0);
+  ASSERT_TRUE(!ensureSeed(b.decor));         // ...and kept afterwards
+  ASSERT_TRUE(b.decor.seed == seed);
+  serializeState(b, bytes);                  // and saved with the state
+  PluginState c;
+  ASSERT_TRUE(deserializeState(bytes.data(), bytes.size(), c));
+  ASSERT_TRUE(c.decor.seed == seed);
+  // A generator that keeps answering 0 still ends with a non-zero seed.
+  Decor d;
+  ASSERT_TRUE(ensureSeed(d, [] { return 0u; }));
+  ASSERT_TRUE(d.seed != 0);
+}
+
+void test_new_random_seed_is_non_zero_and_varies() {
+  uint32_t first = newRandomSeed();
+  bool varied = false;
+  for (int i = 0; i < 16; ++i) {
+    const uint32_t s = newRandomSeed();
+    ASSERT_TRUE(s != 0);
+    if (s != first) varied = true;
+  }
+  ASSERT_TRUE(first != 0 && varied);
+}
+
+void test_decor_blob_roundtrip_and_sanitize() {
+  Decor a = sampleState().decor;
+  a.screwAngles[3] = std::nanf("");
+  a.tapeTexts.push_back("\x01\x02 x ");
+  std::vector<uint8_t> blob;
+  serializeDecor(a, blob);
+  Decor b;
+  ASSERT_TRUE(deserializeDecor(blob.data(), blob.size(), b));
+  ASSERT_TRUE(b.seed == a.seed && b.screwAngles[1] == 45.5f && b.screwAngles[3] == 0.f);
+  ASSERT_TRUE(b.tapeTexts.size() == 4 && b.tapeTexts[3] == "x");
+  Decor untouched;
+  untouched.seed = 7;
+  for (size_t cut = 0; cut < blob.size(); ++cut) {
+    Decor c = untouched;
+    ASSERT_TRUE(!deserializeDecor(blob.data(), cut, c));
+    ASSERT_TRUE(c.seed == 7);
+  }
+}
+
+// ---- State v3: behaviour settings of the back (display window, display peaks, tempo fallback) ----
+// A v2 blob: the v3 one with the version patched and the behaviour block dropped.
+std::vector<uint8_t> v2Bytes(const PluginState& s) {
+  std::vector<uint8_t> bytes;
+  serializeState(s, bytes);
+  bytes.resize(bytes.size() - kBehaviourBytes);
+  bytes[0] = 2; bytes[1] = bytes[2] = bytes[3] = 0;
+  return bytes;
+}
+
+void test_state_v3_roundtrips_behaviour() {
+  PluginState a = sampleState();
+  a.decor.behaviour.displayWindow = 2;
+  a.decor.behaviour.displayPeaks = 0;
+  a.decor.behaviour.tempoFallbackBpm = 96.f;
+  std::vector<uint8_t> bytes;
+  serializeState(a, bytes);
+  PluginState b;
+  ASSERT_TRUE(deserializeState(bytes.data(), bytes.size(), b));
+  ASSERT_TRUE(sameState(a, b));
+  ASSERT_TRUE(b.decor.behaviour.displayWindow == 2 && b.decor.behaviour.displayPeaks == 0);
+  ASSERT_TRUE(b.decor.behaviour.tempoFallbackBpm == 96.f);
+}
+
+void test_state_v2_loads_with_default_behaviour() {
+  PluginState a = sampleState();
+  a.decor.behaviour.displayWindow = 0;   // not in a v2 blob
+  const std::vector<uint8_t> bytes = v2Bytes(a);
+  PluginState b;
+  defaultState(b);
+  b.decor.behaviour.displayWindow = 2;
+  ASSERT_TRUE(deserializeState(bytes.data(), bytes.size(), b));
+  ASSERT_TRUE(b.decor.seed == a.decor.seed && b.decor.tapeTexts == a.decor.tapeTexts);
+  const Behaviour d;
+  ASSERT_TRUE(b.decor.behaviour.displayWindow == d.displayWindow && b.decor.behaviour.displayPeaks == d.displayPeaks);
+  ASSERT_TRUE(b.decor.behaviour.tempoFallbackBpm == d.tempoFallbackBpm);
+  // the defaults are the preview's: 6 s window, 1.5 s peaks, 120 BPM
+  ASSERT_TRUE(displayWindowSeconds(d.displayWindow) == 6.0 && displayPeakHoldSeconds(d.displayPeaks) == 1.5);
+  ASSERT_TRUE(d.tempoFallbackBpm == 120.f);
+  // a truncated behaviour block refuses a v3 state
+  std::vector<uint8_t> v3;
+  serializeState(a, v3);
+  for (size_t cut = v3.size() - kBehaviourBytes; cut < v3.size(); ++cut) {
+    PluginState c;
+    ASSERT_TRUE(!deserializeState(v3.data(), cut, c));
+  }
+}
+
+void test_behaviour_is_sanitized() {
+  PluginState a = sampleState();
+  a.decor.behaviour.displayWindow = 7;
+  a.decor.behaviour.displayPeaks = 0xFFFFFFFFu;
+  a.decor.behaviour.tempoFallbackBpm = std::nanf("");
+  std::vector<uint8_t> bytes;
+  serializeState(a, bytes);
+  PluginState b;
+  ASSERT_TRUE(deserializeState(bytes.data(), bytes.size(), b));
+  const Behaviour d;
+  ASSERT_TRUE(b.decor.behaviour.displayWindow == d.displayWindow && b.decor.behaviour.displayPeaks == d.displayPeaks);
+  ASSERT_TRUE(b.decor.behaviour.tempoFallbackBpm == 120.f);
+  for (float bpm : {INFINITY, -5.f, 0.f, 5.f, 1000.f}) {
+    Behaviour x;
+    x.tempoFallbackBpm = bpm;
+    sanitizeBehaviour(x);
+    ASSERT_TRUE(x.tempoFallbackBpm == 120.f);
+  }
+  Behaviour ok;
+  ok.tempoFallbackBpm = 90.f;
+  sanitizeBehaviour(ok);
+  ASSERT_TRUE(ok.tempoFallbackBpm == 90.f);
+  // the options of the back (pillow_rack.html): 3 / 6 / 12 s and OFF / 1.5 / 3 s
+  ASSERT_TRUE(kDisplayWindowCount == 3 && kDisplayPeaksCount == 3);
+  ASSERT_TRUE(displayWindowSeconds(0) == 3.0 && displayWindowSeconds(2) == 12.0 && displayWindowSeconds(9) == 6.0);
+  ASSERT_TRUE(displayPeakHoldSeconds(0) == 0.0 && displayPeakHoldSeconds(2) == 3.0 && displayPeakHoldSeconds(9) == 1.5);
+}
+
+void test_decor_message_carries_behaviour() {
+  Decor a = sampleState().decor;
+  a.behaviour.displayWindow = 0;
+  a.behaviour.tempoFallbackBpm = 140.f;
+  std::vector<uint8_t> blob;
+  serializeDecor(a, blob);
+  Decor b;
+  ASSERT_TRUE(deserializeDecor(blob.data(), blob.size(), b));
+  ASSERT_TRUE(b.behaviour.displayWindow == 0 && b.behaviour.tempoFallbackBpm == 140.f);
+}
+
+void test_tempo_for_block_uses_the_fallback() {
+  ASSERT_TRUE(tempoForBlock(true, 87.0, 120.0) == 87.0);      // the host's tempo
+  ASSERT_TRUE(tempoForBlock(false, 87.0, 100.0) == 100.0);    // no tempo from the host: the stored fallback
+  ASSERT_TRUE(tempoForBlock(true, 0.0, 100.0) == 100.0);      // a "valid" tempo of 0 or less is no tempo
+  ASSERT_TRUE(tempoForBlock(true, std::nan(""), 100.0) == 100.0);
+  ASSERT_TRUE(tempoForBlock(false, 0.0, std::nan("")) == kFallbackBpm);   // a bad fallback: 120
+  double p[kNumParams];
+  loadDefaults(p);
+  p[kTimeSync] = 1.0; p[kTimeNote] = 2.0 / 3.0;   // 1/4
+  ASSERT_APPROX(mapParams(p, tempoForBlock(false, 0.0, 60.0)).timeMs, 1000.0);
+}
+
+void test_history_resized_keeps_the_newest() {
+  FairyTapes::PillowTalk::Ui::History h(4);
+  for (int i = 1; i <= 4; ++i) h.push(i / 10.f, 1.f, 0.f);
+  const auto smaller = h.resized(2);
+  ASSERT_TRUE(smaller.size() == 2 && std::fabs(smaller.voice(0) - 0.3f) < 1e-6f && std::fabs(smaller.voice(1) - 0.4f) < 1e-6f);
+  const auto larger = h.resized(8);
+  ASSERT_TRUE(larger.size() == 4 && std::fabs(larger.voice(0) - 0.1f) < 1e-6f && std::fabs(larger.voice(3) - 0.4f) < 1e-6f);
+  ASSERT_TRUE(larger.capacity() == 8 && h.resized(0).size() == 0);
+  ASSERT_TRUE(FairyTapes::PillowTalk::Ui::scopePointsFor(6.0, 0.03) == 200 && FairyTapes::PillowTalk::Ui::scopePointsFor(3.0, 0.03) == 100 && FairyTapes::PillowTalk::Ui::scopePointsFor(12.0, 0.03) == 400);
+  ASSERT_TRUE(FairyTapes::PillowTalk::Ui::scopePointsFor(std::nan(""), 0.03) == 200 && FairyTapes::PillowTalk::Ui::scopePointsFor(1e9, 0.03) <= 2000 && FairyTapes::PillowTalk::Ui::scopePointsFor(6.0, 0.0) == 200);
+}
+
+// Fake IMessage / IAttributeList: only what messages.h uses.
+struct FakeAttributes {
+  std::map<std::string, std::string> bin;
+  int setBinary(const char* id, const void* data, unsigned size) {
+    bin[id].assign(static_cast<const char*>(data), size);
+    return 0;
+  }
+  int getBinary(const char* id, const void*& data, unsigned& size) {
+    auto it = bin.find(id);
+    if (it == bin.end()) return 1;
+    data = it->second.data();
+    size = static_cast<unsigned>(it->second.size());
+    return 0;
+  }
+};
+struct FakeMessage {
+  std::string id;
+  FakeAttributes attrs;
+  const char* getMessageID() { return id.c_str(); }
+  void setMessageID(const char* m) { id = m; }
+  FakeAttributes* getAttributes() { return &attrs; }
+};
+
+void test_decor_message_roundtrip_and_rejects() {
+  Decor a = sampleState().decor;
+  FakeMessage m;
+  encodeDecorMessage(&m, a);
+  ASSERT_TRUE(m.id == kMsgDecor);
+  Decor b;
+  ASSERT_TRUE(decodeDecorMessage(&m, b));
+  ASSERT_TRUE(b.seed == a.seed && b.tapeTexts == a.tapeTexts && b.screwAngles[2] == 180.f);
+  FakeMessage other;
+  other.id = "LoadModel";
+  ASSERT_TRUE(!decodeDecorMessage(&other, b));
+  FakeMessage empty;
+  empty.id = kMsgDecor;
+  ASSERT_TRUE(!decodeDecorMessage(&empty, b));
+  FakeMessage junk;
+  junk.id = kMsgDecor;
+  junk.attrs.bin["decor"] = "xy";
+  Decor c;
+  c.seed = 9;
+  ASSERT_TRUE(!decodeDecorMessage(&junk, c));
+  ASSERT_TRUE(c.seed == 9);
+  ASSERT_TRUE(!decodeDecorMessage(static_cast<FakeMessage*>(nullptr), c));
 }
 
 // ---- Parameter mapping ------------------------------------------------------
@@ -878,13 +1230,13 @@ void test_display_echo_follows_mix() {
 void test_editor_size_scales_and_rounds() {
   using namespace FairyTapes::PillowTalk::Ui;
   auto is = [](PixelSize p, int w, int h) { return p.width == w && p.height == h; };
-  ASSERT_TRUE(is(scaledEditorSize(1.0), 480, 560));
-  ASSERT_TRUE(is(scaledEditorSize(2.0), 960, 1120));
-  ASSERT_TRUE(is(scaledEditorSize(1.5), 720, 840));
-  ASSERT_TRUE(is(scaledEditorSize(1.25), 600, 700));
-  ASSERT_TRUE(is(scaledEditorSize(1.75), 840, 980));
-  ASSERT_TRUE(is(scaledEditorSize(1.1), 528, 616));
-  ASSERT_TRUE(is(scaledEditorSize(1.0 / 3.0), 160, 187));  // 186.67 rounds up
+  ASSERT_TRUE(is(scaledEditorSize(1.0), 1000, 628));
+  ASSERT_TRUE(is(scaledEditorSize(2.0), 2000, 1256));
+  ASSERT_TRUE(is(scaledEditorSize(1.5), 1500, 942));
+  ASSERT_TRUE(is(scaledEditorSize(1.25), 1250, 785));
+  ASSERT_TRUE(is(scaledEditorSize(1.75), 1750, 1099));
+  ASSERT_TRUE(is(scaledEditorSize(1.1), 1100, 691));        // 690.8 rounds up
+  ASSERT_TRUE(is(scaledEditorSize(1.0 / 3.0), 333, 209));   // 333.33 and 209.33 round down
 }
 
 void test_editor_size_sanitizes_factor() {
@@ -897,7 +1249,7 @@ void test_editor_size_sanitizes_factor() {
   ASSERT_APPROX(sanitizeContentScale(inf), 1.0);
   ASSERT_APPROX(sanitizeContentScale(1e9), kMaxContentScale);
   ASSERT_APPROX(sanitizeContentScale(2.0), 2.0);
-  ASSERT_TRUE(scaledEditorSize(nan).width == 480 && scaledEditorSize(-1.0).height == 560);
+  ASSERT_TRUE(scaledEditorSize(nan).width == 1000 && scaledEditorSize(-1.0).height == 628);
 }
 
 void test_display_ids_do_not_collide() {
@@ -909,12 +1261,13 @@ void test_display_ids_do_not_collide() {
 
 void test_display_not_in_state() {
   ASSERT_TRUE((int)kNumParams == 16);
-  ASSERT_TRUE(kStateSize == sizeof(int32_t) + sizeof(double) * 16);
-  double v[kNumParams];
-  loadDefaults(v);
+  ASSERT_TRUE(kStateSizeV1 == sizeof(int32_t) + sizeof(double) * 16);
+  PluginState v;
+  defaultState(v);
   std::vector<uint8_t> bytes;
   serializeState(v, bytes);
-  ASSERT_TRUE(bytes.size() == kStateSize);
+  // v3 without texts: v1 + seed + four angles + text count + behaviour (window, peaks, tempo fallback).
+  ASSERT_TRUE(bytes.size() == kStateSizeV1 + 4 + 4 * 4 + 4 + 3 * 4);
 }
 
 void test_display_write_rate_limit() {
@@ -1130,7 +1483,7 @@ void test_level_ids_do_not_collide_and_not_in_state() {
   ASSERT_TRUE(kClearClips == kMeterBase + 9);
   ASSERT_TRUE(kClearClips < kNumDisplayIDs && kNumDisplayIDs == kMeterBase + 10);
   ASSERT_TRUE(kDispInL >= (Steinberg::Vst::ParamID)kNumParams);
-  ASSERT_TRUE((int)kNumParams == 16 && kStateSize == sizeof(int32_t) + sizeof(double) * 16);
+  ASSERT_TRUE((int)kNumParams == 16 && kStateSizeV1 == sizeof(int32_t) + sizeof(double) * 16);
 }
 
 void test_levels_accumulator_holds_peaks() {
@@ -1254,9 +1607,24 @@ int main() {
   RUN_TEST(test_echo_time_change_has_no_click);
   RUN_TEST(test_echo_reprepare_at_new_rate);
   RUN_TEST(test_state_roundtrip);
+  RUN_TEST(test_state_v1_loads_with_default_decor);
   RUN_TEST(test_state_rejects_unknown_version_and_truncation);
-  RUN_TEST(test_state_rejects_non_finite_values);
+  RUN_TEST(test_state_rejects_non_finite_params);
   RUN_TEST(test_state_clamps_out_of_range_values);
+  RUN_TEST(test_state_sanitizes_screw_angles);
+  RUN_TEST(test_tape_text_sanitize);
+  RUN_TEST(test_state_sanitizes_tape_texts);
+  RUN_TEST(test_state_rejects_absurd_text_counts_and_lengths);
+  RUN_TEST(test_state_seed_zero_gets_a_new_seed_that_is_saved);
+  RUN_TEST(test_new_random_seed_is_non_zero_and_varies);
+  RUN_TEST(test_decor_blob_roundtrip_and_sanitize);
+  RUN_TEST(test_decor_message_roundtrip_and_rejects);
+  RUN_TEST(test_state_v3_roundtrips_behaviour);
+  RUN_TEST(test_state_v2_loads_with_default_behaviour);
+  RUN_TEST(test_behaviour_is_sanitized);
+  RUN_TEST(test_decor_message_carries_behaviour);
+  RUN_TEST(test_tempo_for_block_uses_the_fallback);
+  RUN_TEST(test_history_resized_keeps_the_newest);
   RUN_TEST(test_map_params_never_returns_non_finite);
   RUN_TEST(test_engine_ignores_non_finite_settings);
   RUN_TEST(test_note_index_matches_string_list);

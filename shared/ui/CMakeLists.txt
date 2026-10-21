@@ -56,9 +56,20 @@ add_executable(fairy_ui_screw_tests tests/test_screws.cpp)
 target_link_libraries(fairy_ui_screw_tests PRIVATE fairy_ui)
 add_test(NAME fairy_ui_screw_tests COMMAND fairy_ui_screw_tests)
 
+# The back of the panel (SETTINGS, CREDITS, ...): the fixed template, the plug-in's items and credits, hit tests, wrapping.
+add_executable(fairy_ui_back_panel_tests tests/test_back_panel.cpp)
+target_link_libraries(fairy_ui_back_panel_tests PRIVATE fairy_ui)
+add_test(NAME fairy_ui_back_panel_tests COMMAND fairy_ui_back_panel_tests)
+
+# The turn of the panel (front <-> back): pose and progress, about 0.8 s.
+add_executable(fairy_ui_flip_tests tests/test_flip.cpp)
+target_link_libraries(fairy_ui_flip_tests PRIVATE fairy_ui)
+add_test(NAME fairy_ui_flip_tests COMMAND fairy_ui_flip_tests)
+
 # Code-drawn VSTGUI controls and optional bitmap skin.
 add_library(fairy_ui_widgets STATIC src/controls.cpp src/skin.cpp src/meters.cpp src/rack_controls.cpp
-  src/draw_util.cpp src/wear_view.cpp src/silkscreen_view.cpp src/tape_draw.cpp src/screw_view.cpp)
+  src/draw_util.cpp src/wear_view.cpp src/silkscreen_view.cpp src/tape_draw.cpp src/screw_view.cpp
+  src/back_widgets.cpp src/back_view.cpp src/flip_view.cpp)
 target_include_directories(fairy_ui_widgets PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(fairy_ui_widgets PUBLIC fairy_ui vstgui_support)
 # Linked into plugin modules (shared objects).
@@ -85,3 +96,8 @@ add_test(NAME fairy_ui_layer_view_tests COMMAND fairy_ui_layer_view_tests)
 add_executable(fairy_ui_screw_view_tests tests/test_screw_view.cpp)
 target_link_libraries(fairy_ui_screw_view_tests PRIVATE fairy_ui_widgets)
 add_test(NAME fairy_ui_screw_view_tests COMMAND fairy_ui_screw_view_tests)
+
+# Back of the panel and its widgets without a window: clicks, callbacks, tabs, refreshes; the flip helper's refusals.
+add_executable(fairy_ui_back_view_tests tests/test_back_view.cpp)
+target_link_libraries(fairy_ui_back_view_tests PRIVATE fairy_ui_widgets)
+add_test(NAME fairy_ui_back_view_tests COMMAND fairy_ui_back_view_tests)

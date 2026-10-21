@@ -1,6 +1,7 @@
 // Pillow Talk GUI: fixed-capacity history of the three display traces (no VSTGUI, no SDK).
 #pragma once
 
+#include <algorithm>
 #include <cmath>
 #include <vector>
 
@@ -19,6 +20,13 @@ public:
   }
 
   int size() const { return size_; }
+  int capacity() const { return static_cast<int>(data_.size()); }
+  // A copy with another capacity that keeps the newest samples (UI thread: allocates).
+  History resized(int capacity) const {
+    History out(capacity);
+    for (int i = std::max(0, size_ - out.capacity()); i < size_; ++i) out.push(voice(i), send(i), echo(i));
+    return out;
+  }
   float voice(int i) const { return at(i, &Sample::voice, 0.f); }
   float send(int i) const { return at(i, &Sample::send, 1.f); }
   float echo(int i) const { return at(i, &Sample::echo, 0.f); }
@@ -43,5 +51,12 @@ private:
   std::size_t next_ = 0;
   int size_ = 0;
 };
+
+// Points of the ducking display for a window of `seconds` with one point per UI tick of `tickSeconds` (6 s at 30 ms =
+// 200 points); bad values give 200, at most 2000 points.
+inline int scopePointsFor(double seconds, double tickSeconds) {
+  if (!(seconds > 0.0) || !(tickSeconds > 0.0) || !std::isfinite(seconds)) return 200;
+  return static_cast<int>(std::clamp(std::lround(seconds / tickSeconds), 2L, 2000L));
+}
 
 } // namespace FairyTapes::PillowTalk::Ui
