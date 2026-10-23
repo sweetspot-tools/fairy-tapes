@@ -20,10 +20,3 @@ add_subdirectory(src/the-stripper)
 add_subdirectory(src/pillow-talk)
 add_subdirectory(src/deep-throat)
 add_subdirectory(shared/ui)
-# The TONE3000 client (libcurl + OpenSSL outside Windows) is opt-in: it adds a runtime dependency on libssl/libcrypto to the
-# plug-ins that use it, so it stays off until the app is registered and the way OpenSSL ships is settled
-# (docs/superpowers/specs/2026-10-21-tone3000-integration-design.md, section 9). Build and test it with -DFAIRY_ENABLE_TONE3000=ON.
-option(FAIRY_ENABLE_TONE3000 "Build the TONE3000 client and the plug-in tabs that use it" OFF)
-if(FAIRY_ENABLE_TONE3000)
-  add_subdirectory(shared/tone3000)
-endif()

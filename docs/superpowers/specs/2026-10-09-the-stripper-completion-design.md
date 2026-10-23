@@ -18,7 +18,7 @@ Portare The Stripper da "DSP completo con lista parametri dell'host" a plugin ut
 
 Fuori scopo (decisione del 2026-10-09):
 - **Gain staging** (parametri `kBypassGainStaging` e `kGainStagingTrim` restano, inerti, come oggi).
-- **Integrazione Tone3000** (rinviata, decisione 2026-10-23: non nella versione 1): richiedeva rete e account; resta lo spec a parte (§10) e il codice del client in `shared/tone3000`, spento di default. I modelli si caricano a mano dal popup (§3.1).
+- **Integrazione Tone3000** (rinviata, decisione 2026-10-23: non nella versione 1): richiedeva rete e account; resta lo spec a parte (§10) e il codice del client, che era in `shared/tone3000`, è stato **tolto dal repository il 2026-10-24** (recuperabile dalla cronologia (ultimo commit con il codice: `94d8d73`)). I modelli si caricano a mano dal popup (§3.1).
 - Asset grafici disegnati a mano: la GUI è disegnata dal codice (§4); i PNG manuali sono solo un'opzione futura.
 
 ## 2. Componente condiviso: `shared/nam_drive`
@@ -43,7 +43,7 @@ Oggi `NamDrive::loadModel(path)` è sincrono e non c'è alcuna interfaccia per s
 Il clic sul campo del modello (Drive) apre un popup in stile rack (preview: `src/the-stripper/docs/mockups/stripper_model_browser.html`), con due schede:
 
 - **LOCAL:** elenco delle cartelle (aggiungi, rimuovi, riscansiona; scansione ricorsiva dei `.nam`, cartelle salvate nelle preferenze dell'utente) e elenco dei modelli con ricerca per nome, dimensione e tipo; il punto verde marca il modello caricato. Pulsanti LOAD, CANCEL e **NO MODEL** (scarica il modello e riporta il Drive in passthrough). La scansione gira fuori dal thread audio e dal thread dell'interfaccia.
-- **TONE3000:** la scheda implementata il 2026-10-21 (Task 18) è stata **tolta il 2026-10-23**: il popup ha solo la scheda locale. Il client resta in `shared/tone3000` (opt-in con `-DFAIRY_ENABLE_TONE3000=ON`, non collegato a nessun plugin) per una versione futura.
+- **TONE3000:** la scheda implementata il 2026-10-21 (Task 18) è stata **tolta il 2026-10-23**: il popup ha solo la scheda locale. Il client (`shared/tone3000`) e il sottomodulo `vendors/curl` sono stati tolti dal repository il 2026-10-24 (recuperabile dalla cronologia (ultimo commit con il codice: `94d8d73`)).
 - **Architettura:** le sorgenti stanno dietro un'interfaccia comune (`ModelSource`: elenco, ricerca, risoluzione del percorso locale del file); `LocalFolderSource` è la prima implementazione, Tone3000 sarà la seconda. Il caricamento passa sempre dal percorso asincrono (§3).
 - **Nessun modello:** il Drive è in passthrough (nessun gain applicato) e il suo controllo si attenua come un modulo spento; il campo mostra "No model". Nessun modello viene incorporato nel binario del plugin.
 

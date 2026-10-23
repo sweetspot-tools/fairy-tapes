@@ -1,6 +1,6 @@
 # Integrazione TONE3000 — spec (bozza, 2026-10-21)
 
-> **SOSPESA (2026-10-23): non nella versione 1.** Decisione dell'utente: niente connessione a Tone3000 né ricerca online; i modelli si caricano a mano. Questa spec e il client in `shared/tone3000` (spento di default, `-DFAIRY_ENABLE_TONE3000=ON`) restano come riferimento per una versione futura; The Stripper non li usa più (scheda, servizio e crediti tolti).
+> **SOSPESA (2026-10-23): non nella versione 1.** Decisione dell'utente: niente connessione a Tone3000 né ricerca online; i modelli si caricano a mano. Questa spec resta solo come riferimento per una versione futura. **Il client (`shared/tone3000`) e il sottomodulo `vendors/curl` sono stati tolti dal repository il 2026-10-24** (recuperabile dalla cronologia (ultimo commit con il codice: `94d8d73`)); The Stripper non li usa più.
 
 Spec separata richiesta da `2026-10-09-the-stripper-completion-design.md` §3.1 e §10. Parte dai fatti verificati lì (termini API del 7 luglio 2026, documentazione API v1); **non si ripetono qui**: leggere prima §10 di quella spec.
 
