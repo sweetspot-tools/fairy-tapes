@@ -201,3 +201,12 @@
   Expected: PASS.
 - [ ] **Step 3: Verifica manuale in Reaper e Cubase** (a cura dell'utente): aspetto confrontato con la preview, apertura e chiusura 50 volte, automazione e undo, Sync, meter e clip con segnale vero, Wear Off/Light/Heavy, scrivere sul nastro, ruotare le viti, flip del retro, preferenze che persistono, HiDPI.
 - [x] **Step 4: Commit** `docs(pillow-talk): editor v1 documentation`.
+
+---
+
+### Task 10: Scheda ROUTING sul retro
+
+**Files:**
+- Modify: retro dell'editor di Pillow Talk (`src/pillow-talk/src/ui/`), eventuale vista comune in `shared/ui`; spec §12 e questo piano
+
+- [ ] **Step 1: Scheda ROUTING** come nella preview `pillow_rack.html` (2026-10-23): link SETTINGS, ROUTING, CREDITS; schema fisso SIGNAL FLOW e LEGEND secondo `docs/DESIGN_SYSTEM.md`, con test che prima fallisce.
