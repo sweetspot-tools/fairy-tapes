@@ -8,7 +8,7 @@
 namespace FairyTapes::PillowTalk::Ui {
 
 constexpr int kEditorWidth = 1000;   // logical px
-constexpr int kEditorHeight = 628;
+constexpr int kEditorHeight = 470;   // lowered from 628 on 2026-10-21 (pillow_rack.html)
 
 using FairyTapes::Ui::kMaxContentScale;
 using FairyTapes::Ui::PixelSize;

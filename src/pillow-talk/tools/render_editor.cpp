@@ -1,7 +1,7 @@
 // Developer tool: draws the Pillow Talk editor offscreen into a PNG, no host or window needed.
 //   pillow_talk_render out.png [bypass] [sync] [meters] [scope] [wear=off|light|heavy] [seed=<n>] [no-grain]
 //                      [text=<s>] [text1..text6=<s>] [font=zeyada|rocksalt|homemade] [screw1..screw4=<deg>]
-//                      [values=standard|tape] [window=3|6|12] [peaks=off|1.5|3] [back] [tab=settings|credits]
+//                      [values=standard|tape] [window=3|6|12] [peaks=off|1.5|3] [back] [tab=settings|routing|credits]
 //                      [flip=<0..1>] [cycles=<n>]
 // The seed and the tape texts go through the controller's decor (as a stored state would): text= writes on every tape
 // slot, textN= on slot N-1 (only the slots the seed and Wear show are drawn; the tool prints them). The wear level goes
@@ -9,7 +9,7 @@
 // preferences file, as when the editor opens. screwN= stores the user's rotation of screw N-1 (added to its seeded angle)
 // in the decor; the tool prints each screw's look and shown angle. values= goes through Editor::setHandwrittenValues;
 // window= and peaks= are the behaviour settings of the instance (stored in the decor, as the back panel does).
-// back draws the back of the panel (tab= SETTINGS or CREDITS) instead of the front; flip=<p> draws the turn from the
+// back draws the back of the panel (tab= SETTINGS, ROUTING or CREDITS) instead of the front; flip=<p> draws the turn from the
 // front to the back at progress p. cycles=<n> builds and removes the editor's views n times first (for leak checkers).
 // Used to check the look of the code-drawn GUI against docs/mockups/pillow_rack.html on a machine without a host.
 #include "controller.h"
@@ -170,7 +170,7 @@ int main(int argc, char** argv) {
     std::fprintf(stderr,
                  "usage: %s out.png [bypass] [sync] [meters] [scope] [wear=off|light|heavy] [seed=<n>] [no-grain]\n"
                  "       [text=<s>] [text1..text6=<s>] [font=zeyada|rocksalt|homemade] [screw1..screw4=<deg>]\n"
-                 "       [values=standard|tape] [window=3|6|12] [peaks=off|1.5|3] [back] [tab=settings|credits]\n"
+                 "       [values=standard|tape] [window=3|6|12] [peaks=off|1.5|3] [back] [tab=settings|routing|credits]\n"
                  "       [flip=<0..1>] [cycles=<n>]\n",
                  argv[0]);
     return 2;
@@ -230,7 +230,7 @@ int main(int argc, char** argv) {
       opt.back = true;
     } else if (!std::strncmp(argv[i], "tab=", 4)) {
       opt.back = true;
-      opt.tab = !std::strcmp(argv[i] + 4, "credits") ? 1 : 0;
+      opt.tab = !std::strcmp(argv[i] + 4, "credits") ? 2 : !std::strcmp(argv[i] + 4, "routing") ? 1 : 0;
     } else if (!std::strncmp(argv[i], "flip=", 5)) {
       opt.flip = std::strtod(argv[i] + 5, nullptr);
     } else if (!std::strncmp(argv[i], "cycles=", 7)) {

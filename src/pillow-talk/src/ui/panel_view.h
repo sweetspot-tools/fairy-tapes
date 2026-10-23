@@ -24,7 +24,7 @@ public:
 
 private:
   const FairyTapes::Ui::Skin* skin_;
-  VSTGUI::SharedPointer<VSTGUI::CFontDesc> titleFont_, brandFont_, taglineFont_, smallFont_, syncFont_, scaleFont_;
+  VSTGUI::SharedPointer<VSTGUI::CFontDesc> titleFont_, brandFont_, taglineFont_, smallFont_, scaleFont_;
 };
 
 } // namespace FairyTapes::PillowTalk::Ui

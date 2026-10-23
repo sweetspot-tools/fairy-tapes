@@ -83,6 +83,22 @@ void test_button_label_above_the_face() {
   CHECK(printedParts(b, "").texts.empty());
 }
 
+// A name printed alone, on its baseline (e.g. TIME under the note buttons that replace the knob while Sync is on).
+void test_label_alone_on_its_baseline() {
+  PrintedItem l;
+  l.kind = PrintKind::Label;
+  l.cx = 84;
+  l.cy = 395;
+  l.name = "TIME";
+  const PrintedParts p = printedParts(l, "12 ms");
+  CHECK(p.dots.empty() && p.texts.size() == 1);
+  if (p.texts.size() == 1)
+    CHECK(p.texts[0].text == "TIME" && p.texts[0].role == TextRole::Name && near(p.texts[0].x, 84) && near(p.texts[0].y, 395) &&
+          p.texts[0].align == TextAlign::Centre);
+  l.name.clear();
+  CHECK(printedParts(l, "").texts.empty());
+}
+
 void test_choice_labels_over_equal_cells() {
   PrintedItem c;
   c.kind = PrintKind::Choice;
@@ -135,6 +151,7 @@ int main() {
   test_knob_without_ends_value_or_name();
   test_button_label_above_the_face();
   test_choice_labels_over_equal_cells();
+  test_label_alone_on_its_baseline();
   test_aligned_left();
   test_model_state_by_id_and_changes();
   if (g_failed) { std::fprintf(stderr, "%d check(s) failed\n", g_failed); return 1; }

@@ -39,7 +39,7 @@ bool tapeInside(const TapePlacement& t, const Rect& p) {
   return true;
 }
 void test_layout_inside_panel_and_one_screw_missing_at_most() {
-  const Rect panels[] = {{0, 0, 1000, 628}, {0, 0, 2000, 1256}, {10, 20, 500, 314}};
+  const Rect panels[] = {{0, 0, 1000, 470}, {0, 0, 2000, 940}, {10, 20, 500, 235}};
   int sawMissing = 0;
   for (uint32_t seed = 0; seed < 3000; ++seed) {
     for (WearLevel lv : {WearLevel::Off, WearLevel::Light, WearLevel::Heavy}) {
@@ -64,7 +64,7 @@ void test_layout_inside_panel_and_one_screw_missing_at_most() {
   ASSERT_TRUE(sawMissing > 0);  // the rare missing screw does occur
 }
 void test_layout_deterministic_and_seed_dependent() {
-  const Rect p{0, 0, 1000, 628};
+  const Rect p{0, 0, 1000, 470};
   WearLayout a = layoutFromSeed(5u, WearLevel::Heavy, p), b = layoutFromSeed(5u, WearLevel::Heavy, p);
   ASSERT_TRUE(a.tapes.size() == b.tapes.size());
   for (size_t i = 0; i < a.tapes.size(); ++i)
@@ -78,7 +78,7 @@ void test_layout_deterministic_and_seed_dependent() {
   ASSERT_TRUE(differs);
 }
 void test_screws_independent_of_wear_level() {
-  const Rect p{0, 0, 1000, 628};
+  const Rect p{0, 0, 1000, 470};
   WearLayout a = layoutFromSeed(31337u, WearLevel::Light, p), b = layoutFromSeed(31337u, WearLevel::Heavy, p);
   for (int i = 0; i < 4; ++i)
     ASSERT_TRUE(a.screws[i].angleDeg == b.screws[i].angleDeg && a.screws[i].missing == b.screws[i].missing &&
@@ -87,7 +87,7 @@ void test_screws_independent_of_wear_level() {
 // The screws are the shared ones (fairy_ui/screws.h, the same as The Stripper's for the same seed), at kScrewPos scaled
 // to the panel. 4203449416, 1134715807 and 2027020070 are seeds where the former float version differed.
 void test_screws_are_the_shared_ones() {
-  const Rect panel{10, 20, 500, 314};
+  const Rect panel{10, 20, 500, 235};
   std::vector<uint32_t> seeds = {4203449416u, 1134715807u, 2027020070u, 1u, 3u, 7u, 555u};
   for (uint32_t k = 0; k < 20000; ++k) seeds.push_back(k * 2654435761u);
   for (uint32_t seed : seeds) {
@@ -102,18 +102,18 @@ void test_screws_are_the_shared_ones() {
     }
   }
 }
-// Placement pinned (screws: the output of the former ui/wear.cpp, unchanged; tapes: re-pinned on 2026-10-21 when the slots
-// moved off the controls, Task 6, before any tape was drawn): a refactor must not move tapes or screws of existing instances.
+// Placement pinned (screws: the output of the former ui/wear.cpp, unchanged; tapes: re-pinned on 2026-10-23 for the
+// 1000 x 470 panel, whose slots moved with the new layout): a refactor must not move tapes or screws of existing instances.
 void test_layout_pinned() {
   auto near = [](float a, float b) { return std::fabs(a - b) < 1e-3f; };
-  const WearLayout l = layoutFromSeed(5u, WearLevel::Heavy, {0, 0, 1000, 628});
+  const WearLayout l = layoutFromSeed(5u, WearLevel::Heavy, {0, 0, 1000, 470});
   ASSERT_TRUE(l.tapes.size() == 2);
-  ASSERT_TRUE(near(l.tapes[0].cx, 736.425049f) && near(l.tapes[0].cy, 580.610779f) && near(l.tapes[0].w, 65.1670074f) &&
+  ASSERT_TRUE(near(l.tapes[0].cx, 445.507172f) && near(l.tapes[0].cy, 440.229065f) && near(l.tapes[0].w, 65.1670074f) &&
               near(l.tapes[0].h, 22.1169682f) && near(l.tapes[0].rotDeg, -6.67677641f));
   ASSERT_TRUE(near(l.tapes[1].cx, 135.434479f) && near(l.tapes[1].rotDeg, -3.66987896f) &&
               l.tapes[0].slot == 5 && l.tapes[1].slot == 1);
   ASSERT_TRUE(l.screws[0].angleDeg == 34.f && l.screws[0].cross && l.screws[3].angleDeg == 115.f && !l.screws[3].cross);
-  const WearLayout m = layoutFromSeed(31337u, WearLevel::Heavy, {0, 0, 1000, 628});
+  const WearLayout m = layoutFromSeed(31337u, WearLevel::Heavy, {0, 0, 1000, 470});
   ASSERT_TRUE(m.tapes.size() == 3 && near(m.tapes[2].cx, 112.072601f) && near(m.tapes[2].rotDeg, 5.90488815f));
   ASSERT_TRUE(m.screws[0].angleDeg == 154.f && !m.screws[0].cross && m.screws[3].cross);
 }
@@ -136,7 +136,7 @@ FairyTapes::Ui::TapeBox drawnBox(const TapePlacement& t) {
   return FairyTapes::Ui::tapeBounds(t.cx, t.cy, t.w, t.h, t.rotDeg, FairyTapes::Ui::kTapeRaggedX + 1.f);
 }
 void test_tapes_never_cover_controls_or_each_other() {
-  const Rect panel{0, 0, 1000, 628};
+  const Rect panel{0, 0, 1000, 470};
   const std::vector<Rect> obstacles = tapeObstacles();
   for (uint32_t seed = 0; seed < 5000; ++seed) {
     for (WearLevel lv : {WearLevel::Light, WearLevel::Heavy}) {
@@ -156,7 +156,7 @@ void test_tapes_never_cover_controls_or_each_other() {
 // Each tape names its slot (the index of its stored text): valid, distinct, and the same tape keeps its slot when the
 // wear goes from Light to Heavy (Light is a prefix of Heavy).
 void test_tape_slots_are_distinct_and_stable() {
-  const Rect panel{0, 0, 1000, 628};
+  const Rect panel{0, 0, 1000, 470};
   for (uint32_t seed = 0; seed < 2000; ++seed) {
     const WearLayout light = layoutFromSeed(seed, WearLevel::Light, panel), heavy = layoutFromSeed(seed, WearLevel::Heavy, panel);
     std::set<int> seen;

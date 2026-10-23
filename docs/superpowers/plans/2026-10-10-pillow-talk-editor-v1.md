@@ -209,4 +209,10 @@
 **Files:**
 - Modify: retro dell'editor di Pillow Talk (`src/pillow-talk/src/ui/`), eventuale vista comune in `shared/ui`; spec §12 e questo piano
 
-- [ ] **Step 1: Scheda ROUTING** come nella preview `pillow_rack.html` (2026-10-23): link SETTINGS, ROUTING, CREDITS; schema fisso SIGNAL FLOW e LEGEND secondo `docs/DESIGN_SYSTEM.md`, con test che prima fallisce.
+- [x] **Step 1: Scheda ROUTING** (fatta 2026-10-23, `ui/routing_diagram.h`, layout basso comune) come nella preview `pillow_rack.html` (2026-10-23): link SETTINGS, ROUTING, CREDITS; schema fisso SIGNAL FLOW e LEGEND secondo `docs/DESIGN_SYSTEM.md`, con test che prima fallisce.
+
+---
+
+### Task 11: Editor allineato alla preview 1000 × 470 (2026-10-21)
+
+- [x] **Step 1:** DELAY e AUTO DUCK sulla stessa riga, SYNC nell'angolo di ciascun blocco, griglia delle note al posto di Time / Hold, pannello e retro a 1000 × 470, viti e nastri ricollocati; test aggiornati prima del codice (`test_layout`, `test_decor`, `test_back_settings`, dimensioni dell'editor). Fatto 2026-10-23.

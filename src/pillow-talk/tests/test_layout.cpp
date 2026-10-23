@@ -47,8 +47,8 @@ std::vector<Placed> placedItems() {
   return out;
 }
 
-void test_editor_is_1000_by_628() {
-  ASSERT_TRUE(kEditorWidth == 1000 && kEditorHeight == 628);
+void test_editor_is_1000_by_470() {
+  ASSERT_TRUE(kEditorWidth == 1000 && kEditorHeight == 470);   // lowered on 2026-10-21 (pillow_rack.html)
 }
 
 void test_every_persistent_param_has_exactly_one_control() {
@@ -76,11 +76,11 @@ void test_control_kinds_follow_the_parameters() {
   }
 }
 
-// docs/DESIGN_SYSTEM.md: on/off buttons (Bypass, Sync, Sidechain) red, value selectors (notes) yellow, knobs none.
+// docs/DESIGN_SYSTEM.md (three button types): on/off buttons (Bypass, Sync, Sidechain) red; the note values are exclusive
+// choices with the name on the face (no LED); knobs none.
 void test_led_colours_follow_the_rule() {
   for (const ControlSpec& c : kControls) {
     if (c.kind == Kind::Toggle) ASSERT_TRUE(c.led == Led::Red);
-    else if (c.kind == Kind::Choice) ASSERT_TRUE(c.led == Led::Yellow);
     else ASSERT_TRUE(c.led == Led::None);
   }
 }
@@ -110,6 +110,7 @@ void test_no_overlap_within_a_box() {
   for (size_t i = 0; i < items.size(); ++i)
     for (size_t j = i + 1; j < items.size(); ++j) {
       if (items[i].box != items[j].box) continue;
+      if (i < kNumParams && j < kNumParams && sharesPlace(kControls[i].id, kControls[j].id)) continue;   // shown in turn
       if (overlap(items[i].rect, items[j].rect))
         std::fprintf(stderr, "  overlap: %s / %s\n", items[i].what.c_str(), items[j].what.c_str());
       ASSERT_TRUE(!overlap(items[i].rect, items[j].rect));
@@ -125,7 +126,19 @@ void test_preview_positions() {
   ASSERT_TRUE(mix->box == Box::Output && knobCentreX(*mix) == 891 && knobCentreY(*mix) == 176 && mix->capRadius == 22);
   ASSERT_TRUE(controlOf(kSidechain)->box == Box::Ducking);
   ASSERT_TRUE(controlOf(kTimeNote)->box == Box::Delay && controlOf(kHoldNote)->box == Box::AutoDuck);
-  ASSERT_TRUE(knobCentreY(*controlOf(kThreshold)) == 520 && knobCentreY(*controlOf(kTimeMs)) == 352);
+  // DELAY and AUTO DUCK on one row (2026-10-21); SYNC in the top right corner of each block
+  ASSERT_TRUE(boxOf(Box::Delay).rect.y == 282 && boxOf(Box::AutoDuck).rect.y == 282 && boxOf(Box::AutoDuck).rect.x == 550);
+  ASSERT_TRUE(knobCentreY(*controlOf(kThreshold)) == 352 && knobCentreY(*controlOf(kTimeMs)) == 352);
+  ASSERT_TRUE(knobCentreX(*controlOf(kTimeMs)) == 84 && knobCentreX(*controlOf(kWowFlutter)) == 446);
+  ASSERT_TRUE(knobCentreX(*controlOf(kHoldMs)) == 796 && knobCentreX(*controlOf(kRelease)) == 886);
+  const ControlSpec* ts = controlOf(kTimeSync);
+  const ControlSpec* hs = controlOf(kHoldSync);
+  ASSERT_TRUE(ts->rect.x + ts->rect.w / 2 == 515 && ts->rect.y + ts->rect.h / 2 == 320);
+  ASSERT_TRUE(hs->rect.x + hs->rect.w / 2 == 947 && hs->rect.y + hs->rect.h / 2 == 320);
+  // the note values take the place of the knob: the first face centred at (cx - 20, cy - 16), the last at (cx + 20, cy + 10)
+  const ControlSpec* tn = controlOf(kTimeNote);
+  ASSERT_TRUE(tn->rect.x == 44 && tn->rect.w == 80 && tn->rect.y == 323 && tn->rect.h == 52 && tn->choiceCount == 4);
+  ASSERT_TRUE(controlOf(kHoldNote)->rect.x == 756);
 }
 
 void test_meters_and_clips_use_the_display_params() {
@@ -149,15 +162,19 @@ void test_duck_meter_is_send_reduction() {
 }
 
 void test_dimming_rules() {
+  // SYNC swaps the knob and the note values (one hidden, the other shown); nothing is dimmed by it
   const DimState off{false, false, false};
-  ASSERT_TRUE(!controlDimmed(kTimeMs, off) && controlDimmed(kTimeNote, off));
-  ASSERT_TRUE(!controlDimmed(kHoldMs, off) && controlDimmed(kHoldNote, off));
-  ASSERT_TRUE(!controlDimmed(kTimeSync, off) && !controlDimmed(kFeedback, off));
+  ASSERT_TRUE(!controlHidden(kTimeMs, off) && controlHidden(kTimeNote, off));
+  ASSERT_TRUE(!controlHidden(kHoldMs, off) && controlHidden(kHoldNote, off));
+  ASSERT_TRUE(!controlHidden(kTimeSync, off) && !controlHidden(kFeedback, off));
+  for (const ControlSpec& c : kControls) ASSERT_TRUE(!controlDimmed(c.id, off));
   const DimState sync{false, true, true};
-  ASSERT_TRUE(controlDimmed(kTimeMs, sync) && !controlDimmed(kTimeNote, sync));
-  ASSERT_TRUE(controlDimmed(kHoldMs, sync) && !controlDimmed(kHoldNote, sync));
+  ASSERT_TRUE(controlHidden(kTimeMs, sync) && !controlHidden(kTimeNote, sync));
+  ASSERT_TRUE(controlHidden(kHoldMs, sync) && !controlHidden(kHoldNote, sync));
+  ASSERT_TRUE(!controlDimmed(kTimeNote, sync) && !controlDimmed(kTimeMs, sync));
   const DimState timeOnly{false, true, false};
-  ASSERT_TRUE(controlDimmed(kTimeMs, timeOnly) && !controlDimmed(kHoldMs, timeOnly));
+  ASSERT_TRUE(controlHidden(kTimeMs, timeOnly) && !controlHidden(kHoldMs, timeOnly));
+  ASSERT_TRUE(sharesPlace(kTimeMs, kTimeNote) && sharesPlace(kHoldNote, kHoldMs) && !sharesPlace(kTimeMs, kHoldNote));
   // The global bypass dims everything but itself.
   const DimState bypass{true, false, false};
   for (const ControlSpec& c : kControls) ASSERT_TRUE(controlDimmed(c.id, bypass) == (c.id != kBypass));
@@ -166,24 +183,28 @@ void test_dimming_rules() {
 void test_silkscreen_items_from_the_table() {
   using FairyTapes::Ui::PrintKind;
   const auto items = silkscreenItems();
-  ASSERT_TRUE(items.size() == kNumParams);
+  ASSERT_TRUE(items.size() == kNumParams);   // no print for the two note grids, one name each for the TIME and HOLD place
+  int labels = 0;
   for (const auto& it : items) {
+    if (it.kind == PrintKind::Label) {   // TIME / HOLD: printed whichever control holds the place
+      ++labels;
+      const ControlSpec* k = controlOf(static_cast<Steinberg::Vst::ParamID>(it.id - kPlaceLabelKey));
+      ASSERT_TRUE(k && (k->id == kTimeMs || k->id == kHoldMs) && it.name == k->name && it.cx == knobCentreX(*k));
+      ASSERT_TRUE(it.cy == knobCentreY(*k) + k->capRadius + 24);   // the knob name's baseline
+      continue;
+    }
     const ControlSpec* c = controlOf(static_cast<Steinberg::Vst::ParamID>(it.id));
-    ASSERT_TRUE(c != nullptr);
-    switch (c->kind) {
-    case Kind::Knob:
+    ASSERT_TRUE(c != nullptr && c->kind != Kind::Choice);
+    if (c->kind == Kind::Knob) {
       ASSERT_TRUE(it.kind == PrintKind::Knob && it.cx == knobCentreX(*c) && it.cy == knobCentreY(*c));
-      ASSERT_TRUE(it.capRadius == c->capRadius && it.name == c->name && it.lo == c->lo && it.hi == c->hi);
-      break;
-    case Kind::Toggle:
+      ASSERT_TRUE(it.capRadius == c->capRadius && it.lo == c->lo && it.hi == c->hi);
+      ASSERT_TRUE(it.name == ((c->id == kTimeMs || c->id == kHoldMs) ? std::string() : std::string(c->name)));
+    } else {
       ASSERT_TRUE(it.kind == PrintKind::Button && it.name == c->name);
       ASSERT_TRUE(it.cx == c->rect.x + c->rect.w / 2 && it.cy == c->rect.y + c->rect.h / 2);
-      break;
-    case Kind::Choice:
-      ASSERT_TRUE(it.kind == PrintKind::Choice && it.labels.size() == 4 && it.width == c->rect.w);
-      break;
     }
   }
+  ASSERT_TRUE(labels == 2);
 }
 
 void test_panel_texts_and_rules_inside_panel() {
@@ -191,8 +212,6 @@ void test_panel_texts_and_rules_inside_panel() {
     ASSERT_TRUE(t.text && *t.text);
     ASSERT_TRUE(t.x > 0 && t.x < kEditorWidth && t.y > 0 && t.y < kEditorHeight);
   }
-  for (const PanelRule& r : kPanelRules)
-    ASSERT_TRUE(r.x0 >= 0 && r.x1 <= kEditorWidth && r.x0 < r.x1 && r.y > 0 && r.y < kEditorHeight);
 }
 
 void test_tape_slots_and_screws_inside_panel() {
@@ -204,7 +223,7 @@ void test_tape_slots_and_screws_inside_panel() {
 } // namespace
 
 int main() {
-  RUN_TEST(test_editor_is_1000_by_628);
+  RUN_TEST(test_editor_is_1000_by_470);
   RUN_TEST(test_every_persistent_param_has_exactly_one_control);
   RUN_TEST(test_control_kinds_follow_the_parameters);
   RUN_TEST(test_led_colours_follow_the_rule);

@@ -1,4 +1,4 @@
-// Pillow Talk GUI: the plugin editor (1000 x 628 rack panel, views built in code, no .uidesc).
+// Pillow Talk GUI: the plugin editor (1000 x 470 rack panel, views built in code, no .uidesc).
 // Layers from the bottom (docs/DESIGN_SYSTEM.md): panel (PanelView) / silkscreen (SilkscreenView) / wear (WearView) /
 // controls, scope, meters and clip LEDs. Every persistent parameter is bound to one control (ui/layout.h). User gestures
 // go to the controller as beginEdit / performEdit / endEdit; host-side changes (automation, presets, undo) arrive as

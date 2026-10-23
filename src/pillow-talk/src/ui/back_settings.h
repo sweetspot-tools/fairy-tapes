@@ -9,6 +9,7 @@
 #include "state.h"
 #include "ui/credits.h"
 #include "ui/prefs.h"
+#include "ui/routing_diagram.h"
 
 #include "fairy_ui/back_panel.h"
 
@@ -105,7 +106,8 @@ inline FairyTapes::Ui::BackContent backContent(const Prefs& p, const Behaviour& 
   using namespace FairyTapes::Ui;
   BackContent c;
   c.headerLine = "PILLOW TALK  \xC2\xB7  TAPE ECHO VST3";
-  c.tabs = {{"SETTINGS", BackTabKind::Settings}, {"CREDITS", BackTabKind::Credits}};
+  c.tabs = {{"SETTINGS", BackTabKind::Settings}, {"ROUTING", BackTabKind::Routing}, {"CREDITS", BackTabKind::Credits}};
+  c.routing = pillowRouting();
   const auto A = BackColumn::Appearance, B = BackColumn::Behaviour;
   c.items.push_back(choiceItem(kSetWear, A, "WEAR", "", {"OFF", "LIGHT", "HEAVY"}, selectedFor(kSetWear, p, b)));
   c.items.push_back(toggleItem(kSetNotes, A, "NOTES LAYER", "tape and pen marks on the values", "HIDE", "SHOW", p.notes));

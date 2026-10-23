@@ -34,9 +34,10 @@ const FairyTapes::Ui::BackItem* item(const FairyTapes::Ui::BackContent& c, int k
 
 void test_settings_are_the_preview_ones() {
   const auto c = backContent(Prefs{}, Behaviour{});
-  ASSERT_TRUE(FairyTapes::Ui::backContentProblems(c).empty());
+  ASSERT_TRUE(FairyTapes::Ui::backContentProblems(c, FairyTapes::Ui::Back::kShort).empty());   // the 1000 x 470 back
   ASSERT_TRUE(c.headerLine == "PILLOW TALK  \xC2\xB7  TAPE ECHO VST3");
-  ASSERT_TRUE(c.tabs.size() == 2 && c.tabs[0].label == "SETTINGS" && c.tabs[1].label == "CREDITS");
+  ASSERT_TRUE(c.tabs.size() == 3 && c.tabs[0].label == "SETTINGS" && c.tabs[1].label == "ROUTING" && c.tabs[2].label == "CREDITS");
+  ASSERT_TRUE(c.tabs[1].kind == FairyTapes::Ui::BackTabKind::Routing && !c.routing.flow.empty());   // the preview's diagram
   struct Row { int key; BackColumn col; BackItemKind kind; const char* label; std::vector<std::string> options; };
   const std::vector<Row> rows = {
       {kSetWear, BackColumn::Appearance, BackItemKind::Choice, "WEAR", {"OFF", "LIGHT", "HEAVY"}},
