@@ -9,7 +9,6 @@
 #include "ui/recall_marks.h"
 #include "ui/back_content.h"
 #include "ui/buttons_tab.h"
-#include "ui/gpu_chip_view.h"
 #include "fairy_ui/back_view.h"
 #include "fairy_ui/back_widgets.h"
 #include "ui/recall_marks_view.h"
@@ -57,7 +56,7 @@ using FairyTapes::Ui::ScrewView;
 using FairyTapes::Ui::generateScrews;
 using FairyTapes::Ui::kScrewCount;
 using FairyTapes::Ui::MeterKind;
-using FairyTapes::Ui::RackChoice;
+using FairyTapes::Ui::RackLitChoice;
 using FairyTapes::Ui::RackKnob;
 using FairyTapes::Ui::RackLed;
 using FairyTapes::Ui::RackToggle;
@@ -238,7 +237,6 @@ void PLUGIN_API Editor::close() {
   valueEdit_ = nullptr;
   valueEditSpec_ = nullptr;
   strip_ = nullptr;
-  gpuChip_ = nullptr;
   modelGpu_ = false;
   browser_ = nullptr;
   browserClosing_ = false;
@@ -283,8 +281,7 @@ void Editor::createViews(CViewContainer* parent) {
     NormalizedControl* control = nullptr;
     CRect rect = toCRect(spec.rect);
     const auto tag = static_cast<int32_t>(spec.id);
-    const RackLed led = hasYellowLed(spec.id) ? RackLed::Yellow : RackLed::Red;
-    if (spec.kind != Kind::Knob && !isBellButton(spec.id)) rect.bottom += kLedZone;   // room for the LED under the face
+    if (spec.kind == Kind::Toggle && !isBellButton(spec.id)) rect.bottom += kLedZone;   // room for the LED under the face
     switch (spec.kind) {
     case Kind::Knob: {
       const KnobLook* look = knobLookOf(spec.id);
@@ -302,12 +299,14 @@ void Editor::createViews(CViewContainer* parent) {
       break;
     }
     case Kind::Toggle:
-      control = new RackToggle(rect, this, tag, led, isBellButton(spec.id), &skin_);
+      control = new RackToggle(rect, this, tag, RackLed::Red, isBellButton(spec.id), &skin_);
       break;
     case Kind::Choice: {
-      int n = 0;
-      while (n < 3 && spec.choices[n]) ++n;
-      control = new RackChoice(rect, this, tag, n, led, &skin_);
+      std::vector<std::string> names;
+      for (int k = 0; k < 3 && spec.choices[k]; ++k) names.emplace_back(spec.choices[k]);
+      const ChoiceLook* look = choiceLookOf(spec.id);
+      control = new RackLitChoice(rect, this, tag, std::move(names), look ? look->columns : 1,
+                                  look ? look->faceWidth : FairyTapes::Ui::Rack::kLitFaceWidth, &skin_);
       break;
     }
     }
@@ -320,13 +319,6 @@ void Editor::createViews(CViewContainer* parent) {
   strip_->setFont(tapeFontIdOf(prefs.tapeFont));
   strip_->onClick = [this] { openBrowser(); };
   parent->addView(strip_);
-
-  if (const ControlSpec* nam = specs_[kDriveNamOn]) {   // the chip sits on the face of the NAM button (left slot), which sinks 1.5 px when lit
-    const double cx = nam->rect.x + nam->rect.w / 4, cy = nam->rect.y + FairyTapes::Ui::Rack::kFaceHeight / 2 + FairyTapes::Ui::Rack::kPressDepth;
-    gpuChip_ = new GpuChipView(CRect(cx - 10, cy - 10, cx + 10, cy + 10));
-    gpuChip_->setVisible(false);
-    parent->addView(gpuChip_);
-  }
 
   for (std::size_t i = 0; i < bars_.size(); ++i) {
     const MeterRow& row = kMeterRows[i];
@@ -379,7 +371,7 @@ void Editor::applyAppearance(const Preferences& prefs) {
     const double amount = wearAmount(level);
     if (auto* k = dynamic_cast<RackKnob*>(control)) k->setWear(cseed, amount);
     else if (auto* t = dynamic_cast<RackToggle*>(control)) t->setWear(cseed, amount);
-    else if (auto* c = dynamic_cast<RackChoice*>(control)) c->setWear(cseed, amount);
+    else if (auto* c = dynamic_cast<RackLitChoice*>(control)) c->setWear(cseed, amount);
   }
 
   // pieces of tape: the level decides how many show
@@ -671,13 +663,6 @@ void Editor::refreshModules() {
       silk_->setTag(static_cast<int>(m), blockTag(m, channelMode_, comp, namOn_));
       silk_->setTagDimmed(static_cast<int>(m), moduleDimmed(m, state));
     }
-  }
-
-  if (gpuChip_) {
-    const bool show = modelGpu_ && namOn_;
-    gpuChip_->setDimmed(moduleDimmed(Module::Drive, state));
-    if (gpuChip_->isVisible() != show) gpuChip_->setVisible(show);
-    gpuChip_->invalid();
   }
 
   for (const auto& spec : kControls) {

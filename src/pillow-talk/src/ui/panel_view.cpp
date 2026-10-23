@@ -33,7 +33,6 @@ PanelView::PanelView(const CRect& size, const FairyTapes::Ui::Skin* skin)
   brandFont_ = bold(11);
   taglineFont_ = bold(13);
   smallFont_ = bold(11);
-  syncFont_ = bold(10);
   scaleFont_ = bold(9);
   setMouseEnabled(false);
 }
@@ -54,13 +53,7 @@ void PanelView::draw(CDrawContext* ctx) {
   }
   ctx->restoreGlobalState();
 
-  // Thin rules over the Sync groups.
-  ctx->setLineWidth(1);
-  ctx->setFrameColor(CColor(kDimWhite.red, kDimWhite.green, kDimWhite.blue, 128));
-  for (const PanelRule& rule : kPanelRules)
-    ctx->drawLine(o + CPoint(rule.x0, rule.y + 0.5), o + CPoint(rule.x1, rule.y + 0.5));
-
-  // Fixed texts: header, LEVEL tags and scale, small explanations, Sync group titles.
+  // Fixed texts: header, LEVEL tags and scale, small explanations.
   for (const PanelText& t : kPanelTexts) {
     switch (t.style) {
     case TextStyle::Title: ctx->setFont(titleFont_); ctx->setFontColor(kWhite); break;
@@ -70,7 +63,6 @@ void PanelView::draw(CDrawContext* ctx) {
     case TextStyle::RowTag: ctx->setFont(smallFont_); ctx->setFontColor(kWhite); break;
     case TextStyle::Scale:
     case TextStyle::Note: ctx->setFont(scaleFont_); ctx->setFontColor(kDimWhite); break;
-    case TextStyle::SyncTitle: ctx->setFont(syncFont_); ctx->setFontColor(kDimWhite); break;
     }
     const CCoord w = ctx->getStringWidth(t.text);
     ctx->drawString(t.text, o + CPoint(FairyTapes::Ui::alignedLeft(t.x, w, t.align), t.y));

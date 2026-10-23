@@ -204,12 +204,12 @@ inline void setReleaseIndex(Preferences& p, int i) {
 
 // ---- Tabs ----------------------------------------------------------------------------------------------------------
 // The tabs of the back in the order they are shown; the preference stores the BackTab, the shared BackView an index.
-constexpr BackTab kBackTabOrder[] = {BackTab::Settings, BackTab::Buttons, BackTab::Credits};
+constexpr BackTab kBackTabOrder[] = {BackTab::Settings, BackTab::Buttons, BackTab::Routing, BackTab::Credits};
 inline int backTabIndex(BackTab t) {
-  for (int i = 0; i < 3; ++i)
+  for (int i = 0; i < static_cast<int>(sizeof(kBackTabOrder) / sizeof(kBackTabOrder[0])); ++i)
     if (kBackTabOrder[i] == t) return i;
   return 0;
 }
-inline BackTab backTabOfIndex(int i) { return kBackTabOrder[i < 0 ? 0 : i > 2 ? 2 : i]; }
+inline BackTab backTabOfIndex(int i) { return kBackTabOrder[i < 0 ? 0 : i > 3 ? 3 : i]; }
 
 } // namespace FairyTapes::TheStripper::Ui

@@ -35,6 +35,31 @@ int main() {
   // button: LED under the face, label above it
   CHECK(kLedOffsetY > kFaceHeight / 2 + kLedRadius);
   CHECK(kLabelOffsetY < -kFaceHeight / 2);
+
+  // face-lit exclusive choice: a grid of cells, row-major, each face centred in its cell
+  {   // VOICE / DRUMS / CLASSIC stacked: 26 px between the faces, as in the preview
+    const Box c0 = litChoiceCell(44, 78, 3, 1, 0), c2 = litChoiceCell(44, 78, 3, 1, 2);
+    CHECK(near(c0.top, 0) && near(c0.bottom, 26) && near(c2.top, 52) && near(c2.bottom, 78));
+    CHECK(near(c0.left, 0) && near(c0.right, 44));
+    const Box f = litFace(c2, 44, kLitFaceHeight);
+    CHECK(near(f.top, 65 - kLitFaceHeight / 2) && near(f.bottom - f.top, kLitFaceHeight) && near(f.left, 0) && near(f.right, 44));
+  }
+  {   // NAM / 4K side by side: 40 px between the centres
+    const Box a = litFace(litChoiceCell(80, 20, 2, 2, 0), 34, 20), b = litFace(litChoiceCell(80, 20, 2, 2, 1), 34, 20);
+    CHECK(near((b.left + b.right) / 2 - (a.left + a.right) / 2, 40) && near(a.left, 3));
+  }
+  {   // 2 x 2 grid of notes: the last one is bottom right
+    const Box c3 = litChoiceCell(80, 52, 4, 2, 3);
+    CHECK(near(c3.left, 40) && near(c3.top, 26) && near(c3.right, 80) && near(c3.bottom, 52));
+  }
+  // hits: by cell; outside the view or on an empty cell of an incomplete grid there is none
+  CHECK(litChoiceHit(44, 78, 3, 1, 10, 40) == 1);
+  CHECK(litChoiceHit(80, 52, 4, 2, 79, 51) == 3);
+  CHECK(litChoiceHit(80, 52, 3, 2, 60, 40) == -1);
+  CHECK(litChoiceHit(44, 78, 3, 1, -1, 10) == -1 && litChoiceHit(44, 78, 3, 1, 10, 78) == -1);
+  CHECK(litChoiceHit(44, 78, 0, 1, 10, 10) == -1 && litChoiceHit(44, 78, 3, 0, 10, 10) == -1);
+  // the name sits on the face, centred
+  CHECK(kLitTextBaseline > 0 && kLitTextBaseline < kLitFaceHeight / 2);
   if (g_failed) return 1;
   std::puts("test_rack_geometry: ok");
   return 0;

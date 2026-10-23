@@ -14,9 +14,9 @@ namespace FairyTapes::PillowTalk::Ui {
 
 using FairyTapes::Ui::WearLevel;
 
-// Reference panel: 1000 x 628 units; placements scale to the panel passed to layoutFromSeed.
+// Reference panel: 1000 x 470 units (since 2026-10-23, was 628); placements scale to the panel passed to layoutFromSeed.
 constexpr float kDecorDesignW = 1000.f;
-constexpr float kDecorDesignH = 628.f;
+constexpr float kDecorDesignH = 470.f;
 
 // A strip of paper tape: centre, size and rotation (degrees, clockwise), in panel units. `slot`: its base position in
 // kTapeSlots, which is also the index of its text in the instance decor (Decor::tapeTexts).
@@ -38,7 +38,7 @@ struct WearLayout {
   std::vector<ScrewPlacement> screws;
 };
 
-// Base placement: kTapeSlots and kScrewPos in ui/layout.h (reference 1000 x 628 space); Rect comes from there too.
+// Base placement: kTapeSlots and kScrewPos in ui/layout.h (reference 1000 x 470 space); Rect comes from there too.
 
 // Pure and deterministic. Tapes: 0 (Off), 1-2 (Light), 2-3 (Heavy), always fully inside `panel`.
 // Screws: always 4 entries at the corners (scaled to `panel`), at most one missing; kind, angle and the missing one from

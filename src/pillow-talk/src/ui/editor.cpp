@@ -40,6 +40,7 @@
 #include <algorithm>
 #include <cstring>
 #include <string>
+#include <vector>
 
 namespace FairyTapes::PillowTalk::Ui {
 
@@ -51,7 +52,7 @@ using FairyTapes::Ui::ClipLed;
 using FairyTapes::Ui::MeterBar;
 using FairyTapes::Ui::MeterKind;
 using FairyTapes::Ui::NormalizedControl;
-using FairyTapes::Ui::RackChoice;
+using FairyTapes::Ui::RackLitChoice;
 using FairyTapes::Ui::RackKnob;
 using FairyTapes::Ui::RackLed;
 using FairyTapes::Ui::RackToggle;
@@ -514,12 +515,15 @@ void Editor::createViews(CViewContainer* parent) {
   for (const ControlSpec& spec : kControls) {
     const CRect rect = toCRect(viewRect(spec));
     const auto tag = static_cast<int32_t>(spec.id);
-    const RackLed led = spec.led == Led::Yellow ? RackLed::Yellow : RackLed::Red;
     NormalizedControl* control = nullptr;
     switch (spec.kind) {
     case Kind::Knob: control = new RackKnob(rect, this, tag, spec.capRadius, &skin_); break;
-    case Kind::Toggle: control = new RackToggle(rect, this, tag, led, false, &skin_); break;
-    case Kind::Choice: control = new RackChoice(rect, this, tag, spec.choiceCount, led, &skin_); break;
+    case Kind::Toggle: control = new RackToggle(rect, this, tag, RackLed::Red, false, &skin_); break;
+    case Kind::Choice: {
+      std::vector<std::string> names(spec.choices, spec.choices + spec.choiceCount);
+      control = new RackLitChoice(rect, this, tag, std::move(names), kNoteColumns, kNoteFaceWidth, &skin_);
+      break;
+    }
     }
     if (auto* p = ctl->getParameterObject(spec.id))
       control->setDefaultValue(static_cast<float>(p->getInfo().defaultNormalizedValue));
@@ -642,9 +646,16 @@ void Editor::applySideEffects(ParamID id, double norm) {
 
 void Editor::refreshDimming() {
   for (const ControlSpec& c : kControls) {
-    const bool dimmed = controlDimmed(c.id, dim_);
-    if (auto* control = controls_[c.id]) control->setDimmed(dimmed);
-    if (silk_) silk_->setDimmed(static_cast<int>(c.id), dimmed);
+    const bool dimmed = controlDimmed(c.id, dim_), hidden = controlHidden(c.id, dim_);
+    if (auto* control = controls_[c.id]) {
+      control->setDimmed(dimmed);
+      if (control->isVisible() == hidden) control->setVisible(!hidden);   // SYNC: the knob or the note values
+    }
+    if (silk_) {
+      silk_->setDimmed(static_cast<int>(c.id), dimmed);
+      silk_->setHidden(static_cast<int>(c.id), hidden);
+      if (c.id == kTimeMs || c.id == kHoldMs) silk_->setDimmed(placeLabelKey(c.id), dimmed);   // TIME / HOLD stays printed
+    }
   }
   if (scope_) scope_->setAlphaValue(dim_.bypass ? kDimmedAlpha : 1.f);
   for (int i = 0; i < kMeterRowCount; ++i)

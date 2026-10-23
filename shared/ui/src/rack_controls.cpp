@@ -7,6 +7,7 @@
 #include "vstgui/lib/ccolor.h"
 #include "vstgui/lib/cdrawcontext.h"
 #include "vstgui/lib/cgradient.h"
+#include "vstgui/lib/cfont.h"
 #include "vstgui/lib/cgraphicspath.h"
 
 #include <algorithm>
@@ -29,6 +30,7 @@ constexpr CColor kBellOn(0xf0, 0xb4, 0x29);
 constexpr CColor kBellOff(0x8e, 0x8e, 0x91);
 constexpr CColor kBellInk(0x1a, 0x1a, 0x1c);
 constexpr CColor kBellInkOn(0x2a, 0x1d, 0x05);
+constexpr CColor kLitOn(0xf0, 0xb4, 0x29);   // amber face of the active choice (design system)
 constexpr float kDimmedAlpha = 0.4f;
 constexpr double kTexture = 0.25;   // every texture layer of the cap is 25 % over the base colour (spec 4)
 
@@ -67,8 +69,8 @@ void begin(CDrawContext* ctx, bool dimmed) {
 CColor ledOn(RackLed led) { return led == RackLed::Yellow ? CColor(0xf2, 0xc2, 0x1b) : CColor(0xe8, 0x39, 0x2b); }
 CColor ledOff(RackLed led) { return led == RackLed::Yellow ? CColor(0x3a, 0x33, 0x14) : CColor(0x3a, 0x10, 0x10); }
 
-// One button: shadow, grey face (sinks while lit), edge lights, LED under it.
-void drawFace(CDrawContext* ctx, const CRect& face, bool on, RackLed led, bool withLed) {
+// One button: shadow, face (grey, or `fill`; sinks while lit), edge lights, LED under it.
+void drawFace(CDrawContext* ctx, const CRect& face, bool on, RackLed led, bool withLed, const CColor& fill = kFace) {
   const double sink = on ? Rack::kPressDepth : 0.0;
   // soft shadow under a raised part; shorter and tighter when pressed
   CRect shadow(face);
@@ -80,7 +82,7 @@ void drawFace(CDrawContext* ctx, const CRect& face, bool on, RackLed led, bool w
   CRect f(face);
   f.offset(0, sink);
   if (auto path = owned(ctx->createRoundRectGraphicsPath(f, 2))) {
-    ctx->setFillColor(kFace);
+    ctx->setFillColor(fill);
     ctx->drawGraphicsPath(path, CDrawContext::kPathFilled);
     ctx->setFrameColor(kFaceEdge);
     ctx->setLineWidth(1);
@@ -359,6 +361,61 @@ CMouseEventResult RackChoice::onMouseDown(CPoint& where, const CButtonState& but
       break;
     }
   }
+  return kMouseDownEventHandledButDontNeedMovedOrUpEvents;
+}
+
+// ---------------------------------------------------------------------------
+// RackLitChoice
+
+RackLitChoice::RackLitChoice(const CRect& size, IControlListener* listener, int32_t tag, std::vector<std::string> names,
+                             int columns, double faceWidth, const Skin* skin)
+    : ChoiceButtons(size, listener, tag, names.empty() ? std::vector<std::string>(1) : names, skin),
+      names_(names.empty() ? std::vector<std::string>(1) : std::move(names)),
+      columns_(std::clamp(columns, 1, static_cast<int>(names_.size()))), faceWidth_(faceWidth > 4 ? faceWidth : Rack::kLitFaceWidth) {}
+
+CRect RackLitChoice::face(int index) const {
+  const CRect& r = getViewSize();
+  const int n = static_cast<int>(names_.size());
+  const Rack::Box b = Rack::litFace(Rack::litChoiceCell(r.getWidth(), r.getHeight(), n, columns_, index), faceWidth_,
+                                    Rack::kLitFaceHeight);
+  return CRect(r.left + b.left, r.top + b.top, r.left + b.right, r.top + b.bottom);
+}
+
+void RackLitChoice::setWear(std::uint32_t seed, double amount) {
+  wear_.clear();
+  for (size_t i = 0; i < names_.size(); ++i)
+    wear_.push_back(buttonWear(seed + static_cast<std::uint32_t>(i) * 7919u, amount, faceWidth_, Rack::kLitFaceHeight));
+  invalid();
+}
+
+void RackLitChoice::draw(CDrawContext* ctx) {
+  static const SharedPointer<CFontDesc> font = makeOwned<CFontDesc>("Arial", Rack::kLitTextSize, kBoldFace);
+  begin(ctx, dimmed_);
+  const int selected = selectedIndex();
+  ctx->setFont(font);
+  for (int i = 0; i < static_cast<int>(names_.size()); ++i) {
+    const CRect f = face(i);
+    const bool on = i == selected;
+    const bool hasWear = static_cast<size_t>(i) < wear_.size();
+    const CPoint sunk(f.left, f.top + (on ? Rack::kPressDepth : 0.0));
+    if (hasWear) drawWearMarks(ctx, wear_[static_cast<size_t>(i)], f.getTopLeft(), true);
+    drawFace(ctx, f, on, RackLed::Yellow, false, on ? kLitOn : kFace);
+    const std::string& name = names_[static_cast<size_t>(i)];
+    const CCoord tw = ctx->getStringWidth(name.c_str());
+    ctx->setFontColor(on ? kBellInkOn : kBellInk);
+    ctx->drawString(name.c_str(), CPoint(f.left + (f.getWidth() - tw) / 2, sunk.y + f.getHeight() / 2 + Rack::kLitTextBaseline));
+    if (hasWear) drawWearMarks(ctx, wear_[static_cast<size_t>(i)], sunk, false);
+  }
+  ctx->restoreGlobalState();
+  setDirty(false);
+}
+
+CMouseEventResult RackLitChoice::onMouseDown(CPoint& where, const CButtonState& buttons) {
+  if (!buttons.isLeftButton()) return kMouseEventNotHandled;
+  const CRect& r = getViewSize();
+  const int n = static_cast<int>(names_.size());
+  const int i = Rack::litChoiceHit(r.getWidth(), r.getHeight(), n, columns_, where.x - r.left, where.y - r.top);
+  if (i >= 0 && i != selectedIndex()) editTo(static_cast<float>(normFromChoiceIndex(i, n)));
   return kMouseDownEventHandledButDontNeedMovedOrUpEvents;
 }
 

@@ -18,8 +18,8 @@ inline FairyTapes::Ui::BlockTag tagSlot(Module m) {
   case Module::Filters: return {key, 196, 114};
   case Module::Eq: return {key, 40, 302};
   case Module::Comp: return {key, 40, 474};
-  case Module::Drive: return {key, 418, 474};
-  case Module::Limiter: return {key, 724, 474};
+  case Module::Drive: return {key, 388, 474};
+  case Module::Limiter: return {key, 694, 474};
   case Module::Gate: return {key, 862, 474};
   default: return {key, 0, 0};
   }
@@ -31,7 +31,8 @@ inline std::vector<FairyTapes::Ui::PrintedItem> silkscreenItems() {
   using FairyTapes::Ui::PrintKind;
   std::vector<PrintedItem> out;
   for (const ControlSpec& c : kControls) {
-    if (c.sharesView) continue;   // the Drive knob prints for both of its parameters
+    if (c.sharesView) continue;               // the Drive knob prints for both of its parameters
+    if (c.kind == Kind::Choice) continue;     // exclusive choices carry their names on the face
     PrintedItem it;
     it.id = static_cast<int>(c.id);
     it.cx = c.rect.x + c.rect.w / 2;
@@ -45,15 +46,10 @@ inline std::vector<FairyTapes::Ui::PrintedItem> silkscreenItems() {
         it.hi = look->hi;
       }
       if (c.label) it.name = c.label;
-    } else if (c.kind == Kind::Toggle) {
+    } else {
       it.kind = PrintKind::Button;
       it.cy = c.rect.y + Rack::kFaceHeight / 2;
       if (c.label && !isBellButton(c.id)) it.name = c.label;
-    } else {
-      it.kind = PrintKind::Choice;
-      it.cy = c.rect.y + Rack::kFaceHeight / 2;
-      it.width = c.rect.w;
-      for (int k = 0; k < 3 && c.choices[k]; ++k) it.labels.push_back(c.choices[k]);
     }
     out.push_back(std::move(it));
   }
