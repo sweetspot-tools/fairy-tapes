@@ -25,7 +25,7 @@ Steinberg::FUnknown* createController(void*) {
 }
 } // namespace
 
-BEGIN_FACTORY_DEF("Fairy Tapes", "https://github.com/fairy-tapes", "")
+BEGIN_FACTORY_DEF("Sweetspot Tools", "https://github.com/sweetspot-tools/fairy-tapes", "")
 
   DEF_CLASS2(INLINE_UID_FROM_FUID(FairyTapes::PillowTalk::kProcessorUID),
              PClassInfo::kManyInstances, kVstAudioEffectClass, stringPluginName,

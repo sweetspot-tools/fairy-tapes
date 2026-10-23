@@ -33,7 +33,8 @@ void exerciseFactory(FactoryFn getFactory) {
   if (!f) return;
   Steinberg::PFactoryInfo fi{};
   CHECK(f->getFactoryInfo(&fi) == Steinberg::kResultOk);
-  CHECK(std::strcmp(fi.vendor, "Fairy Tapes") == 0);
+  CHECK(std::strcmp(fi.vendor, "Sweetspot Tools") == 0);
+  CHECK(std::strcmp(fi.url, "https://github.com/sweetspot-tools/fairy-tapes") == 0);
   CHECK(f->countClasses() == 2);
   for (Steinberg::int32 i = 0; i < f->countClasses(); ++i) {
     Steinberg::PClassInfo ci{};

@@ -80,7 +80,7 @@ inline FairyTapes::Ui::BackContent makeBackContent(const Preferences& prefs, int
              "Double-click on a knob returns it to its default; Alt + double-click returns it to the recalled value (the blue mark)."};
 
   c.credits.title = "THE STRIPPER";
-  c.credits.versionLine = std::string("Version ") + kPluginVersion + "  \xC2\xB7  Fairy Tapes  \xC2\xB7  github.com/fairy-tapes";
+  c.credits.versionLine = std::string("Version ") + kPluginVersion + "  \xC2\xB7  Fairy Tapes  \xC2\xB7  github.com/sweetspot-tools";
   c.credits.licenseLines = {kLicenseLine, kLicenseLine2, kLicenseLine3};
   for (const auto& e : kCredits) c.credits.entries.push_back({e.component, e.author, e.license});
   for (const char* n : kNotices) c.credits.notices.push_back(n);

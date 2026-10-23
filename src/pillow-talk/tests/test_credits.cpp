@@ -57,6 +57,7 @@ void test_license_notice_version_and_template() {
   const FairyTapes::Ui::BackCredits c = backCredits();
   ASSERT_TRUE(c.title == "PILLOW TALK");
   ASSERT_TRUE(contains(c.versionLine, std::string("Version ") + kPluginVersion));
+  ASSERT_TRUE(contains(c.versionLine, "Fairy Tapes  \xC2\xB7  github.com/sweetspot-tools"));   // suite and publisher
   std::string license;
   for (const auto& l : c.licenseLines) license += l + "\n";
   ASSERT_TRUE(contains(license, "GNU General Public License v3.0") && contains(license, "GPL-3.0"));

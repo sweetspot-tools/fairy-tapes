@@ -140,7 +140,7 @@ struct CreditEntry {
 };
 struct BackCredits {
   std::string title;                       // the plug-in box ("PILLOW TALK")
-  std::string versionLine;                 // "Version 1.0.0  ·  Fairy Tapes  ·  github.com/fairy-tapes"
+  std::string versionLine;                 // "Version 1.0.0  ·  Fairy Tapes  ·  github.com/sweetspot-tools"
   std::vector<std::string> licenseLines;   // at most kMaxLicenseLines
   std::vector<CreditEntry> entries;        // COMPONENTS AND LICENSES
   std::vector<std::string> notices;        // at most kMaxNotices

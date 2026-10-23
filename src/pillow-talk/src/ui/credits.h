@@ -48,7 +48,7 @@ constexpr const char* kNotices[] = {
 inline FairyTapes::Ui::BackCredits backCredits() {
   FairyTapes::Ui::BackCredits c;
   c.title = "PILLOW TALK";
-  c.versionLine = std::string("Version ") + kPluginVersion + "  \xC2\xB7  Fairy Tapes  \xC2\xB7  github.com/fairy-tapes";
+  c.versionLine = std::string("Version ") + kPluginVersion + "  \xC2\xB7  Fairy Tapes  \xC2\xB7  github.com/sweetspot-tools";
   for (const char* l : kLicenseLines) c.licenseLines.emplace_back(l);
   for (const Credit& e : kCredits) c.entries.push_back({e.name, e.author, e.license});
   for (const char* n : kNotices) c.notices.emplace_back(n);

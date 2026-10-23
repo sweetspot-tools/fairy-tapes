@@ -147,6 +147,7 @@ void test_the_content_fits_the_common_template() {
   CHECK(c.items.size() == 11 && c.notes.size() == 4 && c.credits.entries.size() == static_cast<std::size_t>(kCreditCount));
   CHECK(c.headerLine == "THE STRIPPER  \xC2\xB7  CHANNEL STRIP VST3" && c.credits.title == "THE STRIPPER");
   CHECK(c.credits.licenseLines.size() == 3 && c.credits.notices.size() == 3);
+  CHECK(c.credits.versionLine.find("Fairy Tapes  \xC2\xB7  github.com/sweetspot-tools") != std::string::npos);   // suite and publisher
 }
 
 void test_rows_show_the_preferences_and_the_recall_mode() {

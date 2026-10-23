@@ -7,7 +7,7 @@
 	<key>CFBundleExecutable</key>
 	<string>${MACOSX_BUNDLE_EXECUTABLE_NAME}</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.fairytapes.pillowtalk</string>
+	<string>com.sweetspot-tools.fairytapes.pillowtalk</string>
 	<key>CFBundleName</key>
 	<string>Pillow Talk</string>
 	<key>CFBundlePackageType</key>
