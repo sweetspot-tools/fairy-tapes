@@ -6,6 +6,7 @@
 #include "fairy_ui/wear_view.h"
 
 #include "vstgui/lib/cdrawcontext.h"
+#include "vstgui/lib/cgraphicspath.h"
 
 namespace FairyTapes::Ui {
 
@@ -18,10 +19,12 @@ constexpr const char* kBrand = "FAIRY TAPES";
 constexpr const char* kBackText = "\xE2\x86\x90  BACK";
 constexpr const char* kAppearanceSubtitle = "saved for you, in every project";
 constexpr const char* kBehaviourSubtitle = "saved with the project";
+constexpr CColor kPanelInk(0x16, 0x16, 0x17);   // the back of the panel, under the switch contacts of ROUTING
 }  // namespace
 
 BackView::BackView(const CRect& size, const Skin* skin, BackContent content, Callbacks callbacks, int tab)
-: CViewContainer(size), skin_(skin), content_(std::move(content)), cb_(std::move(callbacks)) {
+: CViewContainer(size), skin_(skin), layout_(&backLayoutFor(size.getHeight())), content_(std::move(content)),
+  cb_(std::move(callbacks)) {
   setBackgroundColor(kTransparentCColor);
   titleFont_ = bold(Back::kTitleSize, kItalicFace);
   f10_ = bold(10);
@@ -61,7 +64,7 @@ void BackView::build() {
   // SETTINGS: one widget per item, in its row
   for (std::size_t i = 0; i < content_.items.size(); ++i) {
     BackItem& it = content_.items[i];
-    const CRect r = toCRect(itemControlBox(it, itemRow(content_.items, i)));
+    const CRect r = toCRect(itemControlBox(it, itemRow(content_.items, i), *layout_));
     CView* view = nullptr;
     switch (it.kind) {
     case BackItemKind::Choice: {
@@ -180,11 +183,12 @@ void BackView::drawBackgroundRect(CDrawContext* ctx, const CRect&) {
   switch (tabKind()) {
   case BackTabKind::Settings: drawSettings(ctx, o); break;
   case BackTabKind::Credits: drawCredits(ctx, o); break;
+  case BackTabKind::Routing: drawRouting(ctx, o); break;
   case BackTabKind::Custom: {
     auto it = customDrawers_.find(tab_);
     if (it != customDrawers_.end() && it->second) {
       ctx->saveGlobalState();
-      CRect area = toCRect(Back::kCustomBox);
+      CRect area = toCRect(layout_->custom);
       area.offset(o.x, o.y);
       it->second(ctx, area);
       ctx->restoreGlobalState();
@@ -197,61 +201,141 @@ void BackView::drawBackgroundRect(CDrawContext* ctx, const CRect&) {
 
 void BackView::drawSettings(CDrawContext* ctx, const CPoint& o) {
   auto box = [&](const BackBox& b) { CRect r = toCRect(b); r.offset(o.x, o.y); return r; };
-  drawTitledBox(ctx, box(Back::kAppearanceBox), "APPEARANCE", true);
-  drawTitledBox(ctx, box(Back::kBehaviourBox), "BEHAVIOUR", true);
-  const BackBox& a = Back::kAppearanceBox;
-  const BackBox& b = Back::kBehaviourBox;
-  text(ctx, kAppearanceSubtitle, o.x + a.x + a.w / 2, o.y + Back::kSubtitleBaseline, f10_, kDimWhite, 1);
-  text(ctx, kBehaviourSubtitle, o.x + b.x + b.w / 2, o.y + Back::kSubtitleBaseline, f10_, kDimWhite, 1);
+  const BackLayout& L = *layout_;
+  drawTitledBox(ctx, box(L.appearance), "APPEARANCE", true);
+  drawTitledBox(ctx, box(L.behaviour), "BEHAVIOUR", true);
+  const BackBox& a = L.appearance;
+  const BackBox& b = L.behaviour;
+  text(ctx, kAppearanceSubtitle, o.x + a.x + a.w / 2, o.y + L.subtitleBaseline, f10_, kDimWhite, 1);
+  text(ctx, kBehaviourSubtitle, o.x + b.x + b.w / 2, o.y + L.subtitleBaseline, f10_, kDimWhite, 1);
 
   for (std::size_t i = 0; i < content_.items.size(); ++i) {
     const BackItem& it = content_.items[i];
     const int row = itemRow(content_.items, i);
-    const double y = itemRowY(row);
+    const double y = itemRowY(row, L);
     const double x0 = labelX(it.column);
     text(ctx, it.label, o.x + x0, o.y + y + 16, f13_, kWhite);
     text(ctx, it.hint, o.x + x0, o.y + y + 32, f10_, kDimWhite);
     if (!it.note.empty()) {
-      const BackBox c = itemControlBox(it, row);
+      const BackBox c = itemControlBox(it, row, L);
       text(ctx, it.note, o.x + c.x + c.w + Back::kNoteGap, o.y + y + 16, f10_, kDimWhite);
     }
   }
 
-  drawTitledBox(ctx, box(Back::kNotesBox), "NOTES", true);
+  drawTitledBox(ctx, box(L.notes), "NOTES", true);
   for (std::size_t i = 0; i < content_.notes.size() && static_cast<int>(i) < Back::kMaxNotes; ++i)
-    text(ctx, content_.notes[i], o.x + Back::kNotesBox.x + Back::kLabelInset,
-         o.y + Back::kNotesFirstBaseline + Back::kNotesStep * static_cast<double>(i), f12_, kDimWhite);
+    text(ctx, content_.notes[i], o.x + L.notes.x + Back::kLabelInset,
+         o.y + L.notesFirstBaseline + L.notesStep * static_cast<double>(i), f12_, kDimWhite);
 }
 
 void BackView::drawCredits(CDrawContext* ctx, const CPoint& o) {
   auto box = [&](const BackBox& b) { CRect r = toCRect(b); r.offset(o.x, o.y); return r; };
+  const BackLayout& L = *layout_;
   const BackCredits& c = content_.credits;
   const double x = o.x + Back::kCreditNameX;
-  drawTitledBox(ctx, box(Back::kCreditsTitleBox), c.title.c_str(), true);
-  text(ctx, c.versionLine, x, o.y + Back::kVersionBaseline, f14_, kWhite);
+  drawTitledBox(ctx, box(L.creditsTitle), c.title.c_str(), true);
+  text(ctx, c.versionLine, x, o.y + L.versionBaseline, f14_, kWhite);
   for (std::size_t i = 0; i < c.licenseLines.size() && static_cast<int>(i) < Back::kMaxLicenseLines; ++i)
-    text(ctx, c.licenseLines[i], x, o.y + Back::kLicenseFirstBaseline + Back::kLicenseStep * static_cast<double>(i), f12_, kDimWhite);
+    text(ctx, c.licenseLines[i], x, o.y + L.licenseFirstBaseline + L.licenseStep * static_cast<double>(i), f12_, kDimWhite);
 
-  drawTitledBox(ctx, box(Back::kComponentsBox), "COMPONENTS AND LICENSES", true);
+  drawTitledBox(ctx, box(L.components), "COMPONENTS AND LICENSES", true);
   const int n = static_cast<int>(c.entries.size());
-  const bool compact = creditRowStep(n) < 24;   // many entries: smaller text so the rows stay apart
+  const bool compact = creditRowStep(n, L) < 24;   // many entries: smaller text so the rows stay apart
   ctx->setLineWidth(1);
   for (int i = 0; i < n; ++i) {
     const CreditEntry& e = c.entries[static_cast<std::size_t>(i)];
-    const double y = o.y + creditBaseline(i, n);
+    const double y = o.y + creditBaseline(i, n, L);
     text(ctx, e.name, x, y, compact ? f13_ : f14_, kWhite);
     text(ctx, e.author, o.x + Back::kCreditAuthorX, y, compact ? f12_ : f13_, kDimWhite);
     text(ctx, e.license, o.x + Back::kCreditLicenseRight, y, compact ? f12_ : f13_, kAmber, 2);
     if (i < n - 1) {
-      const double ly = y + creditRowStep(n) * 0.4;
+      const double ly = y + creditRowStep(n, L) * 0.4;
       ctx->setFrameColor(CColor(kDimWhite.red, kDimWhite.green, kDimWhite.blue, 64));
       ctx->drawLine(CPoint(x, ly), CPoint(o.x + Back::kCreditLicenseRight, ly));
     }
   }
 
-  drawTitledBox(ctx, box(Back::kNoticesBox), "NOTICES", true);
+  drawTitledBox(ctx, box(L.notices), "NOTICES", true);
   for (std::size_t i = 0; i < c.notices.size() && static_cast<int>(i) < Back::kMaxNotices; ++i)
-    text(ctx, c.notices[i], x, o.y + Back::kNoticesFirstBaseline + Back::kNoticesStep * static_cast<double>(i), f12_, kDimWhite);
+    text(ctx, c.notices[i], x, o.y + L.noticesFirstBaseline + L.noticesStep * static_cast<double>(i), f12_, kDimWhite);
+}
+
+// ROUTING: the plug-in's diagram in SIGNAL FLOW, the common symbols and its notes in LEGEND (docs/DESIGN_SYSTEM.md).
+void BackView::drawRouting(CDrawContext* ctx, const CPoint& o) {
+  auto box = [&](const BackBox& b) { CRect r = toCRect(b); r.offset(o.x, o.y); return r; };
+  const BackLayout& L = *layout_;
+  drawTitledBox(ctx, box(L.flow), "SIGNAL FLOW", true);
+  drawRoutingPrims(ctx, o, content_.routing.flow);
+  drawTitledBox(ctx, box(L.legend), "LEGEND", true);
+  drawRoutingPrims(ctx, o, legendDiagram(content_.routing.legend, L.legendSymbolY, L.legendNoteBaseline));
+}
+
+void BackView::drawRoutingPrims(CDrawContext* ctx, const CPoint& o, const RoutingDiagram& prims) {
+  auto ink = [](RoutingInk i) { return i == RoutingInk::Amber ? kAmber : i == RoutingInk::Dim ? kDimWhite : kWhite; };
+  auto pathOf = [&](const std::vector<RoutingPt>& pts, bool close) {
+    auto path = owned(ctx->createGraphicsPath());
+    if (path && !pts.empty()) {
+      path->beginSubpath(CPoint(o.x + pts[0].x, o.y + pts[0].y));
+      for (std::size_t k = 1; k < pts.size(); ++k) path->addLine(CPoint(o.x + pts[k].x, o.y + pts[k].y));
+      if (close) path->closeSubpath();
+    }
+    return path;
+  };
+  for (const RoutingPrim& p : prims) {
+    switch (p.kind) {
+    case RoutingPrim::Kind::Line:
+    case RoutingPrim::Kind::Polygon: {
+      const bool polygon = p.kind == RoutingPrim::Kind::Polygon;
+      auto path = pathOf(p.pts, polygon);
+      if (!path) break;
+      if (polygon && p.filled) {
+        ctx->setFillColor(kWhite);
+        ctx->drawGraphicsPath(path, CDrawContext::kPathFilled);
+        break;
+      }
+      ctx->setFrameColor(kWhite);
+      ctx->setLineWidth(p.width);
+      // dashes are in units of the line width: 6 px on, 5 px off at 2 px, as in the previews
+      ctx->setLineStyle(p.dashed ? CLineStyle(CLineStyle::kLineCapRound, CLineStyle::kLineJoinRound, 0, {3.0, 2.5})
+                                 : CLineStyle(CLineStyle::kLineCapRound, CLineStyle::kLineJoinRound));
+      ctx->drawGraphicsPath(path, CDrawContext::kPathStroked);
+      break;
+    }
+    case RoutingPrim::Kind::Circle: {
+      auto path = owned(ctx->createGraphicsPath());
+      if (!path) break;
+      path->addEllipse(CRect(o.x + p.x - p.r, o.y + p.y - p.r, o.x + p.x + p.r, o.y + p.y + p.r));
+      if (p.filled || p.panelFill) {
+        ctx->setFillColor(p.filled ? kWhite : kPanelInk);
+        ctx->drawGraphicsPath(path, CDrawContext::kPathFilled);
+      }
+      if (!p.filled) {
+        ctx->setFrameColor(kWhite);
+        ctx->setLineWidth(p.width);
+        ctx->setLineStyle(CLineStyle(CLineStyle::kLineCapRound));
+        ctx->drawGraphicsPath(path, CDrawContext::kPathStroked);
+      }
+      break;
+    }
+    case RoutingPrim::Kind::Rect: {
+      if (auto path = owned(ctx->createRoundRectGraphicsPath(CRect(o.x + p.x, o.y + p.y, o.x + p.x + p.w, o.y + p.y + p.h), 3))) {
+        ctx->setFrameColor(kWhite);
+        ctx->setLineWidth(p.width);
+        ctx->setLineStyle(CLineStyle(CLineStyle::kLineCapRound, CLineStyle::kLineJoinRound));
+        ctx->drawGraphicsPath(path, CDrawContext::kPathStroked);
+      }
+      break;
+    }
+    case RoutingPrim::Kind::Text: {
+      const int size = static_cast<int>(p.size + 0.5);
+      auto& font = routingFonts_[size];
+      if (!font) font = bold(size);
+      text(ctx, p.text, o.x + p.x, o.y + p.y, font, ink(p.ink),
+           p.align == RoutingAlign::Start ? 0 : p.align == RoutingAlign::End ? 2 : 1);
+      break;
+    }
+    }
+  }
 }
 
 } // namespace FairyTapes::Ui

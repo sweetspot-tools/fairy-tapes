@@ -1,5 +1,5 @@
 // Developer tool: draws the editor offscreen into a PNG, no host or window needed.
-//   the_stripper_render out.png [bypass] [bus] [eq-off] [nam-off] [recall] [moved] [meters] [seed=<n>] [model=<file>] [gpu] [tone3000=unconfigured|signedout|signingin|list|tone|nc|download|error|ir|busy] [model-error=<text>] [browser] [back-settings|back-buttons|back-credits]
+//   the_stripper_render out.png [bypass] [bus] [eq-off] [nam-off] [recall] [moved] [meters] [seed=<n>] [model=<file>] [gpu] [tone3000=unconfigured|signedout|signingin|list|tone|nc|download|error|ir|busy] [model-error=<text>] [browser] [back-settings|back-buttons|back-routing|back-credits]
 // Used to check the look of the code-drawn GUI on a machine without a plugin host.
 #include "controller.h"
 #include "ui/editor.h"
@@ -157,6 +157,7 @@ int main(int argc, char** argv) {
     else if (!std::strcmp(argv[i], "back-settings")) backTab = 0;
     else if (!std::strcmp(argv[i], "back-credits")) backTab = 1;
     else if (!std::strcmp(argv[i], "back-buttons")) backTab = 2;
+    else if (!std::strcmp(argv[i], "back-routing")) backTab = 3;
     else if (!std::strncmp(argv[i], "seed=", 5)) Ui::EditorPreview::setSeed(ctl, static_cast<std::uint32_t>(std::strtoul(argv[i] + 5, nullptr, 0)));
     else if (!std::strncmp(argv[i], "model=", 6)) Ui::EditorPreview::setModel(ctl, 2, argv[i] + 6, "");
     else if (!std::strcmp(argv[i], "gpu")) Ui::EditorPreview::setGpu(ctl);

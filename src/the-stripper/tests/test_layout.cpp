@@ -4,10 +4,13 @@
 
 #include "ui/layout.h"
 
+#include "fairy_ui/rack_geometry.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <set>
+#include <utility>
 #include <string>
 
 using namespace FairyTapes::TheStripper;
@@ -185,7 +188,23 @@ void test_look_tables() {
     if (look) CHECK(look->radius >= 15 && look->radius <= 26 && look->lo && look->hi);
   }
   CHECK(knobLookOf(kDriveAmount)->radius == knobLookOf(kEqSaturation)->radius);
-  CHECK(hasYellowLed(kStripMode) && hasYellowLed(kCompressorMode) && hasYellowLed(kDriveNamOn) && !hasYellowLed(kBypassEQ));
+  // exclusive choices have the name on the face (design system, 2026-10-21): a look for each, faces where the preview puts them
+  for (const auto& c : kControls)
+    if (c.kind == Kind::Choice) CHECK(choiceLookOf(c.id) != nullptr);
+  auto centre = [](Steinberg::Vst::ParamID id, int i) {
+    const ControlSpec* c = nullptr;
+    for (const auto& k : kControls) if (k.id == id) c = &k;
+    const ChoiceLook* l = choiceLookOf(id);
+    int n = 0;
+    while (n < 3 && c->choices[n]) ++n;
+    const auto f = FairyTapes::Ui::Rack::litFace(FairyTapes::Ui::Rack::litChoiceCell(c->rect.w, c->rect.h, n, l->columns, i),
+                                                 l->faceWidth, FairyTapes::Ui::Rack::kLitFaceHeight);
+    return std::pair<double, double>{c->rect.x + (f.left + f.right) / 2, c->rect.y + (f.top + f.bottom) / 2};
+  };
+  CHECK(centre(kStripMode, 0) == std::make_pair(940.0, 198.0) && centre(kStripMode, 1) == std::make_pair(940.0, 224.0));
+  CHECK(centre(kCompressorMode, 0) == std::make_pair(262.0, 498.0) && centre(kCompressorMode, 2) == std::make_pair(262.0, 550.0));
+  CHECK(centre(kDriveNamOn, 0) == std::make_pair(526.0, 490.0) && centre(kDriveNamOn, 1) == std::make_pair(566.0, 490.0));
+  CHECK(choiceLookOf(kCompressorMode)->faceWidth == 44 && choiceLookOf(kStripMode)->faceWidth == 34);
   CHECK(isBellButton(kEqLFBell) && isBellButton(kEqHFBell) && !isBellButton(kBypass));
   // the Bell filter exists only in the Black (Channel) EQ: in Bus mode the buttons are dimmed and inert, every other control stays in use
   CHECK(controlInUse(kEqLFBell, true) && controlInUse(kEqHFBell, true));

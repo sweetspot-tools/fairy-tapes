@@ -89,6 +89,7 @@ void test_back_tab() {
   CHECK(Preferences().backTab == BackTab::Settings);                       // default: SETTINGS
   CHECK(parsePreferences("backTab=Credits\n").backTab == BackTab::Credits);
   CHECK(parsePreferences("backTab=Buttons\n").backTab == BackTab::Buttons);
+  CHECK(parsePreferences("backTab=Routing\n").backTab == BackTab::Routing);
   CHECK(parsePreferences("backTab=Nonsense\n").backTab == BackTab::Settings);
   Preferences in; in.backTab = BackTab::Buttons;
   CHECK(parsePreferences(serializePreferences(in)).backTab == BackTab::Buttons);   // round trip

@@ -10,6 +10,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <string>
 #include <vector>
 
 namespace FairyTapes::Ui {
@@ -75,6 +76,29 @@ private:
   VSTGUI::CRect slot(int index) const;
   RackLed led_;
   int count_;
+  std::vector<std::vector<ControlWearMark>> wear_;
+};
+
+// Exclusive choice with the name on the face (design system, 2026-10-21): no LED, the active face lights amber. The
+// buttons sit in a grid of `columns` columns (1 = stacked, N = side by side), each face (faceWidth x
+// Rack::kLitFaceHeight) centred in its cell. The names are drawn here, on the face, because they move with it.
+class RackLitChoice : public ChoiceButtons {
+public:
+  RackLitChoice(const VSTGUI::CRect& size, VSTGUI::IControlListener* listener, int32_t tag,
+                std::vector<std::string> names, int columns, double faceWidth = Rack::kLitFaceWidth,
+                const Skin* skin = nullptr);
+
+  void setWear(std::uint32_t seed, double amount);   // every button gets its own marks
+
+  void draw(VSTGUI::CDrawContext* context) override;
+  VSTGUI::CMouseEventResult onMouseDown(VSTGUI::CPoint& where, const VSTGUI::CButtonState& buttons) override;
+  CLASS_METHODS_NOCOPY(RackLitChoice, ChoiceButtons)
+
+private:
+  VSTGUI::CRect face(int index) const;
+  std::vector<std::string> names_;
+  int columns_;
+  double faceWidth_;
   std::vector<std::vector<ControlWearMark>> wear_;
 };
 

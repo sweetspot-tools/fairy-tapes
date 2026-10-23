@@ -28,7 +28,7 @@ public:
     std::function<void()> back;               // "<- BACK"
     std::function<void(int tab)> tabChanged;  // a tab link was clicked (the plug-in may remember it)
   };
-  // Draws a custom tab inside `area` (Back::kCustomBox, editor px): the context is already in anti-aliased mode.
+  // Draws a custom tab inside `area` (the custom box of the layout, editor px): the context is already in anti-aliased mode.
   using CustomDrawer = std::function<void(VSTGUI::CDrawContext* context, const VSTGUI::CRect& area)>;
 
   BackView(const VSTGUI::CRect& size, const Skin* skin, BackContent content, Callbacks callbacks, int tab = 0);
@@ -42,6 +42,7 @@ public:
   void setWear(std::vector<WearMark> marks);
   void setCustomDrawer(int tab, CustomDrawer drawer);
   const BackContent& content() const { return content_; }
+  const BackLayout& layout() const { return *layout_; }   // tall (628) or short (470), from the height of the view
 
   void drawBackgroundRect(VSTGUI::CDrawContext* context, const VSTGUI::CRect& updateRect) override;
   VSTGUI::CMouseEventResult onMouseDown(VSTGUI::CPoint& where, const VSTGUI::CButtonState& buttons) override;
@@ -53,11 +54,14 @@ private:
   void build();
   void drawSettings(VSTGUI::CDrawContext* ctx, const VSTGUI::CPoint& o);
   void drawCredits(VSTGUI::CDrawContext* ctx, const VSTGUI::CPoint& o);
+  void drawRouting(VSTGUI::CDrawContext* ctx, const VSTGUI::CPoint& o);
+  void drawRoutingPrims(VSTGUI::CDrawContext* ctx, const VSTGUI::CPoint& o, const RoutingDiagram& prims);
   void text(VSTGUI::CDrawContext* ctx, const std::string& s, double x, double baseline, VSTGUI::CFontDesc* font,
             const VSTGUI::CColor& colour, int align = 0);   // align: 0 left, 1 centre, 2 right
   BackTabKind tabKind() const;
 
   const Skin* skin_;
+  const BackLayout* layout_;
   BackContent content_;
   Callbacks cb_;
   int tab_ = 0;
@@ -66,6 +70,7 @@ private:
   std::vector<VSTGUI::CView*> itemViews_;   // one per content_.items entry, owned by this container
   std::map<int, CustomDrawer> customDrawers_;
   VSTGUI::SharedPointer<VSTGUI::CFontDesc> titleFont_, f10_, f11_, f12_, f13_, f14_;   // all bold, as in the previews
+  std::map<int, VSTGUI::SharedPointer<VSTGUI::CFontDesc>> routingFonts_;               // by size, for the diagram
 };
 
 } // namespace FairyTapes::Ui

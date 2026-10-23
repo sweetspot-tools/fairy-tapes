@@ -28,7 +28,7 @@ using WearLevel = FairyTapes::Ui::WearLevel;   // shared with the other plug-ins
 enum class NotesLevel { Hide, Show };
 enum class TapeFont { Zeyada, RockSalt, HomemadeApple };
 enum class ValuesFont { Standard, Tape };
-enum class BackTab { Settings, Credits, Buttons };   // the tab of the back panel the user looked at last
+enum class BackTab { Settings, Credits, Buttons, Routing };   // the tab of the back panel the user looked at last
 
 constexpr double kMaxMeterHoldSeconds = 10.0;
 constexpr double kMinMeterReleaseDbPerSec = 5.0;
@@ -73,7 +73,9 @@ inline const char* name(WearLevel v) { return v == WearLevel::Off ? "Off" : v ==
 inline const char* name(NotesLevel v) { return v == NotesLevel::Hide ? "Hide" : "Show"; }
 inline const char* name(TapeFont v) { return v == TapeFont::RockSalt ? "RockSalt" : v == TapeFont::HomemadeApple ? "HomemadeApple" : "Zeyada"; }
 inline const char* name(ValuesFont v) { return v == ValuesFont::Standard ? "Standard" : "Tape"; }
-inline const char* name(BackTab v) { return v == BackTab::Credits ? "Credits" : v == BackTab::Buttons ? "Buttons" : "Settings"; }
+inline const char* name(BackTab v) {
+  return v == BackTab::Credits ? "Credits" : v == BackTab::Buttons ? "Buttons" : v == BackTab::Routing ? "Routing" : "Settings";
+}
 
 inline bool usableFolder(const std::string& f) {
   return !f.empty() && f.size() <= kMaxFolderBytes && f.find_first_of(std::string("\n\r\0", 3)) == std::string::npos;
@@ -111,6 +113,7 @@ inline Preferences parsePreferences(const std::string& text) {
       if (value == "Settings") p.backTab = BackTab::Settings;
       else if (value == "Credits") p.backTab = BackTab::Credits;
       else if (value == "Buttons") p.backTab = BackTab::Buttons;
+      else if (value == "Routing") p.backTab = BackTab::Routing;
     } else if (key == "meterHoldSeconds") {
       if (parseDouble(value, d)) p.meterHoldSeconds = std::clamp(d, 0.0, kMaxMeterHoldSeconds);
     } else if (key == "meterReleaseDbPerSec") {

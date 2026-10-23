@@ -8,6 +8,7 @@
 #pragma once
 
 #include "ui/back_panel.h"
+#include "ui/routing_diagram.h"
 
 #include "fairy_ui/back_panel.h"
 
@@ -33,7 +34,9 @@ inline FairyTapes::Ui::BackContent makeBackContent(const Preferences& prefs, int
   using namespace FairyTapes::Ui;
   BackContent c;
   c.headerLine = "THE STRIPPER  \xC2\xB7  CHANNEL STRIP VST3";
-  c.tabs = {{"SETTINGS", BackTabKind::Settings}, {"BUTTONS", BackTabKind::Custom}, {"CREDITS", BackTabKind::Credits}};
+  c.tabs = {{"SETTINGS", BackTabKind::Settings}, {"BUTTONS", BackTabKind::Custom}, {"ROUTING", BackTabKind::Routing},
+            {"CREDITS", BackTabKind::Credits}};
+  c.routing = stripperRouting();
 
   auto prefChange = [act](void (*set)(Preferences&, int)) {
     return [act, set](int i) {

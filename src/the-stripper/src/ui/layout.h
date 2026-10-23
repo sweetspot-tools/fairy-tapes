@@ -41,9 +41,9 @@ constexpr BoxSpec kBoxes[] = {
     {{416, 92, 368, 170}, "LEVEL", false, Module::Level},
     {{790, 92, 186, 170}, "OUTPUT", false, Module::Output},
     {{24, 282, 952, 150}, "EQUALISER", true, Module::Eq},
-    {{24, 452, 372, 146}, "COMPRESSION", false, Module::Comp},
-    {{402, 452, 300, 146}, "DRIVE", false, Module::Drive},
-    {{708, 452, 132, 146}, "LIMITER", false, Module::Limiter},
+    {{24, 452, 342, 146}, "COMPRESSION", false, Module::Comp},
+    {{372, 452, 300, 146}, "DRIVE", false, Module::Drive},
+    {{678, 452, 162, 146}, "LIMITER", false, Module::Limiter},
     {{846, 452, 130, 146}, "GATE", false, Module::Gate},
 };
 
@@ -75,9 +75,9 @@ constexpr ControlSpec kControls[] = {
     {kEqHPFFreq, Kind::Knob, Module::Filters, knob(233, 168), "HIGH PASS", false, false, {}},
     {kEqLPFFreq, Kind::Knob, Module::Filters, knob(337, 168), "LOW PASS", false, false, {}},
     {kBypassLPHP, Kind::Toggle, Module::Filters, button(382, 130), "IN", true, true, {}},   // one IN for both filters
-    {kOutputGain, Kind::Knob, Module::Output, knob(842, 168), "GAIN", false, false, {}},
+    {kOutputGain, Kind::Knob, Module::Output, knob(854, 168), "GAIN", false, false, {}},
     {kBypass, Kind::Toggle, Module::None, button(940, 130), "BYPASS", false, false, {}},
-    {kStripMode, Kind::Choice, Module::Output, button(930, 220, 84), nullptr, false, false, {"CHAN", "BUS"}},
+    {kStripMode, Kind::Choice, Module::Output, {923, 185, 34, 52}, nullptr, false, false, {"CHAN", "BUS"}},   // stacked
     // Equaliser
     {kEqLFGain, Kind::Knob, Module::Eq, knob(134, 352), "GAIN", false, false, {}},
     {kEqLFFreq, Kind::Knob, Module::Eq, knob(216, 352), "FREQ", false, false, {}},
@@ -93,19 +93,19 @@ constexpr ControlSpec kControls[] = {
     {kEqHFBell, Kind::Toggle, Module::Eq, button(887, 306, 26, 18), nullptr, false, false, {}},
     {kBypassEQ, Kind::Toggle, Module::Eq, button(940, 320), "IN", true, true, {}},
     // Compression
-    {kCompressAmount, Kind::Knob, Module::Comp, knob(86, 520), "AMOUNT", false, false, {}},
+    {kCompressAmount, Kind::Knob, Module::Comp, knob(80, 520), "AMOUNT", false, false, {}},
     {kCompressMix, Kind::Knob, Module::Comp, knob(170, 520), "MIX", false, false, {}},
-    {kCompressorMode, Kind::Choice, Module::Comp, button(312, 556, 144), nullptr, false, false,
-     {"VOICE", "DRUMS", "CLASSIC"}},
-    {kBypassCompression, Kind::Toggle, Module::Comp, button(360, 490), "IN", true, true, {}},
+    {kCompressorMode, Kind::Choice, Module::Comp, {240, 485, 44, 78}, nullptr, false, false,
+     {"VOICE", "DRUMS", "CLASSIC"}},   // stacked beside the knobs, away from the IN
+    {kBypassCompression, Kind::Toggle, Module::Comp, button(330, 490), "IN", true, true, {}},
     // Drive, Limiter, Gate
-    {kDriveAmount, Kind::Knob, Module::Drive, knob(458, 520), "DRIVE", false, false, {}},
+    {kDriveAmount, Kind::Knob, Module::Drive, knob(428, 520), "DRIVE", false, false, {}},
     // The same knob shows the 4K saturation amount when the NAM switch is off (the swap is not visible).
-    {kEqSaturation, Kind::Knob, Module::Drive, knob(458, 520), "DRIVE", false, false, {}, true},
+    {kEqSaturation, Kind::Knob, Module::Drive, knob(428, 520), "DRIVE", false, false, {}, true},
     // Two exclusive buttons like the other presets: NAM (left) / 4K (right). Parameter 1 = NAM, hence inverted.
-    {kDriveNamOn, Kind::Choice, Module::Drive, button(606, 490, 84), nullptr, false, true, {"NAM", "4K"}},
-    {kBypassDrive, Kind::Toggle, Module::Drive, button(666, 490), "IN", true, true, {}},
-    {kLimiterPound, Kind::Knob, Module::Limiter, knob(766, 520), "POUND", false, false, {}},
+    {kDriveNamOn, Kind::Choice, Module::Drive, {506, 480, 80, 20}, nullptr, false, true, {"NAM", "4K"}},   // detached from the IN
+    {kBypassDrive, Kind::Toggle, Module::Drive, button(636, 490), "IN", true, true, {}},
+    {kLimiterPound, Kind::Knob, Module::Limiter, knob(752, 520), "POUND", false, false, {}},
     {kBypassLimiter, Kind::Toggle, Module::Limiter, button(811, 490), "IN", true, true, {}},
     {kGateThreshold, Kind::Knob, Module::Gate, knob(903, 520), "THRESH", false, false, {}},
     {kBypassGate, Kind::Toggle, Module::Gate, button(947, 490), "IN", true, true, {}},
@@ -132,8 +132,19 @@ inline const KnobLook* knobLookOf(Steinberg::Vst::ParamID id) {
     if (k.id == id) return &k;
   return nullptr;
 }
-// Mode selectors (Chan/Bus, Voice/Drums/Classic, NAM/4K) have a yellow LED; every other button a red one.
-inline bool hasYellowLed(Steinberg::Vst::ParamID id) { return id == kStripMode || id == kCompressorMode || id == kDriveNamOn; }
+// Exclusive choices (Chan/Bus, Voice/Drums/Classic, NAM/4K) carry the name on the face, which lights amber on the
+// active one (design system, 2026-10-21): the control rect is the whole group, a grid of `columns` columns.
+struct ChoiceLook {
+  Steinberg::Vst::ParamID id;
+  int columns;
+  double faceWidth;
+};
+constexpr ChoiceLook kChoiceLooks[] = {{kStripMode, 1, 34}, {kCompressorMode, 1, 44}, {kDriveNamOn, 2, 34}};
+inline const ChoiceLook* choiceLookOf(Steinberg::Vst::ParamID id) {
+  for (const auto& c : kChoiceLooks)
+    if (c.id == id) return &c;
+  return nullptr;
+}
 // The two Bell buttons show a bell icon on an amber face instead of a label and an LED.
 inline bool isBellButton(Steinberg::Vst::ParamID id) { return id == kEqLFBell || id == kEqHFBell; }
 // Height added under a button face for its LED (the view is taller than the face; the layout rect is the face).
@@ -220,7 +231,7 @@ inline const char* blockTag(Module m, bool channelMode, double compressorMode, b
 inline bool meterDimmed(bool alwaysLit, bool globalBypass) { return globalBypass && !alwaysLit; }
 
 // Paper tape with the model name, bottom right of the Drive box (a click opens the model picker).
-constexpr Rect kModelStrip = {508, 546, 174, 28};
+constexpr Rect kModelStrip = {478, 546, 174, 28};
 
 inline const ControlSpec* inButtonOf(Module m) {
   for (const auto& c : kControls)

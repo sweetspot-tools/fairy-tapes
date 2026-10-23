@@ -50,4 +50,39 @@ constexpr double kLedRadius = 3.4;
 constexpr double kLabelOffsetY = -17;   // label baseline above the face centre (11 px bold)
 constexpr double kPressDepth = 1.5;     // the face sinks this much when the button is lit
 
+// ---- Face-lit exclusive choice (design system, 2026-10-21) ----------------------------------------------------------
+// The name is on the face, there is no LED, the active face lights amber. The buttons of a group sit in a grid of
+// equal cells (row-major); each face is centred in its cell.
+constexpr double kLitFaceWidth = 34, kLitFaceHeight = 20;   // preview default; wider faces for longer names
+constexpr double kLitTextSize = 9;                          // bold, centred
+constexpr double kLitTextBaseline = 3.5;                    // below the face centre
+
+struct Box {
+  double left, top, right, bottom;
+};
+
+inline int litRows(int count, int columns) { return columns > 0 ? (count + columns - 1) / columns : 0; }
+
+// Cell `index` of a group of `count` buttons in `columns` columns, in a view of w x h (view coordinates from 0).
+inline Box litChoiceCell(double w, double h, int count, int columns, int index) {
+  const int rows = litRows(count, columns);
+  if (rows <= 0) return {0, 0, 0, 0};
+  const double cw = w / columns, ch = h / rows;
+  const int col = index % columns, row = index / columns;
+  return {col * cw, row * ch, (col + 1) * cw, (row + 1) * ch};
+}
+
+inline Box litFace(const Box& cell, double faceW, double faceH) {
+  const double cx = (cell.left + cell.right) / 2, cy = (cell.top + cell.bottom) / 2;
+  return {cx - faceW / 2, cy - faceH / 2, cx + faceW / 2, cy + faceH / 2};
+}
+
+// Index of the button whose cell holds (x, y), or -1 (outside the view, or an empty cell of an incomplete grid).
+inline int litChoiceHit(double w, double h, int count, int columns, double x, double y) {
+  const int rows = litRows(count, columns);
+  if (count <= 0 || rows <= 0 || x < 0 || y < 0 || x >= w || y >= h) return -1;
+  const int index = static_cast<int>(y / (h / rows)) * columns + static_cast<int>(x / (w / columns));
+  return index < count ? index : -1;
+}
+
 }  // namespace FairyTapes::Ui::Rack

@@ -57,6 +57,10 @@ target_link_libraries(fairy_ui_screw_tests PRIVATE fairy_ui)
 add_test(NAME fairy_ui_screw_tests COMMAND fairy_ui_screw_tests)
 
 # The back of the panel (SETTINGS, CREDITS, ...): the fixed template, the plug-in's items and credits, hit tests, wrapping.
+add_executable(fairy_ui_routing_tests tests/test_routing.cpp)
+target_link_libraries(fairy_ui_routing_tests PRIVATE fairy_ui)
+add_test(NAME fairy_ui_routing_tests COMMAND fairy_ui_routing_tests)
+
 add_executable(fairy_ui_back_panel_tests tests/test_back_panel.cpp)
 target_link_libraries(fairy_ui_back_panel_tests PRIVATE fairy_ui)
 add_test(NAME fairy_ui_back_panel_tests COMMAND fairy_ui_back_panel_tests)

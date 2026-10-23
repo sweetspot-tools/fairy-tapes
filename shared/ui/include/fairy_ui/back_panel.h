@@ -10,9 +10,13 @@
  *
  * Header-only and free of VSTGUI so it is unit tested (tests/test_back_panel.cpp). Generalised from The Stripper's back
  * (src/the-stripper/src/ui/back_panel.h, back_view.cpp): same geometry, word wrapping ported as is. All visible text is
- * English. Coordinates are editor px of the 1000 x 628 rack panel.
+ * English. Coordinates are editor px of the rack panel: 1000 x 628 (Back::kTall, the constants below) or 1000 x 470
+ * (Back::kShort, Pillow Talk since 2026-10-21: the same template with lower boxes). BackView picks the layout from its
+ * height (backLayoutFor). Every back has a ROUTING tab (2026-10-23): the diagram comes from the plug-in (fairy_ui/routing.h).
  */
 #pragma once
+
+#include "fairy_ui/routing.h"
 
 #include <algorithm>
 #include <cmath>
@@ -61,7 +65,47 @@ constexpr BackBox kNoticesBox{24, 522, 952, 88};
 constexpr double kNoticesFirstBaseline = 556, kNoticesStep = 21;
 constexpr int kMaxNotices = 3;
 constexpr BackBox kCustomBox{24, 102, 952, 508};                          // a custom tab (e.g. BUTTONS) gets this area
+constexpr BackBox kFlowBox{24, 102, 952, 388}, kLegendBox{24, 508, 952, 102};   // ROUTING: SIGNAL FLOW and LEGEND
+constexpr double kLegendSymbolY = 552, kLegendNoteBaseline = 592;
 } // namespace Back
+
+// The vertical layout of the template for one panel height (the horizontal one never changes).
+struct BackLayout {
+  double height;
+  BackBox appearance, behaviour, notes;
+  double subtitleBaseline, firstRowY, rowStep;
+  int maxRows;
+  double notesFirstBaseline, notesStep;
+  BackBox creditsTitle;
+  double versionBaseline, licenseFirstBaseline, licenseStep;
+  BackBox components;
+  double creditFirstBaseline, creditMaxStep, creditLastBaseline;
+  BackBox notices;
+  double noticesFirstBaseline, noticesStep;
+  BackBox custom, flow, legend;
+  double legendSymbolY, legendNoteBaseline;
+};
+
+namespace Back {
+// 1000 x 628 (stripper_rack.html)
+constexpr BackLayout kTall{kHeight,
+                           kAppearanceBox, kBehaviourBox, kNotesBox,
+                           kSubtitleBaseline, kFirstRowY, kRowStep, kMaxRows, kNotesFirstBaseline, kNotesStep,
+                           kCreditsTitleBox, kVersionBaseline, kLicenseFirstBaseline, kLicenseStep,
+                           kComponentsBox, kCreditFirstBaseline, kCreditMaxStep, kCreditLastBaseline,
+                           kNoticesBox, kNoticesFirstBaseline, kNoticesStep,
+                           kCustomBox, kFlowBox, kLegendBox, kLegendSymbolY, kLegendNoteBaseline};
+// 1000 x 470 (pillow_rack.html, 2026-10-21): CREDITS with rows of 22 px, SETTINGS with a row every 40 px, NOTES under them
+constexpr BackLayout kShort{470,
+                            {24, 102, 462, 234}, {514, 102, 462, 234}, {24, 350, 952, 98},
+                            130, 140, 40, 5, 376, 18,
+                            {24, 102, 952, 92}, 132, 150, 16,
+                            {24, 210, 952, 140}, 238, 22, 330,
+                            {24, 366, 952, 82}, 394, 18,
+                            {24, 102, 952, 346}, {24, 102, 952, 250}, {24, 366, 952, 82}, 398, 434};
+} // namespace Back
+
+inline const BackLayout& backLayoutFor(double panelHeight) { return panelHeight < 550 ? Back::kShort : Back::kTall; }
 
 // The link of tab `index` of `count` (right-aligned text), and "<- BACK" at the right edge.
 inline BackBox tabLinkBox(int index, int count) {
@@ -129,7 +173,7 @@ inline BackItem buttonItem(int key, BackColumn column, std::string label, std::s
   return it;
 }
 
-enum class BackTabKind { Settings, Credits, Custom };
+enum class BackTabKind { Settings, Credits, Routing, Custom };
 struct BackTab {
   std::string label;   // "SETTINGS", "CREDITS", "BUTTONS", ... (also the big title when active)
   BackTabKind kind = BackTabKind::Custom;
@@ -152,12 +196,15 @@ struct BackContent {
   std::vector<BackItem> items;         // in row order within each column
   std::vector<std::string> notes;      // NOTES box of SETTINGS, at most kMaxNotes
   BackCredits credits;
+  BackRouting routing;                 // the ROUTING tab: SIGNAL FLOW and LEGEND
 };
 
 // ---- Geometry of the items ---------------------------------------------------------------------------------------
-inline const BackBox& columnBox(BackColumn c) { return c == BackColumn::Behaviour ? Back::kBehaviourBox : Back::kAppearanceBox; }
+inline const BackBox& columnBox(BackColumn c, const BackLayout& L = Back::kTall) {
+  return c == BackColumn::Behaviour ? L.behaviour : L.appearance;
+}
 inline double labelX(BackColumn c) { return columnBox(c).x + Back::kLabelInset; }
-inline double itemRowY(int row) { return Back::kFirstRowY + Back::kRowStep * row; }
+inline double itemRowY(int row, const BackLayout& L = Back::kTall) { return L.firstRowY + L.rowStep * row; }
 
 // The row of items[index] within its column (items are laid out in order, one row each).
 inline int itemRow(const std::vector<BackItem>& items, std::size_t index) {
@@ -175,8 +222,8 @@ inline double itemControlWidth(const BackItem& it) {
   }
   return 0;
 }
-inline BackBox itemControlBox(const BackItem& it, int row) {
-  return {columnBox(it.column).x + Back::kControlInset, itemRowY(row), itemControlWidth(it), Back::kRowHeight};
+inline BackBox itemControlBox(const BackItem& it, int row, const BackLayout& L = Back::kTall) {
+  return {columnBox(it.column, L).x + Back::kControlInset, itemRowY(row, L), itemControlWidth(it), Back::kRowHeight};
 }
 
 // ---- Hit tests -------------------------------------------------------------------------------------------------------
@@ -197,11 +244,13 @@ inline int wrapIndex(int current, int delta, int count) { return count > 0 ? ((c
 inline int clampIndex(int i, int count) { return count > 0 ? std::clamp(i, 0, count - 1) : 0; }
 
 // ---- Credits -----------------------------------------------------------------------------------------------------------
-inline double creditRowStep(int count) {
-  if (count <= 1) return Back::kCreditMaxStep;
-  return std::min(Back::kCreditMaxStep, (Back::kCreditLastBaseline - Back::kCreditFirstBaseline) / (count - 1));
+inline double creditRowStep(int count, const BackLayout& L = Back::kTall) {
+  if (count <= 1) return L.creditMaxStep;
+  return std::min(L.creditMaxStep, (L.creditLastBaseline - L.creditFirstBaseline) / (count - 1));
 }
-inline double creditBaseline(int index, int count) { return Back::kCreditFirstBaseline + creditRowStep(count) * index; }
+inline double creditBaseline(int index, int count, const BackLayout& L = Back::kTall) {
+  return L.creditFirstBaseline + creditRowStep(count, L) * index;
+}
 
 // ---- Lookup --------------------------------------------------------------------------------------------------------
 inline int findItem(const BackContent& c, int key) {
@@ -217,11 +266,23 @@ inline int tabIndexOf(const BackContent& c, BackTabKind kind) {
 
 // What is wrong with the content for the template (empty = fine): mandatory tabs, rows and controls inside their box,
 // unique keys, valid selections, complete credits, line counts. Plug-ins check their content in a unit test.
-inline std::vector<std::string> backContentProblems(const BackContent& c) {
+inline std::vector<std::string> backContentProblems(const BackContent& c, const BackLayout& L = Back::kTall) {
   std::vector<std::string> out;
   if (c.tabs.empty() || static_cast<int>(c.tabs.size()) > Back::kMaxTabs) out.push_back("tabs: 1 to 4 tabs");
   if (tabIndexOf(c, BackTabKind::Settings) < 0) out.push_back("tabs: no SETTINGS tab");
   if (tabIndexOf(c, BackTabKind::Credits) < 0) out.push_back("tabs: no CREDITS tab");
+  if (tabIndexOf(c, BackTabKind::Routing) < 0) out.push_back("tabs: no ROUTING tab");
+  if (c.routing.flow.empty()) out.push_back("routing: no diagram");
+  for (const RoutingPrim& p : c.routing.flow) {   // the diagram stays inside SIGNAL FLOW (text: by its anchor)
+    double x0, y0, x1, y1;
+    routingExtent(p, x0, y0, x1, y1);
+    if (x0 < L.flow.x || x1 > L.flow.x + L.flow.w || y0 < L.flow.y - 8 || y1 > L.flow.y + L.flow.h) {
+      out.push_back("routing: a mark leaves the SIGNAL FLOW box");
+      break;
+    }
+  }
+  if (c.routing.legend.symbols.empty()) out.push_back("routing: empty legend");
+  if (c.routing.legend.notes.size() > 2) out.push_back("routing: more than 2 legend notes");
   for (const BackTab& t : c.tabs)
     if (t.label.empty()) out.push_back("tabs: a tab without a label");
   std::set<int> keys;
@@ -234,8 +295,8 @@ inline std::vector<std::string> backContentProblems(const BackContent& c) {
     else if (it.kind != BackItemKind::Button && (it.selected < 0 || it.selected >= static_cast<int>(it.options.size())))
       out.push_back(name + ": selected out of range");
     const int row = itemRow(c.items, i);
-    if (row >= Back::kMaxRows) out.push_back(name + ": too many rows in the column");
-    const BackBox b = itemControlBox(it, row), col = columnBox(it.column);
+    if (row >= L.maxRows) out.push_back(name + ": too many rows in the column");
+    const BackBox b = itemControlBox(it, row, L), col = columnBox(it.column, L);
     if (b.x + b.w > col.x + col.w - 10 || b.y + b.h > col.y + col.h - 8) out.push_back(name + ": the control leaves its box");
   }
   if (static_cast<int>(c.notes.size()) > Back::kMaxNotes) out.push_back("notes: more than 4 lines");

@@ -31,7 +31,7 @@ bool hasProblem(const BackContent& c, const std::string& needle) {
 BackContent sample() {
   BackContent c;
   c.headerLine = "SAMPLE  \xC2\xB7  TEST VST3";
-  c.tabs = {{"SETTINGS", BackTabKind::Settings}, {"CREDITS", BackTabKind::Credits}};
+  c.tabs = {{"SETTINGS", BackTabKind::Settings}, {"ROUTING", BackTabKind::Routing}, {"CREDITS", BackTabKind::Credits}};
   c.items.push_back(choiceItem(1, BackColumn::Appearance, "WEAR", "", {"OFF", "LIGHT", "HEAVY"}, 1));
   c.items.push_back(toggleItem(2, BackColumn::Appearance, "NOTES LAYER", "marks", "HIDE", "SHOW", true));
   c.items.push_back(stepperItem(3, BackColumn::Appearance, "TAPE FONT", "handwriting", {"Zeyada", "Rock Salt", "Homemade Apple"}, 0, true));
@@ -43,6 +43,12 @@ BackContent sample() {
   c.credits.licenseLines = {"GPL-3.0"};
   c.credits.entries = {{"VST 3 SDK", "Steinberg Media Technologies", "MIT"}, {"VSTGUI", "Steinberg Media Technologies", "BSD-3-Clause"}};
   c.credits.notices = {"VST is a trademark of Steinberg Media Technologies GmbH."};
+  RoutingBuilder r;
+  r.jack(60, 200, "IN L \xC2\xB7 R");
+  r.ln("M69 200 H194");
+  r.block(194, 304, 200, 48, "FILTERS", {"HP \xC2\xB7 LP"});
+  c.routing.flow = r.take();
+  c.routing.legend.symbols = {LegendSymbol::Module, LegendSymbol::Jack};
   return c;
 }
 
@@ -107,6 +113,47 @@ void test_problems_are_reported() {
   CHECK(hasProblem(c, "notes"));
 }
 
+void test_routing_is_mandatory_and_inside_its_box() {
+  BackContent c = sample();
+  CHECK(backContentProblems(c).empty());
+  c.tabs.erase(c.tabs.begin() + 1);
+  CHECK(hasProblem(c, "ROUTING"));
+  c = sample();
+  c.routing.flow.clear();
+  CHECK(hasProblem(c, "routing: no diagram"));
+  c = sample();
+  RoutingBuilder r;
+  r.ln("M60 200 H990");   // past the right border of SIGNAL FLOW
+  c.routing.flow = r.take();
+  CHECK(hasProblem(c, "leaves the SIGNAL FLOW"));
+  c = sample();
+  c.routing.legend.notes = {"a", "b", "c"};
+  CHECK(hasProblem(c, "legend notes"));
+}
+
+void test_short_layout_is_the_pillow_talk_back() {
+  // 1000 x 470 (pillow_rack.html, 2026-10-21): the same template with lower boxes
+  CHECK(&backLayoutFor(470) == &Back::kShort && &backLayoutFor(628) == &Back::kTall);
+  const BackLayout& L = Back::kShort;
+  CHECK(itemRowY(0, L) == 140 && itemRowY(4, L) == 300 && L.maxRows == 5);
+  CHECK(L.appearance.y + L.appearance.h == 336 && L.notes.y == 350 && L.notes.y + L.notes.h <= 470 - 20);
+  CHECK(creditBaseline(0, 5, L) == 238 && creditBaseline(4, 5, L) == 326);   // rows of 22 px
+  CHECK(L.components.y + L.components.h <= L.notices.y && L.notices.y + L.notices.h <= 470 - 20);
+  CHECK(L.flow.y + L.flow.h <= L.legend.y && L.legend.y + L.legend.h <= 470 - 20);
+  for (const BackBox& b : {L.appearance, L.behaviour, L.notes, L.creditsTitle, L.components, L.notices, L.custom, L.flow, L.legend})
+    CHECK(b.y >= 102 && b.y + b.h <= 450);
+  // five rows per column fit, a sixth does not
+  BackContent c = sample();
+  for (int k = 0; k < 2; ++k) c.items.push_back(buttonItem(10 + k, BackColumn::Appearance, "X", "GO", ""));
+  bool tooMany = false;
+  for (const auto& p : backContentProblems(c, L)) tooMany = tooMany || p.find("too many rows") != std::string::npos;
+  CHECK(tooMany);   // six rows in APPEARANCE
+  c.items.pop_back();
+  for (const auto& p : backContentProblems(c, L)) CHECK(p.find("too many rows") == std::string::npos);
+  // the tall layout is the template of the constants
+  CHECK(Back::kTall.firstRowY == Back::kFirstRowY && Back::kTall.flow.h == 388 && Back::kTall.legend.y == 508);
+}
+
 void test_credit_rows_fit_the_box() {
   CHECK(creditRowStep(5) == 30);                      // the preview: 5 rows, 30 px apart
   CHECK(creditBaseline(0, 5) == 284 && creditBaseline(4, 5) == 404);
@@ -129,7 +176,7 @@ void test_hit_tests() {
 void test_lookup() {
   const BackContent c = sample();
   CHECK(findItem(c, 3) == 2 && findItem(c, 99) == -1);
-  CHECK(tabIndexOf(c, BackTabKind::Credits) == 1 && tabIndexOf(c, BackTabKind::Custom) == -1);
+  CHECK(tabIndexOf(c, BackTabKind::Credits) == 2 && tabIndexOf(c, BackTabKind::Routing) == 1 && tabIndexOf(c, BackTabKind::Custom) == -1);
   CHECK(toggleItem(9, BackColumn::Behaviour, "X", "", "OFF", "ON", true).selected == 1);
   CHECK(buttonItem(9, BackColumn::Behaviour, "X", "GO", "").options.size() == 1);
 }
@@ -166,6 +213,8 @@ int main() {
   test_header_links_follow_the_template();
   test_rows_and_controls_stay_in_their_column();
   test_problems_are_reported();
+  test_routing_is_mandatory_and_inside_its_box();
+  test_short_layout_is_the_pillow_talk_back();
   test_credit_rows_fit_the_box();
   test_hit_tests();
   test_lookup();

@@ -131,9 +131,10 @@ void test_meter_options() {
 }
 
 void test_tabs() {
-  // the preference stores a BackTab, the common view an index: the order shown is SETTINGS, BUTTONS, CREDITS
-  CHECK(backTabIndex(BackTab::Settings) == 0 && backTabIndex(BackTab::Buttons) == 1 && backTabIndex(BackTab::Credits) == 2);
-  for (BackTab t : {BackTab::Settings, BackTab::Buttons, BackTab::Credits}) CHECK(backTabOfIndex(backTabIndex(t)) == t);
+  // the preference stores a BackTab, the common view an index: the order shown is SETTINGS, BUTTONS, ROUTING, CREDITS
+  CHECK(backTabIndex(BackTab::Settings) == 0 && backTabIndex(BackTab::Buttons) == 1 && backTabIndex(BackTab::Routing) == 2 &&
+        backTabIndex(BackTab::Credits) == 3);
+  for (BackTab t : {BackTab::Settings, BackTab::Buttons, BackTab::Routing, BackTab::Credits}) CHECK(backTabOfIndex(backTabIndex(t)) == t);
   CHECK(backTabOfIndex(-5) == BackTab::Settings && backTabOfIndex(99) == BackTab::Credits);   // out of range: the nearest tab
 }
 
@@ -145,7 +146,9 @@ void test_the_content_fits_the_common_template() {
   for (const auto& pr : problems) std::fprintf(stderr, "  content problem: %s\n", pr.c_str());
   CHECK(problems.empty());
   const auto c = content(Preferences{});
-  CHECK(c.tabs.size() == 3 && c.tabs[0].label == "SETTINGS" && c.tabs[1].label == "BUTTONS" && c.tabs[2].label == "CREDITS");
+  CHECK(c.tabs.size() == 4 && c.tabs[0].label == "SETTINGS" && c.tabs[1].label == "BUTTONS" && c.tabs[2].label == "ROUTING" &&
+        c.tabs[3].label == "CREDITS");
+  CHECK(c.tabs[2].kind == FairyTapes::Ui::BackTabKind::Routing && !c.routing.flow.empty());   // the diagram of the preview
   CHECK(c.tabs[1].kind == FairyTapes::Ui::BackTabKind::Custom);                                   // the BUTTONS tab is drawn by the editor
   CHECK(c.items.size() == 12 && c.notes.size() == 4 && c.credits.entries.size() == static_cast<std::size_t>(kCreditCount));
   CHECK(c.headerLine == "THE STRIPPER  \xC2\xB7  CHANNEL STRIP VST3" && c.credits.title == "THE STRIPPER");

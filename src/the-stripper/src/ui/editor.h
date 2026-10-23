@@ -48,7 +48,6 @@ namespace FairyTapes::TheStripper::Ui {
 class ModelBrowser;
 class ModelStrip;
 class RecallMarksView;
-class GpuChipView;
 class TapePieceView;
 
 class Editor : public Steinberg::Vst::VSTGUIEditor,
@@ -137,7 +136,6 @@ private:
   const ControlSpec* valueEditSpec_ = nullptr;
   VSTGUI::CTextEdit* tapeEdit_ = nullptr;                // the open text field, owned by the frame
   int tapeEditIndex_ = -1;
-  GpuChipView* gpuChip_ = nullptr;         // on the NAM button while the model runs on the GPU; owned by the frame
   bool modelGpu_ = false;
   std::string stripTip_;                   // the hint on the model strip (setTooltipText keeps the pointer)
   ModelStrip* strip_ = nullptr;            // owned by the frame
