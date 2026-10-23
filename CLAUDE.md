@@ -58,3 +58,4 @@ Le regole visive condivise sono in **`docs/DESIGN_SYSTEM.md`** (pannello rack, l
 - Happy Ending (mastering): spec `docs/superpowers/specs/2026-10-21-happy-ending-design.md`, preview `src/happy-ending/docs/mockups/happy_ending_rack.html`.
 - Pagina con tutte le preview: `docs/mockups/index.html` (da un server locale con radice nel repo).
 - Componenti condivisi: `shared/gpu_nam`, `shared/nam_drive`, `shared/inflator`.
+- Marchio (logo, avatar, favicon): non sta in questo repo ma in `sweetspot-tools/brand` (licenza CC BY-ND 4.0, separata dalla GPL del codice), cartella `fairy-tapes/` con il generatore; copia locale in `/srv/http/sweetspot-tools-brand`. Nei README si usa il link raw, niente submodule.
