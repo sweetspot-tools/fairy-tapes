@@ -231,6 +231,12 @@
 
 ---
 
+### Dopo il piano: editor
+
+- [ ] **Scheda ROUTING nell'editor** (regola comune del 2026-10-23): schema fisso del percorso del segnale come nella preview `deep_throat_rack.html` (spec §10, voce "Scheda ROUTING"), con il modello di retro comune di `shared/ui`; da fare insieme all'editor.
+
+---
+
 ## Self-review
 
 - **Esecuzione:** subagent-driven, un implementatore per compito più una revisione per compito (con cicli di correzione dove servivano). Commit `53ef2f8..be82885` su `pre-release` (tutti i `src/deep-throat` dal Task 1 al Task 10); il Task 11 è questa documentazione (`1203075`); ondata finale di correzioni dopo la revisione complessiva: `984d3f3` (respiri lunghi in Puke e tetto di 1.5 s, Dist 3 limitata in banda sui soli prodotti di distorsione, pulizia dei test) più il commit di documentazione che la accompagna. Le deviazioni dal piano sono registrate nella spec (§3, §4, §8, §9) e nelle righe corrette sopra.

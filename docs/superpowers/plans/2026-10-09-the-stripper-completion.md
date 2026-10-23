@@ -19,6 +19,7 @@ Il piano è chiuso dal punto di vista del codice (2026-10-21, decisione dell'ute
 - [ ] **Sistemi:** compilazione e prova su Windows e macOS (Schannel o OpenSSL, apertura del browser, ritorno su loopback).
 - [ ] **CUDA e NAM INFERENCE:** build con CUDA su una macchina con driver NVIDIA, impostazione Auto/GPU/CPU (ancora attenuata).
 - [ ] **Editor da allineare alla preview (2026-10-21):** pulsanti delle scelte esclusive con il nome sulla faccia (CHAN/BUS, VOICE/DRUMS/CLASSIC, NAM/4K); CHAN/BUS e VOICE/DRUMS/CLASSIC in colonna, lontani dagli IN; NAM/4K staccati dall'IN; togliere l'icona GPU dal pulsante NAM (`ui/gpu_chip_view`). Vedi spec §11.
+- [ ] **Scheda ROUTING sul retro (2026-10-23):** schema a blocchi fisso del percorso del segnale (regola comune in `docs/DESIGN_SYSTEM.md`), come nella preview `stripper_rack.html`; link SETTINGS, BUTTONS, ROUTING, CREDITS. Vedi spec §11.
 
 ## Stato dei compiti (2026-10-10)
 

@@ -427,18 +427,18 @@ el('rect',{x:2,y:2,width:996,height:624,rx:13,fill:'none',stroke:'#2c2c2f','stro
 LY=layers();addWear(LY.wear,0x77,true);screws(LY.screw);
 var bTitle=txt('CREDITS',34,58,38,W,'start',900,back,true);
 txt('FAIRY TAPES',36,78,11,DIMW,'start',700);
-var PANES={credits:el('g',{},back),settings:el('g',{},back)},BOXES={credits:el('g',{},LY.box),settings:el('g',{},LY.box)},TABEL={};
+var PANES={credits:el('g',{},back),settings:el('g',{},back),routing:el('g',{},back)},BOXES={credits:el('g',{},LY.box),settings:el('g',{},LY.box),routing:el('g',{},LY.box)},TABEL={};
 function tabLink(label,key,x){var g=el('g',{style:'cursor:pointer'});el('rect',{x:x-84,y:66,width:86,height:18,fill:'transparent'},g);TABEL[key]=txt(label,x,78,11,DIMW,'end',700,g);g.addEventListener('click',function(){showTab(key);});}
-tabLink('SETTINGS','settings',790);tabLink('CREDITS','credits',880);
+tabLink('SETTINGS','settings',700);tabLink('ROUTING','routing',790);tabLink('CREDITS','credits',880);
 var bk=el('g',{style:'cursor:pointer'});el('rect',{x:896,y:66,width:76,height:18,fill:'transparent'},bk);txt('←  BACK',966,78,11,DIMW,'end',700,bk);
 bk.addEventListener('click',function(){document.getElementById('card').classList.remove('flipped');});
-function showTab(k){lsSet('st_tab',k);bTitle.textContent=k.toUpperCase();['credits','settings'].forEach(function(t){PANES[t].style.display=BOXES[t].style.display=(t===k?'':'none');TABEL[t].setAttribute('fill',t===k?W:DIMW);});}
+function showTab(k){lsSet('st_tab',k);bTitle.textContent=k.toUpperCase();['credits','settings','routing'].forEach(function(t){PANES[t].style.display=BOXES[t].style.display=(t===k?'':'none');TABEL[t].setAttribute('fill',t===k?W:DIMW);});}
 txt('HOTLINE  ·  LINE DEVICES VST3',966,46,13,W,'end',700);
 
 /* ---- CREDITS tab ---- */
 CUR=PANES.credits;BOXOVR=BOXES.credits;
 box(24,102,952,118,'HOTLINE','top');
-txt('Version 1.0.0  ·  Fairy Tapes  ·  github.com/fairy-tapes',50,140,14,W,'start',700);
+txt('Version 1.0.0  ·  Fairy Tapes  ·  github.com/sweetspot-tools',50,140,14,W,'start',700);
 txt('Free software: released under the GNU General Public License v3.0 (GPL-3.0), full text in the LICENSE file.',50,164,12,DIMW,'start',700);
 txt('The plugin includes GPL-3.0 components, so the combined work is distributed under the same license.',50,184,12,DIMW,'start',700);
 txt('Source code and build instructions are available in the project repository.',50,204,12,DIMW,'start',700);
@@ -485,6 +485,66 @@ txt('Appearance settings belong to you: they are kept in your preferences and ap
 txt('Behaviour settings change how the plugin works: they are saved in the project, together with the parameters.',50,544,12,DIMW,'start',700);
 txt('The wear layout (scratches, tape, screws) is generated once per instance from a saved seed and never changes by itself.',50,566,12,DIMW,'start',700);
 txt('Double-click on a knob returns it to its neutral default.',50,588,12,DIMW,'start',700);
+/* ---- ROUTING tab (design system, 2026-10-23): fixed block diagram of the signal path, outboard-manual style; order of the audio engine (spec §2) ---- */
+CUR=PANES.routing;BOXOVR=BOXES.routing;
+var RT=(function(){
+  function ln(d,dash,w,col){return el('path',{d:d,fill:'none',stroke:col||W,'stroke-width':w||2,'stroke-linecap':'round','stroke-linejoin':'round','stroke-dasharray':dash?'6 5':'none'});}
+  function arrow(x,y,col){el('path',{d:'M'+(x-7)+' '+(y-4)+' L'+x+' '+y+' L'+(x-7)+' '+(y+4)+' Z',fill:col||W});}
+  function arrowUp(x,y){el('path',{d:'M'+(x-4)+' '+(y+7)+' L'+x+' '+y+' L'+(x+4)+' '+(y+7)+' Z',fill:W});}
+  function arrowDown(x,y){el('path',{d:'M'+(x-4)+' '+(y-7)+' L'+x+' '+y+' L'+(x+4)+' '+(y-7)+' Z',fill:W});}
+  function dot(x,y){el('circle',{cx:x,cy:y,r:3,fill:W});}
+  function ring(x,y,r){el('circle',{cx:x,cy:y,r:r||2.6,fill:'#161617',stroke:W,'stroke-width':1.4});}
+  function jack(x,y,label){el('circle',{cx:x,cy:y,r:9,fill:'none',stroke:W,'stroke-width':2});el('circle',{cx:x,cy:y,r:3.2,fill:W});txt(label,x,y+24,10,W,'middle',800);}
+  function amp(x0,y,label){el('path',{d:'M'+x0+' '+(y-14)+' L'+(x0+28)+' '+y+' L'+x0+' '+(y+14)+' Z',fill:'none',stroke:W,'stroke-width':2,'stroke-linejoin':'round'});txt(label,x0+12,y+30,10,W,'middle',800);}
+  /* module block: name of the front panel, block tag(s) in amber */
+  function block(x0,x1,y,h,name,tags,noIn){el('rect',{x:x0,y:y-h/2,width:x1-x0,height:h,rx:3,fill:'none',stroke:W,'stroke-width':2});if(!noIn)arrow(x0,y);
+    var n=(tags||[]).length,ty=y+4-n*5.5;txt(name,(x0+x1)/2,ty,11,W,'middle',900);(tags||[]).forEach(function(t,i){txt(t,(x0+x1)/2,ty+13+i*11,9,AMBL,'middle',700);});}
+  /* switch drawn in its default position (thrown: lever on the jump line, e.g. Mono off) and the line that jumps the block */
+  function inSwitch(px,y,rx,top,label,thrown){ring(px,y);ring(px+12,y);ring(px+12,y-14);ln(thrown?'M'+px+' '+y+' L'+(px+11)+' '+(y-12):'M'+px+' '+y+' L'+(px+11)+' '+(y-2),false,1.8);
+    ln('M'+(px+12)+' '+(y-16.6)+' V'+top+' H'+rx+' V'+y);dot(rx,y);txt(label||'IN',(px+rx)/2,top-6,9,DIMW,'middle',800);}
+  function tap(x,y,len,l1,l2){dot(x,y);ln('M'+x+' '+y+' V'+(y+len),false,1.4);dot(x,y+len);txt(l1,x,y+len+14,9,W,'middle',800);if(l2)txt(l2,x,y+len+25,9,DIMW,'middle',700);}
+  function conn(x,y,k){el('circle',{cx:x,cy:y,r:10,fill:'none',stroke:W,'stroke-width':2});txt(k,x,y+4,11,W,'middle',900);}
+  function sum(x,y){el('circle',{cx:x,cy:y,r:9,fill:'none',stroke:W,'stroke-width':2});ln('M'+(x-5)+' '+y+' H'+(x+5)+' M'+x+' '+(y-5)+' V'+(y+5),false,1.8);}
+  return {ln:ln,arrow:arrow,arrowUp:arrowUp,arrowDown:arrowDown,dot:dot,ring:ring,jack:jack,amp:amp,block:block,inSwitch:inSwitch,tap:tap,conn:conn,sum:sum};})();
+box(24,102,952,388,'SIGNAL FLOW','top');
+(function(){var Y1=200,Y2=392,L=RT.ln,CB=290;
+  /* row 1: input, mono sum (off by default), dry split, band, drive, cone, crush */
+  RT.jack(60,Y1,'IN L · R');L('M69 '+Y1+' H158');RT.dot(82,Y1);RT.tap(112,Y1,50,'IN METER','CLIP IN');
+  L('M170 '+Y1+' H174');RT.block(174,254,Y1,48,'MONO',['L + R']);RT.inSwitch(158,Y1,272,150,'MONO',true);L('M254 '+Y1+' H300');
+  RT.dot(286,Y1);L('M286 '+Y1+' V250');RT.conn(286,260,'B');txt('DRY',300,246,9,DIMW,'start',800);
+  RT.block(300,400,Y1,48,'BAND',['HPF · LPF']);L('M400 '+Y1+' H424');
+  RT.block(424,524,Y1,48,'DRIVE',['waveshaper']);L('M524 '+Y1+' H564');RT.tap(544,Y1,50,'CLIP DRV');
+  RT.block(564,664,Y1,48,'CONE',['peak EQ · horn']);L('M664 '+Y1+' H688');
+  RT.block(688,788,Y1,48,'CRUSH',['rate · bits']);L('M788 '+Y1+' H910');
+  RT.arrow(910,Y1);RT.conn(920,Y1,'A');
+  /* DEVICE x MORPH: control line into every block the device table sets */
+  el('rect',{x:40,y:CB-11,width:116,height:22,rx:3,fill:'none',stroke:W,'stroke-width':1.6});txt('DEVICE · MORPH',98,CB+4,9,W,'middle',900);
+  L('M156 '+CB+' H738',true);
+  [350,474,614,738].forEach(function(x){L('M'+x+' '+CB+' V232',true);RT.arrowUp(x,226);});
+  [180,262,376].forEach(function(x){L('M'+x+' '+CB+' V'+(x===262?Y2-86:Y2-32),true);RT.arrowDown(x,x===262?Y2-79:Y2-25);});
+  /* global BYPASS: from the input jack straight to the output switch */
+  L('M82 '+Y1+' V128 H958 V300 H886 V'+(Y2-16.6));txt('BYPASS',520,122,9,DIMW,'middle',800);txt('output = input, bit for bit',950,292,9,DIMW,'end',700);
+  /* row 2: compander, noise added, room, mix (dry from B), output */
+  RT.conn(60,Y2,'A');L('M70 '+Y2+' H90');
+  RT.block(90,210,Y2,48,'COMPANDER',['squelch']);L('M210 '+Y2+' H253');
+  RT.block(217,307,Y2-62,34,'NOISE',['hiss · crackle'],true);L('M262 '+(Y2-45)+' V'+(Y2-9));RT.sum(262,Y2);L('M271 '+Y2+' H316');
+  RT.block(316,436,Y2,48,'ROOM',['short reverb']);L('M436 '+Y2+' H480');
+  RT.block(480,600,Y2,48,'MIX',['dry / wet']);RT.conn(540,Y2+62,'B');L('M540 '+(Y2+52)+' V'+(Y2+31));RT.arrowUp(540,Y2+24);txt('DRY',552,Y2+46,9,DIMW,'start',800);
+  L('M600 '+Y2+' H660');RT.amp(660,Y2,'OUTPUT');L('M688 '+Y2+' H884');
+  RT.ring(886,Y2);RT.ring(886,Y2-14);RT.ring(902,Y2);L('M902 '+Y2+' L888.5 '+(Y2-1),false,1.8);L('M904.6 '+Y2+' H935');RT.tap(918,Y2,52,'OUT METER','CLIP OUT');
+  RT.jack(944,Y2,'OUT L · R');})();
+box(24,508,952,102,'LEGEND','top');
+(function(){var y=546,L=RT.ln;
+  el('rect',{x:50,y:y-12,width:34,height:24,rx:3,fill:'none',stroke:W,'stroke-width':2});txt('module',92,y+4,10,DIMW,'start',700);
+  el('path',{d:'M150 '+(y-11)+' L172 '+y+' L150 '+(y+11)+' Z',fill:'none',stroke:W,'stroke-width':2,'stroke-linejoin':'round'});txt('gain stage',180,y+4,10,DIMW,'start',700);
+  RT.ring(254,y);RT.ring(266,y);RT.ring(266,y-14);L('M254 '+y+' L265 '+(y-2),false,1.8);txt('switch, default position',276,y+4,10,DIMW,'start',700);
+  RT.sum(418,y);txt('sum',432,y+4,10,DIMW,'start',700);
+  el('circle',{cx:484,cy:y,r:9,fill:'none',stroke:W,'stroke-width':2});el('circle',{cx:484,cy:y,r:3.2,fill:W});txt('input / output',500,y+4,10,DIMW,'start',700);
+  L('M592 '+y+' H636',true);txt('control signal',644,y+4,10,DIMW,'start',700);
+  RT.dot(738,y);L('M738 '+y+' V'+(y-12),false,1.4);txt('meter / clip point',748,y+4,10,DIMW,'start',700);
+  RT.conn(870,y,'A');txt('continues',886,y+4,10,DIMW,'start',700);
+  txt('DEVICE sets the blocks, MORPH blends them from neutral (0) to the device (1). CHARACTER scales Drive, Tone (on BAND), Noise, Room and Mix;',50,y+32,11,DIMW,'start',700);
+  txt('with its IN off they keep the device values. The order of the blocks never changes.',50,y+48,11,DIMW,'start',700);})();
 CUR=null;BOXOVR=null;showTab(lsGet('st_tab','settings'));
 ROOT=svg;
 

@@ -482,18 +482,18 @@ el('rect',{x:2,y:2,width:996,height:466,rx:13,fill:'none',stroke:'#2c2c2f','stro
 LY=layers();addWear(LY.wear,0x77,true);screws(LY.screw);
 var bTitle=txt('CREDITS',34,58,38,W,'start',900,back,true);
 txt('FAIRY TAPES',36,78,11,DIMW,'start',700);
-var PANES={credits:el('g',{},back),settings:el('g',{},back)},BOXES={credits:el('g',{},LY.box),settings:el('g',{},LY.box)},TABEL={};
+var PANES={credits:el('g',{},back),settings:el('g',{},back),routing:el('g',{},back)},BOXES={credits:el('g',{},LY.box),settings:el('g',{},LY.box),routing:el('g',{},LY.box)},TABEL={};
 function tabLink(label,key,x){var g=el('g',{style:'cursor:pointer'});el('rect',{x:x-84,y:66,width:86,height:18,fill:'transparent'},g);TABEL[key]=txt(label,x,78,11,DIMW,'end',700,g);g.addEventListener('click',function(){showTab(key);});}
-tabLink('SETTINGS','settings',790);tabLink('CREDITS','credits',880);
+tabLink('SETTINGS','settings',700);tabLink('ROUTING','routing',790);tabLink('CREDITS','credits',880);
 var bk=el('g',{style:'cursor:pointer'});el('rect',{x:896,y:66,width:76,height:18,fill:'transparent'},bk);txt('←  BACK',966,78,11,DIMW,'end',700,bk);
 bk.addEventListener('click',function(){document.getElementById('card').classList.remove('flipped');});
-function showTab(k){lsSet('pt_tab',k);bTitle.textContent=k.toUpperCase();['credits','settings'].forEach(function(t){PANES[t].style.display=BOXES[t].style.display=(t===k?'':'none');TABEL[t].setAttribute('fill',t===k?W:DIMW);});}
+function showTab(k){lsSet('pt_tab',k);bTitle.textContent=k.toUpperCase();['credits','settings','routing'].forEach(function(t){PANES[t].style.display=BOXES[t].style.display=(t===k?'':'none');TABEL[t].setAttribute('fill',t===k?W:DIMW);});}
 txt('PILLOW TALK  ·  TAPE ECHO VST3',966,46,13,W,'end',700);
 
 /* ---- CREDITS tab ---- */
 CUR=PANES.credits;BOXOVR=BOXES.credits;
 box(24,102,952,92,'PILLOW TALK','top');
-txt('Version 1.0.0  ·  Fairy Tapes  ·  github.com/fairy-tapes',50,132,14,W,'start',700);
+txt('Version 1.0.0  ·  Fairy Tapes  ·  github.com/sweetspot-tools',50,132,14,W,'start',700);
 txt('Free software: released under the GNU General Public License v3.0 (GPL-3.0), full text in the LICENSE file.',50,150,12,DIMW,'start',700);
 txt('The plugin includes GPL-3.0 components, so the combined work is distributed under the same license.',50,166,12,DIMW,'start',700);
 txt('Source code and build instructions are available in the project repository.',50,182,12,DIMW,'start',700);
@@ -536,6 +536,56 @@ txt('Appearance settings belong to you: they are kept in your preferences and ap
 txt('Behaviour settings change how the plugin works: they are saved in the project, together with the parameters.',50,394,12,DIMW,'start',700);
 txt('The wear layout (scratches, tape, screws) is generated once per instance from a saved seed and never changes by itself.',50,412,12,DIMW,'start',700);
 txt('Double-click on a knob returns it to its neutral default.',50,430,12,DIMW,'start',700);
+/* ---- ROUTING tab (design system, 2026-10-23): fixed block diagram of the signal path, outboard-manual style; order of the audio engine ---- */
+CUR=PANES.routing;BOXOVR=BOXES.routing;
+var RT=(function(){
+  function ln(d,dash,w,col){return el('path',{d:d,fill:'none',stroke:col||W,'stroke-width':w||2,'stroke-linecap':'round','stroke-linejoin':'round','stroke-dasharray':dash?'6 5':'none'});}
+  function arrow(x,y,col){el('path',{d:'M'+(x-7)+' '+(y-4)+' L'+x+' '+y+' L'+(x-7)+' '+(y+4)+' Z',fill:col||W});}
+  function arrowDown(x,y){el('path',{d:'M'+(x-4)+' '+(y-7)+' L'+x+' '+y+' L'+(x+4)+' '+(y-7)+' Z',fill:W});}
+  function arrowUp(x,y){el('path',{d:'M'+(x-4)+' '+(y+7)+' L'+x+' '+y+' L'+(x+4)+' '+(y+7)+' Z',fill:W});}
+  function dot(x,y){el('circle',{cx:x,cy:y,r:3,fill:W});}
+  function ring(x,y,r){el('circle',{cx:x,cy:y,r:r||2.6,fill:'#161617',stroke:W,'stroke-width':1.4});}
+  function jack(x,y,label,side){el('circle',{cx:x,cy:y,r:9,fill:'none',stroke:W,'stroke-width':2});el('circle',{cx:x,cy:y,r:3.2,fill:W});txt(label,x,y+24,10,W,'middle',800);}
+  function amp(x0,y,label){el('path',{d:'M'+x0+' '+(y-14)+' L'+(x0+28)+' '+y+' L'+x0+' '+(y+14)+' Z',fill:'none',stroke:W,'stroke-width':2,'stroke-linejoin':'round'});txt(label,x0+12,y+30,10,W,'middle',800);}
+  /* module block: name of the front panel, block tag(s) in amber */
+  function block(x0,x1,y,h,name,tags){el('rect',{x:x0,y:y-h/2,width:x1-x0,height:h,rx:3,fill:'none',stroke:W,'stroke-width':2});arrow(x0,y);
+    var n=(tags||[]).length,ty=y+4-n*5.5;txt(name,(x0+x1)/2,ty,11,W,'middle',900);(tags||[]).forEach(function(t,i){txt(t,(x0+x1)/2,ty+13+i*11,9,AMBL,'middle',700);});}
+  /* IN switch (drawn in its default position, module in) and the line that jumps the module */
+  function inSwitch(px,y,rx,top,label){ring(px,y);ring(px+12,y);ring(px+12,y-14);ln('M'+px+' '+y+' L'+(px+11)+' '+(y-2),false,1.8);
+    ln('M'+(px+12)+' '+(y-16.6)+' V'+top+' H'+rx+' V'+y);dot(rx,y);txt(label||'IN',(px+rx)/2,top-6,9,DIMW,'middle',800);}
+  function tap(x,y,len,l1,l2){dot(x,y);ln('M'+x+' '+y+' V'+(y+len),false,1.4);dot(x,y+len);txt(l1,x,y+len+14,9,W,'middle',800);if(l2)txt(l2,x,y+len+25,9,DIMW,'middle',700);}
+  function conn(x,y,k){el('circle',{cx:x,cy:y,r:10,fill:'none',stroke:W,'stroke-width':2});txt(k,x,y+4,11,W,'middle',900);}
+  return {ln:ln,arrow:arrow,arrowUp:arrowUp,arrowDown:arrowDown,dot:dot,ring:ring,jack:jack,amp:amp,block:block,inSwitch:inSwitch,tap:tap,conn:conn};})();
+box(24,102,952,250,'SIGNAL FLOW','top');
+(function(){var YB=124,YD=158,YW=226,YC=300,L=RT.ln;
+  /* input, split into the dry path, the tape echo (wet) and the ducking detector */
+  RT.jack(60,YW,'IN L · R');L('M69 '+YW+' H200');RT.dot(82,YW);RT.tap(110,YW,40,'IN METER','CLIP IN');
+  RT.dot(150,YW);L('M150 '+YD+' V'+YC);
+  /* dry path, over the top into the mix */
+  L('M150 '+YD+' H610 V197');RT.arrowDown(610,204);txt('DRY',380,YD-6,9,DIMW,'middle',800);
+  /* wet path: tape echo, duck gain, mix */
+  RT.block(200,400,YW,44,'DELAY',['TAPE ECHO']);L('M400 '+YW+' H470');txt('WET',435,YW-6,9,DIMW,'middle',800);
+  RT.amp(470,YW,'');txt('DUCK',484,YW-20,10,W,'middle',800);L('M498 '+YW+' H560');RT.tap(528,YW,40,'ECHO');
+  RT.block(560,660,YW,44,'MIX',['DRY · WET']);L('M660 '+YW+' H878');
+  /* global BYPASS: the output fades to the dry signal */
+  L('M82 '+YW+' V'+YB+' H880 V'+(YW-16.6));txt('BYPASS',300,YB-6,9,DIMW,'middle',800);txt('output = dry signal (short fade)',870,YB+14,9,DIMW,'end',700);
+  RT.ring(880,YW);RT.ring(880,YW-14);RT.ring(896,YW);L('M896 '+YW+' L882.5 '+(YW-1),false,1.8);L('M898.6 '+YW+' H935');RT.tap(916,YW,40,'OUT METER','CLIP OUT');
+  RT.jack(944,YW,'OUT L · R');
+  /* detector: the input or the sidechain (SIDECHAIN switch, default off), then the gain sent to DUCK */
+  L('M150 '+YC+' H247.4');RT.jack(60,YC+14,'SC IN');L('M69 '+(YC+14)+' H247.4');
+  RT.ring(250,YC);RT.ring(250,YC+14);RT.ring(266,YC);L('M266 '+YC+' L252.5 '+(YC+1),false,1.8);txt('SIDECHAIN',258,YC-10,9,DIMW,'middle',800);
+  L('M268.6 '+YC+' H300');RT.tap(284,YC,16,'VOICE');
+  RT.block(300,440,YC,40,'AUTO DUCK',['DETECTOR']);
+  L('M440 '+YC+' H484 V242',true);RT.arrowUp(484,236);RT.tap(462,YC,16,'SEND LEVEL');})();
+box(24,366,952,82,'LEGEND','top');
+(function(){var y=398,L=RT.ln;
+  el('rect',{x:50,y:y-12,width:34,height:24,rx:3,fill:'none',stroke:W,'stroke-width':2});txt('module',92,y+4,10,DIMW,'start',700);
+  el('path',{d:'M160 '+(y-11)+' L182 '+y+' L160 '+(y+11)+' Z',fill:'none',stroke:W,'stroke-width':2,'stroke-linejoin':'round'});txt('gain stage',190,y+4,10,DIMW,'start',700);
+  RT.ring(268,y);RT.ring(280,y);RT.ring(280,y-14);L('M268 '+y+' L279 '+(y-2),false,1.8);txt('switch, default position',290,y+4,10,DIMW,'start',700);
+  el('circle',{cx:438,cy:y,r:9,fill:'none',stroke:W,'stroke-width':2});el('circle',{cx:438,cy:y,r:3.2,fill:W});txt('input / output',454,y+4,10,DIMW,'start',700);
+  L('M552 '+y+' H600',true);txt('control signal',608,y+4,10,DIMW,'start',700);
+  RT.dot(712,y);L('M712 '+y+' V'+(y-12),false,1.4);txt('meter / display point',722,y+4,10,DIMW,'start',700);
+  txt('SYNC takes TIME and HOLD from the host tempo; the tape always records the full phrase, the ducking acts on what is played back.',50,y+36,11,DIMW,'start',700);})();
 CUR=null;BOXOVR=null;showTab(lsGet('pt_tab','settings'));
 ROOT=svg;
 

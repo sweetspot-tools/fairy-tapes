@@ -513,10 +513,10 @@ el('rect',{x:2,y:2,width:996,height:624,rx:13,fill:'none',stroke:'#2c2c2f','stro
 LY=layers();addWear(LY.wear,0x77,true);screws(LY.screw);
 var bTitle=txt('CREDITS',34,58,38,W,'start',900,back,true);
 txt('FAIRY TAPES',36,78,11,DIMW,'start',700);
-var TABKEYS=['settings','modes','credits'];
-var PANES={credits:el('g',{},back),settings:el('g',{},back),modes:el('g',{},back)},BOXES={credits:el('g',{},LY.box),settings:el('g',{},LY.box),modes:el('g',{},LY.box)},TABEL={};
+var TABKEYS=['settings','modes','routing','credits'];
+var PANES={credits:el('g',{},back),settings:el('g',{},back),modes:el('g',{},back),routing:el('g',{},back)},BOXES={credits:el('g',{},LY.box),settings:el('g',{},LY.box),modes:el('g',{},LY.box),routing:el('g',{},LY.box)},TABEL={};
 function tabLink(label,key,x){var g=el('g',{style:'cursor:pointer'});el('rect',{x:x-84,y:66,width:86,height:18,fill:'transparent'},g);TABEL[key]=txt(label,x,78,11,DIMW,'end',700,g);g.addEventListener('click',function(){showTab(key);});}
-tabLink('SETTINGS','settings',690);tabLink('MODES','modes',780);tabLink('CREDITS','credits',870);
+tabLink('SETTINGS','settings',600);tabLink('MODES','modes',690);tabLink('ROUTING','routing',780);tabLink('CREDITS','credits',870);
 var bk=el('g',{style:'cursor:pointer'});el('rect',{x:896,y:66,width:76,height:18,fill:'transparent'},bk);txt('←  BACK',966,78,11,DIMW,'end',700,bk);
 bk.addEventListener('click',function(){document.getElementById('card').classList.remove('flipped');});
 function showTab(k){if(TABKEYS.indexOf(k)<0)k='settings';lsSet('dt_tab',k);bTitle.textContent=k.toUpperCase();TABKEYS.forEach(function(t){PANES[t].style.display=BOXES[t].style.display=(t===k?'':'none');TABEL[t].setAttribute('fill',t===k?W:DIMW);});}
@@ -575,6 +575,68 @@ txt('RATIO AUTO and DIST AUTO use the values above; the other choices ignore the
 txt('De-ess x0.15: the DE-ESS amount is multiplied by 0.15 in PUKE, so the stage is almost off.',50,528,11,DIMW,'start',700);
 txt('Breath detector: SPECTRAL tells breaths from voice by spectrum; LEVEL (PUKE) uses the level only, because growls and screams are noisy.',50,546,11,DIMW,'start',700);
 txt('Rider max range is the full travel of the RANGE knob; the rider never moves faster than the speed shown.',50,564,11,DIMW,'start',700);
+/* ---- ROUTING tab (design system, 2026-10-23): fixed block diagram of the signal path, outboard-manual style; order of the audio engine (engine.cpp) ---- */
+CUR=PANES.routing;BOXOVR=BOXES.routing;
+var RT=(function(){
+  function ln(d,dash,w,col){return el('path',{d:d,fill:'none',stroke:col||W,'stroke-width':w||2,'stroke-linecap':'round','stroke-linejoin':'round','stroke-dasharray':dash?'6 5':'none'});}
+  function arrow(x,y,col){el('path',{d:'M'+(x-7)+' '+(y-4)+' L'+x+' '+y+' L'+(x-7)+' '+(y+4)+' Z',fill:col||W});}
+  function arrowUp(x,y){el('path',{d:'M'+(x-4)+' '+(y+7)+' L'+x+' '+y+' L'+(x+4)+' '+(y+7)+' Z',fill:W});}
+  function arrowDown(x,y){el('path',{d:'M'+(x-4)+' '+(y-7)+' L'+x+' '+y+' L'+(x+4)+' '+(y-7)+' Z',fill:W});}
+  function arrowLeft(x,y){el('path',{d:'M'+(x+7)+' '+(y-4)+' L'+x+' '+y+' L'+(x+7)+' '+(y+4)+' Z',fill:W});}
+  function dot(x,y){el('circle',{cx:x,cy:y,r:3,fill:W});}
+  function ring(x,y,r){el('circle',{cx:x,cy:y,r:r||2.6,fill:'#161617',stroke:W,'stroke-width':1.4});}
+  function jack(x,y,label,side){el('circle',{cx:x,cy:y,r:9,fill:'none',stroke:W,'stroke-width':2});el('circle',{cx:x,cy:y,r:3.2,fill:W});txt(label,x,y+24,10,W,'middle',800);}
+  function amp(x0,y,label){el('path',{d:'M'+x0+' '+(y-14)+' L'+(x0+28)+' '+y+' L'+x0+' '+(y+14)+' Z',fill:'none',stroke:W,'stroke-width':2,'stroke-linejoin':'round'});txt(label,x0+12,y+30,10,W,'middle',800);}
+  /* module block: name of the front panel, block tag(s) in amber */
+  function block(x0,x1,y,h,name,tags){el('rect',{x:x0,y:y-h/2,width:x1-x0,height:h,rx:3,fill:'none',stroke:W,'stroke-width':2});arrow(x0,y);
+    var n=(tags||[]).length,ty=y+4-n*5.5;txt(name,(x0+x1)/2,ty,11,W,'middle',900);(tags||[]).forEach(function(t,i){txt(t,(x0+x1)/2,ty+13+i*11,9,AMBL,'middle',700);});}
+  /* IN switch (drawn in its default position, module in) and the line that jumps the module */
+  function inSwitch(px,y,rx,top,label){ring(px,y);ring(px+12,y);ring(px+12,y-14);ln('M'+px+' '+y+' L'+(px+11)+' '+(y-2),false,1.8);
+    ln('M'+(px+12)+' '+(y-16.6)+' V'+top+' H'+rx+' V'+y);dot(rx,y);txt(label||'IN',(px+rx)/2,top-6,9,DIMW,'middle',800);}
+  function tap(x,y,len,l1,l2){dot(x,y);ln('M'+x+' '+y+' V'+(y+len),false,1.4);dot(x,y+len);txt(l1,x,y+len+14,9,W,'middle',800);if(l2)txt(l2,x,y+len+25,9,DIMW,'middle',700);}
+  function conn(x,y,k){el('circle',{cx:x,cy:y,r:10,fill:'none',stroke:W,'stroke-width':2});txt(k,x,y+4,11,W,'middle',900);}
+  return {ln:ln,arrow:arrow,arrowUp:arrowUp,arrowDown:arrowDown,arrowLeft:arrowLeft,dot:dot,ring:ring,jack:jack,amp:amp,block:block,inSwitch:inSwitch,tap:tap,conn:conn};})();
+box(24,102,952,388,'SIGNAL FLOW','top');
+(function(){var Y1=178,YD=300,Y2=424,L=RT.ln;
+  /* row 1: lookahead delay, input, rider, breath, eq, de-ess */
+  RT.jack(60,Y1,'IN L · R');L('M69 '+Y1+' H98');RT.dot(82,Y1);
+  RT.block(98,176,Y1,44,'DELAY',['LOOKAHEAD']);L('M176 '+Y1+' H206');RT.dot(194,Y1);
+  RT.amp(206,Y1,'INPUT');L('M234 '+Y1+' H268');RT.tap(250,Y1,36,'IN METER','CLIP IN');
+  L('M280 '+Y1+' H284');RT.block(284,364,Y1,44,'RIDER',['GAIN']);RT.inSwitch(268,Y1,382,140);L('M364 '+Y1+' H396');
+  L('M408 '+Y1+' H412');RT.block(412,492,Y1,44,'BREATH',['REDUCER']);RT.inSwitch(396,Y1,510,140);L('M492 '+Y1+' H524');
+  L('M536 '+Y1+' H540');RT.block(540,620,Y1,44,'EQ',['HPF · MUD CUT']);RT.inSwitch(524,Y1,638,140);L('M620 '+Y1+' H652');
+  L('M664 '+Y1+' H668');RT.block(668,760,Y1,44,'DE-ESS',['SPLIT BAND']);RT.inSwitch(652,Y1,778,140);L('M760 '+Y1+' H910');
+  RT.arrow(910,Y1);RT.conn(920,Y1,'A');
+  /* what the Listen buttons play: the band the de-esser removes, the part of the breath the reducer removes */
+  L('M740 200 V240 H870');RT.arrow(870,240);RT.conn(880,240,'B');txt('removed band',806,234,9,DIMW,'middle',700);
+  L('M480 200 V262 H910');RT.arrow(910,262);RT.conn(920,262,'C');txt('removed breath',700,256,9,DIMW,'middle',700);
+  /* detection: live (not delayed) input, stereo-linked mono; control lines into the rider and the breath reducer */
+  L('M82 '+Y1+' V'+YD+' H100',true);RT.amp(100,YD,'INPUT');L('M128 '+YD+' H150',true);
+  RT.block(150,210,YD,32,'L + R',['MONO']);L('M210 '+YD+' H244 M226 '+YD+' V350 H244',true);RT.dot(226,YD);
+  RT.block(244,320,YD,32,'LEVEL',['RIDER METER']);L('M320 '+YD+' H334 V207',true);RT.arrowUp(334,200);
+  RT.block(244,356,350,36,'BREATH DETECTOR',['SPECTRAL / LEVEL']);L('M356 350 H380',true);
+  RT.block(380,460,350,36,'MAX',['LOOKAHEAD']);L('M430 332 V207',true);RT.arrowUp(430,200);
+  L('M400 332 V278 H342',true);RT.arrowLeft(335,278);txt('HOLD ON BREATH',372,272,8,DIMW,'middle',800);
+  /* global BYPASS: the delayed input straight to the output switch */
+  L('M194 '+Y1+' V120 H958 V360 H700 V'+(Y2-16.6));txt('BYPASS',300,114,9,DIMW,'middle',800);txt('output = input, delayed by the lookahead',950,352,9,DIMW,'end',700);
+  /* row 2: comp, tone, listen, output */
+  RT.conn(60,Y2,'A');L('M70 '+Y2+' H90');
+  L('M102 '+Y2+' H106');RT.block(106,236,Y2,48,'COMP',['RATIO · DIST','SC HPF ON DETECTOR']);RT.inSwitch(90,Y2,254,390);L('M236 '+Y2+' H290');RT.tap(270,Y2,26,'GR');
+  L('M302 '+Y2+' H306');RT.block(306,410,Y2,48,'TONE',['MUD · PRES · AIR']);RT.inSwitch(290,Y2,428,390);L('M410 '+Y2+' H470');
+  RT.block(470,560,Y2,48,'LISTEN',['DE-ESS · BREATH']);RT.conn(490,372,'B');RT.conn(540,372,'C');L('M490 382 V393 M540 382 V393');RT.arrowDown(490,400);RT.arrowDown(540,400);
+  L('M560 '+Y2+' H600');RT.amp(600,Y2,'OUTPUT');L('M628 '+Y2+' H697.4');
+  RT.ring(700,Y2);RT.ring(700,Y2-14);RT.ring(716,Y2);L('M716 '+Y2+' L702.5 '+(Y2-1),false,1.8);L('M718.6 '+Y2+' H935');RT.tap(760,Y2,26,'OUT METER','CLIP OUT');
+  RT.jack(944,Y2,'OUT L · R');})();
+box(24,504,952,86,'LEGEND','top');
+(function(){var y=540,L=RT.ln;
+  el('rect',{x:50,y:y-12,width:34,height:24,rx:3,fill:'none',stroke:W,'stroke-width':2});txt('module',92,y+4,10,DIMW,'start',700);
+  el('path',{d:'M160 '+(y-11)+' L182 '+y+' L160 '+(y+11)+' Z',fill:'none',stroke:W,'stroke-width':2,'stroke-linejoin':'round'});txt('gain stage',190,y+4,10,DIMW,'start',700);
+  RT.ring(268,y);RT.ring(280,y);RT.ring(280,y-14);L('M268 '+y+' L279 '+(y-2),false,1.8);txt('switch, default position',290,y+4,10,DIMW,'start',700);
+  el('circle',{cx:438,cy:y,r:9,fill:'none',stroke:W,'stroke-width':2});el('circle',{cx:438,cy:y,r:3.2,fill:W});txt('input / output',454,y+4,10,DIMW,'start',700);
+  L('M552 '+y+' H600',true);txt('control signal',608,y+4,10,DIMW,'start',700);
+  RT.dot(712,y);L('M712 '+y+' V'+(y-12),false,1.4);txt('meter / clip point',722,y+4,10,DIMW,'start',700);
+  RT.conn(858,y,'A');txt('continues',874,y+4,10,DIMW,'start',700);
+  txt('SPEAK / SING / PUKE change the values inside the blocks (see MODES). LISTEN plays the DE-ESS band first, then the BREATH; off, the mix.',50,y+34,11,DIMW,'start',700);})();
 CUR=null;BOXOVR=null;showTab(lsGet('dt_tab','settings'));
 ROOT=svg;
 setMode(MODE);
