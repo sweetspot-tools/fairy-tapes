@@ -183,7 +183,6 @@ bool PLUGIN_API Editor::open(void* parent, const PlatformType& platformType) {
       applyAppearance(prefs_);
     };
     act.manageFolders = [this] { openBrowser(); };
-    act.openTone3000 = [this] { openBrowser(true); };
     act.recallModeChanged = [this](int mode) { ctl_->setRecallMode(mode); };
     act.markNow = [this] {
       ctl_->markRecallNow();
@@ -578,12 +577,11 @@ void Editor::closeTapeEdit() {
   tapeEditIndex_ = -1;
 }
 
-void Editor::openBrowser(bool tone3000Tab) {
+void Editor::openBrowser() {
   if (!frame || browser_) return;
-  browser_ = new ModelBrowser(CRect(0, 0, kWidth, kHeight), ctl_->modelPath(), ctl_->tone3000Actions());
+  browser_ = new ModelBrowser(CRect(0, 0, kWidth, kHeight), ctl_->modelPath());
   browser_->onLoad = [this](const std::string& path) { ctl_->requestModelLoad(path); };
   browser_->onClose = [this] { browserClosing_ = true; };
-  if (tone3000Tab) browser_->showTab(true);
   frame->addView(browser_);
 }
 

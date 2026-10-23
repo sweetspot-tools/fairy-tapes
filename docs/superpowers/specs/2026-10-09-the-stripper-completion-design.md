@@ -18,7 +18,7 @@ Portare The Stripper da "DSP completo con lista parametri dell'host" a plugin ut
 
 Fuori scopo (decisione del 2026-10-09):
 - **Gain staging** (parametri `kBypassGainStaging` e `kGainStagingTrim` restano, inerti, come oggi).
-- **Integrazione Tone3000**: richiede rete e account; ha uno spec a parte (§10). Il popup di scelta modello nasce con la sola sorgente locale (§3.1).
+- **Integrazione Tone3000** (rinviata, decisione 2026-10-23: non nella versione 1): richiedeva rete e account; resta lo spec a parte (§10) e il codice del client in `shared/tone3000`, spento di default. I modelli si caricano a mano dal popup (§3.1).
 - Asset grafici disegnati a mano: la GUI è disegnata dal codice (§4); i PNG manuali sono solo un'opzione futura.
 
 ## 2. Componente condiviso: `shared/nam_drive`
@@ -43,7 +43,7 @@ Oggi `NamDrive::loadModel(path)` è sincrono e non c'è alcuna interfaccia per s
 Il clic sul campo del modello (Drive) apre un popup in stile rack (preview: `src/the-stripper/docs/mockups/stripper_model_browser.html`), con due schede:
 
 - **LOCAL:** elenco delle cartelle (aggiungi, rimuovi, riscansiona; scansione ricorsiva dei `.nam`, cartelle salvate nelle preferenze dell'utente) e elenco dei modelli con ricerca per nome, dimensione e tipo; il punto verde marca il modello caricato. Pulsanti LOAD, CANCEL e **NO MODEL** (scarica il modello e riporta il Drive in passthrough). La scansione gira fuori dal thread audio e dal thread dell'interfaccia.
-- **TONE3000 (2026-10-21):** scheda implementata (Task 18) secondo lo spec a parte `2026-10-21-tone3000-integration-design.md`: accesso, elenchi propri e tono scelto sul sito, modelli con autore e licenza, scarico di un modello alla volta; senza l'app registrata (`kTone3000ClientId` vuoto) o senza OpenSSL la scheda dice che non è configurata.
+- **TONE3000:** la scheda implementata il 2026-10-21 (Task 18) è stata **tolta il 2026-10-23**: il popup ha solo la scheda locale. Il client resta in `shared/tone3000` (opt-in con `-DFAIRY_ENABLE_TONE3000=ON`, non collegato a nessun plugin) per una versione futura.
 - **Architettura:** le sorgenti stanno dietro un'interfaccia comune (`ModelSource`: elenco, ricerca, risoluzione del percorso locale del file); `LocalFolderSource` è la prima implementazione, Tone3000 sarà la seconda. Il caricamento passa sempre dal percorso asincrono (§3).
 - **Nessun modello:** il Drive è in passthrough (nessun gain applicato) e il suo controllo si attenua come un modulo spento; il campo mostra "No model". Nessun modello viene incorporato nel binario del plugin.
 
@@ -124,9 +124,9 @@ Servono per vedere a colpo d'occhio dove il segnale si sporca e quanto lavorano 
 
 Doggystyle riusa `shared/nam_drive` e il caricamento asincrono: questo spec va implementato **prima** (almeno §2 e §3).
 
-## 10. Tone3000 (spec a parte)
+## 10. Tone3000 (spec a parte) — rinviata, non nella versione 1
 
-**Spec dell'integrazione: `2026-10-21-tone3000-integration-design.md`.** Riletto il 2026-10-20 su [termini API](https://www.tone3000.com/api/terms) (in vigore dal 7 luglio 2026) e [documentazione API](https://tone3000.com/api) (la pagina dei termini è stata letta tramite un riassunto, non il testo integrale: da rileggere prima del rilascio). Sostituisce la ricerca del 2026-10-10.
+**Rinviata (decisione 2026-10-23): niente connessione a Tone3000 né ricerca online nella versione 1; i modelli si caricano a mano dal disco.** **Spec dell'integrazione: `2026-10-21-tone3000-integration-design.md`.** Riletto il 2026-10-20 su [termini API](https://www.tone3000.com/api/terms) (in vigore dal 7 luglio 2026) e [documentazione API](https://tone3000.com/api) (la pagina dei termini è stata letta tramite un riassunto, non il testo integrale: da rileggere prima del rilascio). Sostituisce la ricerca del 2026-10-10.
 
 **Fatti verificati**
 - Il formato NAM (A1 e A2) è aperto e libero da implementare in ogni prodotto; i termini regolano solo l'accesso all'API e al catalogo.
@@ -166,6 +166,6 @@ Doggystyle riusa `shared/nam_drive` e il caricamento asincrono: questo spec va i
 - **Serigrafia dei blocchi (deciso 2026-10-14):** ogni riquadro con qualcosa di variabile ha una **piccola sigla in alto a sinistra** che dice cosa è montato in quel momento, e cambia con i selettori: **Filters** e **Equaliser** `4K-G` (Chan) / `4K-E` (Bus) (nei filtri cambia in realtà solo il Low Pass); **Compression** `OPTO-2A` (Voice), `FET-76` (Drums), `VCA-160` (Classic), `4K-G` (Bus); **Drive** `NAM` oppure `4K-G` / `4K-E` (la saturazione segue Chan/Bus); **Limiter** `B-PARTY`; **Gate** `D-NOISE`. Input, Output e Level non hanno sigla. Sono sigle abbreviate, scelte dall'utente, che richiamano (senza scriverli per esteso) i modelli d'ispirazione: **rischio marchi accettato dall'utente**, da ricontrollare prima del rilascio; nei Credits restano "in stile". Aspetto: **molto piccole** (7 px) e **molto sbiadite** (opacità circa 10%), che si intuiscano senza saltare all'occhio. Livello della serigrafia (si attenua col modulo, passa sotto l'usura). Fatto nella preview, nell'editor col restyle (Task 11).
 - **Titolo del riquadro (2026-10-14):** il riquadro si chiama **DRIVE** (non più "DRIVE · NAM"): contiene due motori; anche la riga sotto il titolo dice "DRIVE".
 - **Meter del gate (deciso 2026-10-14, fatto nel Task 16):** terza riga GR ("G") nel riquadro Level, tra GR e CLIP, con i dB di attenuazione del gate ricavati dal confronto dei picchi in/out del blocco (Denoise non espone la riduzione), con ballistica veloce (rilascio rapido e breve tenuta del picco) per vedere quando e con che velocità chiude. Nuovo parametro di meter `kMeterGrGate` in sola lettura, visibile, nella codifica SSL 360 Link (terza corsia sul UC1); si attenua con il Bypass globale come le altre righe GR. Limite: stima, meno precisa con segnali molto bassi.
-- **Tone3000:** termini riletti il 2026-10-20 (§10); piano gratuito deciso il 2026-10-21 (plugin gratuiti); restano da chiedere al supporto l'URI di ritorno e la cache locale.
+- **Tone3000:** rinviata (2026-10-23): non nella versione 1; nessuna decisione da prendere finché non si riprende (§10 e lo spec a parte restano come riferimento).
 - **Estrazione di un kit di interfaccia comune** (usura, nastro, viti, retro con Settings e Credits, controlli) in `shared/` per riusarlo negli altri plugin, con lo stesso materiale e la stessa texture. Da valutare quando si inizia il secondo plugin con editor.
 - **Licenze** di font e componenti da ricontrollare prima del rilascio; **build con CUDA** da verificare su una macchina con driver NVIDIA.

@@ -1,6 +1,6 @@
 # Fairy Tapes · The Stripper
 
-VST3 **bus-oriented** channel strip: **Channel** = 4K-EQ + ZLCompressor (+ gain staging, not implemented); **Mix bus** = Pultec (not implemented) + Logical4 (SSL bus compressor clone). LP/HP, **Gain/Drive** = **NAM with GPU extension** (TapeHack2 when NAM off), limiter (BlockParty), gate (Denoise). Real, analog-style tone; Tone3000 integration planned.
+VST3 **bus-oriented** channel strip: **Channel** = 4K-EQ + ZLCompressor (+ gain staging, not implemented); **Mix bus** = Pultec (not implemented) + Logical4 (SSL bus compressor clone). LP/HP, **Gain/Drive** = **NAM with GPU extension** (TapeHack2 when NAM off), limiter (BlockParty), gate (Denoise). Real, analog-style tone; NAM models are loaded by hand from your folders (no online catalogue in version 1).
 
 **Design & decisions:** [docs/OVERVIEW.md](docs/OVERVIEW.md) (one-page summary) · [docs/FEATURES.md](docs/FEATURES.md) (full requirements).
 

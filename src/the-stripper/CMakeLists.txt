@@ -49,8 +49,6 @@ add_library(the_stripper MODULE
   src/ui/panel_view.cpp
   src/ui/browser_widgets.cpp
   src/ui/model_browser.cpp
-  src/ui/tone3000_tab.cpp
-  src/tone3000_service.cpp
   src/ui/model_strip.cpp
   src/ui/tape_piece_view.cpp
   src/ui/buttons_tab.cpp
@@ -73,7 +71,6 @@ target_include_directories(the_stripper PRIVATE
   ${VST3_SDK_PLUGINTERFACES}/vst
   ${VST3_SDK_PUBLIC}/source
   ${VST3_SDK_PUBLIC}/source/vst
-  ${CMAKE_CURRENT_SOURCE_DIR}/../../shared/tone3000/include
 )
 
 target_compile_definitions(the_stripper PRIVATE
@@ -124,9 +121,6 @@ add_custom_command(TARGET the_stripper POST_BUILD
 # Link gpu_nam (GPU NAM inference with automatic CPU-stub fallback).
 # cudart is propagated as a PUBLIC dependency of gpu_nam.
 nam_drive_link(the_stripper)
-# The TONE3000 client is built only where OpenSSL was found (shared/tone3000); without it the tab says it is not set up.
-target_link_libraries(the_stripper PRIVATE $<$<TARGET_EXISTS:tone3000>:tone3000>)
-target_compile_definitions(the_stripper PRIVATE $<$<TARGET_EXISTS:tone3000>:FAIRY_HAS_TONE3000>)
 target_link_libraries(the_stripper PRIVATE gpu_nam sdk fairy_ui fairy_ui_widgets)   # shared code-drawn VSTGUI controls (shared/ui)
 if(APPLE)
   target_link_libraries(the_stripper PRIVATE "-framework CoreFoundation")
@@ -196,11 +190,6 @@ target_link_libraries(the_stripper_silkscreen_items_tests PRIVATE fairy_ui)
 add_test(NAME the_stripper_silkscreen_items_tests COMMAND the_stripper_silkscreen_items_tests)
 
 # Tape fonts as vector paths (header-only, no VSTGUI).
-# The texts of the TONE3000 tab (header-only: the common client headers, no network library).
-add_executable(the_stripper_tone3000_view_tests tests/test_tone3000_view.cpp)
-target_include_directories(the_stripper_tone3000_view_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/../../shared/tone3000/include)
-add_test(NAME the_stripper_tone3000_view_tests COMMAND the_stripper_tone3000_view_tests)
-
 add_executable(the_stripper_tape_kit_tests tests/test_tape_kit.cpp)
 target_include_directories(the_stripper_tape_kit_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(the_stripper_tape_kit_tests PRIVATE fairy_ui)
@@ -233,9 +222,8 @@ add_test(NAME the_stripper_recall_marks_tests COMMAND the_stripper_recall_marks_
 add_executable(the_stripper_render EXCLUDE_FROM_ALL tools/render_editor.cpp ${VST3_SDK_PUBLIC}/source/main/moduleinit.cpp ${VST3_SDK_PUBLIC}/source/main/pluginfactory.cpp src/controller.cpp src/ui/editor.cpp src/ui/panel_view.cpp
   src/ui/browser_widgets.cpp
   src/ui/model_browser.cpp
-  src/ui/tone3000_tab.cpp src/tone3000_service.cpp
   src/ui/model_strip.cpp src/ui/tape_piece_view.cpp src/ui/buttons_tab.cpp src/ui/recall_marks_view.cpp src/ui/gpu_chip_view.cpp)
-target_include_directories(the_stripper_render PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/../../shared/tone3000/include ${VST3_SDK_PATH} ${VST3_SDK_BASE}/source ${VST3_SDK_PLUGINTERFACES}/base ${VST3_SDK_PLUGINTERFACES}/vst ${VST3_SDK_PUBLIC}/source ${VST3_SDK_PUBLIC}/source/vst)
+target_include_directories(the_stripper_render PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${VST3_SDK_PATH} ${VST3_SDK_BASE}/source ${VST3_SDK_PLUGINTERFACES}/base ${VST3_SDK_PLUGINTERFACES}/vst ${VST3_SDK_PUBLIC}/source ${VST3_SDK_PUBLIC}/source/vst)
 target_link_libraries(the_stripper_render PRIVATE sdk pluginterfaces fairy_ui fairy_ui_widgets)
 
 # Model messages (header-only, fake message objects): no SDK libraries needed.

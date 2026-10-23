@@ -16,8 +16,6 @@ public:
   void setText(std::string text);
   void setEnabled(bool enabled);
   bool isEnabled() const { return enabled_; }
-  void setSelected(bool selected);          // the chosen one of a row of buttons: amber lettering and frame
-  void setFontSize(double size);
   std::function<void()> onClick;
 
   void draw(VSTGUI::CDrawContext* context) override;
@@ -27,8 +25,6 @@ public:
 private:
   std::string text_;
   bool enabled_ = true;
-  bool selected_ = false;
-  double fontSize_ = 12;
 };
 
 // Vertical list of text rows with a selection, a green marker on one row and wheel scrolling.

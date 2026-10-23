@@ -2,7 +2,6 @@
 // The folder scan runs on a worker thread; the editor calls poll() from its UI timer to pick up the result.
 #pragma once
 
-#include "tone3000_actions.h"
 #include "ui/model_source.h"
 
 #include "vstgui/lib/controls/cbuttons.h"
@@ -22,7 +21,6 @@ namespace FairyTapes::TheStripper::Ui {
 
 class PushButton;
 class ListBox;
-class Tone3000Tab;
 struct ScanState;
 
 class ModelBrowser : public VSTGUI::CViewContainer, public VSTGUI::IControlListener {
@@ -31,14 +29,12 @@ public:
   static constexpr int kPopupHeight = 430;
 
   // `frameSize`: the overlay covers it and centres the popup. `loadedPath`: path of the model now loaded (green dot).
-  // `tone3000`: what the TONE3000 tab can ask for (left empty = the tab says TONE3000 is not set up).
-  ModelBrowser(const VSTGUI::CRect& frameSize, std::string loadedPath, Tone3000Actions tone3000 = {});
+  ModelBrowser(const VSTGUI::CRect& frameSize, std::string loadedPath);
 
   std::function<void(const std::string& path)> onLoad;   // LOAD (path) or NO MODEL (empty path)
   std::function<void()> onClose;                         // CANCEL, X or after a load: the editor removes the view
 
-  void poll();   // UI timer: picks up a finished scan and a new state of the TONE3000 tab
-  void showTab(bool tone3000);                       // LOCAL (false) or TONE3000 (true)
+  void poll();   // UI timer: picks up a finished scan
 
   // IControlListener (search field)
   void valueChanged(VSTGUI::CControl* control) override;
@@ -51,7 +47,6 @@ protected:
 
 private:
   void build();
-  void applyTab();
   void rescan();
   void applyFilter();
   void refreshFolders();
@@ -75,12 +70,6 @@ private:
   PushButton* loadButton_ = nullptr;
   PushButton* removeButton_ = nullptr;
   std::shared_ptr<ScanState> scan_;
-
-  Tone3000Actions tone3000_;
-  bool tone3000Tab_ = false;
-  std::vector<VSTGUI::CView*> localViews_;
-  Tone3000Tab* tab_ = nullptr;
-  PushButton *localTabButton_ = nullptr, *toneTabButton_ = nullptr;
 };
 
 } // namespace FairyTapes::TheStripper::Ui

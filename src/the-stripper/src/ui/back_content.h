@@ -19,13 +19,13 @@ namespace FairyTapes::TheStripper::Ui {
 // The keys of the rows (BackItem::key), used to refresh a row from outside.
 enum BackKey : int {
   kKeyWear = 1, kKeyNotes, kKeyTapeFont, kKeyValuesFont, kKeyHold, kKeyRelease, kKeyReroll,   // APPEARANCE
-  kKeyInference, kKeyRecall, kKeyMarkNow, kKeyFolders, kKeyTone3000,                          // BEHAVIOUR
+  kKeyInference, kKeyRecall, kKeyMarkNow, kKeyFolders,                       // BEHAVIOUR
 };
 
 // What the editor wires to the rows.
 struct BackActions {
   std::function<void(const std::function<void(Preferences&)>& mutate)> changePreference;   // saves, applies, refreshes the rows
-  std::function<void()> reroll, manageFolders, openTone3000, markNow;
+  std::function<void()> reroll, manageFolders, markNow;
   std::function<void(int mode)> recallModeChanged;                                         // RECALL MARKS: 0 = Auto, 1 = Manual
 };
 
@@ -72,11 +72,8 @@ inline FairyTapes::Ui::BackContent makeBackContent(const Preferences& prefs, int
   BackItem folders = buttonItem(kKeyFolders, BackColumn::Behaviour, "MODEL FOLDERS", "MANAGE...", "");
   folders.hint = "where the picker looks for models";
   folders.onPress = act.manageFolders;
-  BackItem tone = buttonItem(kKeyTone3000, BackColumn::Behaviour, "TONE3000", "OPEN...", "");
-  tone.hint = "sign in and download models";
-  tone.onPress = act.openTone3000;
 
-  c.items = {wear, notes, tape, values, hold, release, look, inference, recall, mark, folders, tone};
+  c.items = {wear, notes, tape, values, hold, release, look, inference, recall, mark, folders};
   c.notes = {"Appearance settings belong to you: they are kept in your preferences and apply to every project and every instance.",
              "Behaviour settings change how the plugin works: they are saved in the project, together with the parameters.",
              "The wear (scratches, tape, screws) is made once per instance from a saved seed and never changes by itself.",

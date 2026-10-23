@@ -61,32 +61,20 @@ void PushButton::setEnabled(bool enabled) {
   invalid();
 }
 
-void PushButton::setSelected(bool selected) {
-  if (selected_ == selected) return;
-  selected_ = selected;
-  invalid();
-}
-
-void PushButton::setFontSize(double size) {
-  if (fontSize_ == size) return;
-  fontSize_ = size;
-  invalid();
-}
-
 void PushButton::draw(CDrawContext* ctx) {
   const CRect r = getViewSize();
   ctx->saveGlobalState();
   ctx->setDrawMode(kAntiAliasing | kNonIntegralMode);
   if (!enabled_) ctx->setGlobalAlpha(0.4f);
   if (auto path = owned(ctx->createRoundRectGraphicsPath(CRect(r).inset(0.5, 0.5), 2))) {
-    ctx->setFillColor(selected_ ? CColor(0x22, 0x22, 0x24) : kButtonFace);
+    ctx->setFillColor(kButtonFace);
     ctx->drawGraphicsPath(path, CDrawContext::kPathFilled);
-    ctx->setFrameColor(selected_ ? kAmber : kButtonEdge);
+    ctx->setFrameColor(kButtonEdge);
     ctx->setLineWidth(1);
     ctx->drawGraphicsPath(path, CDrawContext::kPathStroked);
   }
-  ctx->setFont(font(fontSize_));
-  ctx->setFontColor(selected_ ? kAmber : kButtonText);
+  ctx->setFont(font(12));
+  ctx->setFontColor(kButtonText);
   ctx->drawString(text_.c_str(), r, kCenterText);
   ctx->restoreGlobalState();
   setDirty(false);

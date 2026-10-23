@@ -37,8 +37,6 @@ void test_credits_list_every_component_with_its_license() {
   // the three tape fonts (their licenses oblige us to say so)
   CHECK(contains(all, "Zeyada") && contains(all, "OFL-1.1"));
   CHECK(contains(all, "Rock Salt") && contains(all, "Homemade Apple") && contains(all, "Apache-2.0"));
-  // the network part of the TONE3000 tab (libcurl is built in; OpenSSL is what it uses outside Windows)
-  CHECK(contains(all, "libcurl") && contains(all, "curl license") && contains(all, "OpenSSL"));
   std::set<std::string> names;
   for (const auto& c : kCredits) CHECK(names.insert(c.component).second);   // no component twice
 }
@@ -49,7 +47,6 @@ void test_notices_and_license_text() {
   for (const char* n : kNotices) notices += n;
   CHECK(contains(notices, "trademark") && contains(notices, "Steinberg"));   // the VST trademark notice
   CHECK(contains(notices, ".nam"));                                         // the models carry their own licenses
-  CHECK(contains(notices, "Powered by TONE3000"));                           // a condition of the TONE3000 API terms
   CHECK(contains(std::string(kLicenseLine), "GPL-3.0"));
 }
 
@@ -147,7 +144,7 @@ void test_the_content_fits_the_common_template() {
   const auto c = content(Preferences{});
   CHECK(c.tabs.size() == 3 && c.tabs[0].label == "SETTINGS" && c.tabs[1].label == "BUTTONS" && c.tabs[2].label == "CREDITS");
   CHECK(c.tabs[1].kind == FairyTapes::Ui::BackTabKind::Custom);                                   // the BUTTONS tab is drawn by the editor
-  CHECK(c.items.size() == 12 && c.notes.size() == 4 && c.credits.entries.size() == static_cast<std::size_t>(kCreditCount));
+  CHECK(c.items.size() == 11 && c.notes.size() == 4 && c.credits.entries.size() == static_cast<std::size_t>(kCreditCount));
   CHECK(c.headerLine == "THE STRIPPER  \xC2\xB7  CHANNEL STRIP VST3" && c.credits.title == "THE STRIPPER");
   CHECK(c.credits.licenseLines.size() == 3 && c.credits.notices.size() == 3);
 }
@@ -171,17 +168,16 @@ void test_what_is_not_available_yet_is_dimmed() {
   const auto c = content(Preferences{});
   auto item = [&](int key) { return c.items[static_cast<std::size_t>(FairyTapes::Ui::findItem(c, key))]; };
   CHECK(!item(kKeyInference).enabled);                                                           // needs the GPU build
-  for (int key : {kKeyWear, kKeyRecall, kKeyMarkNow, kKeyFolders, kKeyTone3000, kKeyReroll}) CHECK(item(key).enabled);
+  for (int key : {kKeyWear, kKeyRecall, kKeyMarkNow, kKeyFolders, kKeyReroll}) CHECK(item(key).enabled);
 }
 
 void test_changing_a_row_changes_the_preferences_and_presses_call_the_editor() {
   Preferences p;
-  int rerolls = 0, folders = 0, tone = 0, marks = 0, recallMode = -1, changes = 0;
+  int rerolls = 0, folders = 0, marks = 0, recallMode = -1, changes = 0;
   BackActions a;
   a.changePreference = [&](const std::function<void(Preferences&)>& mutate) { mutate(p); ++changes; };
   a.reroll = [&] { ++rerolls; };
   a.manageFolders = [&] { ++folders; };
-  a.openTone3000 = [&] { ++tone; };
   a.markNow = [&] { ++marks; };
   a.recallModeChanged = [&](int m) { recallMode = m; };
   const auto c = content(p, 0, a);
@@ -201,10 +197,9 @@ void test_changing_a_row_changes_the_preferences_and_presses_call_the_editor() {
   CHECK(changes == 6);
   item(kKeyReroll).onPress();
   item(kKeyFolders).onPress();
-  item(kKeyTone3000).onPress();
   item(kKeyMarkNow).onPress();
   item(kKeyRecall).onChange(1);
-  CHECK(rerolls == 1 && folders == 1 && tone == 1 && marks == 1 && recallMode == 1 && changes == 6);   // these are not preferences
+  CHECK(rerolls == 1 && folders == 1 && marks == 1 && recallMode == 1 && changes == 6);   // these are not preferences
   BackActions none;                                                                               // no callbacks at all: nothing crashes
   const auto quiet = content(Preferences{}, 0, none);
   quiet.items[static_cast<std::size_t>(FairyTapes::Ui::findItem(quiet, kKeyWear))].onChange(1);

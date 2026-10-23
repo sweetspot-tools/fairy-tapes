@@ -4,7 +4,6 @@
  */
 
 #include "controller.h"
-#include "tone3000_service.h"
 #include "pluginterfaces/base/funknownimpl.h"
 #include "state.h"
 #include "ui/editor.h"
@@ -27,8 +26,6 @@ void asciiToStr128(const char* src, Steinberg::Vst::String128 dst) {
   dst[127] = 0;
 }
 } // namespace
-
-Controller::~Controller() { FUNKNOWN_DTOR }
 
 Controller::Controller() {
   FUNKNOWN_CTOR
@@ -726,11 +723,6 @@ std::string Controller::modelPath() const { std::lock_guard<std::mutex> lk(model
 std::string Controller::modelName() const { std::lock_guard<std::mutex> lk(modelMutex_); return modelStatus_.name; }
 std::string Controller::modelError() const { std::lock_guard<std::mutex> lk(modelMutex_); return modelStatus_.error; }
 bool Controller::modelGpu() const { std::lock_guard<std::mutex> lk(modelMutex_); return modelStatus_.state == 2 && modelStatus_.gpu; }
-Tone3000Actions Controller::tone3000Actions() {
-  if (!tone3000_) tone3000_ = Tone3000Service::create();
-  return tone3000_ ? tone3000_->actions() : Tone3000Actions{};
-}
-
 int Controller::modelState() const { std::lock_guard<std::mutex> lk(modelMutex_); return modelStatus_.state; }
 
 } // namespace FairyTapes::TheStripper

@@ -212,7 +212,7 @@ The **Gain / Drive** stage is the **core** of The Stripper. It uses **NAM (Neura
 ### 2.2 NAM integration
 
 - **Target:** NAM A2 — model format and inference API follow NAM A2 when available.
-- **Source of models:** The user can load models from **Tone3000** (when available in the UI) or from **local file** (`.nam` or NAM A2–compatible).
+- **Source of models:** The user loads models from a **local file** (`.nam` or NAM A2–compatible) with the model picker. Downloading from **Tone3000** and online search are **not in version 1** (decision 2026-10-23); models downloaded from the Tone3000 website are loaded by hand.
 - **Single NAM stage:** The Gain / Drive stage is the **only** stage that can run a NAM model. Other stages use classic algorithms only.
 - **Execution: GPU (with CPU fallback).** NAM in the Drive stage is planned to run on **GPU** via integration with **gpuaudio-sdk** (see §6). Currently runs on CPU via `NeuralAmpModelerCore`. If the GPU is unavailable or unsupported, the plugin **falls back to CPU** so it remains usable everywhere.
 
