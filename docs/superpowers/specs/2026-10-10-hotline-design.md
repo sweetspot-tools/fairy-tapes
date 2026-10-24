@@ -94,7 +94,7 @@ Pannello rack orizzontale 1000 × 470 (altezza di Pillow Talk, così il retro us
 - **Posizioni dei sei nastri di carta:** scelte dall'implementatore (intestazione, fascia tra LEVEL e CHARACTER, LEVEL a destra dei LED, due su CHARACTER, fascia sotto i riquadri), verificate solo da test (mai sopra controlli, meter, LED, viti o «BACK →»). **Da confermare con l'utente** guardando il render.
 - **Preview del retro:** aggiornare `hotline_rack.html` al layout 470 con le quattro schede (SETTINGS, DEVICES, ROUTING, CREDITS), oppure lasciare la resa dell'editor come riferimento.
 - **Segno di somma nel kit:** `RoutingBuilder::sum` / `LegendSymbol::Sum` in `shared/ui` (richiesta al proprietario di `shared/`; oggi disegnato in locale). Analogamente un parametro di spostamento del centro per `RackKnob` (oggi `BigRackKnob` locale per la manopola del Morph).
-- **CI:** Hotline non è nel workflow `.github/workflows/build.yml`; aggiungerlo è una decisione dell'utente.
+- **CI:** `.github/workflows/build.yml` compila tutti i target cmake su Ubuntu, Windows e macOS, quindi Hotline è già compilato dalla CI; manca solo il caricamento dell'artefatto di Hotline. La compilazione su Windows e macOS non è ancora verificata. Decisione dell'utente: aggiungere il caricamento dell'artefatto? (`build.yml` non è stato toccato.)
 
 Note tecniche rinviate (una riga ciascuna):
 - LED DRV: vedi la prima decisione aperta qui sopra.
@@ -104,4 +104,4 @@ Decise: pannello alto 470 (2026-10-24); meter LEVEL tenuti (2026-10-24); valori 
 
 ## 9. Processo
 
-Si lavora su `pre-release` (nessun branch dedicato, regola di `CLAUDE.md` §1). Piano: `docs/superpowers/plans/2026-10-10-hotline.md`; poi codice con test. Il kit grafico comune è in `shared/ui` (usura, viti, nastro, retro, controlli rack, routing).
+Il lavoro è stato fatto sul branch `feat/hotline`, in un worktree dedicato, e poi unito in `pre-release` (regole di `CLAUDE.md` §1 e §2). Piano: `docs/superpowers/plans/2026-10-10-hotline.md`; poi codice con test. Il kit grafico comune è in `shared/ui` (usura, viti, nastro, retro, controlli rack, routing).

@@ -23,7 +23,7 @@ From the suite root (SDK in `vendors/vst3sdk`), in a scratch folder outside the 
 ```bash
 cmake -S . -B /tmp/hotline-build -DCMAKE_BUILD_TYPE=Release -DGPU_NAM_DISABLE_CUDA=ON
 cmake --build /tmp/hotline-build -j2 --target hotline hotline_tests hotline_ui_tests hotline_decor_tests \
-  hotline_back_tests hotline_factory_test hotline_state_module_test
+  hotline_back_tests hotline_factory_test hotline_state_module_test hotline_processor_test
 ctest --test-dir /tmp/hotline-build -R hotline --output-on-failure
 ```
 
