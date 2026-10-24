@@ -35,6 +35,7 @@ add_library(hotline MODULE
   src/engine.cpp
   src/ui/big_knob.cpp
   src/ui/decor.cpp
+  src/ui/devices_tab.cpp
   src/ui/editor.cpp
   src/ui/panel_view.cpp
   src/ui/prefs.cpp
@@ -123,6 +124,13 @@ target_include_directories(hotline_decor_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DI
 target_link_libraries(hotline_decor_tests PRIVATE fairy_ui)
 add_test(NAME hotline_decor_tests COMMAND hotline_decor_tests)
 
+# The back of the panel without a window: SETTINGS content, DEVICES cards, ROUTING diagram, CREDITS (headers over the shared
+# kit; devices.cpp for describeDevice).
+add_executable(hotline_back_tests tests/test_back.cpp src/devices.cpp)
+target_include_directories(hotline_back_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${VST3_SDK_PATH})
+target_link_libraries(hotline_back_tests PRIVATE fairy_ui)
+add_test(NAME hotline_back_tests COMMAND hotline_back_tests)
+
 # Geometry of the big Morph knob (VSTGUI views, no window).
 add_executable(hotline_ui_tests tests/test_ui.cpp src/ui/big_knob.cpp)
 target_include_directories(hotline_ui_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${VST3_SDK_PATH})
@@ -139,6 +147,7 @@ add_executable(hotline_render EXCLUDE_FROM_ALL
   src/engine.cpp
   src/ui/big_knob.cpp
   src/ui/decor.cpp
+  src/ui/devices_tab.cpp
   src/ui/editor.cpp
   src/ui/panel_view.cpp
   src/ui/prefs.cpp
@@ -176,6 +185,7 @@ if(NOT WIN32)
   target_include_directories(hotline_state_module_test PRIVATE ${VST3_SDK_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/src)
   target_compile_definitions(hotline_state_module_test PRIVATE HOTLINE_MODULE="${HOTLINE_MODULE_PATH}")
   target_link_libraries(hotline_state_module_test PRIVATE pluginterfaces fairy_ui ${CMAKE_DL_LIBS})
+  add_dependencies(hotline_state_module_test hotline)   # it dlopens the built bundle
   add_test(NAME hotline_state_module_test COMMAND hotline_state_module_test)
   set_tests_properties(hotline_state_module_test PROPERTIES SKIP_RETURN_CODE 77)
 endif()

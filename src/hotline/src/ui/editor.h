@@ -14,7 +14,11 @@
 // Corner screws (over the wear and the tapes, below the controls): look from the seed (ui/screw_angles.h, the same as the
 // other plug-ins'), the missing one shows only its hole; dragging turns a screw and the end of the drag stores the
 // user's rotation in the instance decor (Controller::editDecor, project marked dirty once).
-// The back of the panel (SETTINGS, DEVICES, ROUTING, CREDITS) is Task 8b.
+// The back of the panel (SETTINGS, DEVICES, ROUTING, CREDITS; shared FairyTapes::Ui::BackView, contents from ui/back_settings.h)
+// sits beside the front in the frame. "BACK ->" at the right of the header turns the panel (FairyTapes::Ui::PanelFlip, about
+// 0.8 s), "<- BACK" turns it again; only the side that is shown takes clicks. The back has its own wear (the seed with another
+// salt, the same level) and the four corner screws (turning one turns it on both sides). WEAR and TAPE FONT of SETTINGS are
+// stored in the user preferences (ui/prefs.h) and applied live; the last tab is remembered while the editor is open.
 #pragma once
 
 #include "params.h"
@@ -23,6 +27,7 @@
 #include "ui/layout.h"
 #include "ui/prefs.h"
 
+#include "fairy_ui/flip_view.h"
 #include "fairy_ui/skin.h"
 #include "fairy_ui/tape_font.h"
 #include "fairy_ui/wear.h"
@@ -51,6 +56,8 @@ class ClipLed;
 class SilkscreenView;
 class WearView;
 class ScrewView;
+class BackView;
+class TextLink;
 }
 
 namespace FairyTapes::Hotline {
@@ -143,13 +150,25 @@ private:
   // Screw views for the current seed and the decor's rotations (created once, then updated in place).
   void placeScrews();
   void screwTurned(int index, double shownDeg);
+  // The back of the panel, hidden, in `host` (the frame; the render tool passes its own container).
+  void buildBack(VSTGUI::CViewContainer* host);
+  void startFlip(bool toBack);
+  // A choice on the back: stored in the user preferences and applied.
+  void changeSetting(int key, int index);
+  void applyBackWear();
 
   double scale_ = 1.0;  // sanitized content scale factor
   FairyTapes::Ui::Skin skin_;
   std::array<FairyTapes::Ui::NormalizedControl*, kNumParams> controls_{};  // views are owned by the frame
   FairyTapes::Ui::SilkscreenView* silk_ = nullptr;
   FairyTapes::Ui::WearView* wear_ = nullptr;
-  VSTGUI::CViewContainer* root_ = nullptr;   // the container the views were created in
+  VSTGUI::CViewContainer* root_ = nullptr;   // the container the views were created in (the front)
+  VSTGUI::CViewContainer* front_ = nullptr;  // the front side, owned by the frame
+  FairyTapes::Ui::BackView* back_ = nullptr; // the back side, owned by the frame (hidden until the panel is turned)
+  FairyTapes::Ui::TextLink* backLink_ = nullptr;   // "BACK ->" in the header
+  FairyTapes::Ui::PanelFlip flip_;
+  int backTab_ = 0;                                // the back's tab, kept while the editor is open
+  std::array<FairyTapes::Ui::ScrewView*, kNumScrewViews> backScrews_{};   // the same screws on the back
   std::vector<TapeView*> tapes_;
   std::array<FairyTapes::Ui::ScrewView*, kNumScrewViews> screws_{};
   VSTGUI::CTextEdit* tapeEdit_ = nullptr;

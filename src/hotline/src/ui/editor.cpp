@@ -3,14 +3,18 @@
 
 #include "controller.h"
 #include "state.h"
+#include "ui/back_settings.h"
 #include "ui/big_knob.h"
 #include "ui/decor.h"
+#include "ui/devices_tab.h"
 #include "ui/panel_view.h"
 #include "ui/prefs.h"
 #include "ui/screw_angles.h"
 #include "ui/tape_view.h"
 #include "ui/tapes.h"
 
+#include "fairy_ui/back_view.h"
+#include "fairy_ui/back_widgets.h"
 #include "fairy_ui/draw_util.h"
 #include "fairy_ui/meters.h"
 #include "fairy_ui/rack_controls.h"
@@ -40,6 +44,8 @@
 namespace FairyTapes::Hotline::Ui {
 
 using namespace VSTGUI;
+using FairyTapes::Ui::BackContent;
+using FairyTapes::Ui::BackView;
 using FairyTapes::Ui::ClipLed;
 using FairyTapes::Ui::MeterBar;
 using FairyTapes::Ui::MeterKind;
@@ -50,6 +56,7 @@ using FairyTapes::Ui::RackLitChoice;
 using FairyTapes::Ui::RackToggle;
 using FairyTapes::Ui::ScrewView;
 using FairyTapes::Ui::SilkscreenView;
+using FairyTapes::Ui::TextLink;
 using FairyTapes::Ui::WearLevel;
 using FairyTapes::Ui::WearMark;
 using FairyTapes::Ui::WearView;
@@ -65,6 +72,7 @@ static_assert(Editor::kNumScrewViews == kNumScrews, "one view per stored screw a
 constexpr uint32_t kTimerMs = 30;
 constexpr double kTimerSeconds = kTimerMs / 1000.0;
 constexpr CColor kFrameBackground(0x16, 0x16, 0x17);
+constexpr uint32_t kBackWearSalt = 0x77u;   // the back's wear: another pattern from the same seed (as The Stripper)
 constexpr int32_t kTapeEditTag = 9000;   // + slot; outside the parameter ids
 constexpr CCoord kTapeEditMinWidth = 120, kTapeEditHeight = 24;
 
@@ -173,7 +181,13 @@ bool PLUGIN_API Editor::open(void* parent, const PlatformType& platformType) {
 
   frame = new CFrame(CRect(0, 0, kWidth, kHeight), this);
   frame->setBackgroundColor(kFrameBackground);
-  createViews(frame);
+  // The two sides of the panel: the front (controls) and the back (settings, devices, routing, credits), turned by flip_.
+  front_ = new CViewContainer(CRect(0, 0, kWidth, kHeight));
+  front_->setBackgroundColor(kFrameBackground);
+  createViews(front_);
+  frame->addView(front_);
+  buildBack(frame);
+  flip_ = FairyTapes::Ui::PanelFlip(frame, front_, back_, scale_);
   if (scale_ != 1.0) frame->setZoom(scale_);  // VSTGUIEditor::attached then reports the scaled size
   if (!frame->open(parent, platformType, config)) {
     close();
@@ -192,6 +206,7 @@ void PLUGIN_API Editor::close() {
   }
   unwatchParameters();
   closeTapeEdit(true);   // what was typed is kept, as when the field loses the focus
+  flip_.reset();         // a running turn: its view goes away with the frame's
   if (frame) {
     // Removing the views closes any open knob gesture (controlEndEdit -> endEdit).
     frame->removeAll(true);
@@ -213,8 +228,12 @@ void Editor::resetViewPointers() {
   root_ = nullptr;
   tapes_.clear();
   screws_.fill(nullptr);
+  backScrews_.fill(nullptr);
   tapeEdit_ = nullptr;
   tapeEditSlot_ = -1;
+  front_ = nullptr;
+  back_ = nullptr;
+  backLink_ = nullptr;
 }
 
 const std::vector<WearMark>& Editor::wearMarks(uint32_t seed, WearLevel level) {
@@ -254,8 +273,13 @@ void Editor::setWearLevel(WearLevel level) {
 
 void Editor::applyWear() {
   if (wear_) wear_->setMarks(wearMarks(seed_, wearLevel_));
+  applyBackWear();
   applyControlWear();
   rebuildTapes();
+}
+
+void Editor::applyBackWear() {
+  if (back_) back_->setWear(FairyTapes::Ui::generateWear(seed_ ^ kBackWearSalt, wearLevel_, kWidth, kHeight));
 }
 
 // Caps and button faces: a per-control seed from the instance seed, the same amount as the panel (Off/Light/Heavy).
@@ -365,6 +389,24 @@ void Editor::placeScrews() {
     else root_->addView(view);
     screws_[k] = view;
   }
+  // The same four screws on the back (over its wear and contents; the corners are free of text).
+  if (!back_) return;
+  for (int i = 0; i < kNumScrewViews; ++i) {
+    const auto k = static_cast<std::size_t>(i);
+    const double shown = shownScrewAngle(specs[k].initialAngle, screwAngles_[k]);
+    if (ScrewView* v = backScrews_[k]) {
+      if (v->spec().cross != specs[k].cross || v->spec().missing != specs[k].missing ||
+          v->spec().initialAngle != specs[k].initialAngle)
+        v->setScrew(specs[k], shown);
+      else
+        v->setAngle(shown);
+      continue;
+    }
+    auto* view = new ScrewView(specs[k], shown);
+    view->onTurned = [this, i](double angle) { screwTurned(i, angle); };
+    back_->addView(view);
+    backScrews_[k] = view;
+  }
 }
 
 // The end of a drag: the rotation from the seeded angle goes to the instance decor (one edit, one dirty mark).
@@ -375,6 +417,7 @@ void Editor::screwTurned(int index, double shownDeg) {
   screwAngles_[static_cast<std::size_t>(index)] = d.screwAngles[index];
   owner_->editDecor(d);
   decorRevision_ = owner_->decorRevision();
+  placeScrews();   // the same screw on the other side follows
 }
 
 void Editor::createViews(CViewContainer* parent) {
@@ -427,6 +470,50 @@ void Editor::createViews(CViewContainer* parent) {
   }
 
   applyControlWear();   // caps and faces of the instance
+
+  // The way to the back of the panel: a small text at the right of the header (DESIGN_SYSTEM.md, one link only).
+  const FairyTapes::Ui::BackBox link = FairyTapes::Ui::frontBackLinkBox();
+  backLink_ = new TextLink(CRect(link.x, link.y, link.x + link.w, link.y + link.h), "BACK  \xE2\x86\x92");
+  backLink_->onClick = [this] { startFlip(true); };
+  parent->addView(backLink_);
+}
+
+// ---- The back of the panel ------------------------------------------------------------------------------------------
+void Editor::buildBack(CViewContainer* host) {
+  if (!host) return;
+  BackContent content = backContent(prefs_);
+  for (auto& item : content.items) {
+    const int key = item.key;
+    item.onChange = [this, key](int index) { changeSetting(key, index); };
+  }
+  BackView::Callbacks cb;
+  cb.back = [this] { startFlip(false); };
+  cb.tabChanged = [this](int tab) { backTab_ = tab; };
+  back_ = new BackView(CRect(0, 0, kWidth, kHeight), &skin_, std::move(content), std::move(cb), backTab_);
+  back_->setCustomDrawer(kDevicesTab, drawDevicesTab);
+  back_->setVisible(false);
+  host->addView(back_);
+  applyBackWear();
+  placeScrews();   // the back's screws
+}
+
+// Turns the panel. A text field open on a tape is closed first, keeping what was typed.
+void Editor::startFlip(bool toBack) {
+  closeTapeEdit(true);
+  flip_.start(toBack);
+}
+
+// WEAR and TAPE FONT: stored in the user preferences (a failed write is ignored: the choice still applies to this editor).
+void Editor::changeSetting(int key, int index) {
+  Prefs p = prefs_;
+  if (!applySetting(key, index, p)) return;
+  prefs_ = p;
+  try {
+    savePrefs(prefsPath(), prefs_);
+  } catch (...) {
+  }
+  setWearLevel(p.wear);
+  setTapeFont(tapeFontIdOf(p.tapeFont));
 }
 
 // One click clears the three clip LEDs: the hidden writable parameter goes to the processor, which clears the flags and
@@ -470,6 +557,7 @@ void PLUGIN_API Editor::update(Steinberg::FUnknown* changedUnknown, Steinberg::i
 }
 
 void Editor::onTimer() {
+  flip_.tick();   // the turn of the panel, if one is running
   const uint32_t changed = pending_.exchange(0);
   for (ParamID id = 0; id < kNumParams; ++id)
     if (changed & bit(id)) syncFromController(id);

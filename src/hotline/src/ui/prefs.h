@@ -14,7 +14,7 @@
  * the same names as The Stripper's): wear=Off|Light|Heavy, notes=Show|Hide, tapeFont=Zeyada|RockSalt|HomemadeApple,
  * valuesFont=Tape|Standard. Writes are atomic (temporary file, then rename); a failed write is reported, never fatal.
  * The editor applies Wear (panel and control wear, tapes) and the tape font when it opens and live through
- * Editor::setWearLevel / setTapeFont; NOTES LAYER and VALUES FONT are only stored for now (the SETTINGS tab, Task 8b).
+ * Editor::setWearLevel / setTapeFont; The SETTINGS tab (ui/back_settings.h) offers Wear and the tape font; NOTES LAYER and VALUES FONT are stored in the file but Hotline has no such layers, so they are not offered.
  */
 
 #pragma once
