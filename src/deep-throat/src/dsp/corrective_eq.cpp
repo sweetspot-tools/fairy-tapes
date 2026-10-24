@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "mode_table.h"
+
 namespace FairyTapes::DeepThroat::DSP {
 
 namespace {
@@ -66,12 +68,7 @@ void CorrectiveEq::setAmount(float amount01) {
 }
 
 void CorrectiveEq::updateTargets() {
-  double hpf = 80.0, mud = -2.0;
-  switch (mode_) {
-    case Mode::Speak: hpf = 80.0; mud = -2.0; break;
-    case Mode::Sing:  hpf = 70.0; mud = -3.0; break;
-    case Mode::Puke:  hpf = 60.0; mud = -4.0; break;
-  }
+  const double hpf = modeRow(mode_).hpfHz, mud = modeRow(mode_).mudCutDb;
   targetHpfHz_ = hpf * (0.5 + amount_);
   targetMudDb_ = mud * 2.0 * amount_;
   maxNotchDb_ = 6.0 * 2.0 * amount_;

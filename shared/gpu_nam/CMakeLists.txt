@@ -55,6 +55,11 @@ set(NAM_PARSE_SOURCES
   ${NAM_ROOT}/NAM/sequential.cpp
   ${NAM_ROOT}/NAM/util.cpp
   ${NAM_ROOT}/NAM/wav.cpp
+  # v0.6.0 moved WaveNet (the most common .nam architecture) into NAM/wavenet/: without these files the
+  # WaveNet parser is never registered and those models fail with "No config parser registered".
+  ${NAM_ROOT}/NAM/wavenet/model.cpp
+  ${NAM_ROOT}/NAM/wavenet/a2_fast.cpp
+  ${NAM_ROOT}/NAM/wavenet/slimmable.cpp
 )
 
 # ---------------------------------------------------------------------------

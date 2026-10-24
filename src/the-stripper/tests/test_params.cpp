@@ -10,6 +10,8 @@
 #include "dsp/blockparty.h"
 #include "dsp/denoise.h"
 #include "nam_drive.h"
+#include "dsp/tape_saturation.h"
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -102,6 +104,12 @@ void test_isBypassStage() {
   ASSERT_TRUE(!isBypassStage(0.49));
 }
 
+void test_drive_block_position_follows_strip_mode() {
+  // Channel: right after the input (preamp + multitrack tape); Mix bus: between compression and limiter (2-track mixdown)
+  ASSERT_TRUE(driveBlockAtStart(kStripModeChannel));
+  ASSERT_TRUE(!driveBlockAtStart(kStripModeMixBus));
+}
+
 void test_isChannelMode() {
   ASSERT_TRUE(isChannelMode(0.0));
   ASSERT_TRUE(!isChannelMode(0.5));
@@ -169,8 +177,10 @@ void test_eqTypeFromStripMode() {
 // ---------------------------------------------------------------------------
 
 void test_kNumParams_count() {
-  // 33 up to kDriveAmount (state v7), plus kLimiterPound and kGateThreshold (v8) and kDriveNamOn (v9) appended after it
-  ASSERT_TRUE(kNumParams == 36);
+  // 33 up to kDriveAmount (state v7), plus kLimiterPound and kGateThreshold (v8), kDriveNamOn (v9) and the TAPE
+  // switch and amount (v12) appended after it
+  ASSERT_TRUE(kNumParams == 38);
+  ASSERT_TRUE(kNumParamsV11 == 36);
   ASSERT_TRUE(kNumParamsV8 == 35);
   ASSERT_TRUE(kNumParamsV7 == 33);
   ASSERT_TRUE(kDriveAmount == 32);
@@ -189,7 +199,8 @@ void test_param_enum_ordering() {
   ASSERT_TRUE(kCompressorMode == 14);
   ASSERT_TRUE(kEqHPFFreq == 15);
   ASSERT_TRUE(kEqSaturation == 31);
-  ASSERT_TRUE(kDriveAmount == kNumParams - 4);   // kLimiterPound, kGateThreshold and kDriveNamOn come after it
+  ASSERT_TRUE(kDriveAmount == kNumParams - 6);   // kLimiterPound, kGateThreshold, kDriveNamOn and the two TAPE params come after it
+  ASSERT_TRUE(kDriveTapeOn == 36 && kDriveTapeAmount == 37);
 }
 
 // ---------------------------------------------------------------------------
@@ -309,6 +320,37 @@ void test_fourkeq_hpf_attenuates_dc() {
 
   // HPF at 200 Hz should attenuate DC (constant signal). Last samples should be near zero.
   ASSERT_TRUE(std::fabs(left[N - 1]) < 0.2f);
+}
+
+// Level change (dB) of a sine through the 4K EQ with everything flat and only the HPF on.
+double fourkHpfGainDb(float hpfHz, double sineHz) {
+  DSP::FourKEQ eq;
+  eq.prepare(48000.0, 64);
+  DSP::FourKEQParams p;
+  p.hpfEnabled = true;
+  p.hpfFreq = hpfHz;
+  p.eqTypeBlack = true;
+  std::vector<float> l(64), r(64);
+  double peak = 0.0;
+  for (int b = 0; b < 600; ++b) {
+    for (int i = 0; i < 64; ++i) {
+      const double t = static_cast<double>(b * 64 + i) / 48000.0;
+      l[i] = r[i] = 0.3f * static_cast<float>(std::sin(2.0 * 3.14159265358979 * sineHz * t));
+    }
+    eq.process(l.data(), r.data(), 64, p);
+    if (b >= 450) for (float x : l) peak = std::max(peak, static_cast<double>(std::fabs(x)));
+  }
+  return 20.0 * std::log10(peak / 0.3);
+}
+
+void test_fourkeq_hpf_passband_is_flat() {
+  // The HPF is on by default at 20 Hz: it must leave the audio band alone (it cut 1 kHz by 24 dB when the pole of its
+  // first-order stage had the wrong sign) and only roll off below its corner.
+  ASSERT_APPROX_EPS(fourkHpfGainDb(20.0f, 1000.0), 0.0, 0.3);
+  ASSERT_APPROX_EPS(fourkHpfGainDb(20.0f, 200.0), 0.0, 0.3);
+  ASSERT_APPROX_EPS(fourkHpfGainDb(20.0f, 5000.0), 0.0, 0.3);
+  ASSERT_TRUE(fourkHpfGainDb(200.0f, 50.0) < -12.0);   // well below the corner: cut
+  ASSERT_APPROX_EPS(fourkHpfGainDb(200.0f, 2000.0), 0.0, 0.3);
 }
 
 // ---------------------------------------------------------------------------
@@ -605,6 +647,13 @@ void test_drive_defaults_in_range() {
 // 12. NamDrive DSP (unit-level)
 // ---------------------------------------------------------------------------
 
+// A real WaveNet capture from the pinned NAM submodule (48 kHz). wavenet_a2_max.nam, used before, is gone since
+// NAM v0.6.0, and the tests skipped silently.
+std::filesystem::path exampleModelPath() {
+  return std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path() / "vendors" /
+         "NeuralAmpModelerCore" / "example_models" / "wavenet.nam";
+}
+
 void test_namdrive_passthrough_no_model() {
   FairyTapes::Shared::DSP::NamDrive drv;
   drv.setSampleRate(48000.0);
@@ -637,17 +686,12 @@ void test_namdrive_load_example_model() {
   FairyTapes::Shared::DSP::NamDrive drv;
   drv.setSampleRate(48000.0);
 
-  // Use the example WaveNet A2 model from the NAM repo
-  std::filesystem::path model_path =
-      std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path()
-      / "vendors" / "NeuralAmpModelerCore" / "example_models" / "wavenet_a2_max.nam";
+  const std::filesystem::path model_path = exampleModelPath();
 
-  if (!std::filesystem::exists(model_path)) {
-    std::fprintf(stdout, "    [SKIP] example model not found at %s\n", model_path.c_str());
-    return;
-  }
+  ASSERT_TRUE(std::filesystem::exists(model_path));   // ships with the pinned NAM submodule: never skip
 
   bool ok = drv.loadModel(model_path);
+  if (!ok) std::fprintf(stderr, "    load error: %s\n", drv.lastError().c_str());
   ASSERT_TRUE(ok);
   ASSERT_TRUE(drv.isModelLoaded());
 }
@@ -656,14 +700,9 @@ void test_namdrive_process_with_model() {
   FairyTapes::Shared::DSP::NamDrive drv;
   drv.setSampleRate(48000.0);
 
-  std::filesystem::path model_path =
-      std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path()
-      / "vendors" / "NeuralAmpModelerCore" / "example_models" / "wavenet_a2_max.nam";
+  const std::filesystem::path model_path = exampleModelPath();
 
-  if (!std::filesystem::exists(model_path)) {
-    std::fprintf(stdout, "    [SKIP] example model not found\n");
-    return;
-  }
+  ASSERT_TRUE(std::filesystem::exists(model_path));   // ships with the pinned NAM submodule: never skip
 
   bool ok = drv.loadModel(model_path);
   ASSERT_TRUE(ok);
@@ -696,9 +735,7 @@ void test_namdrive_unload_model() {
   FairyTapes::Shared::DSP::NamDrive drv;
   drv.setSampleRate(48000.0);
 
-  std::filesystem::path model_path =
-      std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path()
-      / "vendors" / "NeuralAmpModelerCore" / "example_models" / "wavenet_a2_max.nam";
+  const std::filesystem::path model_path = exampleModelPath();
 
   if (std::filesystem::exists(model_path))
     drv.loadModel(model_path);
@@ -737,9 +774,7 @@ void test_namdrive_no_nan_inf() {
   FairyTapes::Shared::DSP::NamDrive drv;
   drv.setSampleRate(48000.0);
 
-  std::filesystem::path model_path =
-      std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path()
-      / "vendors" / "NeuralAmpModelerCore" / "example_models" / "wavenet_a2_max.nam";
+  const std::filesystem::path model_path = exampleModelPath();
 
   if (std::filesystem::exists(model_path))
     drv.loadModel(model_path);
@@ -769,20 +804,15 @@ void test_namdrive_auto_compensation_rms() {
   FairyTapes::Shared::DSP::NamDrive drv;
   drv.setSampleRate(48000.0);
 
-  std::filesystem::path model_path =
-      std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path()
-      / "vendors" / "NeuralAmpModelerCore" / "example_models" / "wavenet_a2_max.nam";
+  const std::filesystem::path model_path = exampleModelPath();
 
-  if (!std::filesystem::exists(model_path)) {
-    std::fprintf(stdout, "    [SKIP] example model not found\n");
-    return;
-  }
+  ASSERT_TRUE(std::filesystem::exists(model_path));   // ships with the pinned NAM submodule: never skip
 
-  drv.loadModel(model_path);
+  ASSERT_TRUE(drv.loadModel(model_path));   // a passthrough would pass the level check without testing anything
   drv.setDrive(0.5f);
 
   constexpr int N = 512;
-  constexpr int blocks = 10;
+  constexpr int blocks = 60;   // about 0.64 s: the RMS trackers (tau 100 ms) have converged
   std::vector<float> left(N), right(N);
 
   // Feed several blocks to let RMS tracker converge
@@ -802,27 +832,22 @@ void test_namdrive_auto_compensation_rms() {
     out_rms += left[i] * left[i];
   out_rms = std::sqrt(out_rms / N);
 
-  // Input RMS of a 0.3-amplitude sine ~ 0.3 / sqrt(2) ≈ 0.212
-  // Auto-compensation should keep output RMS within a reasonable range of that
-  // (not necessarily exact due to model nonlinearity and convergence time)
-  ASSERT_TRUE(out_rms > 0.05f);
-  ASSERT_TRUE(out_rms < 1.0f);
+  // Input RMS of a 0.3-amplitude sine = 0.3 / sqrt(2). The compensation is referenced to the input *before* the
+  // Drive gain, so the output keeps that loudness (Drive 0.5 pushes the model +10 dB).
+  const double db = 20.0 * std::log10(out_rms / (0.3 / std::sqrt(2.0)));
+  std::fprintf(stdout, "    NAM Drive 0.5: output %+.2f dB vs input\n", db);
+  ASSERT_APPROX_EPS(db, 0.0, 1.0);
 }
 
 void test_namdrive_coloration_at_zero_drive() {
   FairyTapes::Shared::DSP::NamDrive drv;
   drv.setSampleRate(48000.0);
 
-  std::filesystem::path model_path =
-      std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path()
-      / "vendors" / "NeuralAmpModelerCore" / "example_models" / "wavenet_a2_max.nam";
+  const std::filesystem::path model_path = exampleModelPath();
 
-  if (!std::filesystem::exists(model_path)) {
-    std::fprintf(stdout, "    [SKIP] example model not found\n");
-    return;
-  }
+  ASSERT_TRUE(std::filesystem::exists(model_path));   // ships with the pinned NAM submodule: never skip
 
-  drv.loadModel(model_path);
+  ASSERT_TRUE(drv.loadModel(model_path));
   drv.setDrive(0.0f); // zero drive → unity gain, but model still active
 
   constexpr int N = 512;
@@ -844,6 +869,190 @@ void test_namdrive_coloration_at_zero_drive() {
       differs = true;
   }
   ASSERT_TRUE(differs);
+}
+
+// ---------------------------------------------------------------------------
+// 12c. Tape stage DSP (Airwindows Tape port, one-knob macro, voicing, auto-compensation)
+// ---------------------------------------------------------------------------
+
+double bufferRms(const std::vector<float>& buf, size_t from = 0) {
+  double acc = 0.0;
+  for (size_t i = from; i < buf.size(); ++i)
+    acc += static_cast<double>(buf[i]) * buf[i];
+  return std::sqrt(acc / static_cast<double>(buf.size() - from));
+}
+
+// Runs a stereo sine through the tape in blocks; returns the left channel output.
+std::vector<float> runTapeSine(DSP::TapeSaturation& tape, float amplitude, float freq,
+                               int numBlocks, int blockSize = 512, double sr = 48000.0) {
+  std::vector<float> out;
+  std::vector<float> left(blockSize), right(blockSize);
+  for (int b = 0; b < numBlocks; ++b) {
+    for (int i = 0; i < blockSize; ++i) {
+      const double t = static_cast<double>(b * blockSize + i) / sr;
+      left[i] = right[i] = amplitude * static_cast<float>(std::sin(2.0 * 3.14159265358979 * freq * t));
+    }
+    tape.process(left.data(), right.data(), blockSize);
+    out.insert(out.end(), left.begin(), left.end());
+  }
+  return out;
+}
+
+void test_tape_macro_slam_range() {
+  using V = DSP::TapeSaturation::Voicing;
+  ASSERT_APPROX(DSP::TapeSaturation::slamDb(0.0f, V::Tracking), 0.0);
+  ASSERT_APPROX(DSP::TapeSaturation::slamDb(0.0f, V::Mixdown), 0.0);
+  ASSERT_APPROX(DSP::TapeSaturation::slamDb(1.0f, V::Tracking), 12.0);
+  // Mixdown is gentler than tracking at the same knob position.
+  ASSERT_TRUE(DSP::TapeSaturation::slamDb(1.0f, V::Mixdown) < DSP::TapeSaturation::slamDb(1.0f, V::Tracking));
+  ASSERT_TRUE(DSP::TapeSaturation::slamDb(1.0f, V::Mixdown) > 0.0f);
+}
+
+void test_tape_macro_bump_monotonic() {
+  using V = DSP::TapeSaturation::Voicing;
+  for (V v : {V::Tracking, V::Mixdown}) {
+    float prev = -1.0f;
+    for (float a = 0.0f; a <= 1.0001f; a += 0.1f) {
+      const float b = DSP::TapeSaturation::bump(a, v);
+      ASSERT_TRUE(b > prev);
+      ASSERT_TRUE(b >= 0.0f && b <= 1.0f);
+      prev = b;
+    }
+  }
+  ASSERT_TRUE(DSP::TapeSaturation::bump(1.0f, V::Mixdown) < DSP::TapeSaturation::bump(1.0f, V::Tracking));
+}
+
+// Low-end lift (head bump) relative to 1 kHz, measured with a two-tone signal at -20 dBFS per tone.
+double tapeLowLiftDb(float amount, DSP::TapeSaturation::Voicing v) {
+  DSP::TapeSaturation tape;
+  tape.setSampleRate(48000.0);
+  tape.setParams(amount, v);
+  constexpr int N = 512;
+  constexpr int blocks = 200;
+  std::vector<float> left(N), right(N), out;
+  for (int b = 0; b < blocks; ++b) {
+    for (int i = 0; i < N; ++i) {
+      const double t = static_cast<double>(b * N + i) / 48000.0;
+      left[i] = right[i] = static_cast<float>(0.1 * std::sin(2.0 * 3.14159265358979 * 40.0 * t) +
+                                              0.1 * std::sin(2.0 * 3.14159265358979 * 1000.0 * t));
+    }
+    tape.process(left.data(), right.data(), N);
+    if (b >= blocks - 75)
+      out.insert(out.end(), left.begin(), left.end());
+  }
+  auto mag = [&out](double f) {
+    double re = 0.0, im = 0.0;
+    for (size_t i = 0; i < out.size(); ++i) {
+      const double ph = 2.0 * 3.14159265358979 * f * static_cast<double>(i) / 48000.0;
+      re += out[i] * std::cos(ph);
+      im += out[i] * std::sin(ph);
+    }
+    return std::sqrt(re * re + im * im);
+  };
+  return 20.0 * std::log10(mag(40.0) / mag(1000.0));
+}
+
+void test_tape_head_bump_grows_with_amount() {
+  using V = DSP::TapeSaturation::Voicing;
+  for (V v : {V::Tracking, V::Mixdown}) {
+    const double lo = tapeLowLiftDb(0.0f, v);
+    const double hi = tapeLowLiftDb(1.0f, v);
+    ASSERT_TRUE(lo > 0.0);
+    ASSERT_TRUE(hi > lo + 0.25);
+  }
+  // Tracking has the fatter low end at full amount.
+  ASSERT_TRUE(tapeLowLiftDb(1.0f, V::Tracking) > tapeLowLiftDb(1.0f, V::Mixdown));
+}
+
+void test_tape_near_unity_at_zero_amount() {
+  DSP::TapeSaturation tape;
+  tape.setSampleRate(48000.0);
+  tape.setParams(0.0f, DSP::TapeSaturation::Voicing::Tracking);
+  const std::vector<float> out = runTapeSine(tape, 0.25f, 1000.0f, 40);
+  const double in_rms = 0.25 / std::sqrt(2.0);
+  const double db = 20.0 * std::log10(bufferRms(out, out.size() / 2) / in_rms);
+  ASSERT_APPROX_EPS(db, 0.0, 1.0);
+}
+
+void test_tape_auto_compensation_holds_level() {
+  using V = DSP::TapeSaturation::Voicing;
+  for (V v : {V::Tracking, V::Mixdown}) {
+    DSP::TapeSaturation tape;
+    tape.setSampleRate(48000.0);
+    tape.setParams(1.0f, v);
+    const std::vector<float> out = runTapeSine(tape, 0.25f, 1000.0f, 60);
+    const double in_rms = 0.25 / std::sqrt(2.0);
+    const double db = 20.0 * std::log10(bufferRms(out, out.size() / 2) / in_rms);
+    ASSERT_APPROX_EPS(db, 0.0, 1.5);
+  }
+}
+
+void test_tape_colors_signal_at_full_amount() {
+  DSP::TapeSaturation tape;
+  tape.setSampleRate(48000.0);
+  tape.setParams(1.0f, DSP::TapeSaturation::Voicing::Tracking);
+  const float amp = 0.5f;
+  const std::vector<float> out = runTapeSine(tape, amp, 1000.0f, 40);
+  // Saturation reshapes the waveform: crest factor drops below a pure sine's sqrt(2).
+  const size_t from = out.size() / 2;
+  float peak = 0.0f;
+  for (size_t i = from; i < out.size(); ++i)
+    peak = std::max(peak, std::fabs(out[i]));
+  const double crest = peak / bufferRms(out, from);
+  ASSERT_TRUE(crest < std::sqrt(2.0) - 0.02);
+}
+
+void test_tape_voicings_differ() {
+  DSP::TapeSaturation tracking, mixdown;
+  tracking.setSampleRate(48000.0);
+  mixdown.setSampleRate(48000.0);
+  tracking.setParams(0.8f, DSP::TapeSaturation::Voicing::Tracking);
+  mixdown.setParams(0.8f, DSP::TapeSaturation::Voicing::Mixdown);
+  const std::vector<float> a = runTapeSine(tracking, 0.5f, 60.0f, 20);
+  const std::vector<float> b = runTapeSine(mixdown, 0.5f, 60.0f, 20);
+  double diff = 0.0;
+  for (size_t i = 0; i < a.size(); ++i)
+    diff = std::max(diff, static_cast<double>(std::fabs(a[i] - b[i])));
+  ASSERT_TRUE(diff > 1e-3);
+}
+
+void test_tape_no_nan_inf_hot_input() {
+  DSP::TapeSaturation tape;
+  tape.setSampleRate(96000.0);
+  tape.setParams(1.0f, DSP::TapeSaturation::Voicing::Tracking);
+  const std::vector<float> out = runTapeSine(tape, 4.0f, 100.0f, 20, 333, 96000.0);
+  for (float s : out) {
+    ASSERT_TRUE(std::isfinite(s));
+    ASSERT_TRUE(std::fabs(s) < 8.0f);
+  }
+}
+
+void test_tape_reset_clears_state() {
+  DSP::TapeSaturation tape;
+  tape.setSampleRate(48000.0);
+  tape.setParams(1.0f, DSP::TapeSaturation::Voicing::Tracking);
+  runTapeSine(tape, 0.8f, 50.0f, 10);
+  tape.reset();
+  constexpr int N = 512;
+  std::vector<float> left(N, 0.0f), right(N, 0.0f);
+  tape.process(left.data(), right.data(), N);
+  for (int i = 0; i < N; ++i) {
+    ASSERT_TRUE(std::fabs(left[i]) < 1e-6f);
+    ASSERT_TRUE(std::fabs(right[i]) < 1e-6f);
+  }
+}
+
+void test_tape_keeps_stereo() {
+  DSP::TapeSaturation tape;
+  tape.setSampleRate(48000.0);
+  tape.setParams(0.5f, DSP::TapeSaturation::Voicing::Mixdown);
+  constexpr int N = 512;
+  std::vector<float> left(N), right(N, 0.0f);
+  for (int i = 0; i < N; ++i)
+    left[i] = 0.3f * static_cast<float>(std::sin(2.0 * 3.14159265358979 * 440.0 * i / 48000.0));
+  tape.process(left.data(), right.data(), N);
+  for (int i = 0; i < N; ++i)
+    ASSERT_TRUE(std::fabs(right[i]) < 1e-6f);
 }
 
 // ---------------------------------------------------------------------------
@@ -888,6 +1097,7 @@ int main() {
   RUN_TEST(test_gainStagingTrimToLinear);
   RUN_TEST(test_isBypassStage);
   RUN_TEST(test_isChannelMode);
+  RUN_TEST(test_drive_block_position_follows_strip_mode);
 
   // EQ helpers
   RUN_TEST(test_eqNormToHPFFreq);
@@ -911,6 +1121,7 @@ int main() {
   RUN_TEST(test_fourkeq_passthrough_flat);
   RUN_TEST(test_fourkeq_brown_vs_black_differ);
   RUN_TEST(test_fourkeq_hpf_attenuates_dc);
+  RUN_TEST(test_fourkeq_hpf_passband_is_flat);
 
   // Compression
   RUN_TEST(test_compression_passthrough_zero_amount);
@@ -947,6 +1158,18 @@ int main() {
   RUN_TEST(test_namdrive_no_nan_inf);
   RUN_TEST(test_namdrive_auto_compensation_rms);
   RUN_TEST(test_namdrive_coloration_at_zero_drive);
+
+  // Tape stage DSP
+  RUN_TEST(test_tape_macro_slam_range);
+  RUN_TEST(test_tape_macro_bump_monotonic);
+  RUN_TEST(test_tape_head_bump_grows_with_amount);
+  RUN_TEST(test_tape_near_unity_at_zero_amount);
+  RUN_TEST(test_tape_auto_compensation_holds_level);
+  RUN_TEST(test_tape_colors_signal_at_full_amount);
+  RUN_TEST(test_tape_voicings_differ);
+  RUN_TEST(test_tape_no_nan_inf_hot_input);
+  RUN_TEST(test_tape_reset_clears_state);
+  RUN_TEST(test_tape_keeps_stereo);
 
   // Defaults
   RUN_TEST(test_default_values_in_range);

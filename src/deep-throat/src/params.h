@@ -39,6 +39,24 @@ enum ParamID : Steinberg::Vst::ParamID {
   kNumParams
 };
 
+// Hidden read-only display parameters (processor -> editor) and the writable clear-clips trigger.
+// They are not part of the persistent parameter table (ids >= kNumParams are ignored by the state).
+constexpr Steinberg::Vst::ParamID kMeterBase = 1000;
+enum DisplayID : Steinberg::Vst::ParamID {
+  kDispInL = kMeterBase,
+  kDispInR,
+  kDispOutL,
+  kDispOutR,
+  kDispGr,
+  kDispVoice,
+  kDispRider,
+  kDispBreath,
+  kDispClipIn,
+  kDispClipOut,
+  kNumDisplayIDs
+};
+constexpr Steinberg::Vst::ParamID kClearClips = kMeterBase + 100;
+
 enum class Mode { Speak, Sing, Puke };
 
 // Step counts of the choice parameters (StringListParameter: norm = index / (count - 1)).

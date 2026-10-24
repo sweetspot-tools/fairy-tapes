@@ -450,6 +450,19 @@ Steinberg::tresult PLUGIN_API Controller::getParameterInfo(Steinberg::int32 inde
     asciiToStr128("Thresh", info.shortTitle);
     asciiToStr128("", info.units);
     break;
+  case kDriveTapeOn:
+    info.stepCount = 1;
+    info.defaultNormalizedValue = kDefaultDriveTapeOn;
+    asciiToStr128("Drive Tape", info.title);
+    asciiToStr128("Tape", info.shortTitle);
+    asciiToStr128("", info.units);
+    break;
+  case kDriveTapeAmount:
+    info.defaultNormalizedValue = kDefaultDriveTapeAmount;
+    asciiToStr128("Tape", info.title);
+    asciiToStr128("Tape", info.shortTitle);
+    asciiToStr128("", info.units);
+    break;
   default:
     return Steinberg::kResultFalse;
   }
@@ -565,7 +578,12 @@ Steinberg::tresult PLUGIN_API Controller::getParamStringByValue(Steinberg::Vst::
     asciiToStr128(buf, string);
     return Steinberg::kResultOk;
   case kDriveNamOn:
-    asciiToStr128(valueNormalized >= 0.5 ? "NAM" : "Saturate", string);
+  case kDriveTapeOn:
+    asciiToStr128(valueNormalized >= 0.5 ? "On" : "Off", string);
+    return Steinberg::kResultOk;
+  case kDriveTapeAmount:
+    snprintf(buf, sizeof(buf), "%.1f", valueNormalized * 10.0);
+    asciiToStr128(buf, string);
     return Steinberg::kResultOk;
   case kGateThreshold:
     snprintf(buf, sizeof(buf), "%.0f dB", -72.0 + valueNormalized * 72.0);

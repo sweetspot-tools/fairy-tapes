@@ -19,9 +19,6 @@ public:
   // `text` is the model name (no extension) or the error message; ignored for NoModel and Loading.
   void setModel(Kind kind, std::string text);
   Kind kind() const { return kind_; }
-  // NAM switch off: the strip reads "4K Saturate" and is not clickable.
-  void setSaturate(bool saturate);
-  bool isSaturate() const { return saturate_; }
   void setDimmed(bool dimmed);
   void setFont(TapeFontId font);   // the handwriting font chosen in the preferences
   std::function<void()> onClick;
@@ -34,7 +31,6 @@ private:
   Kind kind_ = Kind::NoModel;
   std::string text_;
   bool dimmed_ = false;
-  bool saturate_ = false;
   TapeFontId font_ = TapeFontId::Zeyada;
 };
 

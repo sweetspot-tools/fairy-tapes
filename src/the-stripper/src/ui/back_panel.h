@@ -33,7 +33,7 @@ struct CreditEntry {
 // Components shipped inside the plug-in, with the licenses read from their LICENSE files (rechecked 2026-10-15).
 constexpr CreditEntry kCredits[] = {
     {"4K-EQ \xC2\xB7 Multi-Comp", "Dusk Audio", "GPL-3.0"},
-    {"Airwindows (BlockParty, DeNoise)", "Chris Johnson", "MIT"},
+    {"Airwindows (BlockParty, DeNoise, Tape)", "Chris Johnson", "MIT"},
     {"Neural Amp Modeler Core", "Steven Atkinson", "MIT"},
     {"AudioDSPTools", "Steven Atkinson", "MIT"},
     {"Eigen", "Eigen contributors", "MPL-2.0"},
@@ -103,15 +103,21 @@ inline std::vector<HelpEntry> helpEntries() {
       bell.ids.push_back(c.id);
       continue;
     }
+    if (c.id == kDriveTapeOn) continue;   // explained together with the NAM switch: one entry for the Drive's two engines
     HelpEntry e;
     e.ids = {c.id};
     e.title = c.kind == Kind::Choice ? help_detail::joinChoices(c) : std::string(c.label ? c.label : "");
+    if (c.id == kDriveNamOn) {
+      e.ids.push_back(kDriveTapeOn);
+      e.title = "NAM / TAPE";
+    }
     switch (c.id) {
     case kStripMode:
       e.what = "Chooses the processing: a channel strip (CHAN) or a mix bus (BUS).";
-      e.imposes = "CHAN: EQ \"Black\" (G series), compressor character selectable (VOICE, DRUMS, CLASSIC), 4K saturation of the G series. "
-                  "BUS: EQ \"Brown\" (E series), 4K saturation of the E series, compressor fixed to the Bus compressor, "
-                  "VOICE / DRUMS / CLASSIC hidden and the Bell buttons out of use. No knob value is changed.";
+      e.imposes = "CHAN: EQ \"Black\" (G series) and its saturation, compressor character selectable (VOICE, DRUMS, CLASSIC), "
+                  "DRIVE right after the INPUT with TAPE as a multitrack machine. BUS: EQ \"Brown\" (E series) and its saturation, "
+                  "Bus compressor, DRIVE before the LIMITER with TAPE as the 2-track mixdown machine; VOICE / DRUMS / CLASSIC "
+                  "hidden and the Bell buttons out of use. No knob value is changed.";
       break;
     case kCompressorMode:
       e.what = "Chooses the character of the compressor (CHAN only).";
@@ -119,10 +125,10 @@ inline std::vector<HelpEntry> helpEntries() {
                   "(soft knee, all round). Amount and Mix keep their values. In BUS the Bus compressor is always used.";
       break;
     case kDriveNamOn:
-      e.what = "Chooses what drives the Drive stage.";
-      e.imposes = "NAM: the loaded .nam model, with the Drive knob as its amount; without a model the signal passes through unchanged. "
-                  "4K: the 4K console saturation, with its own amount on the same knob. Each engine keeps its own knob value; "
-                  "the paper strip reads \"4K Saturate\" while 4K is on.";
+      e.what = "Switch the two engines of the DRIVE block on or off; with both on, NAM comes first.";
+      e.imposes = "NAM: the loaded .nam model, driven by the DRIVE knob; without a model it passes the signal through. TAPE: "
+                  "tape saturation and head bump, one knob, output level matched to the input. Off: the engine is skipped "
+                  "and its knob dims. Knob values are not changed.";
       break;
     case kBypass:
       e.what = "Bypasses the whole plug-in.";
@@ -145,9 +151,9 @@ inline std::vector<HelpEntry> helpEntries() {
   if (!in.ids.empty()) out.push_back(std::move(in));
   if (!bell.ids.empty()) out.push_back(std::move(bell));
   out.push_back({"NO MODEL", "Unloads the NAM model (button of the model picker).",
-                 "The model path is cleared and saved empty. With NAM selected the Drive passes the signal through unchanged. The Drive knob value is not changed.",
+                 "The model path is cleared and saved empty. With NAM on, the NAM passes the signal through unchanged. The Drive knob value is not changed.",
                  {kNoModelHelpId}});
-  out.push_back({"MODEL STRIP", "The paper strip in the Drive box: click it to pick a .nam model (NAM only).",
+  out.push_back({"MODEL STRIP", "The paper strip in the Drive box: click it to pick a .nam model.",
                  "LOAD loads the chosen file on a separate thread (the audio never stops) and saves its path with the project. "
                  "A file that cannot be loaded shows its error on the strip and the Drive passes the signal through.",
                  {kModelStripHelpId}});

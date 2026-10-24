@@ -21,7 +21,8 @@ void test_one_item_per_view_and_unique_ids() {
   CHECK(items.size() == views);
   std::set<int> ids;
   for (const auto& it : items) CHECK(ids.insert(it.id).second);   // ids stay unique: the shared setters act on every item with an id
-  CHECK(ids.count(static_cast<int>(kDriveAmount)) == 1 && ids.count(static_cast<int>(kEqSaturation)) == 0);   // one print for the shared Drive knob
+  CHECK(ids.count(static_cast<int>(kDriveAmount)) == 1 && ids.count(static_cast<int>(kEqSaturation)) == 1 &&
+        ids.count(static_cast<int>(kDriveTapeAmount)) == 1 && ids.count(static_cast<int>(kDriveTapeOn)) == 1);
 }
 
 void test_knobs_print_scale_name_and_ends() {

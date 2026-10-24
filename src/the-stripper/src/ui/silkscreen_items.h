@@ -31,7 +31,7 @@ inline std::vector<FairyTapes::Ui::PrintedItem> silkscreenItems() {
   using FairyTapes::Ui::PrintKind;
   std::vector<PrintedItem> out;
   for (const ControlSpec& c : kControls) {
-    if (c.sharesView) continue;               // the Drive knob prints for both of its parameters
+    if (c.sharesView) continue;               // a control without a view of its own prints through the other one
     if (c.kind == Kind::Choice) continue;     // exclusive choices carry their names on the face
     PrintedItem it;
     it.id = static_cast<int>(c.id);

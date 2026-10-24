@@ -39,14 +39,17 @@ enum ParamID : Steinberg::Vst::ParamID {
   kEqHFGain, kEqHFFreq,           // HF: 1500..16000 Hz
   kEqHFBell,      // 0 = shelf, 1 = bell (Black only)
   // EQ Type (Brown/Black) removed: derived from Strip Mode (Channel=Black, Mix bus=Brown)
-  kEqSaturation,  // 0..1 (0..100%)
+  kEqSaturation,  // 0..1 (0..100%): the 4K console saturation, last step of the EQ (back in the EQ since 2026-10-24)
   // Drive (NAM): single knob. Output auto-compensated. Always 100% wet (bypass = off).
   kDriveAmount,   // 0 = unity (model coloration only), 1 = max (+20 dB into model)
   // Added after state v7 (appended at the end so existing IDs never change):
   kLimiterPound,  // Limiter (BlockParty) pound amount, 0..1
   kGateThreshold, // Gate (DeNoise) threshold, 0..1
   // Added in state v9:
-  kDriveNamOn,    // Drive engine: 1 = NAM, 0 = the 4K saturation (kEqSaturation is then the Drive amount)
+  kDriveNamOn,    // NAM engine of the Drive on (1) or skipped (0). Until 2026-10-24: 1 = NAM, 0 = the 4K saturation
+  // Added in state v12: the TAPE engine of the Drive (after the NAM in the same block)
+  kDriveTapeOn,      // 1 = TAPE on, 0 = skipped
+  kDriveTapeAmount,  // 0..1: one knob over slam and head bump (Tracking voicing in Channel, Mixdown in Mix bus)
   kNumParams
 };
 
@@ -72,6 +75,9 @@ enum MeterID : Steinberg::Vst::ParamID {
   kNumMeterIDs
 };
 constexpr int kNumMeters = static_cast<int>(kNumMeterIDs - kMeterBase);
+
+// Parameter count of states v9..v11 (everything up to and including kDriveNamOn).
+constexpr int kNumParamsV11 = static_cast<int>(kDriveNamOn) + 1;
 
 // Parameter count of state v8 (everything up to and including kGateThreshold).
 constexpr int kNumParamsV8 = static_cast<int>(kGateThreshold) + 1;
@@ -120,7 +126,9 @@ constexpr Steinberg::Vst::ParamValue kDefaultDriveAmount = 0.0;   // unity (colo
 // Limiter / Gate defaults (match the values that were hard-coded in the processor before they became parameters)
 constexpr Steinberg::Vst::ParamValue kDefaultLimiterPound = 0.5;
 constexpr Steinberg::Vst::ParamValue kDefaultGateThreshold = 0.0;
-constexpr Steinberg::Vst::ParamValue kDefaultDriveNamOn = 1.0;   // NAM drives the stage, as before the switch existed
+constexpr Steinberg::Vst::ParamValue kDefaultDriveNamOn = 1.0;   // NAM on, as before the switch existed
+constexpr Steinberg::Vst::ParamValue kDefaultDriveTapeOn = 1.0;      // TAPE on for a new instance (states saved before v12 load it off)
+constexpr Steinberg::Vst::ParamValue kDefaultDriveTapeAmount = 0.0;  // tape colour only, no slam
 
 // Gain range in dB for display; normalized 0 = -20 dB, 1 = +20 dB
 constexpr double kGainMinDb = -20.0;
@@ -155,6 +163,10 @@ inline bool isBypassStage(Steinberg::Vst::ParamValue value) {
 inline bool isChannelMode(Steinberg::Vst::ParamValue stripMode) {
   return stripMode < 0.5;
 }
+
+// Drive block (NAM then TAPE) position: true = right after the input gain (Channel: preamp + multitrack tape before the
+// console), false = between compression and limiter (Mix bus: 2-track mixdown, the limiter stays last on the peaks).
+inline bool driveBlockAtStart(Steinberg::Vst::ParamValue stripMode) { return isChannelMode(stripMode); }
 
 // Drive: normalized -> linear gain
 // Drive amount: 0..1 -> 1x..10x (0..+20 dB) — exponential taper

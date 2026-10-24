@@ -17,23 +17,19 @@ The plugin is a **channel strip** with multiple stages in series. Each stage is 
 | **LP/HP**        | **Active in both modes** (from 4K-EQ HPF/LPF). Part of EQ stage. | Yes (both modes) |
 | **EQ**           | **4K-EQ** in both modes — Channel = Black (G-series, auto), Mix bus = Brown (E-series, auto). §1.2c.1 | Yes        |
 | **Compression**  | Multi-Comp (Channel: Voice, Drums, Classic; Mix bus: Bus only); **sidechain** (2nd input bus) for detection | Yes        |
-| **Gain / Drive** | **Core stage:** NAM with GPU extension (Tone3000 / local); TapeHack2 when NAM off | Yes        |
+| **Gain / Drive** | **Core stage:** NAM (local `.nam`, GPU with CPU fallback) then TAPE (Airwindows Tape, one knob), each with its own switch; the block moves with Strip Mode | Yes        |
 | **Limiter**      | BlockParty (Airwindows)       | Yes        |
 | **Gate / Expander** | Denoise (Airwindows)       | Yes        |
 | **Gain staging** | Optional level/RMS trim      | **Channel mode only**; **not implemented** |
 
 User can run only EQ, only NAM, EQ + NAM, or any combination. No stage is mandatory.
 
-**Order of the chain (signal flow):**  
-1. **Gain staging** (optional; **Channel mode only** — see §1.2; placement at start or end)  
-2. **EQ** (4K-EQ in both modes; Channel = Black/G-series auto, Mix bus = Brown/E-series auto; LP/HP active in both modes — §1.2c.1)  
-3. **Compression** (Multi-Comp in Channel with usage modes, Multi-Comp Bus only in Mix bus — §1.2c.1)  
-4. **Gain / Drive** (NAM with GPU extension; TapeHack2 when NAM not used)  
-5. **Limiter** (BlockParty)  
-6. **Gate / Expander** (Denoise)  
-7. **Gain staging** (if placed at end; **Channel mode only** — in Mix bus mode this stage is not present)
+**Order of the chain (signal flow, 2026-10-24).** The **Drive block** (NAM then TAPE) moves with Strip Mode, to mirror real hardware use (see [DRIVE_STAGE_PARAMS.md §0](DRIVE_STAGE_PARAMS.md)):
 
-So the core flow is: **EQ → Compression → Drive → Limiter → Gate**. Gain staging is **Channel mode only**. **EQ stage:** **4K-EQ** is used in **both** modes; EQ type (Brown/Black) is **automatic** — **Channel** = Black (G-series, tighter Q), **Mix bus** = Brown (E-series, wider curves). **LP/HP** (from 4K-EQ HPF/LPF) remain active in both modes.
+- **Channel:** Input → **Drive** → Filters + EQ (with the 4K saturation as its last step) → Compression → Limiter → Gate → Output. Preamp or capture and the multitrack machine come before the console.
+- **Mix bus:** Input → Filters + EQ (with the 4K saturation) → Compression → **Drive** → Limiter → Gate → Output. The 2-track mixdown machine comes after the bus processing and before the limiter.
+
+Gain staging (optional, **Channel mode only**, not implemented) would sit at one end of the chain. Gain staging is **Channel mode only**. **EQ stage:** **4K-EQ** is used in **both** modes; EQ type (Brown/Black) is **automatic** — **Channel** = Black (G-series, tighter Q), **Mix bus** = Brown (E-series, wider curves). **LP/HP** (from 4K-EQ HPF/LPF) remain active in both modes.
 
 **EQ stage: which controls are active per mode.** **4K-EQ** controls (bands + HPF/LPF) are **active in both modes**. The EQ **type** (Brown = E-series / Black = G-series) is **derived automatically** from Strip Mode — no user-facing selector (kEqType parameter removed). **Channel** = Black (G-series, tighter Q, more precise for channel work). **Mix bus** = Brown (E-series, wider curves, musical, better for bus glue). LP/HP active in both modes.
 
@@ -220,6 +216,7 @@ The **Gain / Drive** stage is the **core** of The Stripper. It uses **NAM (Neura
 
 - **Drive stage = NAM only.** No classic/TapeHack2 fallback. If no model is loaded, the stage is a passthrough.
 - **Single knob (Drive Amount) + bypass toggle.** Auto-compensated output. Rock & roll, easy to use.
+- **TAPE follows the NAM** in the same block (2026-10-24): Airwindows Tape with one knob (macro over slam and head bump) and a voicing from Strip Mode (Channel = Tracking, Mix bus = Mixdown); each engine has its own on/off switch. See [DRIVE_STAGE_PARAMS.md](DRIVE_STAGE_PARAMS.md) Part B.
 
 ---
 

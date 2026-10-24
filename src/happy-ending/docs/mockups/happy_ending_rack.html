@@ -30,7 +30,7 @@ svg{width:100%;height:auto;display:block;touch-action:none}
   <label>Program <select id="prog"><option value="loud" selected>Loud kick &amp; hats</option><option value="quiet">Quiet</option></select></label>
   <span style="color:#555">Wear, tape and screws as in every plugin of the suite (one seed per instance; click a piece of tape to write on it, drag a screw to turn it). Stepped knobs: drag vertically (Shift = fine), wheel = one step, double-click = default. M/S cycles ST → MID → SIDE on each band: the screen shows one stereo curve, or separate MID and SIDE curves as soon as a band works on M or S. On SIDE the high pass switches to a mono-bass scale (Off, 60–200 Hz). LISTEN solos one bell; while it is on, the other bands are locked. A band (or the stage) switched off locks its controls; only its IN button stays live. Bells narrow as their gain grows (Q-coupling). VIBE EQ: LOW does the boost-and-cut trick in one knob, TILT darkens or brightens around the mids, DYN pulls the LOW or AIR boost back on loud program; the amber ACT LED shows how much (dashed line on the screen = the static setting). GLUE: SSL-style bus compressor in parallel (its GR row is now in LEVEL), MIX 50 % by default; the screen scrolls the program level (grey), the compressor's gain reduction (amber) and the net reduction after MIX (dashed); WARM softens the attack. CLIP: soft clipper, level matched (quiet parts pass unchanged, peaks are rounded); the dot on the screen follows the program peaks against the dashed no-clip line, the amber CLIP LEDs show the dB taken off. LIMIT: look-ahead limiter on sample peaks; MODERN / PUNCH / DYNAMIC are styles of the same engine; SET forces a squash and locks everything but RELEASE until you press it again. FINAL: INFLATE (EFFECT, CURVE) or a safety CLIP pushed by up to +2 dB; only the controls of the selected mode are shown. METALHEAD: off by default; a brickwall limiter after FINAL, PUSH drives into the output CEILING. Top row as in every plugin: INPUT gain, LEVEL (IN/OUT peak meters, a clip LED per module in signal order, LUFS short-term and integrated — click to reset) and OUTPUT gain with the global BYPASS, which dims and locks every stage while the meters stay lit.</span>
 </div>
-<div class="stage"><div class="scene"><div class="card" id="card"><svg id="ui" viewBox="0 0 1280 934" role="img" aria-label="Mastering plugin: input, level, output and seven stages"></svg><svg id="back" viewBox="0 0 1280 934" role="img" aria-label="Settings and credits"></svg></div></div></div>
+<div class="stage"><div class="scene"><div class="card" id="card"><svg id="ui" viewBox="0 0 1280 890" role="img" aria-label="Mastering plugin: input, level, output and seven stages"></svg><svg id="back" viewBox="0 0 1280 890" role="img" aria-label="Settings and credits"></svg></div></div></div>
 <script>
 var NS='http://www.w3.org/2000/svg',svg=document.getElementById('ui');
 function el(n,a,p){var e=document.createElementNS(NS,n);for(var k in a)e.setAttribute(k,a[k]);(p||svg).appendChild(e);return e;}
@@ -65,9 +65,9 @@ var defs=el('defs',{});
   var bs=el('filter',{id:'bs',x:'-60%',y:'-60%',width:'220%',height:'240%'},defs);el('feGaussianBlur',{stdDeviation:1.8},bs);
   var g=el('radialGradient',{id:'sheen',cx:'33%',cy:'28%',r:'85%'},defs);[[0,'#fff',.13],[.45,'#fff',.02],[1,'#000',.38]].forEach(function(t){el('stop',{offset:t[0],'stop-color':t[1],'stop-opacity':t[2]},g);});
   var gl=el('linearGradient',{id:'glow',x1:0,y1:0,x2:0,y2:1},defs);[[0,'#fff',.07],[.35,'#fff',0],[.75,'#000',0],[1,'#000',.35]].forEach(function(t){el('stop',{offset:t[0],'stop-color':t[1],'stop-opacity':t[2]},gl);});
-  var cp=el('clipPath',{id:'scr'},defs);el('rect',{x:798,y:116,width:388,height:248,rx:4},cp);
+  var cp=el('clipPath',{id:'scr'},defs);el('rect',{x:798,y:116,width:388,height:232,rx:4},cp);
 })();
-var PH=934;   /* bottom row 46 px lower (PUSH at the height of the CLIP DRIVE, knobs raised), VIBE EQ / GLUE row 44 px lower (GLUE selectors bottom right, lower knobs raised),
+var PH=890;   /* rows 2-4 trimmed again (4 + 4 + 6 px); VIBE EQ / GLUE lower knobs 4 px higher; FINE EQ lower tier 4 px higher; service row 8 px lower again (TARGET and CEIL raised), bottom row 6 px lower again; FINE EQ row 8 px lower (band buttons raised);  bottom row 46 px lower (PUSH at the height of the CLIP DRIVE, knobs raised), VIBE EQ / GLUE row 44 px lower (GLUE selectors bottom right, lower knobs raised),
    service row 12 px lower (CLIP LEDs, TARGET and CEIL raised) */
 
 /* ===== wear, tape, screws and worn controls: the same code as Pillow Talk (from The Stripper), sized for this panel =====
@@ -266,8 +266,8 @@ var STAGEMARK=el('g',{});
 /* screens of CLIP / LIMIT / FINAL and the stage LED rows are gone from the stages: their meters live in LEVEL (GR block) */
 var HID=el('g',{style:'display:none'});
 /* the curve screen has a box of its own, without a title (shows the FINE EQ and the VIBE EQ curves) */
-el('rect',{x:782,y:100,width:474,height:280,rx:11,fill:'none',stroke:W,'stroke-width':2});
-box(24,100,752,280,'FINE EQ','bottom');
+el('rect',{x:782,y:100,width:474,height:264,rx:11,fill:'none',stroke:W,'stroke-width':2});
+box(24,100,752,264,'FINE EQ','bottom');
 
 /* ===== model ===== */
 var GAINS=[];for(var gi=-8;gi<=8;gi++)GAINS.push(gi/2);
@@ -300,7 +300,7 @@ function sumDb(target,f){var d=0;if(!G.on)return 0;BANDS.forEach(function(b){if(
 function anyMS(){return G.on&&BANDS.some(function(b){return b.on&&b.ms!==0;});}
 
 /* ===== screen (read only) ===== */
-var SX=798,SY=116,SW=388,SH=248;
+var SX=798,SY=116,SW=388,SH=232;
 function fx(f){return SX+SW*Math.log(f/20)/Math.log(1000);}
 function dy(db){db=Math.max(-7.5,Math.min(7.5,db));return SY+SH/2-db*(SH/2-6)/7;}
 el('rect',{x:SX,y:SY,width:SW,height:SH,rx:4,fill:'#070708',stroke:'#3a3a3d','stroke-width':1.2});
@@ -405,13 +405,13 @@ var CXS=[78,174,292,420,548,666];
 BANDS.forEach(function(b,i){var cx=CXS[i],sh=b.type!=='hp'&&b.type!=='pk',hw=b.type==='hp'?34:sh?46:56,inv=i===2||i===4,hs=i===5,g=el('g',{},bandsG);b.g=g;
   el('path',{d:'M'+(cx-hw)+' 122 H'+(cx+hw),stroke:DIMW,'stroke-width':1,opacity:.5},g);txt(b.name,cx,116,10,DIMW,'middle',800,g);
   if(b.type==='hp')knob(cx,156,'FREQ',function(){return fq(b);},fmtHP,function(){return ['Off',String(fq(b)[fq(b).length-1])];},b,'fi',b.fd,g);
-  else{knob(cx-(sh?22:34),((sh&&!hs)||inv)?238:156,'FREQ',b.freqs,fmtF,[shortF(b.freqs[0]),shortF(b.freqs[b.freqs.length-1])],b,'fi',b.fd,g);
-       knob(cx+(sh?14:34),(inv||hs)?238:156,'GAIN',GAINS,fmtG,['-4','+4'],b,'gi',8,g);}
-  if(b.type==='pk')knob(cx,inv?156:238,'Q',[0,1,2,3],function(v){return QN[v];},['W','S'],b,'qi',1,g);
+  else{knob(cx-(sh?22:34),((sh&&!hs)||inv)?237:156,'FREQ',b.freqs,fmtF,[shortF(b.freqs[0]),shortF(b.freqs[b.freqs.length-1])],b,'fi',b.fd,g);
+       knob(cx+(sh?14:34),(inv||hs)?237:156,'GAIN',GAINS,fmtG,['-4','+4'],b,'gi',8,g);}
+  if(b.type==='pk')knob(cx,inv?156:237,'Q',[0,1,2,3],function(v){return QN[v];},['W','S'],b,'qi',1,g);
   var pk=b.type==='pk',x0=pk?cx-34:cx-17,dx=34;
-  b.inG=button(x0,326,'IN',RED,function(){return b.on;},function(){b.on=!b.on;},bandsG);
-  button(x0+dx,326,'M/S',YEL,function(){return b.ms!==0;},function(){b.ms=(b.ms+1)%3;},g,function(){return MSN[b.ms];});
-  if(pk)button(x0+2*dx,326,'LISTEN',RED,function(){return G.listen===i;},function(){G.listen=G.listen===i?-1:i;},g);});
+  b.inG=button(x0,315,'IN',RED,function(){return b.on;},function(){b.on=!b.on;},bandsG);
+  button(x0+dx,315,'M/S',YEL,function(){return b.ms!==0;},function(){b.ms=(b.ms+1)%3;},g,function(){return MSN[b.ms];});
+  if(pk)button(x0+2*dx,315,'LISTEN',RED,function(){return G.listen===i;},function(){G.listen=G.listen===i?-1:i;},g);});
 
 function refresh(){KNOBS.forEach(function(d){d();});paintAll();REDRAW();if(HCPP)cutHoles();}
 function setB(i,o){Object.assign(BANDS[i],o);}
@@ -422,7 +422,7 @@ document.getElementById('exMS').onclick=function(){flat();
   setB(0,{fi:4,ms:2});setB(1,{fi:3,gi:10,ms:1});setB(3,{fi:8,gi:6,qi:0,ms:1});setB(5,{fi:5,gi:11,ms:2});refresh();};
 /* ===== stage 2: VIBE EQ — a reduced Pultec-style program EQ; every control drives the same circuit ===== */
 var VIBEMARK=el('g',{});
-box(24,600,624,160,'VIBE EQ','bottom');
+box(24,600,624,152,'VIBE EQ','bottom');
 var ZERO10=[0,1,2,3,4,5,6,7,8,9,10],TILTS=[];for(var ti=-6;ti<=6;ti++)TILTS.push(ti/2);
 var LFQ=[20,30,60,100],AFQ=[5000,8000,10000,12000,16000];
 var V={};
@@ -474,12 +474,12 @@ var ledL,ledA;
   if(h[3]==='L'){ledL=led;headBtn(b-15,644,'DYN',function(){return V.dynL;},function(){V.dynL=!V.dynL;},vG);}
   else{ledA=led;headBtn(b-15,644,'DYN',function(){return V.dynA;},function(){V.dynA=!V.dynA;},vG);}});
 knob(80,670,'FREQ',LFQ,fmtF,['20','100'],V,'lf',2,vG);
-knob(154,692,'LOW',ZERO10,String,['0','10'],V,'low',0,vG);
+knob(154,684,'LOW',ZERO10,String,['0','10'],V,'low',0,vG);
 knob(470,654,'TILT',TILTS,fmtTilt,['DARK','BRIGHT'],V,'tilt',6,vG,24);
 knob(262,670,'FREQ',AFQ,fmtF,['5k','16k'],V,'af',3,vG);
-knob(336,692,'AIR',ZERO10,String,['0','10'],V,'air',0,vG);
+knob(336,684,'AIR',ZERO10,String,['0','10'],V,'air',0,vG);
 /* TUBE: the 12AX7 make-up stage after the whole EQ network (the stage output), set apart from the AIR group, near the IN column */
-knob(574,692,'TUBE',ZERO10,String,['0','10'],V,'drive',2,vG);
+knob(574,684,'TUBE',ZERO10,String,['0','10'],V,'drive',2,vG);
 /* DYN: on/off (red LED); next to it the trigger LED, amber like the GR rows of The Stripper (gain reduction), lit as much as the boost is being pulled back */
 var ACTOFF='#33260a';
 function trig(cx,cy){txt('ACT',cx,cy-17,8.5,W,'middle',800,vG);return el('circle',{cx:cx,cy:cy,r:4.2,stroke:'#000','stroke-width':.6,fill:ACTOFF},vG);}
@@ -498,7 +498,7 @@ function tick(now){var t=(now-T0)/1000,eL=.15,eA=.15;
 document.getElementById('prog').onchange=function(e){SIM.mode=e.target.value;};
 document.getElementById('exV').onclick=function(){vflat();Object.assign(V,{lf:2,low:6,af:3,air:5,tilt:5,drive:4,dynL:true,dynA:true});refresh();};
 /* ===== stage 3: GLUE — SSL-style bus compressor (MultiCompBus) in parallel, stepped controls ===== */
-box(654,600,602,160,'GLUE','bottom');
+box(654,600,602,152,'GLUE','bottom');
 var THR=[];for(var th=-20;th<=0;th++)THR.push(th);
 var RAT=[1.5,2,4],ATK=[0.1,0.3,1,3,10,30],REL=[0.1,0.3,0.6,1.2,0],SCF=[0,60,90,150],MKP=[],MIXS=[];
 for(var mk=0;mk<=12;mk++)MKP.push(mk/2);for(var mx=0;mx<=20;mx++)MIXS.push(mx*5);
@@ -508,13 +508,13 @@ gflat();
 var gG=el('g',{});
 /* compressor knobs on the left, MIX big at the top right next to IN and WARM; right column: IN, WARM, then the RATIO / SC HPF selectors at the bottom right */
 knob(714,656,'THRESH',THR,function(v){return v+' dB';},['-20','0'],C,'thr',10,gG);
-button(1179,708,'RATIO',YEL,function(){return C.rat!==1;},function(){C.rat=(C.rat+1)%RAT.length;},gG,function(){return RAT[C.rat]+':1';});
-knob(784,688,'ATTACK',ATK,function(v){return v+' ms';},['.1','30'],C,'atk',3,gG);
+button(1179,700,'RATIO',YEL,function(){return C.rat!==1;},function(){C.rat=(C.rat+1)%RAT.length;},gG,function(){return RAT[C.rat]+':1';});
+knob(784,680,'ATTACK',ATK,function(v){return v+' ms';},['.1','30'],C,'atk',3,gG);
 knob(854,656,'RELEASE',REL,function(v){return v?v+' s':'Auto';},['.1','A'],C,'rel',4,gG);
-button(1227,708,'SC HPF',YEL,function(){return C.scf!==1;},function(){C.scf=(C.scf+1)%SCF.length;},gG,function(){return SCF[C.scf]?SCF[C.scf]+' Hz':'Off';});
-knob(924,688,'MAKEUP',MKP,function(v){return '+'+v.toFixed(1)+' dB';},['0','+6'],C,'mkp',0,gG);
+button(1227,700,'SC HPF',YEL,function(){return C.scf!==1;},function(){C.scf=(C.scf+1)%SCF.length;},gG,function(){return SCF[C.scf]?SCF[C.scf]+' Hz':'Off';});
+knob(924,680,'MAKEUP',MKP,function(v){return '+'+v.toFixed(1)+' dB';},['0','+6'],C,'mkp',0,gG);
 knob(1004,650,'MIX',MIXS,function(v){return v+' %';},['DRY','WET'],C,'mix',10,gG,24);
-button(1131,708,'WARM',RED,function(){return C.warm;},function(){C.warm=!C.warm;},gG);
+button(1131,700,'WARM',RED,function(){return C.warm;},function(){C.warm=!C.warm;},gG);
 button(1227,638,'IN',RED,function(){return C.on;},function(){C.on=!C.on;},svg);
 /* GR row: amber LEDs, red from 10 dB (same convention as The Stripper) */
 var GRS=[1,2,3,4,6,8,10,12],grLeds=[];
@@ -550,7 +550,7 @@ document.getElementById('exG').onclick=function(){gflat();Object.assign(C,{thr:6
 /* ===== stage 4: CLIP — soft clipper (Airwindows ClipSoftly family), level matched: small signals pass at unity, peaks are rounded ===== */
 var CLIPMARK=el('g',{});
 /* the four small stages side by side on one row, as the bottom row of The Stripper */
-box(24,1040,220,124,'CLIP','bottom');
+box(24,1040,220,112,'CLIP','bottom');
 var DRV=[];for(var dv=0;dv<=12;dv++)DRV.push(dv/2);
 var K={};function kflat(){Object.assign(K,{on:true,drv:4});}kflat();
 var CSX=44,CSY=1150,CSW=150,CSH=146;
@@ -562,13 +562,13 @@ function ccx(x){return CSX+10+x*(CSW-20);}function ccy(y){return CSY+CSH-10-y*(C
   txt('IN',CSX+CSW-8,CSY+CSH-4,8,DIMW,'end',700,g).setAttribute('opacity',.6);txt('OUT',CSX+6,CSY+12,8,DIMW,'start',700,g).setAttribute('opacity',.6);})();
 var CCUR=el('g',{'clip-path':'url(#cscr)'},HID),cdot=el('circle',{r:3.6,fill:'#070708',stroke:W,'stroke-width':1.5},HID);
 function soft(u){var a=Math.abs(u);return (u<0?-1:1)*(a<Math.PI/2?Math.sin(a):1);}
-function clipOut(x){if(!K.on)return x;var g=Math.pow(10,DRV[K.drv]/20);return soft(g*x)/g;}
+function clipOut(x){if(!K.on)return x;var g=Math.pow(10,(DRV[K.drv]+LDX.clip)/20);return soft(g*x)/g;}
 var kG=el('g',{});
 function clipRedraw(){while(CCUR.firstChild)CCUR.removeChild(CCUR.firstChild);kG.style.opacity=K.on?1:.35;kG.style.pointerEvents=K.on?'':'none';
   var d='';for(var i=0;i<=120;i++){var x=i/120*1.05;d+=(i?' L':'M')+ccx(x).toFixed(1)+' '+ccy(clipOut(x)).toFixed(1);}
   el('path',{d:d,fill:'none',stroke:AMBL,'stroke-width':1.8},CCUR);}
-knob(104,1090,'DRIVE',DRV,function(v){return '+'+v.toFixed(1)+' dB';},['0','+6'],K,'drv',4,kG,22);
-txt('level',215,1132,9,DIMW,'middle',700,kG);txt('matched',215,1144,9,DIMW,'middle',700,kG);   /* under IN, on two lines */
+knob(104,1080,'DRIVE',DRV,function(v){return '+'+v.toFixed(1)+' dB';},['0','+6'],K,'drv',4,kG,22);
+txt('level',215,1124,9,DIMW,'middle',700,kG);txt('matched',215,1136,9,DIMW,'middle',700,kG);   /* under IN, on two lines */
 var CLS=[.5,1,1.5,2,3,4,6],clLeds=[];
 txt('CLIP',420,1214,11,YEL,'middle',800,HID);
 CLS.forEach(function(d,i){var x=456+i*30;txt(String(d),x,1196,8,DIMW,'middle',700,HID);clLeds.push(el('circle',{cx:x,cy:1210,r:4,fill:d>=3?'#3a1010':'#33260a',stroke:'#000','stroke-width':.6},HID));});
@@ -584,7 +584,7 @@ function clipTick(now){var t=(now-T0)/1000;
 document.getElementById('exK').onclick=function(){kflat();Object.assign(K,{drv:4});refresh();};
 
 /* ===== stage 5: LIMIT — our own look-ahead limiter on sample peaks (no true peak), three styles of the same engine ===== */
-box(250,1040,385,124,'LIMIT','bottom');
+box(250,1040,385,112,'LIMIT','bottom');
 var THRS=[],CEILS=[-0.1,-0.3,-0.5,-1.0],STYLES=['MODERN','PUNCH','DYN'];
 /* RELEASE is a trim around the style's own release: centre detent = as the style wants, each step a third of an octave faster or slower.
    Base releases: MODERN fast and fixed, PUNCH medium, DYNAMIC slow and program dependent */
@@ -606,13 +606,15 @@ var lG=el('g',{}),rG=el('g',{}),sG=el('g',{}),liG=el('g',{}),tG=el('g',{});
    The forced −8 dB is beyond the knob scale: the pointer rests on the end stop, the value reads the real threshold */
 var SETTHR=-8,LS={gr:0,k:0};
 var THV={get thr(){return LS.k>.001?Lm.thr+(THRS.length-1-Lm.thr)*LS.k:Lm.thr;},set thr(v){Lm.thr=v;}};
-function thrNow(){return THRS[Lm.thr]+(SETTHR-THRS[Lm.thr])*LS.k;}
+var LDX={clip:0,thr:0,fin:0};   /* extra drive from LOUDNESS: CLIP +dB, LIMIT threshold −dB, FINAL 0…1 */
+function thrBase(){return THRS[Lm.thr]-LDX.thr;}   /* the knob plus the LOUDNESS push */
+function thrNow(){return thrBase()+(SETTHR-thrBase())*LS.k;}
 var THRDRAW=KNOBS.length;
-knob(304,1090,'THRESH',THRS,function(){var v=thrNow();return (v<-.04?'−':'')+Math.abs(v).toFixed(1)+' dB';},['0','-4'],THV,'thr',4,tG);
+knob(304,1086,'THRESH',THRS,function(){var v=thrNow();return (v<-.04?'−':'')+Math.abs(v).toFixed(1)+' dB';},['0','-4'],THV,'thr',4,tG);
 /* CEILING moved to OUTPUT (one output ceiling for LIMIT, FINAL and METALHEAD) */
-knob(390,1090,'RELEASE',RTRIM,function(){return Math.round(relMs())+' ms';},['FAST','SLOW'],Lm,'rel',4,rG);
+knob(390,1086,'RELEASE',RTRIM,function(){return Math.round(relMs())+' ms';},['FAST','SLOW'],Lm,'rel',4,rG);
 button(458,1078,'SET',RED,function(){return Lm.cal;},function(){Lm.cal=!Lm.cal;},sG);
-STYLES.forEach(function(n,i){choiceBtn(532,1076+i*26,n,function(){return Lm.style===i;},function(){Lm.style=i;},lG,44);});
+STYLES.forEach(function(n,i){choiceBtn(532,1070+i*26,n,function(){return Lm.style===i;},function(){Lm.style=i;},lG,44);});
 button(606,1078,'IN',RED,function(){return Lm.on;},function(){Lm.on=!Lm.on;},liG);
 var GRL=[.5,1,1.5,2,2.5,3,4,6],lgLeds=[];
 txt('GR',400,1524,11,YEL,'middle',800,HID);
@@ -620,8 +622,8 @@ GRL.forEach(function(d,i){var x=432+i*30;txt(String(d),x,1506,8,DIMW,'middle',70
 txt('aim for 2–3 dB at most',432,1546,10,DIMW,'start',700,HID);
 /* SET overlay: shown over the box, lets the clicks through */
 var calO=el('g',{style:'pointer-events:none;display:none'});
-txt('SET THE',532,1095,18,YEL,'middle',900,calO,true);txt('RELEASE',532,1115,18,YEL,'middle',900,calO,true);   /* over the dimmed style buttons */
-txt('press SET again',532,1133,8,W,'middle',700,calO);
+txt('SET THE',532,1089,18,YEL,'middle',900,calO,true);txt('RELEASE',532,1109,18,YEL,'middle',900,calO,true);   /* over the dimmed style buttons */
+txt('press SET again',532,1127,8,W,'middle',700,calO);
 
 
 function limTick(now){var dt=Math.min(.05,(now-(LS.last||now))/1000);LS.last=now;var t=(now-T0)/1000;
@@ -642,15 +644,16 @@ function limTick(now){var dt=Math.min(.05,(now-(LS.last||now))/1000);LS.last=now
 document.getElementById('exL').onclick=function(){lflat();Object.assign(Lm,{style:1,thr:4,ceil:1,rel:4});refresh();};
 
 /* ===== stage 6: FINAL — INFLATE (our port of ZLInflator, shared/inflator) or CLIP (Airwindows ClipOnly2 safety clip, 0…+2 dB) ===== */
-box(641,1040,340,124,'FINAL','bottom');
+box(641,1040,340,112,'FINAL','bottom');
 var EFFS=[],CRVS=[0,25,50,75,100],DRV6=[0,.5,1,1.5,2];for(var ef=0;ef<=10;ef++)EFFS.push(ef*10);
 var F6={};function fflat(){Object.assign(F6,{on:true,mode:0,eff:5,crv:1,drv:4});}fflat();
 /* inflator maths, same as shared/inflator/inflator.h: quartic + quadratic shapers blended 50/50, wet/dry by EFFECT */
 function shQuartic(x,curve){var c=-6+6*curve,a=(4+c)/2,b=-5-c,cc=(6+c)/2;return x*(1+x*(cc+x*(b+a*x)));}
 function shQuadratic(x){return x*(2-x);}
-function inflate(x){var w=EFFS[F6.eff]/100,cv=CRVS[F6.crv]/100,a=Math.min(1,Math.abs(x)),s=.5*shQuartic(a,cv)+.5*shQuadratic(a);return (x<0?-1:1)*s*w+x*(1-w);}
+function inflate(x){var w=Math.min(1,EFFS[F6.eff]/100+.6*LDX.fin),cv=CRVS[F6.crv]/100,a=Math.min(1,Math.abs(x)),s=.5*shQuartic(a,cv)+.5*shQuadratic(a);return (x<0?-1:1)*s*w+x*(1-w);}
 function CLV(){return Math.pow(10,CEILS[Lm.ceil]/20);}   /* the output CEILING (OUTPUT box) */
-function clip6(x){var g=Math.pow(10,DRV6[F6.drv]/20),y=g*x,c=CLV();return Math.max(-c,Math.min(c,y));}
+function drv6(){return Math.min(2,DRV6[F6.drv]+2*LDX.fin);}
+function clip6(x){var g=Math.pow(10,drv6()/20),y=g*x,c=CLV();return Math.max(-c,Math.min(c,y));}
 function finalOut(x){if(!F6.on)return x;if(F6.mode===1)return clip6(x);var c=CLV();return Math.max(-c,Math.min(c,inflate(x)));}
 var FSX=44,FSY=1610,FSW=150,FSH=146,FMAX=1.25;
 (function(){var cp=el('clipPath',{id:'fscr'},defs);el('rect',{x:FSX,y:FSY,width:FSW,height:FSH,rx:4},cp);})();
@@ -662,13 +665,13 @@ function fcx(x){return FSX+10+x/FMAX*(FSW-20);}function fcy(y){return FSY+FSH-10
 var FCUR=el('g',{'clip-path':'url(#fscr)'},HID),fdot=el('circle',{r:3.6,fill:'#070708',stroke:W,'stroke-width':1.5},HID);
 var infG=el('g',{}),clpG=el('g',{});
 txt('INFLATE',315,1622,11,DIMW,'middle',800,HID);txt('CLIP',480,1622,11,DIMW,'middle',800,HID);
-knob(707,1090,'EFFECT',EFFS,function(v){return v+' %';},['0','100'],F6,'eff',5,infG);
-knob(793,1090,'CURVE',CRVS,function(v){return v+' %';},['0','100'],F6,'crv',1,infG);
-knob(750,1090,'DRIVE',DRV6,function(v){return '+'+v.toFixed(1)+' dB';},['0','+2'],F6,'drv',4,clpG);
+knob(707,1086,'EFFECT',EFFS,function(v){return v+' %';},['0','100'],F6,'eff',5,infG);
+knob(793,1086,'CURVE',CRVS,function(v){return v+' %';},['0','100'],F6,'crv',1,infG);
+knob(750,1086,'DRIVE',DRV6,function(v){return '+'+v.toFixed(1)+' dB';},['0','+2'],F6,'drv',4,clpG);
 var CL6=[.25,.5,1,1.5,2],cl6Leds=[];
 CL6.forEach(function(d,i){var x=566+i*26;txt(String(d),x,1650,8,DIMW,'middle',700,HID);cl6Leds.push(el('circle',{cx:x,cy:1664,r:4,fill:'#33260a',stroke:'#000','stroke-width':.6},HID));});
 txt('dB clipped',566,1686,10,DIMW,'start',700,HID);
-['INFLATE','CLIP'].forEach(function(n,i){choiceBtn(878,1089+i*26,n,function(){return F6.mode===i;},function(){F6.mode=i;},svg,44);});
+['INFLATE','CLIP'].forEach(function(n,i){choiceBtn(878,1083+i*26,n,function(){return F6.mode===i;},function(){F6.mode=i;},svg,44);});
 button(952,1078,'IN',RED,function(){return F6.on;},function(){F6.on=!F6.on;},svg);
 function finalRedraw(){while(FCUR.firstChild)FCUR.removeChild(FCUR.firstChild);
   /* only the controls of the selected mode are on the panel: EFFECT + CURVE for INFLATE, DRIVE for CLIP */
@@ -679,18 +682,18 @@ var FS={sh:0};
 function finalTick(now){var t=(now-T0)/1000;
   var kick=SIM.mode==='loud'?Math.exp(-(t%.5)/.09):0,hat=SIM.mode==='loud'?.5*Math.exp(-((t+.25)%.25)/.05):0;
   var lvl=SIM.mode==='loud'?-9+9*Math.min(1,kick*1.6)+2*hat:-16+2*Math.sin(t*3);
-  var post=Lm.on?Math.min(CEILS[Lm.ceil],lvl-THRS[Lm.thr]+CEILS[Lm.ceil]-LS.gr):lvl,pk=Math.pow(10,post/20),out=finalOut(pk);
-  var sh=(F6.on&&F6.mode===1)?Math.max(0,20*Math.log10(Math.pow(10,DRV6[F6.drv]/20)*pk/Math.abs(out))):0;FS.sh=sh>FS.sh?sh:FS.sh+(sh-FS.sh)*.08;
+  var post=Lm.on?Math.min(CEILS[Lm.ceil],lvl-thrBase()+CEILS[Lm.ceil]-LS.gr):lvl,pk=Math.pow(10,post/20),out=finalOut(pk);
+  var sh=(F6.on&&F6.mode===1)?Math.max(0,20*Math.log10(Math.pow(10,drv6()/20)*pk/Math.abs(out))):0;FS.sh=sh>FS.sh?sh:FS.sh+(sh-FS.sh)*.08;
   CL6.forEach(function(d,i){cl6Leds[i].setAttribute('fill',FS.sh>=d-.1?AMBL:'#33260a');});
   FPK=pk;FS.outDb=20*Math.log10(Math.max(1e-6,Math.abs(out)));fdot.setAttribute('cx',fcx(Math.min(FMAX,pk)).toFixed(1));fdot.setAttribute('cy',fcy(Math.min(FMAX,Math.abs(out))).toFixed(1));}
 document.getElementById('exF').onclick=function(){fflat();Object.assign(F6,{mode:1,drv:4});refresh();};
 
 /* ===== stage 7: METALHEAD — optional brickwall digital limiter after FINAL, off by default; our own engine (no block tag) ===== */
-box(987,1040,269,124,'METALHEAD','bottom');
+box(987,1040,269,112,'METALHEAD','bottom');
 var PUSH=[];for(var pu=0;pu<=12;pu++)PUSH.push(pu/2);
 var MH={};function mflat(){Object.assign(MH,{on:false,push:4});}mflat();
 var mG=el('g',{});
-knob(1101,1090,'PUSH',PUSH,function(v){return '+'+v.toFixed(1)+' dB';},['0','+6'],MH,'push',4,mG,22);
+knob(1101,1080,'PUSH',PUSH,function(v){return '+'+v.toFixed(1)+' dB';},['0','+6'],MH,'push',4,mG,22);
 var MGR=[1,2,3,4,6,8,10,12],mLeds=[];
 txt('GR',400,1884,11,YEL,'middle',800,HID);
 MGR.forEach(function(d,i){var x=432+i*30;txt(String(d),x,1866,8,DIMW,'middle',700,HID);mLeds.push(el('circle',{cx:x,cy:1880,r:4,fill:d>=6?'#3a1010':'#33260a',stroke:'#000','stroke-width':.6},HID));});
@@ -706,19 +709,19 @@ function metalTick(now){var dt=Math.min(.05,(now-(MS.last||now))/1000);MS.last=n
 document.getElementById('exM').onclick=function(){mflat();Object.assign(MH,{on:true,push:8});refresh();};
 
 /* ===== the stages move below the service row INPUT · LEVEL · OUTPUT (same row as the other plugins of the suite) ===== */
-var SMALL=el('g',{transform:'translate(0,-460)'});
+var SMALL=el('g',{transform:'translate(0,-484)'});
 (function(){var n=CLIPMARK.nextSibling;while(n&&n!==SMALL){var nx=n.nextSibling;SMALL.appendChild(n);n=nx;}})();
-var VG2=el('g',{transform:'translate(0,-200)'});
+var VG2=el('g',{transform:'translate(0,-216)'});
 (function(){var n=VIBEMARK.nextSibling;while(n&&n!==CLIPMARK){var nx=n.nextSibling;VG2.appendChild(n);n=nx;}})();
-var STAGES=el('g',{transform:'translate(0,210)'});
+var STAGES=el('g',{transform:'translate(0,202)'});
 (function(){var n=STAGEMARK.nextSibling;while(n&&n!==STAGES){var nx=n.nextSibling;STAGES.appendChild(n);n=nx;}})();
 var GB=false,IO={},GAINIO=[];for(var gq=-24;gq<=24;gq++)GAINIO.push(gq/2);
 function ioflat(){Object.assign(IO,{gin:24,gout:24});GB=false;if(window.LD)Object.assign(LD,{l:0,applied:0,tg:0,flash:0});}ioflat();
 function fmtDb(v){return (v>0?'+':v<0?'−':'')+Math.abs(v).toFixed(1)+' dB';}
-box(24,92,130,198,'INPUT','bottom');
+box(24,92,130,190,'INPUT','bottom');
 var ioIn=el('g',{});knob(89,188,'GAIN',GAINIO,fmtDb,['-12','+12'],IO,'gin',24,ioIn,22);
 /* LEVEL: peak meters IN / OUT and clip LEDs as in The Stripper, plus the loudness readout (LUFS, no true peak) */
-box(160,92,652,198,'LEVEL','bottom');
+box(160,92,652,190,'LEVEL','bottom');
 var LX=242,STEP=24,NL=15,OFFL='#2a2a2c',GRN='#37d04a';
 function ledRow(y,label){txt(label,LX-12,y+4,11,W,'end',800);var a=[];for(var i=0;i<NL;i++)a.push(el('circle',{cx:LX+i*STEP,cy:y,r:3.4,fill:OFFL,stroke:'#000','stroke-width':.6}));return a;}
 function dbCol(i){var d=-60+i*(66/(NL-1));return d>=0?RED:(d>=-9?YEL:(d>=-18?'#9fe03a':GRN));}
@@ -746,18 +749,18 @@ txt('INTEGRATED',652,172,8,DIMW,'start',800,intG);var inT=txt('',786,186,15,AMBL
 txt('TO TARGET',652,210,8,DIMW,'start',800);var tgT=txt('',786,226,13,W,'end',800),tgL=el('circle',{cx:658,cy:222,r:3.4,fill:OFFL,stroke:'#000','stroke-width':.6});el('title',{},tgL).textContent='Within 0.5 LU of the target';
 var LU={st:-20,sum:0,n:0,f:0,pi:[-60,-60],po:[-60,-60]};intG.addEventListener('click',function(){LU.sum=0;LU.n=0;LU.f=0;});
 /* LOUDNESS block (between LEVEL and OUTPUT): one knob drives the stages that make level, in order CLIP (up to +1.5 dB), LIMIT (up to −3 dB) and FINAL;
-   MATCH (action, top right) sets LOUDNESS once to centre the TARGET (selector, bottom right). Preview: the macro moves the stage knobs; how it lives with them is an open decision */
+   MATCH (action, top right) sets LOUDNESS once to centre the TARGET (selector, bottom right). The macro is extra drive on top of the stage settings (decided 2026-10-24): the stage knobs keep their values, LOUDNESS 0 = exactly the user's settings */
 var LOUDS=[];for(var lq=0;lq<=20;lq++)LOUDS.push(lq/2);var TGS=[-14,-11,-9,-7],LD={l:0,applied:0,tg:0,flash:0};
-box(818,92,212,198,'LOUDNESS','bottom');
+box(818,92,212,190,'LOUDNESS','bottom');
 var ldG=el('g',{});knob(890,188,'LOUDNESS',LOUDS,function(v){return v.toFixed(1);},['0','10'],LD,'l',0,ldG,24);
 button(1001,130,'MATCH',RED,function(){return LD.flash>0;},function(){var gap=TGS[LD.tg]-LU.st;LD.l=Math.max(0,Math.min(20,LD.l+Math.round(gap/0.75)));LD.flash=40;},ldG);
-button(1001,238,'TARGET',YEL,function(){return LD.tg!==0;},function(){LD.tg=(LD.tg+1)%TGS.length;},ldG,function(){return TGS[LD.tg]+' LUFS';});
-function applyLoud(){if(LD.l===LD.applied)return;LD.applied=LD.l;var v=LOUDS[LD.l],cl=function(x){return Math.max(0,Math.min(1,x));},a=cl(v/3.33),b=cl((v-3.33)/3.33),c=cl((v-6.67)/3.33);
-  K.drv=Math.round(3*a);Lm.thr=Math.round(6*b);if(F6.mode===1)F6.drv=Math.round(4*c);else F6.eff=Math.round(6*c);KNOBS.forEach(function(d){d();});}
-box(1036,92,220,198,'OUTPUT','bottom');
+button(1001,230,'TARGET',YEL,function(){return LD.tg!==0;},function(){LD.tg=(LD.tg+1)%TGS.length;},ldG,function(){return TGS[LD.tg]+' LUFS';});
+function applyLoud(){if(LD.l===LD.applied)return;LD.applied=LD.l;var v=LOUDS[LD.l],cl=function(x){return Math.max(0,Math.min(1,x));};
+  LDX.clip=1.5*cl(v/3.33);LDX.thr=3*cl((v-3.33)/3.33);LDX.fin=cl((v-6.67)/3.33);}
+box(1036,92,220,190,'OUTPUT','bottom');
 var ioOut=el('g',{});knob(1110,188,'GAIN',GAINIO,fmtDb,['-12','+12'],IO,'gout',24,ioOut,22);
 button(1227,130,'BYPASS',RED,function(){return GB;},function(){GB=!GB;},svg);
-var ceilG=el('g',{});button(1227,238,'CEIL',YEL,function(){return Lm.ceil!==1;},function(){Lm.ceil=(Lm.ceil+1)%CEILS.length;},ceilG,function(){return CEILS[Lm.ceil].toFixed(1)+' dB';});
+var ceilG=el('g',{});button(1227,230,'CEIL',YEL,function(){return Lm.ceil!==1;},function(){Lm.ceil=(Lm.ceil+1)%CEILS.length;},ceilG,function(){return CEILS[Lm.ceil].toFixed(1)+' dB';});
 var FINEMAX=0,VIBEMAX=0;
 function stageMax(){FINEMAX=0;VIBEMAX=0;for(var i=0;i<=48;i++){var f=20*Math.pow(1000,i/48);FINEMAX=Math.max(FINEMAX,sumDb(0,f),sumDb(1,f),sumDb(2,f));VIBEMAX=Math.max(VIBEMAX,vibeDb(f,0,0));}}
 function ioRedraw(){applyLoud();stageMax();STAGES.style.opacity=GB?.35:1;STAGES.style.pointerEvents=GB?'none':'';[ioIn,ioOut,ceilG,ldG].forEach(function(g){g.style.opacity=GB?.35:1;g.style.pointerEvents=GB?'none':'';});}
@@ -772,7 +775,7 @@ function levelTick(now){var t=(now-T0)/1000;
   /* peak at the output of each module, along the chain (estimate for the preview) */
   var lin=function(d){return Math.pow(10,d/20);},dbv=function(x){return 20*Math.log10(Math.max(1e-6,Math.abs(x)));};
   var feq=ins[0]+(G.on?FINEMAX:0),veq=feq+(V.on?VIBEMAX:0),glu=C.on?veq+MKP[C.mkp]:veq,clp=K.on?dbv(clipOut(lin(glu))):glu,
-      lim=Lm.on?Math.min(CEILS[Lm.ceil],clp-THRS[Lm.thr]+CEILS[Lm.ceil]-LS.gr):clp,fin=F6.on?dbv(finalOut(lin(lim))):lim,mtl=MH.on?Math.min(CEILS[Lm.ceil],fin+PUSH[MH.push]):fin;
+      lim=Lm.on?Math.min(CEILS[Lm.ceil],clp-thrBase()+CEILS[Lm.ceil]-LS.gr):clp,fin=F6.on?dbv(finalOut(lin(lim))):lim,mtl=MH.on?Math.min(CEILS[Lm.ceil],fin+PUSH[MH.push]):fin;
   var SD=[ins[0],feq,veq,glu,clp,lim,fin,mtl,outs[0]],SON=[true,G.on,V.on,C.on,K.on,Lm.on,F6.on,MH.on,true];
   SD.forEach(function(d,i){var live=i===0||i===8||(!GB&&SON[i]);if(live&&d>=0)clipOn[i]=60;else if(clipOn[i]>0)clipOn[i]--;
     clipD[i].setAttribute('fill',clipOn[i]>0?RED:OFFL);clipG[i].style.opacity=live?1:.35;});
@@ -828,7 +831,7 @@ function seg(x,y,items,sel,w,cb){var rects=[],labels=[];w=w||70;
 function act(x,y,w,label,cb){var g=el('g',{style:'cursor:pointer'},P);if(cb)g.addEventListener('click',cb);el('rect',{x:x,y:y,width:w,height:24,rx:2,fill:'#8e8e91',stroke:'#b8b8bb'},g);txt(label,x+w/2,y+16,11,'#1a1a1c','middle',800,g);}
 function row(label,y,hint,x0){x0=x0||50;txt(label,x0,y+16,13,W,'start',800,P);if(hint)txt(hint,x0,y+32,10,DIMW,'start',700,P);}
 var SC=654;
-box(24,102,602,364,'APPEARANCE','top',P);txt('saved for you, in every project',325,130,10,DIMW,'middle',700,P);
+box(24,102,602,412,'APPEARANCE','top',P);txt('saved for you, in every project',325,130,10,DIMW,'middle',700,P);
 row('WEAR',146);seg(200,146,['OFF','LIGHT','HEAVY'],['off','light','heavy'].indexOf(WEAR),84,function(i){setWear(['off','light','heavy'][i]);});
 row('NOTES LAYER',194,'tape and pen marks on the values');seg(200,194,['HIDE','SHOW'],1,84);
 row('TAPE FONT',242,'handwriting on the tape');el('rect',{x:226,y:242,width:176,height:24,rx:2,fill:'none',stroke:W,'stroke-width':1.5},P);
@@ -840,13 +843,15 @@ row('VALUES FONT',290,'values and model name');seg(200,290,['STANDARD','TAPE FON
 row('METER HOLD',338);seg(200,338,['OFF','1.5 S','3 S','INF'],1,63);
 row('METER RELEASE',386);seg(200,386,['SLOW','NORMAL','FAST'],1,84);
 row('LOOK',434);act(200,434,120,'RE-ROLL',function(){reroll();});txt('new wear, dirt and screws',332,450,10,DIMW,'start',700,P);
-box(SC,102,602,364,'BEHAVIOUR','top',P);txt('saved with the project',SC+301,130,10,DIMW,'middle',700,P);
-txt('No behaviour settings decided yet.',SC+26,162,12,DIMW,'start',700,P);
-box(24,484,1232,120,'NOTES','top',P);
-txt('Appearance settings belong to you: they are kept in your preferences and apply to every project and every instance.',50,522,12,DIMW,'start',700,P);
-txt('Behaviour settings change how the plugin works: they are saved in the project, together with the parameters.',50,544,12,DIMW,'start',700,P);
-txt('The wear layout (scratches, tape, screws) is generated once per instance from a saved seed and never changes by itself.',50,566,12,DIMW,'start',700,P);
-txt('Double-click on a knob returns it to its neutral default.',50,588,12,DIMW,'start',700,P);
+row('SIZE',482,'editor size, every plugin');seg(200,482,['75 %','90 %','100 %','125 %'],2,63);
+box(SC,102,602,412,'BEHAVIOUR','top',P);txt('saved with the project',SC+301,130,10,DIMW,'middle',700,P);
+row('OVERSAMPLING',146,'CLIP, TUBE, FINAL, METALHEAD',SC+26);seg(SC+226,146,['OFF','2×','4×'],1,63);
+txt('linear phase; the latency is reported to the host and changes only with this setting',SC+26,196,10,DIMW,'start',700,P);
+box(24,532,1232,120,'NOTES','top',P);
+txt('Appearance settings belong to you: they are kept in your preferences and apply to every project and every instance.',50,570,12,DIMW,'start',700,P);
+txt('Behaviour settings change how the plugin works: they are saved in the project, together with the parameters.',50,592,12,DIMW,'start',700,P);
+txt('The wear layout (scratches, tape, screws) is generated once per instance from a saved seed and never changes by itself.',50,614,12,DIMW,'start',700,P);
+txt('Double-click on a knob returns it to its neutral default.',50,636,12,DIMW,'start',700,P);
 
 /* ---- BUTTONS tab: what the buttons that impose settings do (in the plugin: generated from the same table the code uses) ---- */
 P=PANES.buttons;
@@ -862,7 +867,7 @@ box(24,102,1232,700,'WHAT THE BUTTONS DO','top',P);
   ['WARM',['Softens the attack of the GLUE compressor.'],['Threshold, ratio and the other knobs keep their values.']],
   ['MODERN / PUNCH / DYN',['Chooses the style of the limiter: one engine, three tunings.'],['MODERN: clean, fast release. PUNCH: lets a touch of the transient through. DYN (dynamic): slower, program-dependent','release that keeps the breathing. Each style has its own release; the RELEASE knob is a trim around it (centre = as the style wants) and keeps its position, so changing style moves the starting point. THRESH keeps its value.']],
   ['METALHEAD IN',['Switches on the optional last stage, off by default.'],['A brickwall digital limiter after FINAL for extreme loudness: PUSH drives into the output CEILING. Shame on you.']],
-  ['LOUDNESS / TARGET / MATCH',['LOUDNESS drives the stages that make level: CLIP first, then LIMIT, then FINAL.'],['TARGET chooses the loudness to aim for (−14, −11, −9 or −7 LUFS); the LUFS screen shows the gap and lights green within','0.5 LU. MATCH, pressed on the loudest part, sets LOUDNESS once to centre the target; it never moves by itself.']],
+  ['LOUDNESS / TARGET / MATCH',['LOUDNESS adds drive on top of your settings: CLIP first, then LIMIT, then FINAL. The stage knobs keep their values.'],['TARGET chooses the loudness to aim for (−14, −11, −9 or −7 LUFS); the LUFS screen shows the gap and lights green within','0.5 LU. MATCH, pressed on the loudest part, sets LOUDNESS once to centre the target; it never moves by itself.']],
   ['CEILING',['Output ceiling for delivery (OUTPUT): −0.1, −0.3, −0.5 or −1.0 dB.'],['The highest peak that leaves the plug-in: LIMIT, the FINAL clip and inflate, and METALHEAD all stay under it.','−0.1 / −0.3 for loud masters and CD, −1.0 for streaming (no true-peak detection, so keep the margin).']],
   ['INFLATE / CLIP',['Chooses the FINAL stage: the inflator or the safety clip.'],['INFLATE adds loudness by rounding the waveform (EFFECT, CURVE). CLIP pushes into a clean clipper just under','0 dBFS (DRIVE up to +2 dB). Only the controls of the selected mode are shown; both keep their values.']],
   ['SET',['Guided setting of the limiter release (LIMIT).'],['Forces a heavy squash and locks every LIMIT control except RELEASE, so you can hear the pumping while you turn it.','Press SET again to restore the threshold and unlock. It switches off when the editor closes and is never saved.']]],y=142;
@@ -957,7 +962,7 @@ boxTag(40,122,function(){return 'MULTI-Q';},bandsG);
 boxTag(40,622,function(){return 'TUBE-1A';},vG);
 boxTag(670,622,function(){return '4K-G';},gG);
 boxTag(40,1062,function(){return 'C-SOFTLY';},kG);
-boxTag(657,1062,function(){return F6.mode===0?'ZL-INFL':'C-ONLY2';},fTagG);
+boxTag(657,1062,function(){return F6.mode===0?'INFL-Z':'C-ONLY2';},fTagG);
 /* draws the selected view on the shared screen (EQ is drawn by redraw() and vibeRedraw()) */
 function viewTick(){var eq=GV.view==='eq';[grid,CURVES,LEG,VIBEC,VLEG].forEach(function(g){g.style.display=eq?'':'none';});
   while(VIEWG.firstChild)VIEWG.removeChild(VIEWG.firstChild);while(VIEWL.firstChild)VIEWL.removeChild(VIEWL.firstChild);

@@ -91,7 +91,7 @@ else()
   )
 endif()
 
-target_link_libraries(deep_throat PRIVATE sdk)
+target_link_libraries(deep_throat PRIVATE sdk fairy_ui)
 if(APPLE)
   target_link_libraries(deep_throat PRIVATE "-framework CoreFoundation")
   target_link_options(deep_throat PRIVATE
@@ -114,6 +114,7 @@ target_include_directories(deep_throat_tests PRIVATE
   ${VST3_SDK_PATH}/pluginterfaces/base
   ${VST3_SDK_PATH}/pluginterfaces/vst
 )
+target_link_libraries(deep_throat_tests PRIVATE fairy_ui)  # header-only (fairy_ui/knob_math.h)
 add_test(NAME deep_throat_tests COMMAND deep_throat_tests)
 
 # Module/factory lifecycle smoke test: dlopens the built bundle from dist/ (exit 77 = skipped
@@ -130,7 +131,22 @@ if(NOT WIN32)
     ${CMAKE_CURRENT_SOURCE_DIR}/src)
   target_compile_definitions(deep_throat_factory_test PRIVATE
     DEEP_THROAT_MODULE="${DEEP_THROAT_MODULE_PATH}")
-  target_link_libraries(deep_throat_factory_test PRIVATE pluginterfaces ${CMAKE_DL_LIBS})
+  target_link_libraries(deep_throat_factory_test PRIVATE pluginterfaces fairy_ui ${CMAKE_DL_LIBS})
   add_test(NAME deep_throat_factory_test COMMAND deep_throat_factory_test)
   set_tests_properties(deep_throat_factory_test PROPERTIES SKIP_RETURN_CODE 77)
+
+  # State v2 (seed, screw angles, tape texts) and the Decor messages on the real module, with the SDK's minimal host
+  # classes (IHostApplication, IMessage); skipped when the module is absent.
+  add_executable(deep_throat_state_module_test tests/test_state_module.cpp
+    ${VST3_SDK_PATH}/public.sdk/source/vst/vstinitiids.cpp
+    ${VST3_SDK_PATH}/public.sdk/source/vst/hosting/hostclasses.cpp
+    ${VST3_SDK_PATH}/public.sdk/source/vst/hosting/pluginterfacesupport.cpp
+    ${VST3_SDK_PATH}/public.sdk/source/vst/utility/stringconvert.cpp
+    ${VST3_SDK_PATH}/public.sdk/source/common/commonstringconvert.cpp)
+  target_include_directories(deep_throat_state_module_test PRIVATE ${VST3_SDK_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_compile_definitions(deep_throat_state_module_test PRIVATE
+    DEEP_THROAT_MODULE="${DEEP_THROAT_MODULE_PATH}")
+  target_link_libraries(deep_throat_state_module_test PRIVATE pluginterfaces fairy_ui ${CMAKE_DL_LIBS})
+  add_test(NAME deep_throat_state_module_test COMMAND deep_throat_state_module_test)
+  set_tests_properties(deep_throat_state_module_test PROPERTIES SKIP_RETURN_CODE 77)
 endif()

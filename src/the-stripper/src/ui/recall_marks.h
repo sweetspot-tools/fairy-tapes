@@ -28,9 +28,8 @@ inline bool recallMarkVisible(double current, double recall, bool marksExist) {
   return marksExist && std::isfinite(current) && std::isfinite(recall) && std::fabs(current - recall) >= kRecallThreshold;
 }
 
-// Knobs get marks; buttons and selectors do not. The Drive knob shows one mark, for the engine in use (its own view's id).
+// Knobs get marks; buttons and selectors do not.
 inline bool hasRecallMark(Steinberg::Vst::ParamID id) {
-  if (id == kEqSaturation) return false;
   for (const auto& c : kControls)
     if (c.id == id && c.kind == Kind::Knob && !c.sharesView) return true;
   return false;

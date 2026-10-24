@@ -5,6 +5,7 @@
 
 #include "params.h"
 #include "state.h"
+#include "messages.h"
 #include "dsp/rider.h"
 #include "dsp/fft.h"
 #include "dsp/spectral_breath_detector.h"
@@ -15,15 +16,18 @@
 #include "dsp/deesser.h"
 #include "dsp/distressor_comp.h"
 #include "dsp/tone_eq.h"
-#include "mode_presets.h"
+#include "mode_table.h"
 #include "engine.h"
+#include "display.h"
 #include <algorithm>
 #include <atomic>
+#include <string>
 #include <new>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <limits>
 #include <vector>
 
@@ -146,46 +150,264 @@ void test_defaults() {
   ASSERT_TRUE(d[kInput] == 0.5 && d[kOutput] == 0.5);
 }
 
+std::vector<uint8_t> v1Blob(const double* v) {
+  std::vector<uint8_t> out;
+  detail::putLE(out, 1u, 4);
+  for (int i = 0; i < (int)kNumParams; ++i) {
+    uint64_t bits;
+    std::memcpy(&bits, &v[i], sizeof bits);
+    detail::putLE(out, bits, 8);
+  }
+  return out;
+}
+
 void test_state_roundtrip() {
   double in[kNumParams];
   for (int i = 0; i < (int)kNumParams; ++i) in[i] = (i + 1) / 26.0;
   std::vector<uint8_t> bytes;
-  serializeState(in, bytes);
-  ASSERT_TRUE(bytes.size() == kStateSize);
+  serializeState(in, Decor{}, bytes);
   double out[kNumParams] = {};
-  ASSERT_TRUE(deserializeState(bytes.data(), bytes.size(), out));
+  Decor d;
+  ASSERT_TRUE(deserializeState(bytes.data(), bytes.size(), out, d));
   for (int i = 0; i < (int)kNumParams; ++i) ASSERT_TRUE(out[i] == in[i]);
 }
 
-void test_state_rejects_bad_version_and_nan() {
+void test_state_v2_roundtrip() {
+  double in[kNumParams];
+  for (int i = 0; i < (int)kNumParams; ++i) in[i] = (i + 1) / 26.0;
+  Decor decor;
+  decor.seed = 0xC0FFEE12u;
+  const float angles[4] = {0.f, 90.5f, 180.25f, 359.f};
+  for (int i = 0; i < 4; ++i) decor.screwAngles[i] = angles[i];
+  decor.tapeTexts = {"VOX", "LEAD 2"};
+  std::vector<uint8_t> bytes;
+  serializeState(in, decor, bytes);
+  ASSERT_TRUE(bytes.size() > kStateSizeV1);
+  ASSERT_TRUE(bytes.size() <= kMaxStateBytes);
+  double out[kNumParams] = {};
+  Decor got;
+  ASSERT_TRUE(deserializeState(bytes.data(), bytes.size(), out, got));
+  for (int i = 0; i < (int)kNumParams; ++i) ASSERT_TRUE(out[i] == in[i]);
+  ASSERT_TRUE(got.seed == decor.seed);
+  for (int i = 0; i < 4; ++i) ASSERT_TRUE(got.screwAngles[i] == angles[i]);
+  ASSERT_TRUE(got.tapeTexts.size() == 2 && got.tapeTexts[0] == "VOX" && got.tapeTexts[1] == "LEAD 2");
+}
+
+void test_state_v2_exact_size() {
   double in[kNumParams];
   loadDefaults(in);
   std::vector<uint8_t> bytes;
-  serializeState(in, bytes);
+  serializeState(in, Decor{}, bytes);
+  ASSERT_TRUE(bytes.size() == kStateSizeV1 + 4 + 4 * 4 + 4);   // seed + 4 angles + text count
+  Decor d;
+  d.tapeTexts = {"abc", "", "hello"};
+  serializeState(in, d, bytes);
+  ASSERT_TRUE(bytes.size() == kStateSizeV1 + 4 + 4 * 4 + 4 + (4 + 3) + (4 + 0) + (4 + 5));
+  ASSERT_TRUE(bytes[0] == 2 && bytes[1] == 0 && bytes[2] == 0 && bytes[3] == 0);
+}
+
+void test_state_v1_loads_with_default_decor() {
+  double in[kNumParams];
+  for (int i = 0; i < (int)kNumParams; ++i) in[i] = (i + 1) / 26.0;
+  const std::vector<uint8_t> blob = v1Blob(in);
+  ASSERT_TRUE(blob.size() == kStateSizeV1);
+  double out[kNumParams] = {};
+  Decor d;
+  d.seed = 55;   // must be replaced by the default
+  d.tapeTexts = {"x"};
+  ASSERT_TRUE(deserializeState(blob.data(), blob.size(), out, d));
+  for (int i = 0; i < (int)kNumParams; ++i) ASSERT_TRUE(out[i] == in[i]);
+  ASSERT_TRUE(d.seed == 0 && d.tapeTexts.empty());
+  for (float a : d.screwAngles) ASSERT_TRUE(a == 0.f);
+  ASSERT_TRUE(ensureSeed(d));
+  ASSERT_TRUE(d.seed != 0);
+  const uint32_t first = d.seed;
+  ASSERT_TRUE(!ensureSeed(d));
+  ASSERT_TRUE(d.seed == first);
+  Decor z;   // a generator answering 0 still gives a non-zero seed
+  ASSERT_TRUE(ensureSeed(z, [] { return 0u; }) && z.seed != 0);
+}
+
+void test_state_rejects_corrupt() {
+  double in[kNumParams];
+  loadDefaults(in);
+  Decor decor;
+  decor.seed = 7;
+  decor.tapeTexts = {"ab", "cd"};
+  std::vector<uint8_t> bytes;
+  serializeState(in, decor, bytes);
+
   double out[kNumParams];
   loadDefaults(out);
   out[kTone] = 0.123;
+  Decor keep;
+  keep.seed = 999;
+  keep.tapeTexts = {"keep"};
+  const auto untouched = [&] {
+    return out[kTone] == 0.123 && keep.seed == 999 && keep.tapeTexts.size() == 1 && keep.tapeTexts[0] == "keep";
+  };
+
+  // Truncated at every length, from empty to one byte short: v2 needs the whole decor (v1 length alone is valid v1
+  // only with version 1, and a v2 version byte with a v1 length lacks the decor).
+  for (size_t n = 0; n < bytes.size(); ++n) {
+    ASSERT_TRUE(!deserializeState(bytes.data(), n, out, keep));
+    ASSERT_TRUE(untouched());
+  }
+  ASSERT_TRUE(!deserializeState(nullptr, 0, out, keep));
 
   std::vector<uint8_t> bad = bytes;
-  bad[0] = 99;  // unknown version
-  ASSERT_TRUE(!deserializeState(bad.data(), bad.size(), out));
-  ASSERT_TRUE(!deserializeState(bytes.data(), bytes.size() - 1, out));  // short
-  ASSERT_TRUE(!deserializeState(nullptr, 0, out));
+  bad[0] = 3;   // unknown version
+  ASSERT_TRUE(!deserializeState(bad.data(), bad.size(), out, keep) && untouched());
+  bad[0] = 0;
+  ASSERT_TRUE(!deserializeState(bad.data(), bad.size(), out, keep) && untouched());
 
   double nan_in[kNumParams];
   loadDefaults(nan_in);
   nan_in[kTone] = std::numeric_limits<double>::quiet_NaN();
-  serializeState(nan_in, bad);
-  ASSERT_TRUE(!deserializeState(bad.data(), bad.size(), out));
-  ASSERT_TRUE(out[kTone] == 0.123);  // untouched on failure
+  serializeState(nan_in, decor, bad);
+  ASSERT_TRUE(!deserializeState(bad.data(), bad.size(), out, keep) && untouched());
 
+  const size_t countAt = kStateSizeV1 + 4 + 16;
+  bad.assign(bytes.begin(), bytes.begin() + countAt);   // huge text count
+  detail::putLE(bad, 0xFFFFFFFFull, 4);
+  bad.insert(bad.end(), bytes.begin() + countAt + 4, bytes.end());
+  ASSERT_TRUE(!deserializeState(bad.data(), bad.size(), out, keep) && untouched());
+
+  bad.assign(bytes.begin(), bytes.begin() + countAt + 4);   // first text announces more bytes than the blob has
+  detail::putLE(bad, 100u, 4);
+  bad.push_back('a');
+  ASSERT_TRUE(!deserializeState(bad.data(), bad.size(), out, keep) && untouched());
+
+  bad.assign(bytes.begin(), bytes.begin() + countAt + 4);   // a text longer than the stored limit
+  detail::putLE(bad, 100000u, 4);
+  bad.insert(bad.end(), 100000, 'a');
+  ASSERT_TRUE(!deserializeState(bad.data(), bad.size(), out, keep) && untouched());
+
+  // The same refusals through the decor alone.
+  Decor dk;
+  dk.seed = 5;
+  std::vector<uint8_t> db;
+  serializeDecor(decor, db);
+  for (size_t n = 0; n < db.size(); ++n) ASSERT_TRUE(!deserializeDecor(db.data(), n, dk) && dk.seed == 5);
+  ASSERT_TRUE(!deserializeDecor(nullptr, 0, dk));
+}
+
+void test_state_clamps_and_ignores_trailing() {
   double wild[kNumParams];
   loadDefaults(wild);
   wild[kInput] = 5.0;
   wild[kOutput] = -3.0;
-  serializeState(wild, bad);
-  ASSERT_TRUE(deserializeState(bad.data(), bad.size(), out));
+  std::vector<uint8_t> bytes;
+  serializeState(wild, Decor{}, bytes);
+  bytes.push_back(0xAB);   // trailing byte ignored
+  double out[kNumParams];
+  Decor d;
+  ASSERT_TRUE(deserializeState(bytes.data(), bytes.size(), out, d));
   ASSERT_TRUE(out[kInput] == 1.0 && out[kOutput] == 0.0);  // clamped
+}
+
+void test_decor_sanitised() {
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+  Decor d;
+  d.seed = 3;
+  d.screwAngles[0] = nan;
+  d.screwAngles[1] = inf;
+  d.screwAngles[2] = 1000.f;
+  d.screwAngles[3] = -1000.f;
+  d.tapeTexts = {std::string("a\x01" "b\n\xE9z"), std::string(40, 'x'), "  pad  ", "4", "5", "6", "7", "8"};
+  std::vector<uint8_t> bytes;
+  serializeDecor(d, bytes);
+  Decor got;
+  ASSERT_TRUE(deserializeDecor(bytes.data(), bytes.size(), got));
+  ASSERT_TRUE(got.seed == 3);
+  ASSERT_TRUE(got.screwAngles[0] == 0.f && got.screwAngles[1] == 0.f);
+  ASSERT_NEAR(got.screwAngles[2], 280.0, 1e-3);
+  ASSERT_TRUE(std::fabs(got.screwAngles[3] - 80.0) < 1e-3);
+  for (float a : got.screwAngles) ASSERT_TRUE(a >= 0.f && a < 360.f);
+  ASSERT_TRUE(got.tapeTexts.size() == 6);
+  ASSERT_TRUE(got.tapeTexts[0] == "abz");   // control bytes and the non-ASCII byte are dropped
+  for (const auto& t : got.tapeTexts) {
+    ASSERT_TRUE((int)t.size() <= kMaxTapeChars);
+    for (char c : t) ASSERT_TRUE(c >= 0x20 && c <= 0x7E);
+  }
+  ASSERT_TRUE(got.tapeTexts[1] == std::string(14, 'x'));
+  ASSERT_TRUE(got.tapeTexts[2] == "pad");
+
+  // A hand-made blob with raw junk is sanitised on reading too (the writer is not trusted).
+  std::vector<uint8_t> raw;
+  detail::putLE(raw, 9u, 4);
+  const float rawAngles[4] = {nan, -90.f, 720.f, 45.f};
+  for (float a : rawAngles) {
+    uint32_t bits;
+    std::memcpy(&bits, &a, 4);
+    detail::putLE(raw, bits, 4);
+  }
+  detail::putLE(raw, 7u, 4);
+  for (int i = 0; i < 7; ++i) {
+    detail::putLE(raw, 40u, 4);
+    raw.insert(raw.end(), 40, i == 0 ? '\x07' : 'q');
+  }
+  ASSERT_TRUE(deserializeDecor(raw.data(), raw.size(), got));
+  ASSERT_TRUE(got.screwAngles[0] == 0.f && got.screwAngles[1] == 270.f && got.screwAngles[2] == 0.f);
+  ASSERT_TRUE(got.tapeTexts.size() == 6 && got.tapeTexts[0].empty());
+  ASSERT_TRUE(got.tapeTexts[1] == std::string(14, 'q'));
+}
+
+// Stand-in for Steinberg::Vst::IMessage / IAttributeList.
+struct FakeAttrs {
+  std::vector<uint8_t> blob;
+  bool has = false;
+  int setBinary(const char* id, const void* d, unsigned n) {
+    if (std::strcmp(id, "decor") != 0) return 1;
+    blob.assign((const uint8_t*)d, (const uint8_t*)d + n);
+    has = true;
+    return 0;
+  }
+  int getBinary(const char* id, const void*& d, unsigned& n) {
+    if (std::strcmp(id, "decor") != 0 || !has) return 1;
+    d = blob.data();
+    n = (unsigned)blob.size();
+    return 0;
+  }
+};
+struct FakeMsg {
+  std::string id;
+  FakeAttrs attrs;
+  void setMessageID(const char* s) { id = s; }
+  const char* getMessageID() { return id.c_str(); }
+  FakeAttrs* getAttributes() { return &attrs; }
+};
+
+void test_decor_message_roundtrip() {
+  Decor d;
+  d.seed = 424242;
+  d.screwAngles[1] = 12.5f;
+  d.screwAngles[3] = 300.f;
+  d.tapeTexts = {"one", "two", "three"};
+  FakeMsg m;
+  encodeDecorMessage(&m, d);
+  ASSERT_TRUE(m.id == kMsgDecor && m.id == "Decor");
+  Decor got;
+  ASSERT_TRUE(decodeDecorMessage(&m, got));
+  ASSERT_TRUE(got.seed == d.seed && got.screwAngles[1] == 12.5f && got.screwAngles[3] == 300.f);
+  ASSERT_TRUE(got.tapeTexts == d.tapeTexts);
+
+  Decor keep;
+  keep.seed = 1;
+  FakeMsg other = m;
+  other.id = "Other";
+  ASSERT_TRUE(!decodeDecorMessage(&other, keep) && keep.seed == 1);
+  FakeMsg corrupt = m;
+  corrupt.attrs.blob.resize(corrupt.attrs.blob.size() - 1);   // cuts the last text
+  ASSERT_TRUE(!decodeDecorMessage(&corrupt, keep) && keep.seed == 1);
+  FakeMsg empty;
+  empty.id = kMsgDecor;   // attribute missing
+  ASSERT_TRUE(!decodeDecorMessage(&empty, keep) && keep.seed == 1);
+  FakeMsg huge = m;
+  huge.attrs.blob.assign(kMaxStateBytes + 1, 0);
+  ASSERT_TRUE(!decodeDecorMessage(&huge, keep) && keep.seed == 1);
+  ASSERT_TRUE(!decodeDecorMessage<FakeMsg>(nullptr, keep));
 }
 
 float toDb(float lin) { return 20.0f * std::log10(lin); }
@@ -1709,24 +1931,38 @@ void test_tone_changes_are_smooth() {
   ASSERT_TRUE(bad == 0);
 }
 
-void test_presets_values() {
-  ASSERT_NEAR(presetFor(Mode::Speak).riderMaxRangeDb, 6.0, 1e-9);
-  ASSERT_NEAR(presetFor(Mode::Speak).riderSlewDbPerSec, 8.0, 1e-9);
-  ASSERT_NEAR(presetFor(Mode::Sing).riderMaxRangeDb, 4.0, 1e-9);
-  ASSERT_NEAR(presetFor(Mode::Sing).riderSlewDbPerSec, 4.0, 1e-9);
-  ASSERT_NEAR(presetFor(Mode::Puke).riderMaxRangeDb, 3.0, 1e-9);
-  ASSERT_NEAR(presetFor(Mode::Puke).riderSlewDbPerSec, 2.0, 1e-9);
-  ASSERT_TRUE(&presetFor(Mode::Sing) == &kModePresets[1]);
+void test_mode_table_values() {
+  struct Exp {
+    const char* name; const char* desc; bool level; double range, slew, hpf, mud, deEss, ratio;
+    int dist; double tMud, tPres, tAir;
+  };
+  const Exp e[3] = {
+      {"SPEAK", "Spoken word: podcast, voice-over", false, 6, 8, 80, -2, 1.0, 2, 1, -2, 3, 2},
+      {"SING", "Sung voice", false, 4, 4, 70, -3, 1.0, 3, 2, -1.5, 2, 4},
+      {"PUKE", "Extreme voices: scream, growl", true, 3, 2, 60, -4, 0.15, 8, 3, -3, 1, 0}};
+  const Mode modes[3] = {Mode::Speak, Mode::Sing, Mode::Puke};
+  for (int i = 0; i < 3; ++i) {
+    const ModeRow& r = modeRow(modes[i]);
+    ASSERT_TRUE(&r == &kModeTable[i]);
+    ASSERT_TRUE(std::string(r.name) == e[i].name);
+    ASSERT_TRUE(std::string(r.description) == e[i].desc);
+    ASSERT_TRUE(r.levelDetector == e[i].level);
+    ASSERT_NEAR(r.riderMaxRangeDb, e[i].range, 1e-9);
+    ASSERT_NEAR(r.riderSlewDbPerSec, e[i].slew, 1e-9);
+    ASSERT_NEAR(r.hpfHz, e[i].hpf, 1e-9);
+    ASSERT_NEAR(r.mudCutDb, e[i].mud, 1e-9);
+    ASSERT_NEAR(r.deEssScale, e[i].deEss, 1e-9);
+    ASSERT_NEAR(r.compRatio, e[i].ratio, 1e-9);
+    ASSERT_TRUE(r.compDist == e[i].dist);
+    ASSERT_NEAR(r.toneMudDb, e[i].tMud, 1e-9);
+    ASSERT_NEAR(r.tonePresenceDb, e[i].tPres, 1e-9);
+    ASSERT_NEAR(r.toneAirDb, e[i].tAir, 1e-9);
+  }
+  ASSERT_TRUE(&modeRow(static_cast<Mode>(7)) == &kModeTable[2]);
+  ASSERT_TRUE(&modeRow(static_cast<Mode>(-1)) == &kModeTable[0]);
 }
 
-
-// ---- Mode presets (ODR fix) ----
-
-void test_presets_out_of_range_mode_is_clamped() {
-  ASSERT_TRUE(&presetFor(static_cast<Mode>(-1)) == &kModePresets[0]);
-  ASSERT_TRUE(&presetFor(static_cast<Mode>(7)) == &kModePresets[2]);
-  ASSERT_NEAR(presetFor(static_cast<Mode>(99)).riderMaxRangeDb, 3.0, 1e-9);
-}
+// ---- Mode table ----
 
 // ---- DistressorComp: huge finite input ----
 
@@ -1823,6 +2059,24 @@ std::vector<float> phraseBreathPhrase(double sr, double breathDb = -35.0) {
 
 int expectedLatency(double sr) {
   return (int)std::lround(0.080 * sr) + DSP::nextPow2((int)std::ceil(0.020 * sr));
+}
+
+void test_mode_table_drives_engine() {
+  const double expRange[3] = {6.0, 4.0, 3.0};
+  const double norm[3] = {0.0, 0.5, 1.0};
+  for (int i = 0; i < 3; ++i) {
+    double v[kNumParams];
+    loadDefaults(v);
+    v[kMode] = norm[i];
+    v[kRiderRange] = 1.0;
+    const Settings s = mapParams(v);
+    ASSERT_NEAR(s.riderRangeDb, expRange[i], 1e-6);
+    Engine e;
+    e.prepare(48000.0);
+    const std::vector<float> x(512, 0.1f);
+    runEngine(e, s, x, x);
+    ASSERT_TRUE(e.usingLevelDetector() == (i == 2));
+  }
 }
 
 void test_engine_defaults_finite_and_mapped() {
@@ -2259,6 +2513,41 @@ void test_engine_all_in_off_is_passthrough() {
   }
 }
 
+// The Input gain belongs to the input timeline: a change made at input time T must reach the
+// audio when the audio of time T leaves the delay (T + latency), not immediately at the output.
+void test_engine_input_gain_follows_the_input_timeline() {
+  for (double sr : kRates) {
+    const size_t total = (size_t)(3.0 * sr);
+    std::vector<float> x(total);
+    for (size_t i = 0; i < total; ++i)
+      x[i] = (float)(0.1 * std::sin(2.0 * 3.14159265358979 * 220.0 * (double)i / sr));
+    Settings s1 = engineDefaults();
+    setAllIn(s1, false);
+    s1.inputDb = 0.0f;
+    Settings s2 = s1;
+    s2.inputDb = 12.0f;
+    const size_t block = 256;
+    const size_t n0 = block * (size_t)std::ceil(sr / (double)block);  // change at input time ~1 s
+    Engine e;
+    e.prepare(sr);
+    const size_t L = (size_t)e.latencySamples();
+    std::vector<float> y(total);
+    for (size_t i = 0; i < total; i += block) {
+      const size_t n = std::min(block, total - i);
+      e.setSettings(i < n0 ? s1 : s2);
+      e.process(&x[i], &x[i], &y[i], &y[i], (int)n);
+    }
+    const size_t w = (size_t)(0.020 * sr);
+    const double ref = rmsDb(y, L + (size_t)(0.2 * sr), L + (size_t)(0.2 * sr) + w);
+    // Output time n0 + 20 ms is still the audio of input time n0 - L + 20 ms: old gain.
+    const double before = rmsDb(y, n0 + (size_t)(0.020 * sr), n0 + (size_t)(0.020 * sr) + w);
+    ASSERT_NEAR(before, ref, 1.0);
+    // 60 ms after the audio of input time n0 leaves the delay the new gain is settled.
+    const double after = rmsDb(y, n0 + L + (size_t)(0.060 * sr), n0 + L + (size_t)(0.060 * sr) + w);
+    ASSERT_NEAR(after, ref + 12.0, 1.0);
+  }
+}
+
 void test_engine_breath_in_off_disables_reduction() {
   const double sr = 48000.0;
   const auto x = phraseBreathPhrase(sr);
@@ -2450,8 +2739,11 @@ void test_engine_gains_are_smoothed() {
   for (size_t i = 1; i < y.size(); ++i) maxStep = std::max(maxStep, (double)std::fabs(y[i] - y[i - 1]));
   // Natural step of the loudest part: 2 pi 1000 / 48000 x 1.0 = 0.13; a jump would be ~0.9.
   ASSERT_TRUE(maxStep < 0.2);
-  // Settled values: +12 dB then +12 - 12 = 0 dB on the 0.25 sine (-15.05 dBFS RMS).
-  ASSERT_NEAR(rmsDb(y, (size_t)(L + 9600), (size_t)(L + 14400)), -15.05 + 12.0, 0.1);
+  // Settled values: +12 dB then +12 - 12 = 0 dB on the 0.25 sine (-15.05 dBFS RMS). The input
+  // gain step (made at input time ~L + 4800, block aligned) reaches the output one latency
+  // later, plus its 60 ms settling; the output gain step acts at the output immediately.
+  const size_t inStep = (size_t)L + 4800 + 256;
+  ASSERT_NEAR(rmsDb(y, inStep + (size_t)L + 2880, (size_t)(L + 14400)), -15.05 + 12.0, 0.1);
   ASSERT_NEAR(rmsDb(y, (size_t)(L + 24000), y.size()), -15.05, 0.1);
 }
 
@@ -2494,7 +2786,7 @@ void test_engine_chain_order_matches_reference() {
   rider.prepare(sr);
   rider.setTargetDb(s.riderTargetDb);
   rider.setMaxRangeDb(s.riderRangeDb);
-  rider.setSlewDbPerSec(presetFor(s.mode).riderSlewDbPerSec);
+  rider.setSlewDbPerSec(modeRow(s.mode).riderSlewDbPerSec);
   DSP::BreathReducer red;
   red.prepare(sr);
   red.setAmount(s.breathAmount);
@@ -2609,6 +2901,284 @@ void test_engine_no_alloc_in_process() {
   ASSERT_TRUE(g_allocs == 0);
 }
 
+
+// ---- Display values (LEVEL meters, clip LEDs, SCOPE) ----
+
+// Runs the engine in blocks and calls `onBlock` after each one (the display values are taken there).
+template <class F>
+void runBlocks(Engine& e, const Settings& s, const std::vector<float>& l, const std::vector<float>& r,
+               int block, F onBlock) {
+  std::vector<float> ol(l.size()), orr(l.size());
+  for (size_t i = 0; i < l.size(); i += (size_t)block) {
+    const int n = (int)std::min<size_t>((size_t)block, l.size() - i);
+    e.setSettings(s);
+    e.process(&l[i], &r[i], &ol[i], &orr[i], n);
+    onBlock(i + (size_t)n);
+  }
+}
+
+void test_display_peaks_and_clip() {
+  const double sr = 48000.0;
+  Settings s = engineDefaults();
+  s.bypass = true;  // the output is the delayed input: its peak is the input peak
+  s.inputDb = 12.0f;  // the input peaks are taken BEFORE the input gain
+  const auto x = sineVec(sr, 1000.0, std::pow(10.0, -6.0 / 20.0), 1.0);
+  std::vector<float> r(x.size());
+  for (size_t i = 0; i < x.size(); ++i) r[i] = 0.5f * x[i];  // R is 6 dB lower
+  Engine e;
+  e.prepare(sr);
+  LevelValues last;
+  runBlocks(e, s, x, r, 256, [&](size_t) { last = e.takeLevels(); });
+  ASSERT_NEAR(last.inL, -6.0, 0.5);
+  ASSERT_NEAR(last.inR, -12.0, 0.5);
+  ASSERT_NEAR(last.outL, -6.0, 0.5);
+  ASSERT_NEAR(last.outR, -12.0, 0.5);
+  ASSERT_TRUE(!last.clipIn && !last.clipOut);
+
+  // Output peak is taken after the Output gain (bypass off: chain + output gain -6 dB).
+  {
+    Settings g = engineDefaults();
+    g.eqOn = g.deEssOn = g.compOn = g.toneOn = g.riderOn = g.breathOn = false;
+    g.outputDb = -6.0f;
+    Engine e2;
+    e2.prepare(sr);
+    LevelValues l2;
+    runBlocks(e2, g, x, x, 256, [&](size_t) { l2 = e2.takeLevels(); });
+    ASSERT_NEAR(l2.inL, -6.0, 0.5);
+    ASSERT_NEAR(l2.outL, -12.0, 0.6);
+  }
+
+  // A full-scale sample lights clipIn at once and holds it for 2 s of audio.
+  std::vector<float> z((size_t)(4.0 * sr), 0.0f);
+  z[100] = 1.0f;
+  Settings b = engineDefaults();
+  b.bypass = true;
+  Engine c;
+  c.prepare(sr);
+  bool in19 = false, in21 = true, outSeen = false, inAtFirst = false;
+  runBlocks(c, b, z, z, 256, [&](size_t end) {
+    const LevelValues v = c.takeLevels();
+    if (end == 256) inAtFirst = v.clipIn;
+    if (v.clipOut) outSeen = true;
+    if (end == (size_t)(1.9 * sr) / 256 * 256) in19 = v.clipIn;
+    if (end == (size_t)(2.2 * sr) / 256 * 256) in21 = v.clipIn;
+  });
+  ASSERT_TRUE(inAtFirst);
+  ASSERT_TRUE(in19);
+  ASSERT_TRUE(!in21);
+  ASSERT_TRUE(outSeen);  // the bypassed sample reaches the output unchanged, after the latency
+
+  // clearClips() turns the held flag off.
+  Engine d;
+  d.prepare(sr);
+  const std::vector<float> one(256, 1.0f);
+  std::vector<float> o1(256), o2(256);
+  const std::vector<float> zero(256, 0.0f);
+  d.setSettings(b);
+  d.process(one.data(), one.data(), o1.data(), o2.data(), 256);
+  ASSERT_TRUE(d.takeLevels().clipIn);
+  d.process(zero.data(), zero.data(), o1.data(), o2.data(), 256);
+  ASSERT_TRUE(d.takeLevels().clipIn);  // still held
+  d.clearClips();
+  d.process(zero.data(), zero.data(), o1.data(), o2.data(), 256);
+  ASSERT_TRUE(!d.takeLevels().clipIn);
+}
+
+void test_display_gr_and_rider() {
+  const double sr = 48000.0;
+  Settings s = engineDefaults();
+  s.compAmount = 1.0f;
+  const auto loud = sineVec(sr, 220.0, 0.8, 1.5);
+  Engine e;
+  e.prepare(sr);
+  float grMax = 0.f;
+  runBlocks(e, s, loud, loud, 256, [&](size_t) { grMax = std::max(grMax, e.takeDisplay().grDb); });
+  ASSERT_TRUE(grMax > 3.0f);
+
+  // Quiet voice under the Rider target: the Rider raises it, gain > 0 dB.
+  Settings q = engineDefaults();
+  q.riderRangeDb = 6.0f;
+  const auto quiet = sineVec(sr, 220.0, 0.02, 3.0);
+  Engine f;
+  f.prepare(sr);
+  DisplayValues dv;
+  runBlocks(f, q, quiet, quiet, 256, [&](size_t) { dv = f.takeDisplay(); });
+  ASSERT_TRUE(dv.riderGainDb > 0.5f);
+  ASSERT_TRUE(dv.voiceDb < -30.0f && dv.voiceDb > -50.0f);  // Rider meter level of the quiet voice
+
+  // Rider IN off: the gain actually applied is unity.
+  q.riderOn = false;
+  Engine g;
+  g.prepare(sr);
+  runBlocks(g, q, quiet, quiet, 256, [&](size_t) { dv = g.takeDisplay(); });
+  ASSERT_NEAR(dv.riderGainDb, 0.0, 1e-3);
+}
+
+void test_display_breath_prob_raw() {
+  const double sr = 48000.0;
+  const auto x = phraseBreathPhrase(sr);  // phrase 0-1 s, breath 1-1.3 s, phrase 1.3-2.3 s
+  Settings s = engineDefaults();
+  Engine e;
+  e.prepare(sr);
+  float inBreath = 0.f, afterBreath = 0.f, inPhrase = 0.f;
+  size_t start = 0;
+  runBlocks(e, s, x, x, 128, [&](size_t end) {
+    const float p = e.takeDisplay().breathProb;
+    const double t0 = (double)start / sr, t1 = (double)end / sr;
+    start = end;
+    if (t0 >= 1.05 && t1 <= 1.3) inBreath = std::max(inBreath, p);
+    if (t0 >= 1.33 && t1 <= 1.39) afterBreath = std::max(afterBreath, p);  // the look-ahead max (D = 101 ms) still holds here
+    if (t0 >= 0.5 && t1 <= 0.9) inPhrase = std::max(inPhrase, p);
+  });
+  ASSERT_TRUE(inBreath > 0.6f);
+  ASSERT_TRUE(afterBreath < 0.3f);  // raw output: the look-ahead max would still hold the breath here
+  ASSERT_TRUE(inPhrase < 0.3f);
+}
+
+void test_display_norms_mapping() {
+  using namespace FairyTapes::DeepThroat;
+  LevelValues l;
+  DisplayValues d;
+  l.inL = 0.f;
+  l.inR = -60.f;
+  l.outL = 6.f;
+  l.outR = -120.f;
+  l.clipIn = true;
+  d.grDb = 21.f;
+  d.voiceDb = -27.f;
+  d.riderGainDb = 6.f;
+  d.breathProb = 0.25f;
+  auto n = displayNorms(d, l);
+  ASSERT_NEAR(n[kDispInL - kMeterBase], 60.0 / 66.0, 1e-6);
+  ASSERT_NEAR(n[kDispInR - kMeterBase], 0.0, 1e-6);
+  ASSERT_NEAR(n[kDispOutL - kMeterBase], 1.0, 1e-6);
+  ASSERT_NEAR(n[kDispOutR - kMeterBase], 0.0, 1e-6);
+  ASSERT_NEAR(n[kDispGr - kMeterBase], 1.0, 1e-6);
+  ASSERT_NEAR(n[kDispVoice - kMeterBase], 33.0 / 66.0, 1e-6);
+  ASSERT_NEAR(n[kDispRider - kMeterBase], 1.0, 1e-6);
+  ASSERT_NEAR(n[kDispBreath - kMeterBase], 0.25, 1e-6);
+  ASSERT_NEAR(n[kDispClipIn - kMeterBase], 1.0, 1e-6);
+  ASSERT_NEAR(n[kDispClipOut - kMeterBase], 0.0, 1e-6);
+  d.grDb = 10.5f;
+  d.riderGainDb = -6.f;
+  n = displayNorms(d, l);
+  ASSERT_NEAR(n[kDispGr - kMeterBase], 0.5, 1e-6);
+  ASSERT_NEAR(n[kDispRider - kMeterBase], 0.0, 1e-6);
+  d.grDb = 50.f;
+  d.riderGainDb = 0.f;
+  d.breathProb = 3.f;
+  n = displayNorms(d, l);
+  ASSERT_NEAR(n[kDispGr - kMeterBase], 1.0, 1e-6);
+  ASSERT_NEAR(n[kDispRider - kMeterBase], 0.5, 1e-6);
+  ASSERT_NEAR(n[kDispBreath - kMeterBase], 1.0, 1e-6);
+  d.grDb = -3.f;
+  ASSERT_NEAR(displayNorms(d, l)[kDispGr - kMeterBase], 0.0, 1e-6);
+  const float nan = std::numeric_limits<float>::quiet_NaN(), inf = std::numeric_limits<float>::infinity();
+  DisplayValues dn{nan, nan, nan, nan};
+  LevelValues ln;
+  ln.inL = nan;
+  ln.inR = inf;
+  ln.outL = -inf;
+  ln.outR = nan;
+  const auto nz = displayNorms(dn, ln);
+  for (double v : nz) ASSERT_NEAR(v, 0.0, 1e-12);
+}
+
+void test_display_rate_limiter_16ms() {
+  for (double sr : {44100.0, 48000.0, 96000.0}) {
+    DisplayRateLimiter lim;
+    lim.prepare(sr);
+    const int period = (int)(sr * 0.016);
+    ASSERT_TRUE(lim.advance(1));  // the first call writes
+    int calls = 1;
+    int since = 0;
+    for (int k = 0; k < 5; ++k) {
+      since = 0;
+      bool fired = false;
+      while (!fired && since < 4 * period) {
+        fired = lim.advance(1);
+        ++since;
+        ++calls;
+      }
+      ASSERT_TRUE(fired);
+      ASSERT_TRUE(since == period);  // exactly one write per 16 ms of audio
+    }
+    // Blocks larger than the interval write on every call.
+    DisplayRateLimiter big;
+    big.prepare(sr);
+    ASSERT_TRUE(big.advance(period + 5));
+    ASSERT_TRUE(big.advance(period + 5));
+    ASSERT_TRUE(!lim.advance(0));
+  }
+}
+
+void test_display_accumulators_hold_extremes() {
+  DisplayAccumulator a;
+  DisplayValues d1;
+  d1.voiceDb = -20.f;
+  d1.riderGainDb = 2.f;
+  d1.breathProb = 0.8f;
+  d1.grDb = 4.f;
+  DisplayValues d2;
+  d2.voiceDb = -10.f;
+  d2.riderGainDb = 1.f;
+  d2.breathProb = 0.2f;
+  d2.grDb = 2.f;
+  a.add(d1);
+  a.add(d2);
+  DisplayValues t = a.take();
+  ASSERT_NEAR(t.voiceDb, -10.0, 1e-6);
+  ASSERT_NEAR(t.riderGainDb, 1.0, 1e-6);  // MIN
+  ASSERT_NEAR(t.breathProb, 0.8, 1e-6);
+  ASSERT_NEAR(t.grDb, 4.0, 1e-6);
+  t = a.take();  // empty: neutral values
+  ASSERT_NEAR(t.riderGainDb, 0.0, 1e-6);
+  ASSERT_NEAR(t.grDb, 0.0, 1e-6);
+  ASSERT_TRUE(t.voiceDb <= -120.f);
+
+  LevelAccumulator la;
+  LevelValues a1, a2;
+  a1.inL = -30.f;
+  a1.clipOut = true;
+  a2.inL = -10.f;
+  la.add(a1);
+  la.add(a2);
+  LevelValues lt = la.take();
+  ASSERT_NEAR(lt.inL, -10.0, 1e-6);
+  ASSERT_TRUE(lt.clipOut && !lt.clipIn);
+  la.add(a1);
+  la.clearClips();
+  ASSERT_TRUE(!la.take().clipOut);
+}
+
+void test_display_no_alloc() {
+  const double sr = 48000.0;
+  const auto x = phraseBreathPhrase(sr);
+  std::vector<float> l(x.size()), r(x.size());
+  Engine e;
+  e.prepare(sr);
+  const Settings s = engineDefaults();
+  DisplayAccumulator da;
+  LevelAccumulator la;
+  double sink = 0.0;
+  g_allocs = 0;
+  g_countAllocs = true;
+  for (size_t at = 0; at + 512 <= x.size(); at += 512) {
+    e.setSettings(s);
+    e.process(&x[at], &x[at], &l[at], &r[at], 512);
+    const LevelValues lv = e.takeLevels();
+    const DisplayValues dv = e.takeDisplay();
+    da.add(dv);
+    la.add(lv);
+    const auto n = displayNorms(da.take(), la.take());
+    sink += n[0] + n[9];
+    e.clearClips();
+  }
+  g_countAllocs = false;
+  ASSERT_TRUE(g_allocs == 0);
+  ASSERT_TRUE(sink == sink);
+}
+
 // ---- BreathReducer ----
 
 void test_reducer_amount_zero_is_unity() {
@@ -2686,7 +3256,13 @@ int main() {
   RUN_TEST(test_io_gain_ranges);
   RUN_TEST(test_defaults);
   RUN_TEST(test_state_roundtrip);
-  RUN_TEST(test_state_rejects_bad_version_and_nan);
+  RUN_TEST(test_state_v2_roundtrip);
+  RUN_TEST(test_state_v2_exact_size);
+  RUN_TEST(test_state_v1_loads_with_default_decor);
+  RUN_TEST(test_state_rejects_corrupt);
+  RUN_TEST(test_state_clamps_and_ignores_trailing);
+  RUN_TEST(test_decor_sanitised);
+  RUN_TEST(test_decor_message_roundtrip);
   RUN_TEST(test_rider_raises_quiet_to_target);
   RUN_TEST(test_rider_lowers_loud);
   RUN_TEST(test_rider_slew_limited);
@@ -2769,8 +3345,8 @@ int main() {
   RUN_TEST(test_tone_nonfinite_input_and_tone_are_safe);
   RUN_TEST(test_tone_stereo_channels_identical);
   RUN_TEST(test_tone_changes_are_smooth);
-  RUN_TEST(test_presets_values);
-  RUN_TEST(test_presets_out_of_range_mode_is_clamped);
+  RUN_TEST(test_mode_table_values);
+  RUN_TEST(test_mode_table_drives_engine);
   RUN_TEST(test_comp_huge_finite_input_recovers);
   RUN_TEST(test_engine_defaults_finite_and_mapped);
   RUN_TEST(test_engine_silence_stays_silent);
@@ -2787,6 +3363,7 @@ int main() {
   RUN_TEST(test_engine_mode_switch_no_blowup);
   RUN_TEST(test_engine_sample_rates);
   RUN_TEST(test_engine_all_in_off_is_passthrough);
+  RUN_TEST(test_engine_input_gain_follows_the_input_timeline);
   RUN_TEST(test_engine_breath_in_off_disables_reduction);
   RUN_TEST(test_engine_in_toggle_no_click);
   RUN_TEST(test_engine_breath_listen_outputs_removed);
@@ -2795,6 +3372,13 @@ int main() {
   RUN_TEST(test_engine_gains_are_smoothed);
   RUN_TEST(test_engine_chain_order_matches_reference);
   RUN_TEST(test_engine_no_alloc_in_process);
+  RUN_TEST(test_display_peaks_and_clip);
+  RUN_TEST(test_display_gr_and_rider);
+  RUN_TEST(test_display_breath_prob_raw);
+  RUN_TEST(test_display_norms_mapping);
+  RUN_TEST(test_display_rate_limiter_16ms);
+  RUN_TEST(test_display_accumulators_hold_extremes);
+  RUN_TEST(test_display_no_alloc);
 
   std::fprintf(stdout, "\n%d passed, %d failed.\n", g_passed, g_failed);
   if (g_failed > 0) {

@@ -1,5 +1,5 @@
 #include "engine.h"
-#include "mode_presets.h"
+#include "mode_table.h"
 
 #include <algorithm>
 #include <cmath>
@@ -61,7 +61,7 @@ Settings mapParams(const double* raw) {
   s.inputDb = (float)inputDbFromNorm(v[kInput]);
   s.outputDb = (float)outputDbFromNorm(v[kOutput]);
   s.riderTargetDb = (float)riderTargetDbFromNorm(v[kRiderTarget]);
-  s.riderRangeDb = (float)(presetFor(s.mode).riderMaxRangeDb * v[kRiderRange]);
+  s.riderRangeDb = (float)(modeRow(s.mode).riderMaxRangeDb * v[kRiderRange]);
   s.breathAmount = (float)v[kBreathAmount];
   s.deEssAmount = (float)v[kDeEssAmount];
   s.compAmount = (float)v[kCompAmount];
@@ -104,10 +104,13 @@ void Engine::prepare(double sampleRate) {
   comp_.prepare(sr_, 2);
   tone_.prepare(sr_, 2);
 
+  clipHoldSamples_ = (long long)std::lround(kClipHoldSeconds * sr_);
   lookahead_ = (int)std::lround(kLookaheadMs * 0.001 * sr_);
   latency_ = lookahead_ + spectral_.latencySamples();
   delayL_.assign((size_t)latency_ + 1, 0.0f);
   delayR_.assign((size_t)latency_ + 1, 0.0f);
+  gainedL_.assign((size_t)latency_ + 1, 0.0f);
+  gainedR_.assign((size_t)latency_ + 1, 0.0f);
   window_ = latency_;
   maxVal_.assign((size_t)window_ + 1, 0.0f);
   maxIdx_.assign((size_t)window_ + 1, 0);
@@ -135,11 +138,52 @@ void Engine::reset() {
   resetBlocks();
   std::fill(delayL_.begin(), delayL_.end(), 0.0f);
   std::fill(delayR_.begin(), delayR_.end(), 0.0f);
+  std::fill(gainedL_.begin(), gainedL_.end(), 0.0f);
+  std::fill(gainedR_.begin(), gainedR_.end(), 0.0f);
   writePos_ = 0;
   maxHead_ = maxCount_ = 0;
   sampleIndex_ = 0;
   snapPending_ = true;
   snapSmoothers();
+  resetDisplay();
+  clipInLeft_ = clipOutLeft_ = 0;
+}
+
+void Engine::resetDisplay() {
+  inPeakL_ = inPeakR_ = outPeakL_ = outPeakR_ = 0.f;
+  voiceMaxDb_ = -120.f;
+  riderMinGain_ = kNoRiderGain;
+  breathMax_ = 0.f;
+  grMaxDb_ = 0.f;
+}
+
+namespace {
+inline float peakToDb(float peak) { return peak > 1e-6f ? 20.0f * std::log10(peak) : -120.0f; }
+} // namespace
+
+LevelValues Engine::takeLevels() {
+  LevelValues v;
+  v.inL = peakToDb(inPeakL_);
+  v.inR = peakToDb(inPeakR_);
+  v.outL = peakToDb(outPeakL_);
+  v.outR = peakToDb(outPeakR_);
+  v.clipIn = clipInLeft_ > 0;
+  v.clipOut = clipOutLeft_ > 0;
+  inPeakL_ = inPeakR_ = outPeakL_ = outPeakR_ = 0.f;
+  return v;
+}
+
+DisplayValues Engine::takeDisplay() {
+  DisplayValues v;
+  v.voiceDb = voiceMaxDb_;
+  v.riderGainDb = riderMinGain_ == kNoRiderGain ? 0.f : peakToDb(riderMinGain_);
+  v.breathProb = breathMax_;
+  v.grDb = grMaxDb_;
+  voiceMaxDb_ = -120.f;
+  riderMinGain_ = kNoRiderGain;
+  breathMax_ = 0.f;
+  grMaxDb_ = 0.f;
+  return v;
 }
 
 void Engine::snapSmoothers() {
@@ -157,7 +201,7 @@ void Engine::applySettings(const Settings& s, bool force) {
     comp_.setMode(s.mode);
     tone_.setMode(s.mode);
     DSP::BreathDetector* want =
-        s.mode == Mode::Puke ? static_cast<DSP::BreathDetector*>(&level_) : &spectral_;
+        modeRow(s.mode).levelDetector ? static_cast<DSP::BreathDetector*>(&level_) : &spectral_;
     if (want != detector_) {
       detector_ = want;
       // The newly selected detector starts clean: it needs a few hundred ms of phrase context
@@ -168,7 +212,7 @@ void Engine::applySettings(const Settings& s, bool force) {
   // Setters are idempotent and never allocate; every block-level change is smoothed inside.
   rider_.setTargetDb(s.riderTargetDb);
   rider_.setMaxRangeDb(s.riderRangeDb);
-  rider_.setSlewDbPerSec(presetFor(s.mode).riderSlewDbPerSec);
+  rider_.setSlewDbPerSec(modeRow(s.mode).riderSlewDbPerSec);
   spectral_.setSensitivity(s.breathSens);
   level_.setSensitivity(s.breathSens);
   reducer_.setAmount(s.breathAmount);
@@ -257,19 +301,32 @@ void Engine::process(const float* inL, const float* inR, float* outL, float* out
     const float ll = xl * gIn, lr = xr * gIn;
     const float mono = 0.5f * (ll + lr);
     const float levelDb = meter_.process(mono);
-    const float prob = lookaheadMax(detector_->process(mono));
+    const float rawProb = detector_->process(mono);
+    const float prob = lookaheadMax(rawProb);
+    voiceMaxDb_ = std::max(voiceMaxDb_, levelDb);
+    breathMax_ = std::max(breathMax_, rawProb);
+    {  // input peaks and clip: before the Input gain
+      const float al_ = std::fabs(xl), ar_ = std::fabs(xr);
+      inPeakL_ = std::max(inPeakL_, al_);
+      inPeakR_ = std::max(inPeakR_, ar_);
+      if (al_ >= 1.0f || ar_ >= 1.0f) clipInLeft_ = clipHoldSamples_;
+      else if (clipInLeft_ > 0) --clipInLeft_;
+    }
 
     // Audio delay.
     delayL_[(size_t)writePos_] = xl;
     delayR_[(size_t)writePos_] = xr;
+    gainedL_[(size_t)writePos_] = ll;
+    gainedR_[(size_t)writePos_] = lr;
     writePos_ = writePos_ + 1 == len ? 0 : writePos_ + 1;
     const float dl = delayL_[(size_t)writePos_], dr = delayR_[(size_t)writePos_];
-    const float al = dl * gIn, ar = dr * gIn;
+    const float al = gainedL_[(size_t)writePos_], ar = gainedR_[(size_t)writePos_];
 
     // Rider and breath reducer gains (they always run; IN crossfades the gain to 1).
     const float gRider = rider_.processFrame(levelDb, prob > 0.5f);
     const float gBreath = reducer_.process(prob);
     const float gR = xfade(1.0f, gRider, rRider), gB = xfade(1.0f, gBreath, rBreath);
+    riderMinGain_ = std::min(riderMinGain_, gR);
     float l = al * gR * gB, r = ar * gR * gB;
 
     // Corrective EQ.
@@ -288,6 +345,7 @@ void Engine::process(const float* inL, const float* inR, float* outL, float* out
     f[0] = l;
     f[1] = r;
     comp_.processFrame(f);
+    grMaxDb_ = std::max(grMaxDb_, comp_.lastGainReductionDb());
     l = xfade(l, f[0], rComp);
     r = xfade(r, f[1], rComp);
     // Tone.
@@ -309,6 +367,14 @@ void Engine::process(const float* inL, const float* inR, float* outL, float* out
     // Bypass: the delayed input only.
     l = xfade(l, dl, rBypass);
     r = xfade(r, dr, rBypass);
+
+    {  // output peaks and clip: after the Output gain and Bypass
+      const float ol_ = std::fabs(l), or_ = std::fabs(r);
+      outPeakL_ = std::max(outPeakL_, ol_);
+      outPeakR_ = std::max(outPeakR_, or_);
+      if (ol_ >= 1.0f || or_ >= 1.0f) clipOutLeft_ = clipHoldSamples_;
+      else if (clipOutLeft_ > 0) --clipOutLeft_;
+    }
 
     outL[i] = l;
     if (outR) outR[i] = r;

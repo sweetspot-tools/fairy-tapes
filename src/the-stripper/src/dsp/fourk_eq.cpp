@@ -69,7 +69,9 @@ void FourKEQ::setCoeffsFirstOrderHP(double sampleRate, float freq, Biquad& bq) {
     return;
   float K = std::tan(kPi * freq / static_cast<float>(sampleRate));
   float norm = 1.0f / (1.0f + K);
-  bq.setCoefficients(norm, -norm, 0.0f, (1.0f - K) * norm, 0.0f);
+  // Biquad::processSample subtracts a1 * w1, so the pole at (1 - K) / (1 + K) goes in with a minus sign (a plus put it
+  // near Nyquist and turned the HPF into a differentiator that cut 1 kHz by 24 dB).
+  bq.setCoefficients(norm, -norm, 0.0f, -(1.0f - K) * norm, 0.0f);
 }
 
 void FourKEQ::setCoeffsHighPass(double sampleRate, float freq, float q, Biquad& bqL, Biquad& bqR) {

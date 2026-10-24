@@ -77,7 +77,7 @@ void test_help_titles_come_from_the_layout_labels() {
   const HelpEntry* comp = find(kCompressorMode);
   CHECK(comp && comp->title == "VOICE / DRUMS / CLASSIC");
   const HelpEntry* eng = find(kDriveNamOn);
-  CHECK(eng && eng->title == "NAM / 4K");
+  CHECK(eng && eng->title == "NAM / TAPE" && find(kDriveTapeOn) == eng);   // one entry for the two engine switches of the Drive
   const HelpEntry* by = find(kBypass);
   CHECK(by && by->title == "BYPASS");
   const HelpEntry* in = find(kBypassEQ);
@@ -90,10 +90,13 @@ void test_help_says_the_values_it_imposes() {
   const auto help = helpEntries();
   std::string everything;
   for (const auto& e : help) everything += e.what + " " + e.imposes + "\n";
-  // the facts a user needs: what changes with Chan/Bus, with NAM/4K, and with NO MODEL
+  // the facts a user needs: what changes with Chan/Bus (also where the Drive sits), with NAM / TAPE, and with NO MODEL
   CHECK(contains(everything, "Black") && contains(everything, "Brown"));
   CHECK(contains(everything, "Bus compressor") || contains(everything, "Bus"));
   CHECK(contains(everything, "OPTO") && contains(everything, "FET") && contains(everything, "VCA"));
+  CHECK(contains(everything, "after the INPUT") && contains(everything, "before the LIMITER"));
+  CHECK(contains(everything, "multitrack") && contains(everything, "mixdown"));
+  CHECK(!contains(everything, "4K Saturate"));
   CHECK(contains(everything, "passes") || contains(everything, "pass"));
   CHECK(contains(everything, "not changed") || contains(everything, "unchanged"));
 }

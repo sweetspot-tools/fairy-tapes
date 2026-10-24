@@ -289,7 +289,7 @@ void Editor::createViews(CViewContainer* parent) {
       const ControlSpec* specPtr = &spec;
       knob->onValueClick = [this, specPtr] { editValue(*specPtr); };
       knob->altDoubleClickTarget = [this, specPtr](float& value) {   // Alt + double click: back to the recalled value
-        const ParamID id = specPtr->id == kDriveAmount ? driveParam_ : specPtr->id;
+        const ParamID id = specPtr->id;
         const double cur = std::isnan(seen_[id]) ? 0.0 : seen_[id], rec = ctl_->recallValue(id);
         if (!recallMarkVisible(cur, rec, ctl_->recallValid())) return false;   // no mark showing: plain default
         value = static_cast<float>(rec);
@@ -416,7 +416,7 @@ void Editor::updateRecallMarks() {
   marks_->setMarksExist(ctl_->recallValid());
   for (const auto& c : kControls) {
     if (c.kind != Kind::Knob || c.sharesView) continue;
-    const ParamID id = c.id == kDriveAmount ? driveParam_ : c.id;   // the Drive knob shows the engine in use
+    const ParamID id = c.id;
     const double cur = std::isnan(seen_[id]) ? 0.0 : seen_[id];
     marks_->setValues(c.id, cur, ctl_->recallValue(id));
   }
@@ -504,7 +504,7 @@ void Editor::updateModel() {
 // A click on the value under a knob: a text field with the number; Enter or leaving it confirms, Escape cancels.
 void Editor::editValue(const ControlSpec& spec) {
   if (!frame || valueEdit_ || tapeEdit_ || browser_ || flip_.running()) return;
-  const ParamID id = spec.id == kDriveAmount ? driveParam_ : spec.id;   // the shared Drive knob edits the engine in use
+  const ParamID id = spec.id;
   NormalizedControl* knobView = controls_[spec.id];
   if (!knobView) return;
   const double norm = std::isnan(seen_[id]) ? defaultNorm(ctl_, id) : seen_[id];
@@ -537,8 +537,7 @@ void Editor::commitValue(const ControlSpec& spec, double paramNorm) {
   ctl_->performEdit(spec.id, v);
   ctl_->endEdit(spec.id);
   seen_[spec.id] = ctl_->getParamNormalized(spec.id);
-  const ParamID viewId = spec.id == kEqSaturation ? kDriveAmount : spec.id;
-  if (NormalizedControl* control = controls_[viewId]) {
+  if (NormalizedControl* control = controls_[spec.id]) {
     control->setValueNormalized(static_cast<float>(uiValue(spec.inverted, seen_[spec.id])));
     control->invalid();
   }
@@ -611,10 +610,9 @@ void Editor::syncFromController(bool force) {
       control->setValueNormalized(static_cast<float>(uiValue(spec->inverted, v)));
       control->invalid();
     }
-    if (id != kDriveAmount && id != kEqSaturation) showValue(*spec, v);   // the Drive knob is handled by syncDriveKnob
+    showValue(*spec, v);
   }
   if (changed) {
-    syncDriveKnob();
     refreshModules();
     updateRecallMarks();
   }
@@ -622,24 +620,8 @@ void Editor::syncFromController(bool force) {
 
 void Editor::showValue(const ControlSpec& spec, double paramNorm) {
   if (!silk_ || spec.kind != Kind::Knob) return;
-  const ParamID id = spec.id == kEqSaturation ? kDriveAmount : spec.id;   // the shared Drive knob has one printed value
-  silk_->setValueText(static_cast<int>(id), paramString(ctl_, spec.id, paramNorm));
+  silk_->setValueText(static_cast<int>(spec.id), paramString(ctl_, spec.id, paramNorm));
 }
-
-void Editor::syncDriveKnob() {
-  NormalizedControl* knob = controls_[kDriveAmount];
-  if (!knob) return;
-  const bool namOn = seen_[kDriveNamOn] >= 0.5 || std::isnan(seen_[kDriveNamOn]);
-  const Steinberg::Vst::ParamID active = driveEngineParam(namOn);
-  driveParam_ = active;
-  knob->setTag(static_cast<int32_t>(active));
-  knob->setDefaultValue(static_cast<float>(defaultNorm(ctl_, active)));
-  const double v = std::isnan(seen_[active]) ? defaultNorm(ctl_, active) : seen_[active];
-  knob->setValueNormalized(static_cast<float>(v));
-  knob->invalid();
-  if (specs_[active]) showValue(*specs_[active], v);
-}
-
 
 // Dimming (module IN off or global bypass) and the Channel-only controls.
 void Editor::refreshModules() {
@@ -652,15 +634,16 @@ void Editor::refreshModules() {
   }
   channelMode_ = isChannelMode(seen_[kStripMode]);
   namOn_ = seen_[kDriveNamOn] >= 0.5 || std::isnan(seen_[kDriveNamOn]);
+  tapeOn_ = seen_[kDriveTapeOn] >= 0.5 || std::isnan(seen_[kDriveTapeOn]);
   if (strip_) {
-    strip_->setSaturate(stripShowsSaturate(namOn_));
-    stripTip_ = stripTooltip(modelState_, modelName_, modelError_, stripShowsSaturate(namOn_));
+    strip_->setDimmed(moduleDimmed(Module::Drive, state) || stripDimmed(namOn_));   // dims with the Drive and with the NAM switch
+    stripTip_ = stripTooltip(modelState_, modelName_, modelError_);
     strip_->setTooltipText(stripTip_.c_str());
   }
   if (silk_) {
     const double comp = std::isnan(seen_[kCompressorMode]) ? 0.0 : seen_[kCompressorMode];
     for (const Module m : kModules) {
-      silk_->setTag(static_cast<int>(m), blockTag(m, channelMode_, comp, namOn_));
+      silk_->setTag(static_cast<int>(m), blockTag(m, channelMode_, comp, namOn_, tapeOn_));
       silk_->setTagDimmed(static_cast<int>(m), moduleDimmed(m, state));
     }
   }
@@ -670,7 +653,7 @@ void Editor::refreshModules() {
     if (!control || spec.sharesView) continue;
     bool dim = false;
     if (spec.module != Module::None) dim = spec.isIn ? state.globalBypass : moduleDimmed(spec.module, state);
-    if (spec.id == kDriveAmount && driveKnobDimmed(namOn_, modelState_ == 2)) dim = true;   // NAM without a model passes through
+    if (engineKnobDimmed(spec.id, namOn_, tapeOn_, modelState_ == 2)) dim = true;   // engine switched off, or NAM without a model
     const bool inUse = controlInUse(spec.id, channelMode_);
     if (!inUse) dim = true;
     control->setMouseEnabled(inUse);
@@ -720,7 +703,6 @@ void Editor::valueChanged(CControl* control) {
   ctl_->performEdit(spec->id, v);
   seen_[spec->id] = ctl_->getParamNormalized(spec->id);
   showValue(*spec, seen_[spec->id]);
-  if (spec->id == kDriveNamOn) syncDriveKnob();   // the Drive knob changes engine
   refreshModules();
 }
 

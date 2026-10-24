@@ -3,14 +3,13 @@
 #include <algorithm>
 #include <cmath>
 
+#include "mode_table.h"
+
 namespace FairyTapes::DeepThroat::DSP {
 
 namespace {
 constexpr double kMudHz = 250.0, kPresenceHz = 3500.0, kAirHz = 12000.0, kQ = 0.8;
 constexpr double kSmoothMs = 30.0;
-
-struct Curve { double mud, presence, air; };  // dB at t = +1
-constexpr Curve kCurves[3] = {{-2.0, 3.0, 2.0}, {-1.5, 2.0, 4.0}, {-3.0, 1.0, 0.0}};
 
 double step(double cur, double target, double k) {
   return std::fabs(target - cur) < 1e-3 ? target : cur + (target - cur) * k;
@@ -42,11 +41,11 @@ void ToneEq::setTone(float tone01) {
 }
 
 void ToneEq::updateTargets() {
-  const int m = std::clamp(static_cast<int>(mode_), 0, 2);
+  const ModeRow& row = modeRow(mode_);
   const double t = (static_cast<double>(tone_) - 0.5) * 2.0;
-  targetMudDb_ = kCurves[m].mud * t;
-  targetPresenceDb_ = kCurves[m].presence * t;
-  targetAirDb_ = kCurves[m].air * t;
+  targetMudDb_ = row.toneMudDb * t;
+  targetPresenceDb_ = row.tonePresenceDb * t;
+  targetAirDb_ = row.toneAirDb * t;
 }
 
 void ToneEq::snap(Channel& c) {

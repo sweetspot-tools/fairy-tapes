@@ -34,6 +34,7 @@
 #pragma once
 
 #include "params.h"
+#include "display.h"
 #include "dsp/breath_reducer.h"
 #include "dsp/corrective_eq.h"
 #include "dsp/deesser.h"
@@ -59,7 +60,7 @@ struct Settings {
 };
 
 // Normalized values are clamped to [0,1]; non-finite ones fall back to the defaults.
-// riderRangeDb = presetFor(mode).riderMaxRangeDb x Rider Range.
+// riderRangeDb = modeRow(mode).riderMaxRangeDb x Rider Range.
 Settings mapParams(const double* values);
 
 constexpr double kLookaheadMs = 80.0;
@@ -80,6 +81,15 @@ public:
   int latencySamples() const { return latency_; }
   // inR may be null (mono in: inR = inL), outR may be null (mono out). Inputs may alias outputs.
   void process(const float* inL, const float* inR, float* outL, float* outR, int n);
+
+  // Display values accumulated inside process() since the previous call (peaks, extremes), then
+  // reset; never allocate. Input peaks are taken before the Input gain, output peaks after the
+  // Output gain and Bypass. The clip flags are held for kClipHoldSeconds of audio (reported until
+  // they expire or clearClips()). The processor merges the takes with the accumulators of
+  // display.h between two (16 ms) writes.
+  LevelValues takeLevels();
+  DisplayValues takeDisplay();
+  void clearClips() { clipInLeft_ = clipOutLeft_ = 0; }
 
   // Test / metering hooks.
   bool usingLevelDetector() const { return detector_ == &level_; }
@@ -116,8 +126,11 @@ private:
   int lookahead_ = 0;
   int window_ = 0;  // sliding-max length - 1 (= latency_)
 
-  // Audio delay (raw sanitized input), length latency_ + 1.
+  // Audio delays, length latency_ + 1: the raw sanitized input (Bypass plays it) and the input
+  // after the Input gain (the chain processes it): the gain belongs to the input timeline, so a
+  // change reaches the audio when the audio of that moment leaves the delay.
   std::vector<float> delayL_, delayR_;
+  std::vector<float> gainedL_, gainedR_;
   int writePos_ = 0;
 
   // Sliding maximum of the breath probability over the look-ahead window (monotonic deque).
@@ -133,6 +146,13 @@ private:
   float rampInc_ = 0.f;
   Ramp riderIn_, breathIn_, eqIn_, deEssIn_, compIn_, toneIn_;
   Ramp breathListen_, deEssListen_, bypass_;
+
+  // Display accumulation (linear peaks / extremes since the last take; converted to dB there).
+  void resetDisplay();
+  float inPeakL_ = 0.f, inPeakR_ = 0.f, outPeakL_ = 0.f, outPeakR_ = 0.f;
+  long long clipInLeft_ = 0, clipOutLeft_ = 0, clipHoldSamples_ = 96000;
+  float voiceMaxDb_ = -120.f, riderMinGain_ = kNoRiderGain, breathMax_ = 0.f, grMaxDb_ = 0.f;
+  static constexpr float kNoRiderGain = 1e9f;
 };
 
 } // namespace FairyTapes::DeepThroat

@@ -78,19 +78,20 @@ constexpr ControlSpec kControls[] = {
     {kOutputGain, Kind::Knob, Module::Output, knob(854, 168), "GAIN", false, false, {}},
     {kBypass, Kind::Toggle, Module::None, button(940, 130), "BYPASS", false, false, {}},
     {kStripMode, Kind::Choice, Module::Output, {923, 185, 34, 52}, nullptr, false, false, {"CHAN", "BUS"}},   // stacked
-    // Equaliser
-    {kEqLFGain, Kind::Knob, Module::Eq, knob(134, 352), "GAIN", false, false, {}},
-    {kEqLFFreq, Kind::Knob, Module::Eq, knob(216, 352), "FREQ", false, false, {}},
-    {kEqLFBell, Kind::Toggle, Module::Eq, button(237, 306, 26, 18), nullptr, false, false, {}},
-    {kEqLMGain, Kind::Knob, Module::Eq, knob(296, 352), "GAIN", false, false, {}},
-    {kEqLMFreq, Kind::Knob, Module::Eq, knob(378, 352), "FREQ", false, false, {}},
-    {kEqLMQ, Kind::Knob, Module::Eq, knob(460, 352), "Q", false, false, {}},
-    {kEqHMGain, Kind::Knob, Module::Eq, knob(540, 352), "GAIN", false, false, {}},
-    {kEqHMFreq, Kind::Knob, Module::Eq, knob(622, 352), "FREQ", false, false, {}},
-    {kEqHMQ, Kind::Knob, Module::Eq, knob(704, 352), "Q", false, false, {}},
-    {kEqHFGain, Kind::Knob, Module::Eq, knob(784, 352), "GAIN", false, false, {}},
-    {kEqHFFreq, Kind::Knob, Module::Eq, knob(866, 352), "FREQ", false, false, {}},
-    {kEqHFBell, Kind::Toggle, Module::Eq, button(887, 306, 26, 18), nullptr, false, false, {}},
+    // Equaliser: ten band knobs, then SATURATE (the 4K console saturation is the last step of the EQ, back from the Drive)
+    {kEqLFGain, Kind::Knob, Module::Eq, knob(78, 352), "GAIN", false, false, {}},
+    {kEqLFFreq, Kind::Knob, Module::Eq, knob(160, 352), "FREQ", false, false, {}},
+    {kEqLFBell, Kind::Toggle, Module::Eq, button(181, 306, 26, 18), nullptr, false, false, {}},
+    {kEqLMGain, Kind::Knob, Module::Eq, knob(240, 352), "GAIN", false, false, {}},
+    {kEqLMFreq, Kind::Knob, Module::Eq, knob(322, 352), "FREQ", false, false, {}},
+    {kEqLMQ, Kind::Knob, Module::Eq, knob(404, 352), "Q", false, false, {}},
+    {kEqHMGain, Kind::Knob, Module::Eq, knob(484, 352), "GAIN", false, false, {}},
+    {kEqHMFreq, Kind::Knob, Module::Eq, knob(566, 352), "FREQ", false, false, {}},
+    {kEqHMQ, Kind::Knob, Module::Eq, knob(648, 352), "Q", false, false, {}},
+    {kEqHFGain, Kind::Knob, Module::Eq, knob(728, 352), "GAIN", false, false, {}},
+    {kEqHFFreq, Kind::Knob, Module::Eq, knob(810, 352), "FREQ", false, false, {}},
+    {kEqHFBell, Kind::Toggle, Module::Eq, button(831, 306, 26, 18), nullptr, false, false, {}},
+    {kEqSaturation, Kind::Knob, Module::Eq, knob(891, 352), "SATURATE", false, false, {}},
     {kBypassEQ, Kind::Toggle, Module::Eq, button(940, 320), "IN", true, true, {}},
     // Compression
     {kCompressAmount, Kind::Knob, Module::Comp, knob(80, 520), "AMOUNT", false, false, {}},
@@ -99,11 +100,11 @@ constexpr ControlSpec kControls[] = {
      {"VOICE", "DRUMS", "CLASSIC"}},   // stacked beside the knobs, away from the IN
     {kBypassCompression, Kind::Toggle, Module::Comp, button(330, 490), "IN", true, true, {}},
     // Drive, Limiter, Gate
-    {kDriveAmount, Kind::Knob, Module::Drive, knob(428, 520), "DRIVE", false, false, {}},
-    // The same knob shows the 4K saturation amount when the NAM switch is off (the swap is not visible).
-    {kEqSaturation, Kind::Knob, Module::Drive, knob(428, 520), "DRIVE", false, false, {}, true},
-    // Two exclusive buttons like the other presets: NAM (left) / 4K (right). Parameter 1 = NAM, hence inverted.
-    {kDriveNamOn, Kind::Choice, Module::Drive, {506, 480, 80, 20}, nullptr, false, true, {"NAM", "4K"}},   // detached from the IN
+    // Two engines in series, each with its knob and its on/off switch (left of the module IN): NAM, then TAPE.
+    {kDriveAmount, Kind::Knob, Module::Drive, knob(416, 520), "DRIVE", false, false, {}},
+    {kDriveTapeAmount, Kind::Knob, Module::Drive, knob(498, 520), "TAPE", false, false, {}},
+    {kDriveNamOn, Kind::Toggle, Module::Drive, button(566, 490), "NAM", false, false, {}},
+    {kDriveTapeOn, Kind::Toggle, Module::Drive, button(601, 490), "TAPE", false, false, {}},
     {kBypassDrive, Kind::Toggle, Module::Drive, button(636, 490), "IN", true, true, {}},
     {kLimiterPound, Kind::Knob, Module::Limiter, knob(752, 520), "POUND", false, false, {}},
     {kBypassLimiter, Kind::Toggle, Module::Limiter, button(811, 490), "IN", true, true, {}},
@@ -124,7 +125,8 @@ constexpr KnobLook kKnobLooks[] = {
     {kEqLMGain, "-20", "+20", 19},       {kEqLMFreq, ".2k", "2.5k", 19},      {kEqLMQ, ".4", "4", 19},
     {kEqHMGain, "-20", "+20", 19},       {kEqHMFreq, ".6k", "7k", 19},        {kEqHMQ, ".4", "4", 19},
     {kEqHFGain, "-20", "+20", 19},       {kEqHFFreq, "1.5k", "16k", 19},      {kCompressAmount, "0", "10", 19},
-    {kCompressMix, "DRY", "WET", 19},    {kDriveAmount, "0", "10", 21},       {kEqSaturation, "0", "10", 21},
+    {kCompressMix, "DRY", "WET", 19},    {kDriveAmount, "0", "10", 21},       {kEqSaturation, "0", "10", 22},
+    {kDriveTapeAmount, "0", "10", 19},
     {kLimiterPound, "0", "10", 19},      {kGateThreshold, "-\xE2\x88\x9E", "0", 19},
 };
 inline const KnobLook* knobLookOf(Steinberg::Vst::ParamID id) {
@@ -132,14 +134,14 @@ inline const KnobLook* knobLookOf(Steinberg::Vst::ParamID id) {
     if (k.id == id) return &k;
   return nullptr;
 }
-// Exclusive choices (Chan/Bus, Voice/Drums/Classic, NAM/4K) carry the name on the face, which lights amber on the
+// Exclusive choices (Chan/Bus, Voice/Drums/Classic) carry the name on the face, which lights amber on the
 // active one (design system, 2026-10-21): the control rect is the whole group, a grid of `columns` columns.
 struct ChoiceLook {
   Steinberg::Vst::ParamID id;
   int columns;
   double faceWidth;
 };
-constexpr ChoiceLook kChoiceLooks[] = {{kStripMode, 1, 34}, {kCompressorMode, 1, 44}, {kDriveNamOn, 2, 34}};
+constexpr ChoiceLook kChoiceLooks[] = {{kStripMode, 1, 34}, {kCompressorMode, 1, 44}};
 inline const ChoiceLook* choiceLookOf(Steinberg::Vst::ParamID id) {
   for (const auto& c : kChoiceLooks)
     if (c.id == id) return &c;
@@ -156,7 +158,7 @@ struct EqBand {
   double left, right;
 };
 constexpr double kEqBandRuleY = 306;
-constexpr EqBand kEqBands[] = {{"LF", 98, 218}, {"LM", 260, 496}, {"HM", 504, 740}, {"HF", 748, 868}};
+constexpr EqBand kEqBands[] = {{"LF", 42, 162}, {"LM", 204, 440}, {"HM", 448, 684}, {"HF", 692, 812}};
 
 // Level box: LED rows (peak meters, then gain reduction) and the clip LEDs (spec 4.1).
 constexpr int kMeterLeds = 15;
@@ -204,16 +206,18 @@ inline double grBarNorm(double value, double maxDb) {
 }
 constexpr double kGrCompMaxDb = 20.0, kGrLimiterMaxDb = 12.0, kGrGateMaxDb = 40.0;
 
-// Drive engine: NAM on -> kDriveAmount drives the stage, off -> the 4K saturation (kEqSaturation).
-inline Steinberg::Vst::ParamID driveEngineParam(bool namOn) { return namOn ? kDriveAmount : kEqSaturation; }
-// The NAM without a model passes the signal through, so its knob is dimmed; the saturation never needs a model.
-inline bool driveKnobDimmed(bool namOn, bool modelLoaded) { return namOn && !modelLoaded; }
-// With the NAM off the paper strip reads "4K Saturate" instead of the model name (and is not clickable).
-inline bool stripShowsSaturate(bool namOn) { return !namOn; }
+// An engine's knob in the Drive dims when its switch is off; the NAM's also without a model (it passes the signal through).
+inline bool engineKnobDimmed(Steinberg::Vst::ParamID id, bool namOn, bool tapeOn, bool modelLoaded) {
+  if (id == kDriveAmount) return !namOn || !modelLoaded;
+  if (id == kDriveTapeAmount) return !tapeOn;
+  return false;
+}
+// The paper strip with the model name dims with the NAM switch (it stays clickable: a model can be chosen first).
+inline bool stripDimmed(bool namOn) { return !namOn; }
 
 // The small tag printed at the top left of a block: what is mounted on it right now (spec 11, "Serigrafia dei blocchi").
 // `compressorMode` is the parameter value 0 / 0.5 / 1 (Voice / Drums / Classic). Blocks without a tag return "".
-inline const char* blockTag(Module m, bool channelMode, double compressorMode, bool namOn) {
+inline const char* blockTag(Module m, bool channelMode, double compressorMode, bool namOn, bool tapeOn) {
   const char* series = channelMode ? "4K-G" : "4K-E";
   switch (m) {
   case Module::Filters:
@@ -221,7 +225,7 @@ inline const char* blockTag(Module m, bool channelMode, double compressorMode, b
   case Module::Comp:
     if (!channelMode) return "4K-G";   // the Bus compressor
     return compressorMode < 0.25 ? "OPTO-2A" : compressorMode < 0.75 ? "FET-76" : "VCA-160";
-  case Module::Drive: return namOn ? "NAM" : series;
+  case Module::Drive: return namOn && tapeOn ? "NAM \xC2\xB7 TAPE" : namOn ? "NAM" : tapeOn ? "TAPE" : "";
   case Module::Limiter: return "B-PARTY";
   case Module::Gate: return "D-NOISE";
   default: return "";
@@ -230,8 +234,8 @@ inline const char* blockTag(Module m, bool channelMode, double compressorMode, b
 
 inline bool meterDimmed(bool alwaysLit, bool globalBypass) { return globalBypass && !alwaysLit; }
 
-// Paper tape with the model name, bottom right of the Drive box (a click opens the model picker).
-constexpr Rect kModelStrip = {478, 546, 174, 28};
+// Paper tape with the model name, bottom right of the Drive box, right of the TAPE knob (a click opens the model picker).
+constexpr Rect kModelStrip = {540, 546, 122, 28};
 
 inline const ControlSpec* inButtonOf(Module m) {
   for (const auto& c : kControls)

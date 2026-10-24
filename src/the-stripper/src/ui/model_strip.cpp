@@ -38,12 +38,6 @@ void ModelStrip::setModel(Kind kind, std::string text) {
   invalid();
 }
 
-void ModelStrip::setSaturate(bool saturate) {
-  if (saturate_ == saturate) return;
-  saturate_ = saturate;
-  invalid();
-}
-
 void ModelStrip::setFont(TapeFontId font) {
   if (font_ == font) return;
   font_ = font;
@@ -86,16 +80,16 @@ void ModelStrip::draw(CDrawContext* ctx) {
 
   // The writing: the tape font, sized so its digits match the standard text (x1.3), cut by its measured width.
   const double em = normalizedFontSize(font_, 13.0);
-  std::string text = saturate_ ? "4K Saturate" : kind_ == Kind::NoModel ? "No model" : kind_ == Kind::Loading ? "Loading..." : text_;
+  std::string text = kind_ == Kind::NoModel ? "No model" : kind_ == Kind::Loading ? "Loading..." : text_;
   text = fitTapeText(font_, text, em, w - 2 * kTextInset);
   drawTapeText(ctx, font_, text, CPoint(r.left + kTextInset, r.top + h * 0.68), em,
-               !saturate_ && kind_ == Kind::Error ? kErrorInk : kInk, 0x5eed, 1.0);
+               kind_ == Kind::Error ? kErrorInk : kInk, 0x5eed, 1.0);
   ctx->restoreGlobalState();
   setDirty(false);
 }
 
 CMouseEventResult ModelStrip::onMouseDown(CPoint&, const CButtonState& buttons) {
-  if (!buttons.isLeftButton() || saturate_) return kMouseEventNotHandled;   // not clickable while the NAM is off
+  if (!buttons.isLeftButton()) return kMouseEventNotHandled;
   if (onClick) onClick();
   return kMouseEventHandled;
 }

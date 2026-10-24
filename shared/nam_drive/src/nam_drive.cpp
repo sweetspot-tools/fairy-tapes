@@ -27,7 +27,8 @@ namespace FairyTapes::Shared::DSP {
 
 static constexpr float kRmsTimeConstantSec = 0.1f;
 static constexpr float kRmsFloor = 1e-6f;
-static constexpr float kCompensationMinDb = -20.0f;
+// The drive gain alone is up to +20 dB, and a model can add its own gain on top: leave room to bring it all back.
+static constexpr float kCompensationMinDb = -40.0f;
 static constexpr float kCompensationMaxDb = 20.0f;
 
 static float computeRmsAlpha(double sampleRate, int blockSize) {
@@ -348,12 +349,16 @@ void NamDrive::process(float* left, float* right, int numSamples) {
 
   const float drive_lin = static_cast<float>(std::pow(10.0f, drive_));
 
+  // The compensation reference is the signal *before* the drive gain, so the output keeps the input's loudness
+  // whatever the Drive setting: the knob changes how hard the model is hit, not how loud the stage is.
+  float dry_sum_sq = 0.0f;
   for (size_t i = 0; i < n; ++i) {
-    float s = (left[i] + right[i]) * 0.5f * drive_lin;
-    mono_in_[i] = std::clamp(s, -10.0f, 10.0f);
+    const float mid = (left[i] + right[i]) * 0.5f;
+    dry_sum_sq += mid * mid;
+    mono_in_[i] = std::clamp(mid * drive_lin, -10.0f, 10.0f);
   }
 
-  const float in_rms = blockRms(mono_in_.data(), numSamples);
+  const float in_rms = std::sqrt(dry_sum_sq / static_cast<float>(numSamples));
 
   // ---- Inference (GPU or CPU) ----
   if (model->gpu) {
