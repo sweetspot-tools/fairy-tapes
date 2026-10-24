@@ -98,11 +98,13 @@ Ordine congelato e valori (default in grassetto), da spec §3-§5 e dalla previe
 **Interfaces:**
 - Produces: `struct VibeSettings { bool on; int lowFreqIndex; int low; int airFreqIndex; int air; int tiltIndex; int tube; bool dynLow; bool dynAir; }`; `class VibeEq { void prepare(double sr, int maxBlock); void set(const VibeSettings&); void processLinear(float* L, float* R, int n); void processTube(float* L, float* R, int n); float dynLowAmount() const; float dynAirAmount() const; double magnitudeDb(double hz, bool staticSetting) const; }`. `processTube` è separato perché gira nella zona sovracampionata (Task 13).
 
-- [ ] **Step 1: Test**: `testLowTrickBoostAndDip` (LOW 60 Hz, 6: risposta a 60 Hz > +2 dB e un minimo sotto 0 dB tra 100 e 400 Hz), `testAirBoost` (AIR 10 kHz, 6: +2 dB o più a 10 kHz), `testTiltSymmetric` (TILT +3: guadagno a 50 Hz ≈ −guadagno a 10 kHz entro 0,5 dB; TILT 0 piatto entro 0,1 dB), `testDynPullsBackOnLoudProgram` (LOW 8 + DYN: su un seno a 60 Hz a −30 dBFS il boost misurato supera di almeno 2 dB quello a −6 dBFS; `dynLowAmount()` > 0 solo nel secondo caso), `testTubeZeroIsNearlyLinear` (TUBE 0: THD di un seno 1 kHz a −6 dBFS sotto −60 dB), `testTubeAddsHarmonics` (TUBE 10: THD sopra −40 dB), `testStageOffIsIdentity`.
-- [ ] **Step 2: Esegui** → FAIL.
-- [ ] **Step 3: Implementa** il port (soglia e tempi del DYN da `tuning.h`); TILT come coppia di shelf a 1 kHz di segno opposto, ±3 dB.
-- [ ] **Step 4: Esegui** → PASS.
-- [ ] **Step 5: Commit** `feat(happy-ending): Vibe EQ port (LOW trick, AIR, TILT, DYN, TUBE)`.
+- [x] **Step 1: Test**: `testLowTrickBoostAndDip` (LOW 60 Hz, 6: risposta a 60 Hz > +2 dB e un minimo sotto 0 dB tra 100 e 400 Hz), `testAirBoost` (AIR 10 kHz, 6: +2 dB o più a 10 kHz), `testTiltSymmetric` (TILT +3: guadagno a 50 Hz ≈ −guadagno a 10 kHz entro 0,5 dB; TILT 0 piatto entro 0,1 dB), `testDynPullsBackOnLoudProgram` (LOW 8 + DYN: su un seno a 60 Hz a −30 dBFS il boost misurato supera di almeno 2 dB quello a −6 dBFS; `dynLowAmount()` > 0 solo nel secondo caso), `testTubeZeroIsNearlyLinear` (TUBE 0: THD di un seno 1 kHz a −6 dBFS sotto −60 dB), `testTubeAddsHarmonics` (TUBE 10: THD sopra −40 dB), `testStageOffIsIdentity`.
+- [x] **Step 2: Esegui** → FAIL.
+- [x] **Step 3: Implementa** il port (soglia e tempi del DYN da `tuning.h`); TILT come coppia di shelf a 1 kHz di segno opposto, ±3 dB.
+- [x] **Step 4: Esegui** → PASS.
+- [x] **Step 5: Commit** `feat(happy-ending): Vibe EQ port (LOW trick, AIR, TILT, DYN, TUBE)`.
+
+Note (Task 4 done): LOW cut is a bell at 2.5x the boost frequency, not the source's same-frequency low shelf (that cannot make a dip above the boost); AIR uses a fixed Q 0.8 (the source's Q polynomial would flatten a 10 kHz boost across the band); TUBE harmonics are scaled x3 (`Tuning::kVibeTubeHarmonics`): the source tops out at about -44 dB THD, the test asks for more than -40 dB. Everything voiced is in `tuning.h` (`kVibe*`, `kDyn*`).
 
 ### Task 5: GLUE
 

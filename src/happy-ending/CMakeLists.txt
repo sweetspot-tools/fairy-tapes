@@ -38,3 +38,15 @@ target_include_directories(happy_ending_fine_eq_tests PRIVATE
   ${VST3_SDK_PATH}/pluginterfaces/vst
 )
 add_test(NAME happy_ending_fine_eq_tests COMMAND happy_ending_fine_eq_tests)
+
+add_executable(happy_ending_vibe_eq_tests
+  tests/test_vibe_eq.cpp
+  src/dsp/vibe_eq.cpp
+)
+target_include_directories(happy_ending_vibe_eq_tests PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/src
+  ${VST3_SDK_PATH}
+  ${VST3_SDK_PATH}/pluginterfaces/base
+  ${VST3_SDK_PATH}/pluginterfaces/vst
+)
+add_test(NAME happy_ending_vibe_eq_tests COMMAND happy_ending_vibe_eq_tests)

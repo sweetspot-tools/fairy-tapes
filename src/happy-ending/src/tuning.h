@@ -21,6 +21,25 @@ inline constexpr int kFineRampSamples = 64;
 inline constexpr double kDynThresholdDb = -18.0;  // level above which the boost retreats
 inline constexpr double kDynAttackMs = 10.0;
 inline constexpr double kDynReleaseMs = 200.0;
+inline constexpr double kDynRangeDb = 12.0;       // dB over the threshold at which the pull-back is complete
+inline constexpr double kDynMaxPullback = 0.8;    // share of the LOW / AIR amount removed at most
+inline constexpr double kDynLowDetectHz = 400.0;  // the LOW detector hears what is below this
+inline constexpr double kDynAirDetectHz = 2000.0; // the AIR detector hears what is above this
+
+// VIBE EQ network (port of the Tube EQ of Multi-Q, remapped to the stepped controls).
+inline constexpr double kVibeLowBoostDbPerStep = 1.4;  // LOW boost, per step of the 0-10 knob
+inline constexpr double kVibeLowAttenRatio = 0.5;      // the knob also drives the cut: attenuation steps = ratio * LOW
+inline constexpr double kVibeLowDipDbPerStep = 1.75;   // cut, per step of the attenuation
+inline constexpr double kVibeLowDipFreqRatio = 2.5;    // the cut sits this many times above the boost frequency
+inline constexpr double kVibeLowDipQ = 0.7;
+inline constexpr double kVibeAirDbPerStep = 1.8;       // AIR boost, per step of the 0-10 knob
+inline constexpr double kVibeAirQ = 0.8;               // broad (a lower Q cannot be built as a bell: its width passes Nyquist)
+inline constexpr double kVibeTiltHz = 1000.0;          // the two opposite shelves of TILT meet here
+inline constexpr double kVibeTiltQ = 0.7071067811865476;
+inline constexpr double kVibeTubeDriveMax = 1.0;       // tube stage drive at TUBE 10 (1.0 = the Multi-Q maximum)
+inline constexpr double kVibeTubeHarmonics = 3.0;      // scale of all tube harmonics (1.0 = Multi-Q: 0.15 % THD hardware, about -44 dB at most)
+inline constexpr int kVibeSubBlock = 32;               // samples between coefficient updates (linear ramp)
+inline constexpr int kVibeTubeRampSamples = 256;       // length of the TUBE drive ramp
 
 // LIMIT: base release of each style (MODERN, PUNCH, DYN); RELEASE trims around it.
 inline constexpr double kLimitReleaseBaseMs[3] = {50.0, 100.0, 250.0};
