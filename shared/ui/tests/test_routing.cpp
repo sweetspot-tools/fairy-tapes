@@ -49,6 +49,19 @@ int main() {
     CHECK(jump);
     CHECK(d.back().kind == RoutingPrim::Kind::Text && d.back().text == "IN" && near(d.back().y, 144));
   }
+  // the sum mark: a ring (default radius 9) with a plus inside, two lines of width 1.8
+  {
+    RoutingBuilder b;
+    b.sum(262, 300);
+    const auto& d = b.diagram();
+    CHECK(d.size() == 3 && count(d, RoutingPrim::Kind::Circle) == 1 && count(d, RoutingPrim::Kind::Line) == 2);
+    CHECK(near(d[0].x, 262) && near(d[0].y, 300) && near(d[0].r, 9) && !d[0].filled && d[0].panelFill && near(d[0].width, 1.4));
+    CHECK(d[1].pts.size() == 2 && near(d[1].pts[0].x, 257) && near(d[1].pts[1].x, 267) && near(d[1].pts[0].y, 300) && near(d[1].width, 1.8));
+    CHECK(d[2].pts.size() == 2 && near(d[2].pts[0].y, 295) && near(d[2].pts[1].y, 305) && near(d[2].pts[0].x, 262) && near(d[2].width, 1.8));
+    RoutingBuilder c;
+    c.sum(100, 50, 12);
+    CHECK(near(c.diagram()[0].r, 12) && near(c.diagram()[1].pts[0].x, 100 - 12 * 5.0 / 9.0) && near(c.diagram()[2].pts[1].y, 50 + 12 * 5.0 / 9.0));
+  }
   // control lines are dashed
   {
     RoutingBuilder b;

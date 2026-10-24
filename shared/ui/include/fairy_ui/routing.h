@@ -104,6 +104,12 @@ public:
   void arrowDown(double x, double y) { poly({{x - 4, y - 7}, {x, y}, {x + 4, y - 7}}, true); }
   void dot(double x, double y) { circle(x, y, 3, true, false, 0); }
   void ring(double x, double y, double r = 2.6) { circle(x, y, r, false, true, 1.4); }
+  // The "sum" mark (a mixing point): a ring of radius r with a plus inside (arms 5/9 of r, so 5 px at the default 9).
+  void sum(double x, double y, double r = 9) {
+    ring(x, y, r);
+    const double a = r * 5.0 / 9.0;
+    ln("M" + n(x - a) + " " + n(y) + " H" + n(x + a) + " M" + n(x) + " " + n(y - a) + " V" + n(y + a), false, 1.8);
+  }
   void jack(double x, double y, const std::string& label) {
     circle(x, y, 9, false, false, 2);
     circle(x, y, 3.2, true, false, 0);

@@ -50,6 +50,12 @@ public:
              std::string label, const Skin* skin = nullptr);
 
   void setLabel(std::string label);
+  // Where the knob centre sits below the top of the view (default kCenterOffsetY). A bigger cap needs a taller view above
+  // the centre: the caller picks the view rect and the offset together. center(), the drawing and (in RackKnob) the value
+  // area all follow this value.
+  void setCenterOffsetY(VSTGUI::CCoord offset) { centerOffsetY_ = offset; invalid(); }
+  VSTGUI::CCoord centerOffsetY() const { return centerOffsetY_; }
+  VSTGUI::CPoint center() const;   // the knob centre in the parent's coordinates
   // Alt (or Ctrl/Cmd) + double click goes here instead of to the default value: return true and set `value` (0..1)
   // to jump to it. Unset or false = the plain double-click behaviour.
   std::function<bool(float& value)> altDoubleClickTarget;
@@ -68,8 +74,9 @@ public:
   CLASS_METHODS_NOCOPY(AnalogKnob, NormalizedControl)
 
 private:
-  VSTGUI::CPoint center() const;
   const std::string& valueText();
+
+  VSTGUI::CCoord centerOffsetY_ = kCenterOffsetY;
 
   std::string label_;
   ValueFormatter formatter_;

@@ -18,7 +18,7 @@ namespace FairyTapes::Ui {
 enum class RackLed { Red, Yellow };
 
 // Knob cap and pointer. The view is the usual knob cell (AnalogKnob::kPreferredWidth x kPreferredHeight); the cap is
-// centred kCenterOffsetY below its top.
+// centred centerOffsetY() (default kCenterOffsetY) below its top; a bigger cap uses a taller view and setCenterOffsetY.
 class RackKnob : public AnalogKnob {
 public:
   RackKnob(const VSTGUI::CRect& size, VSTGUI::IControlListener* listener, int32_t tag,

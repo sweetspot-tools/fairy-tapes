@@ -191,8 +191,8 @@ void RackKnob::setWear(std::uint32_t seed, double amount) {
 }
 
 CRect RackKnob::valueArea() const {
-  const CRect& r = getViewSize();
-  const double cx = r.left + r.getWidth() / 2, cy = r.top + AnalogKnob::kCenterOffsetY;
+  const CPoint c = center();
+  const double cx = c.x, cy = c.y;
   const double baseline = Rack::valueBaseline(cy, capRadius_);
   return CRect(cx - 34, baseline - 12, cx + 34, baseline + 5);
 }
@@ -208,8 +208,8 @@ CMouseEventResult RackKnob::onMouseDown(CPoint& where, const CButtonState& butto
 void RackKnob::draw(CDrawContext* ctx) {
   begin(ctx, dimmed_);
   const double v = sanitizeNorm(getValue(), getDefaultValue());
-  const CRect& r = getViewSize();
-  const double cx = r.left + r.getWidth() / 2, cy = r.top + AnalogKnob::kCenterOffsetY, R = capRadius_;
+  const CPoint c = center();
+  const double cx = c.x, cy = c.y, R = capRadius_;
   const double Zf = std::max(0.35, R / 56.0);   // the preview scales its fine marks with the cap
 
   drawWearMarks(ctx, wear_, CPoint(cx, cy), true);   // dirt around the base, below the cap

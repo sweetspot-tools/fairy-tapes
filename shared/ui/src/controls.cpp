@@ -148,7 +148,7 @@ void AnalogKnob::setValueFormatter(ValueFormatter formatter) {
 
 CPoint AnalogKnob::center() const {
   const CRect& r = getViewSize();
-  return CPoint(r.left + r.getWidth() / 2, r.top + AnalogKnob::kCenterOffsetY);
+  return CPoint(r.left + r.getWidth() / 2, r.top + centerOffsetY_);
 }
 
 const std::string& AnalogKnob::valueText() {
