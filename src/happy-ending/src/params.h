@@ -213,7 +213,7 @@ inline constexpr std::array<ParamSpec, kNumParams> kParams = {{
   // VIBE EQ
   detail::sw("Vibe EQ", 1),
   {"Low Freq", 4, 2}, {"Low", 11, 0},
-  {"Air Freq", 5, 2}, {"Air", 11, 0},
+  {"Air Freq", 5, 3}, {"Air", 11, 0},
   {"Tilt", 13, 6},
   {"Tube", 11, 2},
   detail::sw("Dyn Low", 0), detail::sw("Dyn Air", 0),

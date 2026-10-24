@@ -144,7 +144,7 @@ void testDefaultValues() {
   ASSERT_TRUE(kParams[kMidMs].steps == 3 && kParams[kMidMs].defaultIndex == 0);  // ST
 
   ASSERT_NEAR(valueOf(kLowFreq, kParams[kLowFreq].defaultIndex), 60.0);
-  ASSERT_NEAR(valueOf(kAirFreq, kParams[kAirFreq].defaultIndex), 10000.0);
+  ASSERT_NEAR(valueOf(kAirFreq, kParams[kAirFreq].defaultIndex), 12000.0);
   ASSERT_NEAR(valueOf(kTilt, kParams[kTilt].defaultIndex), 0.0);
   ASSERT_NEAR(valueOf(kTube, kParams[kTube].defaultIndex), 2.0);
   ASSERT_NEAR(valueOf(kLow, kParams[kLow].defaultIndex), 0.0);
