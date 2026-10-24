@@ -28,7 +28,7 @@ enum ParamID : Steinberg::Vst::ParamID {
 constexpr int kNumDevices = 6;
 
 // Read-only hidden display parameters (processor -> editor), outside the persistent table.
-// Peaks are normalized with the dB map 0..1 of fairy_ui/meter_math.h; clip flags are 0/1.
+// Peaks are normalized with the dB map 0..1 below (meterNormFromDb, the range the editor's LED rows show); clip flags are 0/1.
 constexpr Steinberg::Vst::ParamID kMeterBase = 1000;
 enum DisplayID : Steinberg::Vst::ParamID {
   kMeterInL = kMeterBase,
@@ -41,6 +41,10 @@ enum DisplayID : Steinberg::Vst::ParamID {
   kClipClear,   // the only writable one: the editor sets it to 1, the processor clears the clip flags
   kNumDisplayIDs
 };
+
+// Level meters: the processor publishes the peaks, the editor's LED rows read them, both over this dB range.
+constexpr double kMeterMinDb = -60.0;
+constexpr double kMeterMaxDb = 6.0;
 
 // Defaults (normalized)
 constexpr double kDefaultBypass = 0.0;
@@ -73,5 +77,14 @@ inline double toneHpOctavesFromNorm(double n) { return -(detail::clamp01(n) - 0.
 inline int deviceIndexFromNorm(double n) {
   return static_cast<int>(std::lround(detail::clamp01(n) * (kNumDevices - 1)));
 }
+
+// Index <-> normalized value of the Device parameter: the inverse of deviceIndexFromNorm (an index out of range is clamped).
+inline double normFromDeviceIndex(int index) {
+  return static_cast<double>(std::clamp(index, 0, kNumDevices - 1)) / (kNumDevices - 1);
+}
+
+// Peak level in dB <-> normalized meter value (linear over kMeterMinDb..kMeterMaxDb, clamped; NaN -> 0).
+inline double meterNormFromDb(double db) { return detail::clamp01((db - kMeterMinDb) / (kMeterMaxDb - kMeterMinDb)); }
+inline double meterDbFromNorm(double n) { return kMeterMinDb + detail::clamp01(n) * (kMeterMaxDb - kMeterMinDb); }
 
 } // namespace FairyTapes::Hotline

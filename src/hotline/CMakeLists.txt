@@ -33,6 +33,8 @@ add_library(hotline MODULE
   src/controller.cpp
   src/devices.cpp
   src/engine.cpp
+  src/ui/editor.cpp
+  src/ui/panel_view.cpp
 )
 
 target_include_directories(hotline PRIVATE
@@ -70,7 +72,16 @@ else()
   )
 endif()
 
-target_link_libraries(hotline PRIVATE sdk fairy_ui)
+# Bitmap resources go to Contents/Resources of the bundle, where VSTGUI looks for them: the panel grain tile shared by
+# the suite (shared/ui/assets). Without it the panel is drawn in plain #161617.
+set(FAIRY_UI_ASSETS "${CMAKE_CURRENT_SOURCE_DIR}/../../shared/ui/assets")
+add_custom_command(TARGET hotline POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E make_directory "${HOTLINE_BUNDLE}/Contents/Resources"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${FAIRY_UI_ASSETS}/panel_grain.png"
+          "${HOTLINE_BUNDLE}/Contents/Resources/panel_grain.png"
+  VERBATIM)
+
+target_link_libraries(hotline PRIVATE sdk fairy_ui fairy_ui_widgets)
 if(APPLE)
   target_link_libraries(hotline PRIVATE "-framework CoreFoundation")
   target_link_options(hotline PRIVATE
@@ -96,6 +107,22 @@ target_include_directories(hotline_tests PRIVATE
 )
 target_link_libraries(hotline_tests PRIVATE fairy_ui)
 add_test(NAME hotline_tests COMMAND hotline_tests)
+
+# Developer tool: draws the editor offscreen into a PNG (no host needed). Not built by default.
+add_executable(hotline_render EXCLUDE_FROM_ALL
+  tools/render_editor.cpp
+  ${VST3_SDK_PATH}/public.sdk/source/main/moduleinit.cpp
+  ${VST3_SDK_PATH}/public.sdk/source/main/pluginfactory.cpp
+  src/controller.cpp
+  src/devices.cpp
+  src/engine.cpp
+  src/ui/editor.cpp
+  src/ui/panel_view.cpp
+)
+target_include_directories(hotline_render PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${VST3_SDK_PATH})
+target_compile_definitions(hotline_render PRIVATE
+  HOTLINE_ASSETS="${CMAKE_CURRENT_SOURCE_DIR}/../../shared/ui/assets/")
+target_link_libraries(hotline_render PRIVATE sdk pluginterfaces fairy_ui fairy_ui_widgets)
 
 # Module/factory lifecycle smoke test: dlopens the built bundle from dist/ (exit 77 = skipped
 # when the plugin has not been built). Links only the pluginterfaces IIDs, not the plugin.

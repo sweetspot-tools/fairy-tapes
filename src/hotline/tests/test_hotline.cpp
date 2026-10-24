@@ -16,6 +16,7 @@
 #include "dsp/room.h"
 #include "params.h"
 #include "state.h"
+#include "ui/layout.h"
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -1663,10 +1664,185 @@ void accumulatorKeepsPeaksAndFlags() {
   ASSERT_TRUE(!z.clipIn && !z.clipDrive && !z.clipOut);
 }
 
+
+// ---- Task 7: editor layout (ui/layout.h, no VSTGUI) and shared meter / device helpers ----
+
+namespace UI = FairyTapes::Hotline::Ui;
+
+bool rectInside(const UI::Rect& in, const UI::Rect& out) {
+  return in.x >= out.x && in.y >= out.y && in.x + in.w <= out.x + out.w && in.y + in.h <= out.y + out.h;
+}
+
+void everyPersistentParamHasOneControl() {
+  for (Steinberg::Vst::ParamID id = 0; id < kNumParams; ++id) {
+    int n = 0;
+    for (const auto& c : UI::kControls) n += c.id == id ? 1 : 0;
+    ASSERT_TRUE(n == 1);
+  }
+  ASSERT_TRUE(static_cast<int>(sizeof(UI::kControls) / sizeof(UI::kControls[0])) == kNumParams);
+  const UI::ControlSpec* bypass = UI::controlOf(kBypass);
+  ASSERT_TRUE(bypass && bypass->kind == UI::Kind::Toggle && bypass->led == UI::Led::Red);
+  ASSERT_TRUE(UI::controlOf(kMono) && UI::controlOf(kMono)->led == UI::Led::Yellow);
+  ASSERT_TRUE(UI::controlOf(kDevice)->kind == UI::Kind::Choice);
+  ASSERT_TRUE(UI::controlOf(kCharacterIn)->isIn && !UI::controlOf(kBypass)->isIn);
+}
+
+void controlsInsideTheirBox() {
+  for (const auto& c : UI::kControls) {
+    const UI::BoxSpec& box = UI::boxOf(c.module);
+    ASSERT_TRUE(rectInside(UI::viewRect(c), box.rect));
+    if (c.kind == UI::Kind::Knob) {   // cap, scale dots and end values stay inside the box
+      const float reach = c.capRadius + 9.f + 2.f;
+      ASSERT_TRUE(UI::knobCentreX(c) - reach >= box.rect.x && UI::knobCentreX(c) + reach <= box.rect.x + box.rect.w);
+      ASSERT_TRUE(UI::knobCentreY(c) - reach >= box.rect.y);
+      ASSERT_TRUE(UI::knobCentreY(c) + c.capRadius + 42.f <= box.rect.y + box.rect.h);   // value under the name
+    }
+  }
+  ASSERT_TRUE(UI::controlOf(kBypass)->module == UI::Module::Output);
+  ASSERT_TRUE(UI::controlOf(kMono)->module == UI::Module::Output);
+  ASSERT_TRUE(UI::controlOf(kGain)->module == UI::Module::Output);
+  ASSERT_TRUE(UI::controlOf(kCharacterIn)->module == UI::Module::Character);
+  for (const auto& r : UI::kMeterRows) ASSERT_TRUE(rectInside(UI::meterBarRect(r), UI::boxOf(UI::Module::Level).rect));
+  for (const auto& k : UI::kClips) ASSERT_TRUE(rectInside(UI::clipRect(k), UI::boxOf(UI::Module::Level).rect));
+  for (const auto& t : UI::kPanelTexts) {   // the printed LEVEL texts are inside their box too (header texts are not)
+    if (t.y > 92.f && t.x > 336.f && t.x < 784.f) ASSERT_TRUE(t.y < 248.f);
+  }
+}
+
+void controlsDoNotOverlap() {
+  const int n = static_cast<int>(sizeof(UI::kControls) / sizeof(UI::kControls[0]));
+  for (int i = 0; i < n; ++i)
+    for (int j = i + 1; j < n; ++j) {
+      const UI::Rect a = UI::viewRect(UI::kControls[i]), b = UI::viewRect(UI::kControls[j]);
+      const bool apart = a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y;
+      ASSERT_TRUE(apart);
+    }
+}
+
+void boxesInsideEditor() {
+  ASSERT_TRUE(UI::kEditorWidth == 1000 && UI::kEditorHeight == 470);
+  const UI::Rect editor{0, 0, 1000, 470};
+  for (const auto& b : UI::kBoxes) ASSERT_TRUE(rectInside(b.rect, editor));
+  for (const auto& c : UI::kControls) ASSERT_TRUE(rectInside(UI::viewRect(c), editor));
+  const UI::BoxSpec& dev = UI::boxOf(UI::Module::Device);
+  ASSERT_TRUE(dev.rect.x == 24 && dev.rect.y == 92 && dev.rect.w == 306 && dev.rect.h == 156);
+  const UI::BoxSpec& ch = UI::boxOf(UI::Module::Character);
+  ASSERT_TRUE(ch.rect.x == 270 && ch.rect.y == 268 && ch.rect.w == 706 && ch.rect.h == 172);
+  ASSERT_TRUE(static_cast<int>(sizeof(UI::kBoxes) / sizeof(UI::kBoxes[0])) == 5);
+}
+
+void characterInDimsFiveControls() {
+  UI::ModuleState s;
+  for (const auto& c : UI::kControls) ASSERT_TRUE(!UI::controlDimmed(c, s));
+  s.characterIn = false;
+  int dimmed = 0;
+  for (const auto& c : UI::kControls) {
+    const bool d = UI::controlDimmed(c, s);
+    const bool expected = c.id == kDrive || c.id == kTone || c.id == kNoise || c.id == kRoom || c.id == kMix;
+    ASSERT_TRUE(d == expected);
+    dimmed += d ? 1 : 0;
+  }
+  ASSERT_TRUE(dimmed == 5);
+  ASSERT_TRUE(UI::moduleDimmed(UI::Module::Character, s));
+  ASSERT_TRUE(!UI::moduleDimmed(UI::Module::Device, s) && !UI::moduleDimmed(UI::Module::Output, s));
+  ASSERT_TRUE(!UI::moduleDimmed(UI::Module::Morph, s) && !UI::moduleDimmed(UI::Module::Level, s));
+  for (const auto& k : UI::kClips) ASSERT_TRUE(!UI::clipDimmed(k, s));   // the DRV clip follows the global bypass only
+}
+
+void globalBypassDimsEverything() {
+  UI::ModuleState s;
+  s.bypass = true;
+  for (UI::Module m : {UI::Module::None, UI::Module::Device, UI::Module::Level, UI::Module::Output, UI::Module::Morph,
+                       UI::Module::Character})
+    ASSERT_TRUE(UI::moduleDimmed(m, s));
+  for (const auto& c : UI::kControls) ASSERT_TRUE(UI::controlDimmed(c, s) == (c.id != kBypass));   // Bypass never dims itself
+  ASSERT_TRUE(UI::controlDimmed(*UI::controlOf(kCharacterIn), s));   // the IN button follows the global bypass
+  s.bypass = false;
+  s.characterIn = false;
+  ASSERT_TRUE(!UI::controlDimmed(*UI::controlOf(kCharacterIn), s));  // but not its own state
+  s.bypass = true;
+  for (const auto& r : UI::kMeterRows) ASSERT_TRUE(!UI::meterDimmed(r, s));   // the level rows stay lit
+  int dimmedClips = 0;
+  for (const auto& k : UI::kClips) dimmedClips += UI::clipDimmed(k, s) ? 1 : 0;
+  ASSERT_TRUE(dimmedClips == 1 && UI::clipDimmed(UI::kClips[1], s) && UI::kClips[1].id == kClipDrive);
+}
+
+void deviceButtonsMapToSixDistinctChoices() {
+  const UI::ControlSpec* d = UI::controlOf(kDevice);
+  ASSERT_TRUE(d && d->choiceCount == kNumDevices && d->columns == 3 && d->led == UI::Led::None);
+  std::set<std::string> labels;
+  std::set<int> indices;
+  for (int i = 0; i < kNumDevices; ++i) {
+    ASSERT_TRUE(std::string(d->choices[i]) == kDevices[i].button);
+    labels.insert(d->choices[i]);
+    const double n = normFromDeviceIndex(i);
+    ASSERT_TRUE(deviceIndexFromNorm(n) == i);
+    ASSERT_APPROX(n, FairyTapes::Ui::normFromChoiceIndex(i, kNumDevices));   // what RackLitChoice writes for button i
+    indices.insert(deviceIndexFromNorm(n));
+  }
+  ASSERT_TRUE(labels.size() == 6 && indices.size() == 6);
+  ASSERT_APPROX(normFromDeviceIndex(-3), 0.0);
+  ASSERT_APPROX(normFromDeviceIndex(99), 1.0);
+}
+
+void meterRangeHelpersRoundTrip() {
+  ASSERT_APPROX(kMeterMinDb, -60.0);
+  ASSERT_APPROX(kMeterMaxDb, 6.0);
+  ASSERT_APPROX(meterNormFromDb(-60.0), 0.0);
+  ASSERT_APPROX(meterNormFromDb(6.0), 1.0);
+  ASSERT_APPROX(meterNormFromDb(-27.0), 0.5);
+  ASSERT_APPROX(meterNormFromDb(-120.0), 0.0);
+  ASSERT_APPROX(meterNormFromDb(30.0), 1.0);
+  ASSERT_APPROX(meterNormFromDb(std::numeric_limits<double>::quiet_NaN()), 0.0);
+  ASSERT_APPROX(meterDbFromNorm(0.0), -60.0);
+  ASSERT_APPROX(meterDbFromNorm(1.0), 6.0);
+  for (double db = -60.0; db <= 6.0; db += 3.0) ASSERT_APPROX(meterDbFromNorm(meterNormFromDb(db)), db);
+  ASSERT_APPROX(meterNormFromDb(0.0), 60.0 / 66.0);
+  // the LED rows of the editor read the same four display parameters the processor writes
+  ASSERT_TRUE(UI::kMeterRows[0].id == kMeterInL && UI::kMeterRows[1].id == kMeterInR);
+  ASSERT_TRUE(UI::kMeterRows[2].id == kMeterOutL && UI::kMeterRows[3].id == kMeterOutR);
+  ASSERT_TRUE(UI::kClips[0].id == kClipIn && UI::kClips[1].id == kClipDrive && UI::kClips[2].id == kClipOut);
+}
+
+void panelValueTextMatchesPreview() {
+  ASSERT_TRUE(UI::panelValueText(kDrive, 0.4) == "4.0");
+  ASSERT_TRUE(UI::panelValueText(kNoise, 0.3) == "3.0");
+  ASSERT_TRUE(UI::panelValueText(kRoom, 1.0) == "10.0");
+  ASSERT_TRUE(UI::panelValueText(kTone, 0.5) == "0.0");
+  ASSERT_TRUE(UI::panelValueText(kTone, 0.7) == "+2.0");
+  ASSERT_TRUE(UI::panelValueText(kTone, 0.0) == "-5.0");
+  ASSERT_TRUE(UI::panelValueText(kGain, 0.5) == "0.0 dB");
+  ASSERT_TRUE(UI::panelValueText(kGain, 0.75) == "+10.0 dB");
+  ASSERT_TRUE(UI::panelValueText(kGain, 0.0) == "-20.0 dB");
+  ASSERT_TRUE(UI::panelValueText(kMorph, 1.0) == "100 %");
+  ASSERT_TRUE(UI::panelValueText(kMix, 0.5) == "50 %");
+  ASSERT_TRUE(UI::panelValueText(kBypass, 1.0).empty() && UI::panelValueText(kDevice, 0.2).empty());
+  ASSERT_TRUE(UI::panelValueText(kDrive, std::numeric_limits<double>::quiet_NaN()) == "0.0");
+}
+
+void silkscreenPrintsEveryKnobAndButton() {
+  const auto items = UI::silkscreenItems();
+  for (const auto& c : UI::kControls) {
+    int n = 0;
+    for (const auto& it : items) n += it.id == static_cast<int>(c.id) ? 1 : 0;
+    ASSERT_TRUE(n == (c.kind == UI::Kind::Choice ? 0 : 1));   // the device names are on the faces
+  }
+}
+
 }  // namespace
 
 int main() {
   RUN_TEST(paramIdsAreFrozen);
+  RUN_TEST(everyPersistentParamHasOneControl);
+  RUN_TEST(controlsInsideTheirBox);
+  RUN_TEST(controlsDoNotOverlap);
+  RUN_TEST(boxesInsideEditor);
+  RUN_TEST(characterInDimsFiveControls);
+  RUN_TEST(globalBypassDimsEverything);
+  RUN_TEST(deviceButtonsMapToSixDistinctChoices);
+  RUN_TEST(meterRangeHelpersRoundTrip);
+  RUN_TEST(panelValueTextMatchesPreview);
+  RUN_TEST(silkscreenPrintsEveryKnobAndButton);
   RUN_TEST(formatGainTone);
   RUN_TEST(formatPercentToggleDevice);
   RUN_TEST(rateLimiterWritesFirstThenEvery16ms);

@@ -5,7 +5,6 @@
 #include "processor.h"
 #include "state.h"
 #include "state_stream.h"
-#include "fairy_ui/knob_math.h"
 #include "pluginterfaces/base/ibstream.h"
 #include "pluginterfaces/vst/ivstparameterchanges.h"
 #include <vector>
@@ -93,7 +92,7 @@ void Processor::publishDisplay(Steinberg::Vst::ProcessData& data) {
   if (!display_limiter_.advance(data.numSamples))
     return;
   const DisplayValues d = display_acc_.take();
-  const auto norm = [](float db) { return Ui::meterNormFromDb(db, -60.0, 6.0); };
+  const auto norm = [](float db) { return meterNormFromDb(static_cast<double>(db)); };
   put(kMeterInL, norm(d.inPeakDb[0]));
   put(kMeterInR, norm(d.inPeakDb[1]));
   put(kMeterOutL, norm(d.outPeakDb[0]));

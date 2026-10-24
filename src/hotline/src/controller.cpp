@@ -8,9 +8,11 @@
 #include "format.h"
 #include "state.h"
 #include "state_stream.h"
+#include "ui/editor.h"
 #include "pluginterfaces/base/ibstream.h"
 #include "public.sdk/source/vst/vstparameters.h"
 #include <cstdint>
+#include <cstring>
 #include <vector>
 
 namespace FairyTapes::Hotline {
@@ -92,8 +94,10 @@ Steinberg::tresult PLUGIN_API Controller::getParamStringByValue(Steinberg::Vst::
   return Steinberg::kResultOk;
 }
 
-Steinberg::IPlugView* PLUGIN_API Controller::createView(Steinberg::FIDString) {
-  return nullptr;   // the editor is provided by Task 7
+Steinberg::IPlugView* PLUGIN_API Controller::createView(Steinberg::FIDString name) {
+  if (name && std::strcmp(name, Steinberg::Vst::ViewType::kEditor) == 0)
+    return new Ui::Editor(this);
+  return nullptr;
 }
 
 } // namespace FairyTapes::Hotline

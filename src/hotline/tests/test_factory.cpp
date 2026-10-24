@@ -54,7 +54,14 @@ void exerciseController(Steinberg::FUnknown* obj) {
   CHECK(str[0] == 'M' && str[1] == 'e');   // "Megaphone", first device
   CHECK(ctl->getParamStringByValue(3, 0.5, str) == Steinberg::kResultOk);
   CHECK(str[0] == '0' && str[1] == '.' && str[2] == '0');
-  CHECK(ctl->createView(Steinberg::Vst::ViewType::kEditor) == nullptr);   // editor arrives with Task 7
+  Steinberg::IPlugView* view = ctl->createView(Steinberg::Vst::ViewType::kEditor);
+  CHECK(view != nullptr);   // the editor (Task 7), 1000 x 470 at scale 1
+  if (view) {
+    Steinberg::ViewRect size{};
+    CHECK(view->getSize(&size) == Steinberg::kResultOk && size.getWidth() == 1000 && size.getHeight() == 470);
+    view->release();
+  }
+  CHECK(ctl->createView("not an editor") == nullptr);
   CHECK(ctl->terminate() == Steinberg::kResultOk);
   ctl->release();
 }
