@@ -58,6 +58,10 @@ int main() {
   CHECK(litChoiceHit(80, 52, 3, 2, 60, 40) == -1);
   CHECK(litChoiceHit(44, 78, 3, 1, -1, 10) == -1 && litChoiceHit(44, 78, 3, 1, 10, 78) == -1);
   CHECK(litChoiceHit(44, 78, 0, 1, 10, 10) == -1 && litChoiceHit(44, 78, 3, 0, 10, 10) == -1);
+  // cycling selector (M/S, Ratio, SC HPF, Ceil): the value is printed under the LED; a click steps to the next, wrapping
+  CHECK(kCycleValueOffsetY > kLedOffsetY + kLedRadius && near(kCycleValueOffsetY, 39));
+  CHECK(cycleNextIndex(0, 3) == 1 && cycleNextIndex(2, 3) == 0 && cycleNextIndex(-4, 3) == 1 && cycleNextIndex(7, 3) == 0);   // out of range: clamped first
+  CHECK(cycleNextIndex(0, 1) == 0 && cycleNextIndex(5, 0) == 0);
   // the name sits on the face, centred
   CHECK(kLitTextBaseline > 0 && kLitTextBaseline < kLitFaceHeight / 2);
   if (g_failed) return 1;

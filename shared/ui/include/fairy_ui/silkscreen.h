@@ -13,7 +13,8 @@
 
 namespace FairyTapes::Ui {
 
-enum class PrintKind { Knob, Button, Choice, Label };   // Label: a name alone, centred on (cx, cy = baseline)
+// Label: a name alone, centred on (cx, cy = baseline). Cycle: a cycling selector, name above the face and value under its LED.
+enum class PrintKind { Knob, Button, Choice, Label, Cycle };
 
 // One control as printed on the panel, in the coordinates of the silkscreen view.
 struct PrintedItem {
@@ -81,6 +82,10 @@ inline PrintedParts printedParts(const PrintedItem& item, const std::string& val
   }
   case PrintKind::Button:
     if (!item.name.empty()) p.texts.push_back({item.name, item.cx, item.cy + Rack::kLabelOffsetY, TextAlign::Centre, TextRole::Label});
+    break;
+  case PrintKind::Cycle:
+    if (!item.name.empty()) p.texts.push_back({item.name, item.cx, item.cy + Rack::kLabelOffsetY, TextAlign::Centre, TextRole::Label});
+    if (!value.empty()) p.texts.push_back({value, item.cx, item.cy + Rack::kCycleValueOffsetY, TextAlign::Centre, TextRole::Value});
     break;
   case PrintKind::Label:
     if (!item.name.empty()) p.texts.push_back({item.name, item.cx, item.cy, TextAlign::Centre, TextRole::Name});

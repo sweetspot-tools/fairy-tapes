@@ -419,4 +419,39 @@ CMouseEventResult RackLitChoice::onMouseDown(CPoint& where, const CButtonState& 
   return kMouseDownEventHandledButDontNeedMovedOrUpEvents;
 }
 
+// ---------------------------------------------------------------------------
+// RackCycle
+
+RackCycle::RackCycle(const CRect& size, IControlListener* listener, int32_t tag, int count, const Skin* skin)
+    : ChoiceButtons(size, listener, tag, std::vector<std::string>(static_cast<size_t>(std::max(count, 1))), skin),
+      count_(std::max(count, 1)) {}
+
+bool RackCycle::ledLit() const { return selectedIndex() != choiceIndexFromNorm(getDefaultValue(), count_); }
+
+void RackCycle::setWear(std::uint32_t seed, double amount) {
+  wear_ = buttonWear(seed, amount, Rack::kFaceWidth, Rack::kFaceHeight);
+  invalid();
+}
+
+void RackCycle::draw(CDrawContext* ctx) {
+  begin(ctx, dimmed_);
+  const CRect face = faceIn(getViewSize());
+  const bool lit = ledLit();
+  drawWearMarks(ctx, wear_, face.getTopLeft(), true);
+  drawFace(ctx, face, false, RackLed::Yellow, false);   // the face never stays down: a selector, not a switch
+  drawWearMarks(ctx, wear_, face.getTopLeft(), false);
+  const double ly = face.getCenter().y + Rack::kLedOffsetY;
+  fillCircle(ctx, face.getCenter().x, ly, Rack::kLedRadius, lit ? ledOn(RackLed::Yellow) : ledOff(RackLed::Yellow));
+  strokeCircle(ctx, face.getCenter().x, ly, Rack::kLedRadius, 0.6, CColor(0, 0, 0));
+  ctx->restoreGlobalState();
+  setDirty(false);
+}
+
+CMouseEventResult RackCycle::onMouseDown(CPoint& where, const CButtonState& buttons) {
+  if (!buttons.isLeftButton()) return kMouseEventNotHandled;
+  if (faceIn(getViewSize()).pointInside(where))
+    editTo(static_cast<float>(normFromChoiceIndex(Rack::cycleNextIndex(selectedIndex(), count_), count_)));
+  return kMouseDownEventHandledButDontNeedMovedOrUpEvents;
+}
+
 } // namespace FairyTapes::Ui

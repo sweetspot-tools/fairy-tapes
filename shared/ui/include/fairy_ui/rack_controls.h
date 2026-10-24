@@ -79,6 +79,25 @@ private:
   std::vector<std::vector<ControlWearMark>> wear_;
 };
 
+// Cycling selector (design system, 2026-10-21): one grey face, a click steps to the next of `count` values and wraps;
+// the yellow LED under it is lit while the value is not the default. The name and the current value are printed by the
+// silkscreen (PrintKind::Cycle). Value = normFromChoiceIndex(index, count).
+class RackCycle : public ChoiceButtons {
+public:
+  RackCycle(const VSTGUI::CRect& size, VSTGUI::IControlListener* listener, int32_t tag, int count, const Skin* skin = nullptr);
+
+  bool ledLit() const;   // the value is not the default one
+  void setWear(std::uint32_t seed, double amount);
+
+  void draw(VSTGUI::CDrawContext* context) override;
+  VSTGUI::CMouseEventResult onMouseDown(VSTGUI::CPoint& where, const VSTGUI::CButtonState& buttons) override;
+  CLASS_METHODS_NOCOPY(RackCycle, ChoiceButtons)
+
+private:
+  int count_;
+  std::vector<ControlWearMark> wear_;
+};
+
 // Exclusive choice with the name on the face (design system, 2026-10-21): no LED, the active face lights amber. The
 // buttons sit in a grid of `columns` columns (1 = stacked, N = side by side), each face (faceWidth x
 // Rack::kLitFaceHeight) centred in its cell. The names are drawn here, on the face, because they move with it.

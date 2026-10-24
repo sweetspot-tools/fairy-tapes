@@ -1,5 +1,7 @@
 /** Fairy Tapes · shared UI — knob double-click gestures that do not need a window (no drawing). */
 #include "fairy_ui/controls.h"
+#include "fairy_ui/knob_math.h"
+#include "fairy_ui/rack_controls.h"
 
 #include "vstgui/lib/cbuttonstate.h"
 #include "vstgui/lib/cpoint.h"
@@ -55,9 +57,25 @@ void test_alt_double_click_without_target_falls_back_to_default() {
   k->onMouseDown(p, CButtonState(kLButton | kDoubleClick | kAlt));
   CHECK(near(k->getValue(), 0.5f));
 }
+// A cycling selector steps to the next value at each click and wraps; its LED is lit away from the default value.
+void test_cycle_steps_and_wraps() {
+  auto c = owned(new RackCycle(CRect(0, 0, 24, 36), nullptr, 1, 3));
+  c->setDefaultValue(static_cast<float>(normFromChoiceIndex(0, 3)));
+  c->setValueNormalized(static_cast<float>(normFromChoiceIndex(0, 3)));
+  CHECK(c->selectedIndex() == 0 && !c->ledLit());
+  CPoint p(12, 11);
+  c->onMouseDown(p, CButtonState(kLButton));
+  CHECK(c->selectedIndex() == 1 && c->ledLit());
+  c->onMouseDown(p, CButtonState(kLButton));
+  c->onMouseDown(p, CButtonState(kLButton));
+  CHECK(c->selectedIndex() == 0 && !c->ledLit());   // wrapped back to the default
+  c->onMouseDown(p, CButtonState(kRButton));          // only the left button steps
+  CHECK(c->selectedIndex() == 0);
+}
 } // namespace
 
 int main() {
+  test_cycle_steps_and_wraps();
   std::puts("knob gesture tests");
   test_double_click_goes_to_default();
   test_alt_double_click_goes_to_target();

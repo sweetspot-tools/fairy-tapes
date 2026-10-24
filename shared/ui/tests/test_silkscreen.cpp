@@ -99,6 +99,22 @@ void test_label_alone_on_its_baseline() {
   CHECK(printedParts(l, "").texts.empty());
 }
 
+// A cycling selector: its name above the face like a button, its current value (amber role) under the LED.
+void test_cycle_label_and_value() {
+  PrintedItem c;
+  c.kind = PrintKind::Cycle;
+  c.cx = 488;
+  c.cy = 544;
+  c.name = "RATIO";
+  const PrintedParts p = printedParts(c, "AUTO 3:1");
+  CHECK(p.dots.empty() && p.texts.size() == 2);
+  if (p.texts.size() == 2) {
+    CHECK(p.texts[0].text == "RATIO" && p.texts[0].role == TextRole::Label && near(p.texts[0].y, 544 + Rack::kLabelOffsetY));
+    CHECK(p.texts[1].text == "AUTO 3:1" && p.texts[1].role == TextRole::Value && near(p.texts[1].y, 583) && near(p.texts[1].x, 488));
+  }
+  CHECK(printedParts(c, "").texts.size() == 1);   // no value yet: only the name
+}
+
 void test_choice_labels_over_equal_cells() {
   PrintedItem c;
   c.kind = PrintKind::Choice;
@@ -152,6 +168,7 @@ int main() {
   test_button_label_above_the_face();
   test_choice_labels_over_equal_cells();
   test_label_alone_on_its_baseline();
+  test_cycle_label_and_value();
   test_aligned_left();
   test_model_state_by_id_and_changes();
   if (g_failed) { std::fprintf(stderr, "%d check(s) failed\n", g_failed); return 1; }

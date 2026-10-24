@@ -50,6 +50,18 @@ constexpr double kLedRadius = 3.4;
 constexpr double kLabelOffsetY = -17;   // label baseline above the face centre (11 px bold)
 constexpr double kPressDepth = 1.5;     // the face sinks this much when the button is lit
 
+// ---- Cycling selector (design system, 2026-10-21: M/S, Ratio, SC HPF, Ceil) ------------------------------------------
+// A grey face like an on/off button; the LED (yellow) is lit while the value is not the default; the current value is
+// printed under the LED, amber, 10 px (preview deep_throat_rack.html: face at 544, value at 583).
+constexpr double kCycleValueOffsetY = 39;   // value baseline below the face centre
+
+// The next value of a selector of `count` values (wraps; an index out of range is clamped first).
+inline int cycleNextIndex(int index, int count) {
+  if (count <= 0) return 0;
+  const int i = index < 0 ? 0 : index >= count ? count - 1 : index;
+  return (i + 1) % count;
+}
+
 // ---- Face-lit exclusive choice (design system, 2026-10-21) ----------------------------------------------------------
 // The name is on the face, there is no LED, the active face lights amber. The buttons of a group sit in a grid of
 // equal cells (row-major); each face is centred in its cell.
