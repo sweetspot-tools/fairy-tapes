@@ -1,9 +1,10 @@
 /**
- * Fairy Tapes · Hotline — Unit tests for params and state.
+ * Fairy Tapes · Hotline — Unit tests for params, state, devices, DSP blocks and engine.
  * Run via CTest; build target: hotline_tests.
  */
 
 #include "devices.h"
+#include "engine.h"
 #include "dsp/band.h"
 #include "dsp/compander.h"
 #include "dsp/cone.h"
@@ -19,6 +20,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <limits>
 #include <set>
 #include <string>
@@ -834,6 +836,685 @@ void newBlocksStableAtExtremeSampleRates() {
   }
 }
 
+
+// ---- Engine (Task 5) ----
+std::vector<float> whiteNoise(int n, uint32_t seed, float amp) {
+  Lcg l; l.s = seed;
+  std::vector<float> v((size_t)n);
+  for (auto& x : v) x = amp * l.next();
+  return v;
+}
+
+std::vector<float> sineWave(int n, double fs, double hz, double amp) {
+  std::vector<float> v((size_t)n);
+  for (int i = 0; i < n; ++i) v[(size_t)i] = (float)(amp * std::sin(2 * kPiT * hz * i / fs));
+  return v;
+}
+
+// Defaults of the parameter table, then device and morph.
+Settings engineSettings(int device, float morph) {
+  double v[kNumParams];
+  loadDefaults(v);
+  Settings s = mapParams(v);
+  s.device = device;
+  s.morph = morph;
+  return s;
+}
+
+struct Out { std::vector<float> L, R; };
+
+// Feeds the whole input in calls whose lengths cycle through `blocks` (0 = an empty call).
+Out runEngine(Engine& e, const std::vector<float>& inL, const std::vector<float>& inR,
+              const std::vector<int>& blocks = {512}) {
+  const int n = (int)inL.size();
+  Out o{std::vector<float>((size_t)n), std::vector<float>((size_t)n)};
+  int pos = 0;
+  size_t k = 0, idle = 0;
+  while (pos < n && idle < 1000) {
+    const int len = std::min(blocks[k++ % blocks.size()], n - pos);
+    e.process(inL.data() + pos, inR.data() + pos, o.L.data() + pos, o.R.data() + pos, len);
+    pos += len;
+    idle = len ? 0 : idle + 1;
+  }
+  return o;
+}
+
+double maxJump(const std::vector<float>& v, int from, int to) {
+  double j = 0;
+  for (int i = std::max(from, 1); i < to; ++i) j = std::max(j, (double)std::fabs(v[(size_t)i] - v[(size_t)i - 1]));
+  return j;
+}
+
+double rmsOf(const std::vector<float>& v, int from, int to) {
+  double s = 0;
+  for (int i = from; i < to; ++i) s += (double)v[(size_t)i] * v[(size_t)i];
+  return std::sqrt(s / std::max(1, to - from));
+}
+
+bool sameBits(const std::vector<float>& a, const std::vector<float>& b, int from, int to) {
+  return std::memcmp(a.data() + from, b.data() + from, sizeof(float) * (size_t)(to - from)) == 0;
+}
+
+void loadDefaultsMatchesTable() {
+  double v[kNumParams];
+  for (auto& x : v) x = -7.0;
+  loadDefaults(v);
+  ASSERT_TRUE(v[kBypass] == kDefaultBypass && v[kDevice] == kDefaultDevice && v[kMorph] == kDefaultMorph);
+  ASSERT_TRUE(v[kGain] == kDefaultGain && v[kMono] == kDefaultMono && v[kDrive] == kDefaultDrive);
+  ASSERT_TRUE(v[kTone] == kDefaultTone && v[kNoise] == kDefaultNoise && v[kRoom] == kDefaultRoom);
+  ASSERT_TRUE(v[kMix] == kDefaultMix && v[kCharacterIn] == kDefaultCharacterIn);
+}
+
+void mapParamsDefaults() {
+  double v[kNumParams];
+  loadDefaults(v);
+  const Settings s = mapParams(v);
+  ASSERT_TRUE(s.device == 0);
+  ASSERT_APPROX(s.morph, 1.0);
+  ASSERT_APPROX(s.gainDb, 0.0);
+  ASSERT_APPROX(s.drive, 1.0);
+  ASSERT_APPROX(s.tone, 0.0);
+  ASSERT_APPROX(s.noise, 1.0);
+  ASSERT_APPROX(s.room, 1.0);
+  ASSERT_APPROX(s.mix, 1.0);
+  ASSERT_TRUE(!s.mono && !s.bypass && s.characterIn);
+}
+
+void mapParamsNonFiniteAndClamp() {
+  double v[kNumParams];
+  for (auto& x : v) x = std::numeric_limits<double>::quiet_NaN();
+  const Settings d = mapParams(v);  // every value falls back to its default
+  ASSERT_TRUE(d.device == 0 && !d.mono && !d.bypass && d.characterIn);
+  ASSERT_APPROX(d.morph, 1.0);
+  ASSERT_APPROX(d.gainDb, 0.0);
+  ASSERT_APPROX(d.drive, 1.0);
+  ASSERT_APPROX(d.mix, 1.0);
+  for (auto& x : v) x = std::numeric_limits<double>::infinity();
+  const Settings i = mapParams(v);
+  ASSERT_APPROX(i.gainDb, 0.0);  // inf is non-finite: default, not "clamped to 1"
+  for (auto& x : v) x = 5.0;
+  const Settings hi = mapParams(v);
+  ASSERT_TRUE(hi.device == kNumDevices - 1 && hi.mono && hi.bypass && hi.characterIn);
+  ASSERT_APPROX(hi.morph, 1.0);
+  ASSERT_APPROX(hi.gainDb, 20.0);
+  ASSERT_APPROX(hi.drive, 2.0);
+  ASSERT_APPROX(hi.tone, 1.0);
+  ASSERT_APPROX(hi.noise, 2.0);
+  ASSERT_APPROX(hi.room, 2.0);
+  ASSERT_APPROX(hi.mix, 1.0);
+  for (auto& x : v) x = -5.0;
+  v[kCharacterIn] = 1.0;
+  const Settings lo = mapParams(v);
+  ASSERT_TRUE(lo.device == 0 && !lo.mono && !lo.bypass);
+  ASSERT_APPROX(lo.morph, 0.0);
+  ASSERT_APPROX(lo.gainDb, -20.0);
+  ASSERT_APPROX(lo.drive, 0.0);
+  ASSERT_APPROX(lo.tone, -1.0);
+  ASSERT_APPROX(lo.mix, 0.0);
+}
+
+void mapParamsCharacterInOff() {
+  double v[kNumParams];
+  loadDefaults(v);
+  v[kDevice] = 0.4; v[kMorph] = 0.3; v[kGain] = 0.75;
+  v[kDrive] = 1.0; v[kTone] = 1.0; v[kNoise] = 1.0; v[kRoom] = 1.0; v[kMix] = 0.0;
+  v[kCharacterIn] = 0.0;
+  const Settings s = mapParams(v);
+  ASSERT_TRUE(!s.characterIn);
+  ASSERT_TRUE(s.device == 2);
+  ASSERT_APPROX(s.morph, 0.3);
+  ASSERT_APPROX(s.gainDb, 10.0);
+  ASSERT_APPROX(s.drive, 0.0);
+  ASSERT_APPROX(s.tone, 0.0);
+  ASSERT_APPROX(s.noise, 0.0);
+  ASSERT_APPROX(s.room, 0.0);
+  ASSERT_APPROX(s.mix, 1.0);
+}
+
+void targetParamsUserControls() {
+  const BlockParams& mega = kDevices[0].p;
+  Settings s = engineSettings(0, 1.f);
+  ASSERT_TRUE(sameParams(targetParams(mega, s), mega));  // multipliers 1, tone 0: the device row
+  s.drive = 2.f; s.room = 2.f; s.noise = 2.f; s.tone = 1.f;
+  BlockParams p = targetParams(mega, s);
+  ASSERT_APPROX(p.drive, 1.0);                               // 0.5 * 2
+  ASSERT_APPROX(p.room, 0.1);                                // 0.05 * 2
+  ASSERT_APPROX(p.noiseDb, mega.noiseDb + 20 * std::log10(2.0));
+  ASSERT_APPROX(p.lpHz, 9000.0);                             // +1 octave
+  ASSERT_APPROX(p.hpHz, 400.0 / std::sqrt(2.0));             // -1/2 octave
+  s.drive = 0.f; s.room = 0.f; s.noise = 0.f; s.tone = -1.f;
+  p = targetParams(mega, s);
+  ASSERT_TRUE(p.drive == 0.0 && p.room == 0.0 && p.noiseDb == -120.0);
+  ASSERT_APPROX(p.lpHz, 2250.0);
+  ASSERT_APPROX(p.hpHz, 400.0 * std::sqrt(2.0));
+  // corners stay in the band's valid range
+  const BlockParams& cheap = kDevices[5].p;
+  s = engineSettings(5, 1.f); s.tone = 1.f;
+  ASSERT_TRUE(targetParams(cheap, s).lpHz <= 20000.0);
+  // Morph 0 is neutral whatever the user controls say (tone shift scales with morph)
+  for (int d = 0; d < kNumDevices; ++d)
+    for (float a : {0.f, 1.f, 2.f})
+      for (float t : {-1.f, 0.f, 1.f}) {
+        Settings z = engineSettings(d, 0.f);
+        z.drive = z.noise = z.room = a; z.tone = t;
+        ASSERT_TRUE(sameParams(targetParams(kDevices[d].p, z), neutralParams()));
+      }
+}
+
+// Ruling 6: crackle peaks grow with sqrt(fs), so the noise floor never goes above -20 dB.
+void noiseLevelIsCapped() {
+  BlockParams loud = kDevices[2].p;
+  loud.noiseDb = -10.0;
+  Settings s = engineSettings(2, 1.f);
+  for (float a : {0.5f, 1.f, 2.f}) { s.noise = a; ASSERT_TRUE(targetParams(loud, s).noiseDb <= -20.0); }
+  loud.noiseDb = -30.0; s.noise = 2.f;
+  ASSERT_APPROX(targetParams(loud, s).noiseDb, -30.0 + 20 * std::log10(2.0));  // under the cap: untouched
+  for (int d = 0; d < kNumDevices; ++d) { Settings t = engineSettings(d, 1.f); t.noise = 2.f; ASSERT_TRUE(targetParams(kDevices[d].p, t).noiseDb <= -20.0); }
+}
+
+void morphZeroEqualsInput() {
+  const int n = 48000;
+  const auto L = whiteNoise(n, 1, 0.9f), R = whiteNoise(n, 2, 0.9f);
+  for (int d = 0; d < kNumDevices; ++d)
+    for (float a : {1.f, 2.f})
+      for (float t : {-1.f, 0.f, 1.f}) {
+        Engine e; e.prepare(48000, 512);
+        Settings s = engineSettings(d, 0.f);
+        s.drive = s.noise = s.room = a; s.tone = t;
+        e.setSettings(s);
+        const Out o = runEngine(e, L, R);
+        for (int i = 0; i < n; ++i) {
+          ASSERT_TRUE(std::fabs(o.L[(size_t)i] - L[(size_t)i]) <= 1e-6);
+          ASSERT_TRUE(std::fabs(o.R[(size_t)i] - R[(size_t)i]) <= 1e-6);
+        }
+      }
+}
+
+// Morph 1 -> 0: the smoothed block values must land EXACTLY on neutral (snap), so every block
+// takes its neutral fast path again. Without the snap the noise level stays at ~-120 dB + eps and
+// the crackle (peaks ~31x the RMS) alone exceeds 1e-6.
+void morphBackToZeroIsExact() {
+  const int n = 3 * 24000;
+  const auto L = whiteNoise(n, 3, 0.8f), R = whiteNoise(n, 4, 0.8f);
+  for (int d = 0; d < kNumDevices; ++d) {
+    Engine e; e.prepare(48000, 512);
+    Settings s = engineSettings(d, 1.f);
+    s.noise = 2.f; s.room = 2.f;
+    e.setSettings(s);
+    std::vector<float> oL((size_t)n), oR((size_t)n);
+    for (int pos = 0; pos < n; pos += 480) {
+      if (pos == 24000) { s.morph = 0.f; e.setSettings(s); }
+      e.process(L.data() + pos, R.data() + pos, oL.data() + pos, oR.data() + pos, 480);
+    }
+    ASSERT_TRUE(std::fabs(oL[1000] - L[1000]) > 1e-3);  // the device was really on
+    for (int i = 48000; i < n; ++i) {
+      ASSERT_TRUE(std::fabs(oL[(size_t)i] - L[(size_t)i]) <= 1e-6);
+      ASSERT_TRUE(std::fabs(oR[(size_t)i] - R[(size_t)i]) <= 1e-6);
+    }
+  }
+}
+
+void bypassIsBitExact() {
+  const int n = 48000;
+  const auto L = whiteNoise(n, 5, 0.9f), R = whiteNoise(n, 6, 0.9f);
+  for (int d = 0; d < kNumDevices; ++d) {
+    Engine e; e.prepare(48000, 256);
+    Settings s = engineSettings(d, 1.f);
+    e.setSettings(s);
+    std::vector<float> oL((size_t)n), oR((size_t)n);
+    const int on = 9600, settled = on + 4800;  // bypass after 200 ms, check from 100 ms later
+    for (int pos = 0; pos < n; pos += 240) {
+      if (pos == on) { s.bypass = true; e.setSettings(s); }
+      e.process(L.data() + pos, R.data() + pos, oL.data() + pos, oR.data() + pos, 240);
+    }
+    ASSERT_TRUE(!sameBits(oL, L, 0, on));
+    ASSERT_TRUE(std::fabs(oL[on + 1] - L[on + 1]) > 0.f || std::fabs(oL[on + 2] - L[on + 2]) > 0.f);  // a ramp, not a cut
+    ASSERT_TRUE(sameBits(oL, L, settled, n));
+    ASSERT_TRUE(sameBits(oR, R, settled, n));
+  }
+  // bypassed from the start: exact straight away
+  Engine e; e.prepare(48000, 256);
+  Settings s = engineSettings(2, 1.f); s.bypass = true;
+  e.setSettings(s);
+  const Out o = runEngine(e, L, R);
+  ASSERT_TRUE(sameBits(o.L, L, 0, n) && sameBits(o.R, R, 0, n));
+}
+
+void monoMakesChannelsIdentical() {
+  const int n = 48000;
+  const auto L = sineWave(n, 48000, 440, 0.5);
+  const auto R = whiteNoise(n, 7, 0.5f);
+  Engine e; e.prepare(48000, 512);
+  Settings s = engineSettings(0, 1.f);  // Megaphone: noise and room on, so they must follow Mono too
+  e.setSettings(s);
+  std::vector<float> oL((size_t)n), oR((size_t)n);
+  const int on = 4800;
+  for (int pos = 0; pos < n; pos += 480) {
+    if (pos == on) { s.mono = true; e.setSettings(s); }
+    e.process(L.data() + pos, R.data() + pos, oL.data() + pos, oR.data() + pos, 480);
+  }
+  ASSERT_TRUE(!sameBits(oL, oR, 0, on));
+  ASSERT_TRUE(!sameBits(oL, oR, on, on + 200));  // a 10 ms ramp, not a switch
+  const int settled = on + 480 + 64;             // 10 ms ramp + one update interval of margin
+  ASSERT_TRUE(sameBits(oL, oR, settled, n));
+  ASSERT_TRUE(rmsOf(oL, settled, n) > 0.01);
+}
+
+// Mono off: noise is decorrelated between the channels even on identical (silent) input.
+void noiseIsDecorrelatedWhenStereo() {
+  const int n = 24000;
+  const std::vector<float> z((size_t)n, 0.f), z2((size_t)n, 0.f);
+  Engine e; e.prepare(48000, 512);
+  Settings s = engineSettings(2, 1.f);  // Walkie-talkie: noise -40 dB
+  s.room = 0.f;
+  e.setSettings(s);
+  const Out o = runEngine(e, z, z2);
+  ASSERT_TRUE(rmsOf(o.L, 0, n) > 1e-4 && rmsOf(o.R, 0, n) > 1e-4);
+  double c = 0;
+  for (int i = 0; i < n; ++i) c += (double)o.L[(size_t)i] * o.R[(size_t)i];
+  c /= n * rmsOf(o.L, 0, n) * rmsOf(o.R, 0, n);
+  ASSERT_TRUE(std::fabs(c) < 0.2);
+}
+
+void telephoneBandOnEngine() {
+  // Drive and Room off as the brief says; Noise off too: the -54 dB floor and its crackle would
+  // otherwise dominate the level of the heavily attenuated tones being measured.
+  auto level = [](double hz) {
+    Engine e; e.prepare(48000, 512);
+    Settings s = engineSettings(1, 1.f);
+    s.mix = 1.f; s.drive = 0.f; s.room = 0.f; s.noise = 0.f;
+    e.setSettings(s);
+    const auto x = sineWave(72000, 48000, hz, 0.5);
+    const Out o = runEngine(e, x, x);
+    return rmsOf(o.L, 24000, 72000);
+  };
+  const double ref = level(1000);
+  ASSERT_TRUE(ref > 0.01);
+  ASSERT_TRUE(toDb(level(100) / ref) <= -15.0);
+  ASSERT_TRUE(toDb(level(8000) / ref) <= -15.0);
+}
+
+void extremeParametersStayFinite() {
+  const int n = 48000;
+  std::vector<float> L((size_t)n), R((size_t)n);
+  Lcg l;
+  for (int i = 0; i < n; ++i) {
+    L[(size_t)i] = 10.f * l.next();
+    R[(size_t)i] = i % 2 ? 10.f : -10.f;
+    if (i % 97 == 0) L[(size_t)i] = kNaN;
+    if (i % 89 == 0) R[(size_t)i] = kInf;
+    if (i % 83 == 0) L[(size_t)i] = -kInf;
+  }
+  for (int d = 0; d < kNumDevices; ++d)
+    for (int variant = 0; variant < 4; ++variant) {
+      double v[kNumParams];
+      for (auto& x : v) x = variant == 1 ? 0.0 : 1.0;
+      v[kBypass] = 0.0;
+      v[kDevice] = d / double(kNumDevices - 1);
+      if (variant == 2) v[kMix] = 0.0;   // dry path at +20 dB
+      if (variant == 3) v[kMono] = 0.0;
+      Engine e; e.prepare(48000, 512);
+      e.setSettings(mapParams(v));
+      const Out o = runEngine(e, L, R);
+      for (int i = 0; i < n; ++i) {
+        ASSERT_TRUE(std::isfinite(o.L[(size_t)i]) && std::isfinite(o.R[(size_t)i]));
+        ASSERT_TRUE(std::fabs(o.L[(size_t)i]) <= 16.f && std::fabs(o.R[(size_t)i]) <= 16.f);
+      }
+    }
+}
+
+void zeroLatency() {
+  std::vector<float> x(256, 0.f);
+  x[0] = 1.f;
+  Engine e; e.prepare(48000, 256);
+  e.setSettings(engineSettings(1, 0.f));
+  Out o = runEngine(e, x, x);
+  ASSERT_TRUE(o.L[0] == 1.f && o.R[0] == 1.f);
+  // with the device on, the response still starts on sample 0 (no lookahead anywhere)
+  Engine a; a.prepare(48000, 256);
+  Settings s = engineSettings(4, 1.f); s.noise = 0.f;
+  a.setSettings(s);
+  o = runEngine(a, x, x);
+  ASSERT_TRUE(std::fabs(o.L[0]) > 1e-4);
+}
+
+void noiseIsDeterministic() {
+  const int n = 24000;
+  const auto L = whiteNoise(n, 8, 0.3f), R = whiteNoise(n, 9, 0.3f);
+  Settings s = engineSettings(2, 1.f); s.noise = 2.f;
+  Engine a; a.prepare(48000, 512); a.setSettings(s);
+  Engine b; b.prepare(48000, 512); b.setSettings(s);
+  const Out oa = runEngine(a, L, R), ob = runEngine(b, L, R);
+  ASSERT_TRUE(sameBits(oa.L, ob.L, 0, n) && sameBits(oa.R, ob.R, 0, n));
+}
+
+void resetMatchesFreshEngine() {
+  const int n = 24000;
+  const auto L = whiteNoise(n, 10, 0.5f), R = whiteNoise(n, 11, 0.5f);
+  Settings s = engineSettings(4, 1.f); s.noise = 2.f;
+  Engine a; a.prepare(48000, 512); a.setSettings(s);
+  runEngine(a, L, R);
+  a.reset();
+  const Out oa = runEngine(a, L, R);
+  Engine b; b.prepare(48000, 512); b.setSettings(s);
+  const Out ob = runEngine(b, L, R);
+  ASSERT_TRUE(sameBits(oa.L, ob.L, 0, n) && sameBits(oa.R, ob.R, 0, n));
+}
+
+void processDoesNotAllocate() {
+  const int n = 512;
+  std::vector<float> L = whiteNoise(n, 12, 0.5f), R = whiteNoise(n, 13, 0.5f), oL((size_t)n), oR((size_t)n);
+  L[100] = kNaN;
+  Engine e; e.prepare(48000, 256);
+  Settings s = engineSettings(0, 1.f);
+  e.setSettings(s);
+  g_allocs = 0;
+  g_countAllocs = true;
+  for (int k = 0; k < 400; ++k) {
+    s.device = k % kNumDevices;
+    s.morph = (k / 7) % 2 ? 1.f : 0.f;
+    s.mono = (k / 11) % 2;
+    s.bypass = (k / 13) % 2;
+    s.characterIn = (k / 17) % 2;
+    e.setSettings(s);
+    if (k % 5 == 0) e.process(L.data(), nullptr, oL.data(), oR.data(), n);  // mono host track
+    else if (k % 5 == 1) e.process(L.data(), R.data(), oL.data(), nullptr, n);
+    else e.process(L.data(), R.data(), oL.data(), oR.data(), n);
+    (void)e.lastDisplay();
+    if (k == 200) { e.reset(); e.clearClips(); }
+  }
+  g_countAllocs = false;
+  ASSERT_TRUE(g_allocs == 0);
+}
+
+void sampleRateExtremes() {
+  for (double fs : {8000.0, 44100.0, 192000.0}) {
+    const int n = (int)fs;
+    const auto L = whiteNoise(n, 14, 0.9f), R = whiteNoise(n, 15, 0.9f);
+    for (int d = 0; d < kNumDevices; ++d) {
+      Engine e; e.prepare(fs, 512);
+      Settings s = engineSettings(d, 1.f);
+      s.drive = s.noise = s.room = 2.f; s.tone = 1.f;
+      e.setSettings(s);
+      const Out o = runEngine(e, L, R);
+      for (int i = 0; i < n; ++i) ASSERT_TRUE(std::isfinite(o.L[(size_t)i]) && std::isfinite(o.R[(size_t)i]));
+      ASSERT_TRUE(rmsOf(o.L, n / 2, n) > 1e-3);
+      // Morph 0 stays transparent at every rate (the band must not stay on just because its
+      // LPF is clamped below Nyquist at low rates)
+      Engine z; z.prepare(fs, 512);
+      z.setSettings(engineSettings(d, 0.f));
+      const Out oz = runEngine(z, L, R);
+      for (int i = 0; i < n; ++i) ASSERT_TRUE(std::fabs(oz.L[(size_t)i] - L[(size_t)i]) <= 1e-6);
+    }
+  }
+}
+
+// Same output whatever the host's block sizes, also across a settings change (made at the same
+// sample in every run): the 32-sample update grid runs on its own sample counter.
+void blockSizesAgree() {
+  const int n = 48000, maxBlock = 512, at = 12000 + 5;
+  const auto L = whiteNoise(n, 16, 0.7f), R = sineWave(n, 48000, 330, 0.7);
+  for (int d = 0; d < kNumDevices; ++d) {
+    Settings s = engineSettings(d, 1.f); s.noise = 2.f; s.room = 2.f;
+    Settings t = s; t.device = (d + 2) % kNumDevices; t.morph = 0.6f; t.mono = true;
+    Engine ref; ref.prepare(48000, maxBlock); ref.setSettings(s);
+    std::vector<float> rL((size_t)n), rR((size_t)n);
+    ref.process(L.data(), R.data(), rL.data(), rR.data(), at);  // one call each side, split internally
+    ref.setSettings(t);
+    ref.process(L.data() + at, R.data() + at, rL.data() + at, rR.data() + at, n - at);
+    for (const std::vector<int>& pattern : {std::vector<int>{0, 1, 7, maxBlock + 100}, std::vector<int>{1},
+                                            std::vector<int>{maxBlock + 100}, std::vector<int>{33, 0, 31}}) {
+      Engine e; e.prepare(48000, maxBlock); e.setSettings(s);
+      const std::vector<float> L1(L.begin(), L.begin() + at), R1(R.begin(), R.begin() + at);
+      const std::vector<float> L2(L.begin() + at, L.end()), R2(R.begin() + at, R.end());
+      const Out o1 = runEngine(e, L1, R1, pattern);
+      e.setSettings(t);
+      const Out o2 = runEngine(e, L2, R2, pattern);
+      ASSERT_TRUE(sameBits(o1.L, rL, 0, at) && sameBits(o1.R, rR, 0, at));
+      ASSERT_TRUE(std::memcmp(o2.L.data(), rL.data() + at, sizeof(float) * (size_t)(n - at)) == 0);
+      ASSERT_TRUE(std::memcmp(o2.R.data(), rR.data() + at, sizeof(float) * (size_t)(n - at)) == 0);
+    }
+  }
+}
+
+void monoHostTrack() {
+  const int n = 9600;
+  const auto x = whiteNoise(n, 17, 0.5f);
+  std::vector<float> oL((size_t)n), oR((size_t)n), oL2((size_t)n), oR2((size_t)n), oL3((size_t)n);
+  Settings s = engineSettings(0, 1.f); s.noise = 2.f;  // noise would differ per channel on a stereo track
+  Engine a; a.prepare(48000, 512); a.setSettings(s);
+  a.process(x.data(), nullptr, oL.data(), oR.data(), n);
+  ASSERT_TRUE(sameBits(oL, oR, 0, n));
+  Engine b; b.prepare(48000, 512); b.setSettings(s);
+  b.process(x.data(), x.data(), oL2.data(), oR2.data(), n);
+  ASSERT_TRUE(sameBits(oL2, oR2, 0, n));
+  ASSERT_TRUE(sameBits(oL, oL2, 0, n));
+  Engine c; c.prepare(48000, 512); c.setSettings(s);
+  c.process(x.data(), nullptr, oL3.data(), nullptr, n);
+  ASSERT_TRUE(sameBits(oL3, oL, 0, n));
+  // in place: output buffer == input buffer
+  std::vector<float> io = x;
+  Engine d; d.prepare(48000, 512); d.setSettings(s);
+  d.process(io.data(), io.data(), io.data(), nullptr, n);
+  ASSERT_TRUE(sameBits(io, oL, 0, n));
+}
+
+// Morph 0 -> 1 mid-block on a loud 440 Hz sine. The sine's own step is 2*pi*440/48000*0.9 =
+// 0.052 and the devices at steady state stay below ~0.3 (measured: walkie's drive slope); an
+// unsmoothed jump (block values or the band's cold start) steps by ~|x| (up to 0.9). Noise is off:
+// crackle is impulsive by design and is not a parameter click.
+void morphJumpHasNoClick() {
+  const int n = 48000, at = 24000 + 13;
+  const auto x = sineWave(n, 48000, 440, 0.9);
+  for (int d = 0; d < kNumDevices; ++d) {
+    Engine e; e.prepare(48000, 512);
+    Settings s = engineSettings(d, 0.f); s.noise = 0.f;
+    e.setSettings(s);
+    std::vector<float> oL((size_t)n), oR((size_t)n);
+    e.process(x.data(), x.data(), oL.data(), oR.data(), at);
+    s.morph = 1.f; e.setSettings(s);
+    e.process(x.data() + at, x.data() + at, oL.data() + at, oR.data() + at, n - at);
+    ASSERT_TRUE(maxJump(oL, 1, n) <= 0.5);
+    for (float y : oL) ASSERT_TRUE(std::isfinite(y));
+  }
+}
+
+// Morph automated 0 -> 1 over 1 s (the intro use case), loud 440 Hz sine, noise off. The output
+// blends from the dry sine (step 0.052) to the device's steady state, so no step may exceed the
+// larger of the two by more than 0.05. The band's cold start where it leaves neutral would add
+// ~0.3..0.5 here (measured with the band crossfade removed: 0.37..0.58 on 5 of 6 devices).
+void morphAutomationHasNoClick() {
+  const int n = 96000, from = 24000;
+  const auto x = sineWave(n, 48000, 440, 0.9);
+  const double dryStep = 2 * kPiT * 440 / 48000 * 0.9;
+  for (int d = 0; d < kNumDevices; ++d) {
+    Engine e; e.prepare(48000, 512);
+    Settings s = engineSettings(d, 0.f); s.noise = 0.f;
+    e.setSettings(s);
+    std::vector<float> oL((size_t)n), oR((size_t)n);
+    for (int pos = 0; pos < n; pos += 48) {  // host automation: one value per 1 ms block
+      if (pos >= from) { s.morph = std::min(1.f, (pos - from) / 48000.f); e.setSettings(s); }
+      e.process(x.data() + pos, x.data() + pos, oL.data() + pos, oR.data() + pos, 48);
+    }
+    const double steady = std::max(dryStep, maxJump(oL, n - 4800, n));
+    ASSERT_TRUE(maxJump(oL, from, n) <= steady + 0.05);
+  }
+}
+
+// PA with its room at full, an impulse, then Device changes 20 ms into the tail (as the brief
+// says) and 60 ms in (the first comb echo only arrives after ~25 ms at 48 kHz, so at 20 ms the
+// tail has barely started). Sample steps stay <= 0.5, and over the 64 samples after the change
+// the output departs from an unswitched twin by at most a quarter of the tail's level: the
+// smoothed values have moved ~12% by then. Cutting the room (or any instant jump) departs by
+// about the whole tail.
+void deviceSwitchDuringRoomTail() {
+  const int n = 48000;
+  std::vector<float> x((size_t)n, 0.f);
+  x[0] = 1.f;
+  for (int at : {960, 2880 + 7})
+  for (int to = 0; to < kNumDevices; ++to) {
+    if (to == 4) continue;
+    Settings s = engineSettings(4, 1.f); s.room = 2.f; s.noise = 0.f;
+    Engine e; e.prepare(48000, 512); e.setSettings(s);
+    Engine ref; ref.prepare(48000, 512); ref.setSettings(s);
+    const Out r = runEngine(ref, x, x);
+    std::vector<float> oL((size_t)n), oR((size_t)n);
+    e.process(x.data(), x.data(), oL.data(), oR.data(), at);
+    s.device = to; e.setSettings(s);
+    e.process(x.data() + at, x.data() + at, oL.data() + at, oR.data() + at, n - at);
+    for (float y : oL) ASSERT_TRUE(std::isfinite(y));
+    ASSERT_TRUE(maxJump(oL, at, n) <= 0.5);
+    if (at < 1200) continue;  // 20 ms: before the first echo, nothing more to compare
+    // the tail is there at the switch, and the switch bends it, it does not cut it
+    double dev = 0, tail = 0;
+    for (int i = at; i < at + 64; ++i) {
+      dev = std::max(dev, (double)std::fabs(oL[(size_t)i] - r.L[(size_t)i]));
+      tail = std::max(tail, (double)std::fabs(r.L[(size_t)i]));
+    }
+    ASSERT_TRUE(tail > 1e-2);
+    ASSERT_TRUE(dev <= 0.25 * tail);
+  }
+}
+
+// Device change is a ~40 ms crossfade: early it is still close to the old device, then it lands
+// on the new one exactly (same output as an engine that started on it, once the state converged).
+void deviceSwitchSettles() {
+  const int n = 48000, at = 4800;
+  const auto x = sineWave(n, 48000, 700, 0.5);
+  // AM radio -> Cheap speaker: no Crush on either side (a sample-and-hold phase never converges
+  // between two instances, so it would hide the comparison with a fresh engine)
+  Settings s = engineSettings(3, 1.f); s.noise = 0.f; s.room = 0.f;
+  Engine e; e.prepare(48000, 480); e.setSettings(s);
+  Settings t = s; t.device = 5;
+  Engine fresh; fresh.prepare(48000, 480); fresh.setSettings(t);
+  Engine old; old.prepare(48000, 480); old.setSettings(s);
+  const Out f = runEngine(fresh, x, x), o0 = runEngine(old, x, x);
+  std::vector<float> oL((size_t)n), oR((size_t)n);
+  e.process(x.data(), x.data(), oL.data(), oR.data(), at);
+  e.setSettings(t);
+  e.process(x.data() + at, x.data() + at, oL.data() + at, oR.data() + at, n - at);
+  double early = 0, oldDiff = 0, late = 0;
+  for (int i = at; i < at + 96; ++i) {
+    early = std::max(early, (double)std::fabs(oL[(size_t)i] - f.L[(size_t)i]));
+    oldDiff = std::max(oldDiff, (double)std::fabs(oL[(size_t)i] - o0.L[(size_t)i]));
+  }
+  for (int i = n - 4800; i < n; ++i) late = std::max(late, (double)std::fabs(oL[(size_t)i] - f.L[(size_t)i]));
+  ASSERT_TRUE(oldDiff < early);   // 2 ms after the change it is still nearer the old device
+  ASSERT_TRUE(late < 1e-3);       // and it ends on the new one
+}
+
+void characterInOffIgnoresMix() {
+  const int n = 24000;
+  const auto L = whiteNoise(n, 18, 0.5f), R = whiteNoise(n, 19, 0.5f);
+  double v[kNumParams];
+  loadDefaults(v);
+  v[kDevice] = 0.2; v[kCharacterIn] = 0.0;
+  v[kMix] = 0.0;
+  Engine a; a.prepare(48000, 512); a.setSettings(mapParams(v));
+  v[kMix] = 1.0;
+  Engine b; b.prepare(48000, 512); b.setSettings(mapParams(v));
+  const Out oa = runEngine(a, L, R), ob = runEngine(b, L, R);
+  ASSERT_TRUE(sameBits(oa.L, ob.L, 0, n) && sameBits(oa.R, ob.R, 0, n));
+  ASSERT_TRUE(!sameBits(oa.L, L, 0, n));  // the device itself still colours the sound
+  // Settings handed straight to the engine get the same treatment
+  Settings s = engineSettings(1, 1.f); s.characterIn = false; s.mix = 0.f; s.drive = 2.f;
+  Engine c; c.prepare(48000, 512); c.setSettings(s);
+  const Out oc = runEngine(c, L, R);
+  ASSERT_TRUE(sameBits(oc.L, ob.L, 0, n));
+}
+
+// Ruling 7: the asymmetric shaper adds DC; the 10 Hz blocker after it removes it.
+void driveDcIsBlocked() {
+  const int n = 72000;
+  const auto x = sineWave(n, 48000, 1000, 0.9);
+  Settings s = engineSettings(0, 1.f);  // Megaphone, drive 0.5
+  s.noise = 0.f; s.room = 0.f;
+  ASSERT_APPROX(targetParams(kDevices[0].p, s).drive, 0.5);
+  Engine e; e.prepare(48000, 512); e.setSettings(s);
+  const Out o = runEngine(e, x, x);
+  double mean = 0;
+  for (int i = 24000; i < n; ++i) mean += o.L[(size_t)i];
+  mean /= (n - 24000);
+  ASSERT_TRUE(std::fabs(mean) < 0.01);
+  ASSERT_TRUE(rmsOf(o.L, 24000, n) > 0.05);
+}
+
+void nonFiniteSettingsIgnored() {
+  const int n = 9600, step = 1920;
+  const auto L = whiteNoise(n, 20, 0.5f), R = whiteNoise(n, 21, 0.5f);
+  const Settings s = engineSettings(3, 0.7f);
+  Engine a; a.prepare(48000, 512); a.setSettings(s);
+  Engine b; b.prepare(48000, 512); b.setSettings(s);
+  Settings bad[4] = {s, s, s, s};
+  bad[0].morph = kNaN;
+  bad[1].gainDb = kInf;
+  bad[2].mix = -kInf; bad[2].device = 0;
+  bad[3].tone = kNaN; bad[3].noise = 2.f;
+  std::vector<float> aL((size_t)n), aR((size_t)n), bL((size_t)n), bR((size_t)n);
+  for (int k = 0; k * step < n; ++k) {  // each bad set is followed by audio, so each one counts
+    if (k < 4) b.setSettings(bad[k]);
+    a.process(L.data() + k * step, R.data() + k * step, aL.data() + k * step, aR.data() + k * step, step);
+    b.process(L.data() + k * step, R.data() + k * step, bL.data() + k * step, bR.data() + k * step, step);
+  }
+  ASSERT_TRUE(sameBits(aL, bL, 0, n) && sameBits(aR, bR, 0, n));
+}
+
+// A NaN on L clears L's chain (the room tail stops) and leaves R untouched.
+void nonFiniteInputClearsChannel() {
+  const int n = 24000, bad = 4800;
+  std::vector<float> L = whiteNoise(n, 22, 0.8f), R = L;
+  for (int i = bad + 1; i < n; ++i) L[(size_t)i] = R[(size_t)i] = 0.f;
+  std::vector<float> Lbad = L;
+  Lbad[bad] = kNaN;
+  Settings s = engineSettings(4, 1.f); s.noise = 0.f; s.room = 2.f;  // PA: long tail, no noise
+  Engine a; a.prepare(48000, 512); a.setSettings(s);
+  Engine b; b.prepare(48000, 512); b.setSettings(s);
+  const Out oa = runEngine(a, L, R), ob = runEngine(b, Lbad, R);
+  ASSERT_TRUE(sameBits(oa.R, ob.R, 0, n));
+  ASSERT_TRUE(sameBits(oa.L, ob.L, 0, bad));
+  for (float y : ob.L) ASSERT_TRUE(std::isfinite(y));
+  ASSERT_TRUE(ob.L[bad] == 0.f);
+  ASSERT_TRUE(rmsOf(oa.L, bad + 1, bad + 2400) > 1e-3);  // the clean run has a tail here
+  ASSERT_TRUE(rmsOf(ob.L, bad + 1, n) == 0.0);           // the cleared chain is silent
+}
+
+void displayPeaksAndClipHold() {
+  Engine e; e.prepare(48000, 512);
+  Settings s = engineSettings(0, 0.f);
+  e.setSettings(s);
+  std::vector<float> z(4800, 0.f), o1(4800), o2(4800);
+  e.process(z.data(), z.data(), o1.data(), o2.data(), 4800);
+  DisplayValues d = e.lastDisplay();
+  ASSERT_TRUE(d.inPeakDb[0] <= -119.f && d.outPeakDb[1] <= -119.f && !d.clipIn && !d.clipOut && !d.clipDrive);
+  const auto half = sineWave(4800, 48000, 1000, 0.5);
+  const auto quiet = sineWave(4800, 48000, 1000, 0.25);
+  e.process(half.data(), quiet.data(), o1.data(), o2.data(), 4800);
+  d = e.lastDisplay();
+  ASSERT_TRUE(std::fabs(d.inPeakDb[0] - (-6.02f)) < 0.1f && std::fabs(d.inPeakDb[1] - (-12.04f)) < 0.1f);
+  ASSERT_TRUE(std::fabs(d.outPeakDb[0] - (-6.02f)) < 0.1f && !d.clipIn);
+  const auto hot = sineWave(4800, 48000, 1000, 1.2);
+  e.process(hot.data(), hot.data(), o1.data(), o2.data(), 4800);
+  ASSERT_TRUE(e.lastDisplay().clipIn && e.lastDisplay().clipOut);
+  for (int k = 0; k < 18; ++k) e.process(z.data(), z.data(), o1.data(), o2.data(), 4800);  // 1.8 s
+  ASSERT_TRUE(e.lastDisplay().clipIn && e.lastDisplay().clipOut);
+  for (int k = 0; k < 3; ++k) e.process(z.data(), z.data(), o1.data(), o2.data(), 4800);   // 2.1 s
+  ASSERT_TRUE(!e.lastDisplay().clipIn && !e.lastDisplay().clipOut);
+  e.process(hot.data(), hot.data(), o1.data(), o2.data(), 4800);
+  e.clearClips();
+  ASSERT_TRUE(!e.lastDisplay().clipIn && !e.lastDisplay().clipOut);
+  // DRV: the shaper is driven onto its rail
+  Engine w; w.prepare(48000, 512);
+  Settings t = engineSettings(2, 1.f); t.drive = 2.f; t.noise = 0.f;
+  w.setSettings(t);
+  const auto big = sineWave(4800, 48000, 1000, 4.0);
+  w.process(big.data(), big.data(), o1.data(), o2.data(), 4800);
+  ASSERT_TRUE(w.lastDisplay().clipDrive);
+  Engine q; q.prepare(48000, 512);
+  q.setSettings(t);
+  q.process(half.data(), half.data(), o1.data(), o2.data(), 4800);
+  ASSERT_TRUE(!q.lastDisplay().clipDrive);
+}
+
 }  // namespace
 
 int main() {
@@ -891,6 +1572,35 @@ int main() {
   RUN_TEST(roomNoStaleStateAfterNeutral);
   RUN_TEST(roomRejectsNonFinite);
   RUN_TEST(newBlocksStableAtExtremeSampleRates);
+  RUN_TEST(loadDefaultsMatchesTable);
+  RUN_TEST(mapParamsDefaults);
+  RUN_TEST(mapParamsNonFiniteAndClamp);
+  RUN_TEST(mapParamsCharacterInOff);
+  RUN_TEST(targetParamsUserControls);
+  RUN_TEST(noiseLevelIsCapped);
+  RUN_TEST(morphZeroEqualsInput);
+  RUN_TEST(morphBackToZeroIsExact);
+  RUN_TEST(bypassIsBitExact);
+  RUN_TEST(monoMakesChannelsIdentical);
+  RUN_TEST(noiseIsDecorrelatedWhenStereo);
+  RUN_TEST(telephoneBandOnEngine);
+  RUN_TEST(extremeParametersStayFinite);
+  RUN_TEST(zeroLatency);
+  RUN_TEST(noiseIsDeterministic);
+  RUN_TEST(resetMatchesFreshEngine);
+  RUN_TEST(processDoesNotAllocate);
+  RUN_TEST(sampleRateExtremes);
+  RUN_TEST(blockSizesAgree);
+  RUN_TEST(monoHostTrack);
+  RUN_TEST(morphJumpHasNoClick);
+  RUN_TEST(morphAutomationHasNoClick);
+  RUN_TEST(deviceSwitchDuringRoomTail);
+  RUN_TEST(deviceSwitchSettles);
+  RUN_TEST(characterInOffIgnoresMix);
+  RUN_TEST(driveDcIsBlocked);
+  RUN_TEST(nonFiniteSettingsIgnored);
+  RUN_TEST(nonFiniteInputClearsChannel);
+  RUN_TEST(displayPeaksAndClipHold);
   std::printf("%d tests run, %d failed\n", g_passed + g_failed, g_failed);
   return g_failed ? 1 : 0;
 }
