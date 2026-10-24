@@ -363,7 +363,7 @@ var P={time:.45,fb:.4,tone:.6,sat:.3,wow:.2,mix:.3,thr:.45,depth:.6,hold:.5,rel:
 function lgm(v,a,b){return a*Math.pow(b/a,v);}
 function fitName(){}
 var F={
- time:withNum(function(v){return Math.round(lgm(v,60,1200))+' ms';},function(v){return lgm(v,60,1200);}),
+ time:withNum(function(v){return Math.round(lgm(v,20,1200))+' ms';},function(v){return lgm(v,20,1200);}),
  fb:withNum(function(v){return Math.round(v*95)+' %';},function(v){return v*95;}),
  tone:withNum(function(v){var f=lgm(v,800,12000);return f>=1000?(f/1000).toFixed(1)+' kHz':Math.round(f)+' Hz';},function(v){return lgm(v,800,12000);}),
  pct:pct,
@@ -392,7 +392,7 @@ var thrV=.3;
 function recompute(){
   var thr=.05+P.thr*.55;thrV=thr;
   var depthG=P.depth>.99?0:Math.pow(10,-(P.depth*60)/20);
-  var H=(HS?NOTEMS[HN]:lgm(P.hold,50,1000))/1000,R=lgm(P.rel,50,2000)/1000,T=(TS?NOTEMS[TN]:lgm(P.time,60,1200))/1000,fb=P.fb*.95;
+  var H=(HS?NOTEMS[HN]:lgm(P.hold,50,1000))/1000,R=lgm(P.rel,50,2000)/1000,T=(TS?NOTEMS[TN]:lgm(P.time,20,1200))/1000,fb=P.fb*.95;
   var hold=0,tgt=1,g=1;gain=[];
   for(var pass=0;pass<2;pass++){for(var i=0;i<NSIM;i++){
     if(voice[i]>thr){hold=H;tgt=depthG;}else if(hold>0){hold-=DTS;}else{tgt+=(1-tgt)*(1-Math.exp(-DTS/R));}
@@ -448,7 +448,7 @@ btn(940,130,'BYPASS',false,function(b){toggle(b);GB=b._on;MODS.forEach(paint);GB
 function noteGrid(cx,cy,label,cur,set,arr){var g=grp();['1/16','1/8','1/4','1/2'].forEach(function(n,i){arr.push(choice(cx-20+(i%2)*40,cy-16+Math.floor(i/2)*26,n,i===cur,function(){set(i);arr.forEach(function(m,j){m._on=(j===i);m._paint(m._on);});recompute();},34));});
   txt(label,cx,cy+19+24,12,W,'middle',800);endGrp();return reg(g,false);}   /* same baseline as the knob label it replaces (R 19 + 24) */
 box(24,282,520,150,'DELAY','bottom');
-var gTm=grp();knob(84,352,'TIME',P.time,'60','1200','',{def:.5,fmt:F.time,onchg:onk('time')});endGrp();var mTm=reg(gTm,false);
+var gTm=grp();knob(84,352,'TIME',P.time,'20','1200','',{def:.5,fmt:F.time,onchg:onk('time')});endGrp();var mTm=reg(gTm,false);
 var tnB=[],mTn=noteGrid(84,352,'TIME',TN,function(i){TN=i;},tnB);
 var gDl=grp();
 knob(174,352,'FEEDBACK',P.fb,'0','95','',{def:.4,fmt:F.fb,onchg:onk('fb')});
