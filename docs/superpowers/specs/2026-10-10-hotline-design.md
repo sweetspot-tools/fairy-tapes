@@ -47,10 +47,10 @@ Device, Morph, Gain, Mono, Bypass, Drive, Tone, Noise, Room, Mix, IN di CHARACTE
 
 Pannello rack orizzontale 1000 × 428 nel linguaggio comune. Materiale e texture sono quelli di The Stripper, uguali per tutti i plugin (decisione del 2026-10-10). Tutto il testo è in inglese. Preview di riferimento: `src/hotline/docs/mockups/hotline_rack.html` (derivata da `stripper_rack.html`).
 
-- **Riga 1:** DEVICE (sei pulsanti su due righe con il nome sulla faccia: il dispositivo attivo ha la faccia ambra, nessun LED — regola comune dei tre tipi di pulsante del 2026-10-21; pulsanti un po' più stretti, preview 2026-10-21; nessun nastro), LEVEL (meter IN e OUT stereo e LED di clip IN, DRV, OUT), OUTPUT (Gain, Bypass in alto a destra, Mono).
+- **Riga 1:** DEVICE (sei pulsanti su due righe con il nome sulla faccia: il dispositivo attivo ha la faccia ambra, nessun LED — regola comune dei tre tipi di pulsante del 2026-10-21; pulsanti un po' più stretti, preview 2026-10-21; nessun nastro), LEVEL (meter IN e OUT stereo e LED di clip IN, DRV, OUT: tenuti, deciso il 2026-10-24), OUTPUT (Gain, Bypass in alto a destra, Mono).
 - **Riga 2:** MORPH (manopola grande) e un solo blocco CHARACTER con Drive, Tone, Noise, Room e Mix (manopole un po' più ravvicinate e IN del blocco appena più in basso, preview 2026-10-21; editor da allineare).
 - **IN:** un solo pulsante IN per CHARACTER, che attenua tutti e cinque i controlli (Mix compreso). Il Bypass globale attenua tutto e fa passare il segnale identico, bit per bit.
-- Usura, viti, retro come da design system. La preview ha ancora il retro di The Stripper, non adattato.
+- Usura, viti e retro (SETTINGS, DEVICES, ROUTING, CREDITS) come da design system. La preview ha SETTINGS, ROUTING e CREDITS, ma i crediti sono ancora quelli di The Stripper e manca la scheda DEVICES.
 - **Retro, scheda DEVICES (deciso):** oltre a SETTINGS e CREDITS, il retro ha una scheda **DEVICES** che spiega cosa fa ciascun pulsante di Device e **quali valori impone** (frequenze di HPF e LPF, drive, risonanza del cono, crush, compander, rumore, room e relative note). La scheda è generata dalla stessa tabella dei dispositivi usata dal motore: i valori mostrati non possono divergere da quelli applicati.
 - **Retro, scheda ROUTING (regola comune del 2026-10-23, preview fatta):** schema a blocchi fisso della catena del §2, nello stile di `docs/DESIGN_SYSTEM.md`: IN → meter IN → MONO (somma L+R, disegnata col deviatore in posizione spento) → presa del dry → BAND → DRIVE (clip DRV) → CONE → CRUSH → COMPANDER → somma del NOISE → ROOM → MIX (dry dalla presa dopo MONO) → Gain di OUTPUT → BYPASS globale (dall'ingresso) → meter OUT; DEVICE · MORPH come linea di controllo tratteggiata verso i blocchi del dispositivo; CHARACTER e il suo IN spiegati nella legenda (non cambiano il percorso). Ordine dei link: SETTINGS, DEVICES (quando ci sarà nella preview), ROUTING, CREDITS. Da confermare col codice: punto in cui si preleva il dry del MIX (assunto dopo la somma mono, prima della BAND).
 
@@ -80,11 +80,11 @@ Pannello rack orizzontale 1000 × 428 nel linguaggio comune. Materiale e texture
 
 ## 8. Decisioni aperte
 
-- Valori delle tabelle dei sei dispositivi (da regolare a orecchio).
-- Se tenere i meter LEVEL (aggiunti per coerenza con The Stripper, non nei parametri iniziali).
-- Retro: crediti e licenze di Hotline da scrivere (la preview ha ancora quelli di The Stripper).
-- Nessun supporto CUDA: Hotline non usa NAM.
+- **Altezza del pannello e retro:** il pannello è 1000 × 428, ma i template del retro in `shared/ui/include/fairy_ui/back_panel.h` esistono solo per 628 (`kTall`) e 470 (`kShort`). Con 428 serve un terzo template (modifica comune, in `shared/`) oppure si porta Hotline a 470 come Pillow Talk. Da decidere prima del Task 8.
+- Punto da cui si preleva il dry del MIX (assunto dopo la somma mono, prima della BAND): si conferma nel Task 5 e, se cambia, si aggiorna lo schema ROUTING.
+
+Decise: meter LEVEL tenuti (2026-10-24); valori iniziali dei dispositivi nel piano, da affinare a orecchio durante l'implementazione; crediti e licenze di Hotline scritti nel Task 8 (la preview ha ancora quelli di The Stripper).
 
 ## 9. Processo
 
-Branch `feat/hotline`, sganciato da `pre-release`, in un worktree dedicato. Prossimi passi: piano di implementazione in `docs/superpowers/plans/2026-10-10-hotline.md`, poi codice con test.
+Si lavora su `pre-release` (nessun branch dedicato, regola di `CLAUDE.md` §1). Piano: `docs/superpowers/plans/2026-10-10-hotline.md`; poi codice con test. Il kit grafico comune è in `shared/ui` (usura, viti, nastro, retro, controlli rack, routing).
