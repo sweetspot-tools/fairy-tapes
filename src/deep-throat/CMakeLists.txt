@@ -117,6 +117,17 @@ target_include_directories(deep_throat_tests PRIVATE
 target_link_libraries(deep_throat_tests PRIVATE fairy_ui)  # header-only (fairy_ui/knob_math.h)
 add_test(NAME deep_throat_tests COMMAND deep_throat_tests)
 
+# Pure editor layout (ui/layout.h): no VSTGUI, only SDK type headers through params.h.
+add_executable(deep_throat_ui_tests tests/test_ui.cpp)
+target_include_directories(deep_throat_ui_tests PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/src
+  ${VST3_SDK_PATH}
+  ${VST3_SDK_PATH}/pluginterfaces/base
+  ${VST3_SDK_PATH}/pluginterfaces/vst
+)
+target_link_libraries(deep_throat_ui_tests PRIVATE fairy_ui)
+add_test(NAME deep_throat_ui_tests COMMAND deep_throat_ui_tests)
+
 # Module/factory lifecycle smoke test: dlopens the built bundle from dist/ (exit 77 = skipped
 # when the plugin has not been built). Links only the pluginterfaces IIDs, not the plugin.
 if(NOT WIN32)
