@@ -104,6 +104,12 @@ void test_isBypassStage() {
   ASSERT_TRUE(!isBypassStage(0.49));
 }
 
+void test_drive_block_position_follows_strip_mode() {
+  // Channel: right after the input (preamp + multitrack tape); Mix bus: between compression and limiter (2-track mixdown)
+  ASSERT_TRUE(driveBlockAtStart(kStripModeChannel));
+  ASSERT_TRUE(!driveBlockAtStart(kStripModeMixBus));
+}
+
 void test_isChannelMode() {
   ASSERT_TRUE(isChannelMode(0.0));
   ASSERT_TRUE(!isChannelMode(0.5));
@@ -171,8 +177,10 @@ void test_eqTypeFromStripMode() {
 // ---------------------------------------------------------------------------
 
 void test_kNumParams_count() {
-  // 33 up to kDriveAmount (state v7), plus kLimiterPound and kGateThreshold (v8) and kDriveNamOn (v9) appended after it
-  ASSERT_TRUE(kNumParams == 36);
+  // 33 up to kDriveAmount (state v7), plus kLimiterPound and kGateThreshold (v8), kDriveNamOn (v9) and the TAPE
+  // switch and amount (v12) appended after it
+  ASSERT_TRUE(kNumParams == 38);
+  ASSERT_TRUE(kNumParamsV11 == 36);
   ASSERT_TRUE(kNumParamsV8 == 35);
   ASSERT_TRUE(kNumParamsV7 == 33);
   ASSERT_TRUE(kDriveAmount == 32);
@@ -191,7 +199,8 @@ void test_param_enum_ordering() {
   ASSERT_TRUE(kCompressorMode == 14);
   ASSERT_TRUE(kEqHPFFreq == 15);
   ASSERT_TRUE(kEqSaturation == 31);
-  ASSERT_TRUE(kDriveAmount == kNumParams - 4);   // kLimiterPound, kGateThreshold and kDriveNamOn come after it
+  ASSERT_TRUE(kDriveAmount == kNumParams - 6);   // kLimiterPound, kGateThreshold, kDriveNamOn and the two TAPE params come after it
+  ASSERT_TRUE(kDriveTapeOn == 36 && kDriveTapeAmount == 37);
 }
 
 // ---------------------------------------------------------------------------
@@ -1088,6 +1097,7 @@ int main() {
   RUN_TEST(test_gainStagingTrimToLinear);
   RUN_TEST(test_isBypassStage);
   RUN_TEST(test_isChannelMode);
+  RUN_TEST(test_drive_block_position_follows_strip_mode);
 
   // EQ helpers
   RUN_TEST(test_eqNormToHPFFreq);

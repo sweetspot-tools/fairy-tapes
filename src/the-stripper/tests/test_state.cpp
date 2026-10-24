@@ -38,11 +38,14 @@ GOLDEN_PARAMS(X)
 #undef X
 
 void test_new_params_appended_at_end() {
-  CHECK(kLimiterPound == kNumParams - 3);
-  CHECK(kGateThreshold == kNumParams - 2);
-  CHECK(kDriveNamOn == kNumParams - 1);
+  CHECK(kLimiterPound == kNumParams - 5);
+  CHECK(kGateThreshold == kNumParams - 4);
+  CHECK(kDriveNamOn == kNumParams - 3);
+  CHECK(kDriveTapeOn == kNumParams - 2);
+  CHECK(kDriveTapeAmount == kNumParams - 1);
+  CHECK(kNumParamsV11 == kDriveNamOn + 1);
   CHECK(kNumParamsV8 == kGateThreshold + 1);
-  CHECK(kDriveAmount == kNumParams - 4);
+  CHECK(kDriveAmount == kNumParams - 6);
   CHECK(kNumParamsV7 == kDriveAmount + 1);
 }
 
@@ -126,7 +129,7 @@ void test_state_v10_roundtrip_with_seed_and_tape() {
 void test_state_v9_loads_without_seed_or_tape() {
   MemStream s;
   s.writeInt32(9);
-  for (int i = 0; i < kNumParams; ++i) s.writeDouble(0.25);
+  for (int i = 0; i < kNumParamsV11; ++i) s.writeDouble(0.25);
   s.writeInt32(0);
   PluginState out; CHECK(readState(s, out));
   CHECK(out.wearSeed == 0 && out.tapeTexts.empty());   // 0 = "none yet": the controller makes one
@@ -142,10 +145,10 @@ void test_state_v10_limits_and_corruption() {
   CHECK(out.tapeTexts.size() == static_cast<std::size_t>(kMaxTapePieces));
   CHECK(out.tapeTexts[0].text.size() <= static_cast<std::size_t>(kMaxTapeTextBytes));
   // a stream that claims more than the limit is rejected
-  { MemStream b; b.writeInt32(10); for (int i = 0; i < kNumParams; ++i) b.writeDouble(0.5); b.writeInt32(0); b.writeInt32(7); b.writeInt32(1000); PluginState o; CHECK(!readState(b, o)); }
-  { MemStream b; b.writeInt32(10); for (int i = 0; i < kNumParams; ++i) b.writeDouble(0.5); b.writeInt32(0); b.writeInt32(7); b.writeInt32(1); b.writeInt32(9999); PluginState o; CHECK(!readState(b, o)); }
-  { MemStream b; b.writeInt32(10); for (int i = 0; i < kNumParams; ++i) b.writeDouble(0.5); b.writeInt32(0); b.writeInt32(7); b.writeInt32(-3); PluginState o; CHECK(!readState(b, o)); }
-  { MemStream b; b.writeInt32(10); for (int i = 0; i < kNumParams; ++i) b.writeDouble(0.5); b.writeInt32(0); PluginState o; CHECK(!readState(b, o)); }   // v10 must have the seed
+  { MemStream b; b.writeInt32(10); for (int i = 0; i < kNumParamsV11; ++i) b.writeDouble(0.5); b.writeInt32(0); b.writeInt32(7); b.writeInt32(1000); PluginState o; CHECK(!readState(b, o)); }
+  { MemStream b; b.writeInt32(10); for (int i = 0; i < kNumParamsV11; ++i) b.writeDouble(0.5); b.writeInt32(0); b.writeInt32(7); b.writeInt32(1); b.writeInt32(9999); PluginState o; CHECK(!readState(b, o)); }
+  { MemStream b; b.writeInt32(10); for (int i = 0; i < kNumParamsV11; ++i) b.writeDouble(0.5); b.writeInt32(0); b.writeInt32(7); b.writeInt32(-3); PluginState o; CHECK(!readState(b, o)); }
+  { MemStream b; b.writeInt32(10); for (int i = 0; i < kNumParamsV11; ++i) b.writeDouble(0.5); b.writeInt32(0); PluginState o; CHECK(!readState(b, o)); }   // v10 must have the seed
 }
 
 // ---- state v11: screw angles, recall marks, recall mode ---------------------------------------
@@ -171,14 +174,14 @@ void test_state_v11_defaults_and_old_states() {
   PluginState out; CHECK(readState(s, out));
   CHECK(!out.hasScrewAngles && !out.recallValid && out.recallMode == 0);   // Auto is the default
   // a v10 state (seed and tape, nothing after) loads with the new fields at their defaults
-  MemStream t; t.writeInt32(10); for (int i = 0; i < kNumParams; ++i) t.writeDouble(0.5); t.writeInt32(0); t.writeInt32(77); t.writeInt32(0);
+  MemStream t; t.writeInt32(10); for (int i = 0; i < kNumParamsV11; ++i) t.writeDouble(0.5); t.writeInt32(0); t.writeInt32(77); t.writeInt32(0);
   PluginState old; CHECK(readState(t, old));
   CHECK(old.wearSeed == 77 && !old.hasScrewAngles && !old.recallValid && old.recallMode == 0);
   CHECK(t.pos == t.buf.size());
 }
 
 void test_state_v11_rejects_corruption_and_clamps() {
-  auto head = [](MemStream& b) { b.writeInt32(11); for (int i = 0; i < kNumParams; ++i) b.writeDouble(0.5); b.writeInt32(0); b.writeInt32(1); b.writeInt32(0); };
+  auto head = [](MemStream& b) { b.writeInt32(11); for (int i = 0; i < kNumParamsV11; ++i) b.writeDouble(0.5); b.writeInt32(0); b.writeInt32(1); b.writeInt32(0); };
   { MemStream b; head(b); b.writeInt32(3); PluginState o; CHECK(!readState(b, o)); }            // 3 screws: neither 0 nor 4
   { MemStream b; head(b); b.writeInt32(4); b.writeDouble(1); PluginState o; CHECK(!readState(b, o)); }   // truncated
   { MemStream b; head(b); b.writeInt32(0); b.writeInt32(2); PluginState o; CHECK(!readState(b, o)); }    // recall flag must be 0 or 1
@@ -187,12 +190,42 @@ void test_state_v11_rejects_corruption_and_clamps() {
   // non-finite angles are replaced, recall values are clamped to 0..1
   MemStream b; head(b); b.writeInt32(4);
   b.writeDouble(std::nan("")); b.writeDouble(400.0); b.writeDouble(-20.0); b.writeDouble(1e300);
-  b.writeInt32(1); for (int i = 0; i < kNumParams; ++i) b.writeDouble(i == 0 ? 7.0 : i == 1 ? -3.0 : i == 2 ? std::nan("") : 0.25);
+  b.writeInt32(1); for (int i = 0; i < kNumParamsV11; ++i) b.writeDouble(i == 0 ? 7.0 : i == 1 ? -3.0 : i == 2 ? std::nan("") : 0.25);
   b.writeInt32(0);
   PluginState o; CHECK(readState(b, o));
   CHECK(o.hasScrewAngles);
   for (int i = 0; i < 4; ++i) CHECK(std::isfinite(o.screwAngles[i]) && o.screwAngles[i] >= 0.0 && o.screwAngles[i] < 360.0);
   CHECK(o.recallValid && o.recall[0] == 1.0 && o.recall[1] == 0.0 && o.recall[2] == 0.0 && o.recall[3] == 0.25);
+}
+
+// ---- state v12: the TAPE engine of the Drive (switch + amount) ------------------------------------
+void test_state_v12_keeps_the_tape_params() {
+  PluginState in; fillDefaultParams(in.params);
+  in.params[kDriveTapeOn] = 0.0;
+  in.params[kDriveTapeAmount] = 0.65;
+  MemStream s; CHECK(writeState(s, in));
+  PluginState out; CHECK(readState(s, out));
+  CHECK(out.params[kDriveTapeOn] == 0.0);
+  CHECK(out.params[kDriveTapeAmount] == 0.65);
+  CHECK(s.pos == s.buf.size());
+}
+
+void test_state_v11_loads_with_tape_off() {
+  // a v11 stream: 36 parameters, empty path, seed, no tape pieces, no screws, recall marks for the 36, Auto
+  MemStream s;
+  s.writeInt32(11);
+  for (int i = 0; i < kNumParamsV11; ++i) s.writeDouble(0.01 * (i + 1));
+  s.writeInt32(0); s.writeInt32(5); s.writeInt32(0); s.writeInt32(0);
+  s.writeInt32(1); for (int i = 0; i < kNumParamsV11; ++i) s.writeDouble(0.5);
+  s.writeInt32(0);
+  PluginState out; CHECK(readState(s, out));
+  CHECK(s.pos == s.buf.size());
+  for (int i = 0; i < kNumParamsV11; ++i) CHECK(out.params[i] == 0.01 * (i + 1));
+  CHECK(out.params[kDriveTapeOn] == 0.0);                       // a project saved before TAPE keeps its sound
+  CHECK(out.params[kDriveTapeAmount] == kDefaultDriveTapeAmount);
+  CHECK(out.recallValid);
+  for (int i = 0; i < kNumParamsV11; ++i) CHECK(out.recall[i] == 0.5);
+  CHECK(out.recall[kDriveTapeAmount] == out.params[kDriveTapeAmount]);   // no mark away from the loaded value
 }
 
 // ---- older states keep loading ----------------------------------------------------------
@@ -239,8 +272,8 @@ void test_state_unknown_or_truncated_rejected() {
   { MemStream s; s.writeInt32(99); PluginState o; CHECK(!readState(s, o)); }
   { MemStream s; s.writeInt32(0);  PluginState o; CHECK(!readState(s, o)); }
   { MemStream s; s.writeInt32(8); s.writeDouble(0.5); PluginState o; CHECK(!readState(s, o)); }                 // truncated params
-  { MemStream s; s.writeInt32(9); for (int i = 0; i < kNumParams; ++i) s.writeDouble(0.5); s.writeInt32(100); PluginState o; CHECK(!readState(s, o)); }   // path length beyond the data
-  { MemStream s; s.writeInt32(9); for (int i = 0; i < kNumParams; ++i) s.writeDouble(0.5); s.writeInt32(-5); PluginState o; CHECK(!readState(s, o)); }
+  { MemStream s; s.writeInt32(9); for (int i = 0; i < kNumParamsV11; ++i) s.writeDouble(0.5); s.writeInt32(100); PluginState o; CHECK(!readState(s, o)); }   // path length beyond the data
+  { MemStream s; s.writeInt32(9); for (int i = 0; i < kNumParamsV11; ++i) s.writeDouble(0.5); s.writeInt32(-5); PluginState o; CHECK(!readState(s, o)); }
   { MemStream s; PluginState o; CHECK(!readState(s, o)); }                                                       // empty stream
 }
 
@@ -268,6 +301,8 @@ int main() {
   test_state_v10_limits_and_corruption();
   test_state_v8_loads_with_nam_on();
   test_state_v9_keeps_the_switch();
+  test_state_v12_keeps_the_tape_params();
+  test_state_v11_loads_with_tape_off();
   test_state_v7_loads_with_defaults();
   test_state_v6_skips_drive_output_and_mix();
   test_state_v5_gets_default_drive();

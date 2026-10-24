@@ -1,5 +1,5 @@
 // Developer tool: draws the editor offscreen into a PNG, no host or window needed.
-//   the_stripper_render out.png [bypass] [bus] [eq-off] [nam-off] [recall] [moved] [meters] [seed=<n>] [model=<file>] [gpu] [model-error=<text>] [browser] [back-settings|back-buttons|back-routing|back-credits]
+//   the_stripper_render out.png [bypass] [bus] [eq-off] [nam-off] [tape-off] [recall] [moved] [meters] [seed=<n>] [model=<file>] [gpu] [model-error=<text>] [browser] [back-settings|back-buttons|back-routing|back-credits]
 // Used to check the look of the code-drawn GUI on a machine without a plugin host.
 #include "controller.h"
 #include "ui/editor.h"
@@ -84,7 +84,7 @@ struct EditorPreview {
 int main(int argc, char** argv) {
   using namespace FairyTapes::TheStripper;
   if (argc < 2) {
-    std::fprintf(stderr, "usage: %s out.png [bypass] [bus] [eq-off] [nam-off]\n", argv[0]);
+    std::fprintf(stderr, "usage: %s out.png [bypass] [bus] [eq-off] [nam-off] [tape-off]\n", argv[0]);
     return 2;
   }
   if (argc >= 2 && !std::strcmp(argv[1], "dump-help")) {   // the button help as tab-separated lines (title, what, imposes), for the HTML preview
@@ -99,7 +99,8 @@ int main(int argc, char** argv) {
   for (int i = 2; i < argc; ++i) {
     if (!std::strcmp(argv[i], "bypass")) ctl.setParamNormalized(kBypass, 1.0);
     else if (!std::strcmp(argv[i], "bus")) ctl.setParamNormalized(kStripMode, 1.0);
-    else if (!std::strcmp(argv[i], "nam-off")) { ctl.setParamNormalized(kDriveNamOn, 0.0); ctl.setParamNormalized(kEqSaturation, 0.4); }
+    else if (!std::strcmp(argv[i], "nam-off")) ctl.setParamNormalized(kDriveNamOn, 0.0);
+    else if (!std::strcmp(argv[i], "tape-off")) ctl.setParamNormalized(kDriveTapeOn, 0.0);
     else if (!std::strcmp(argv[i], "eq-off")) ctl.setParamNormalized(kBypassEQ, 1.0);
     else if (!std::strcmp(argv[i], "browser")) browser = true;
     else if (!std::strcmp(argv[i], "back-settings")) backTab = 0;
