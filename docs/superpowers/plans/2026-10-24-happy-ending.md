@@ -204,9 +204,11 @@ Nota (Task 9 fatto): **INFLATE** = `inflator::Inflator<float>` come nella previe
 **Interfaces:**
 - Produces: `struct LoudPush { float clipDb; float limitDb; float final01; }`; `LoudPush loudPush(float loudness /*0..10*/)`; `int matchLoudnessIndex(int currentIndex, double shortTermLufs, double targetLufs)` (indice 0…20; nessun cambio se lo short-term è `-INFINITY`).
 
-- [ ] **Step 1: Test**: `testZeroIsNoPush` (tutti 0), `testOrderClipThenLimitThenFinal` (a 3,0 solo CLIP > 0; a 6,0 CLIP = 1,5 e LIMIT > 0 con FINAL = 0; a 10 CLIP 1,5, LIMIT 3, FINAL 1), `testMonotonic` (nessun valore cala salendo di 0,5), `testMatchMovesTowardTarget` (indice 4, short-term −12, target −9: indice nuovo = 4 + round(3 / 0,75) = 8), `testMatchClamps` (risultato in 0…20), `testMatchIgnoresNoSignal`.
-- [ ] **Step 2: Esegui** → FAIL. **Step 3: Implementa** con i valori di `kLoudCurve` e `kMatchDbPerStep`. **Step 4: Esegui** → PASS.
-- [ ] **Step 5: Commit** `feat(happy-ending): LOUDNESS push curve and MATCH`.
+- [x] **Step 1: Test**: `testZeroIsNoPush` (tutti 0), `testOrderClipThenLimitThenFinal` (a 3,0 solo CLIP > 0; a 6,0 CLIP = 1,5 e LIMIT > 0 con FINAL = 0; a 10 CLIP 1,5, LIMIT 3, FINAL 1), `testMonotonic` (nessun valore cala salendo di 0,5), `testMatchMovesTowardTarget` (indice 4, short-term −12, target −9: indice nuovo = 4 + round(3 / 0,75) = 8), `testMatchClamps` (risultato in 0…20), `testMatchIgnoresNoSignal`.
+- [x] **Step 2: Esegui** → FAIL. **Step 3: Implementa** con i valori di `kLoudCurve` e `kMatchDbPerStep`. **Step 4: Esegui** → PASS.
+- [x] **Step 5: Commit** `feat(happy-ending): LOUDNESS push curve and MATCH`.
+
+> Nota: la curva usa i terzi del range 0…10 (CLIP 0…10/3, LIMIT 10/3…20/3, FINAL 20/3…10, rampe lineari che saturano al massimo); `limitDb` è restituito come quantità positiva (il motore la sottrae dalla soglia). In `tuning.h` il membro di `LoudCurve` `final` è stato rinominato `finalAmount`.
 
 ### Task 12: Engine (catena completa)
 

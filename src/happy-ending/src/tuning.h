@@ -90,12 +90,14 @@ inline constexpr double kSetGlideMs = 150.0;
 // do the crossfades on switching the stage on or off and between its two modes.
 inline constexpr double kFinalRampMs = 10.0;
 
-// LOUDNESS macro: what the last third of the knob adds to each stage, in this order
-// (CLIP first, then LIMIT, then FINAL). The knob travels 0..10; each stage owns one third.
+// LOUDNESS macro: what the knob adds on top of the stage settings, in this order: CLIP first, then
+// LIMIT, then FINAL. The knob travels 0..10 and each stage owns one third of it (CLIP over 0..10/3,
+// LIMIT over 10/3..20/3, FINAL over 20/3..10): the stage ramps linearly over its third and then
+// holds the maximum below.
 struct LoudCurve {
-  double clipDb;   // extra CLIP drive at the end of the first third
-  double limitDb;  // extra LIMIT threshold (negative = lower) at the end of the second third
-  double final;    // extra FINAL EFFECT / DRIVE, 0..1 of its range, at the end of the last third
+  double clipDb;       // extra CLIP drive once its third is complete
+  double limitDb;      // extra LIMIT threshold (negative = lower) once its third is complete
+  double finalAmount;  // extra FINAL EFFECT / DRIVE, 0..1 of its range, once its third is complete
 };
 inline constexpr LoudCurve kLoudCurve{1.5, -3.0, 1.0};
 

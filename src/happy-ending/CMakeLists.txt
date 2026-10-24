@@ -111,3 +111,11 @@ target_include_directories(happy_ending_loudness_tests PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 add_test(NAME happy_ending_loudness_tests COMMAND happy_ending_loudness_tests)
+
+add_executable(happy_ending_loudness_macro_tests
+  tests/test_loudness_macro.cpp
+)
+target_include_directories(happy_ending_loudness_macro_tests PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+add_test(NAME happy_ending_loudness_macro_tests COMMAND happy_ending_loudness_macro_tests)

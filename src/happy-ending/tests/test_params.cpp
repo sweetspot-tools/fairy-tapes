@@ -208,7 +208,7 @@ void testTuningTable() {
   ASSERT_NEAR(Tuning::kMatchDbPerStep, 0.75);
   ASSERT_NEAR(Tuning::kLoudCurve.clipDb, 1.5);
   ASSERT_NEAR(Tuning::kLoudCurve.limitDb, -3.0);
-  ASSERT_NEAR(Tuning::kLoudCurve.final, 1.0);
+  ASSERT_NEAR(Tuning::kLoudCurve.finalAmount, 1.0);
   ASSERT_TRUE(Tuning::kDynThresholdDb < 0.0);
   ASSERT_TRUE(Tuning::kDynAttackMs > 0.0 && Tuning::kDynReleaseMs > Tuning::kDynAttackMs);
 }
