@@ -236,6 +236,7 @@ void VibeEq::prepare(double sampleRate, int /*maxBlock*/) {
   for (auto& ind : airInductor_) ind.prepare(sampleRate, seed + 1);
   prepareTube(sampleRate);
 
+  inductorScale_ = std::pow(10.0, Tuning::kVibeInductorLevelDb / 20.0);
   attackCoeff_ = 1.0 - std::exp(-1.0 / (Tuning::kDynAttackMs * 0.001 * sampleRate));
   releaseCoeff_ = 1.0 - std::exp(-1.0 / (Tuning::kDynReleaseMs * 0.001 * sampleRate));
   lowLpCoeff_ = 1.0 - std::exp(-2.0 * kPi * Tuning::kDynLowDetectHz / sampleRate);
@@ -315,7 +316,7 @@ VibeEq::Network VibeEq::designNetwork(double lowPull, double airPull, bool progr
   // TILT: opposite shelves around 1 kHz.
   const double tilt = tableValue(kTilt, settings_.tiltIndex);
   matched::computeLowShelf(n.tiltLow, Tuning::kVibeTiltHz, sr, -tilt, Tuning::kVibeTiltQ);
-  matched::computeHighShelf(n.tiltHigh, Tuning::kVibeTiltHz, sr, tilt, Tuning::kVibeTiltQ);
+  matched::computeHighShelfMatched(n.tiltHigh, Tuning::kVibeTiltHz, sr, tilt, Tuning::kVibeTiltQ);
   return n;
 }
 
@@ -393,9 +394,9 @@ void VibeEq::processLinear(float* left, float* right, int n) {
         double x = *io[ch];
         if (!std::isfinite(x)) x = 0.0;
         x = sections_[kPeak].run(x, ch);
-        if (lowInductorDrive_ > 0.0) x = lowInductor_[static_cast<std::size_t>(ch)].processNonlinearity(x, lowInductorDrive_);
+        if (lowInductorDrive_ > 0.0) x = lowInductor_[static_cast<std::size_t>(ch)].processNonlinearity(x * inductorScale_, lowInductorDrive_) / inductorScale_;
         x = sections_[kDip].run(x, ch);
-        if (airInductorDrive_ > 0.0) x = airInductor_[static_cast<std::size_t>(ch)].processNonlinearity(x, airInductorDrive_);
+        if (airInductorDrive_ > 0.0) x = airInductor_[static_cast<std::size_t>(ch)].processNonlinearity(x * inductorScale_, airInductorDrive_) / inductorScale_;
         x = sections_[kAir].run(x, ch);
         x = sections_[kTiltLow].run(x, ch);
         x = sections_[kTiltHigh].run(x, ch);

@@ -95,7 +95,7 @@ BiquadCoeffs FineEq::designFor(int index) const {
   const double freq = tableValue(kFreqParam[index], s.freqIndex);
   const double gain = tableValue(gainParam(index), s.gainIndex);
   if (index == kLs) matched::computeLowShelf(t, freq, sampleRate_, gain, Tuning::kFineShelfQ);
-  else if (index == kHs) matched::computeHighShelf(t, freq, sampleRate_, gain, Tuning::kFineShelfQ);
+  else if (index == kHs) matched::computeHighShelfMatched(t, freq, sampleRate_, gain, Tuning::kFineShelfQ);
   else matched::computePeakingMatched(t, freq, sampleRate_, gain, effectiveQ(tableValue(qParam(index), s.qIndex), gain));
   return t;
 }

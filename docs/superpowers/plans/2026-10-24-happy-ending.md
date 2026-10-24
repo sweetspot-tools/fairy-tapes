@@ -76,7 +76,7 @@ Ordine congelato e valori (default in grassetto), da spec §3-§5 e dalla previe
 - [x] **Step 4: Esegui** → PASS.
 - [x] **Step 5: Commit** `feat(happy-ending): matched biquad port and Fine EQ bands`.
 
-Nota (Task 4): le campane del FINE EQ usano ora il progetto matched di Vicanek (`matched::computePeakingMatched`): boost diretto e taglio come reciproco esatto del boost; LISTEN e gli shelf restano com'erano.
+Nota (Task 4): le campane del FINE EQ usano ora il progetto matched di Vicanek (`matched::computePeakingMatched`): boost diretto e taglio come reciproco esatto del boost; LISTEN e lo shelf basso restano com'erano; lo shelf alto (HI SHELF) usa ora il progetto matched (`matched::computeHighShelfMatched`, boost e taglio reciproco), con errore sotto 0,3 dB rispetto al prototipo analogico fino a Nyquist per tutti gli angoli a 44,1 / 48 / 96 kHz.
 
 ### Task 3: M/S, IN e LISTEN del FINE EQ
 
@@ -106,7 +106,7 @@ Nota (Task 4): le campane del FINE EQ usano ora il progetto matched di Vicanek (
 - [x] **Step 4: Esegui** → PASS.
 - [x] **Step 5: Commit** `feat(happy-ending): Vibe EQ port (LOW trick, AIR, TILT, DYN, TUBE)`.
 
-Nota (Task 4 fatto): il taglio di LOW è una campana a 2,5 volte la frequenza del boost, non lo shelf basso alla stessa frequenza della sorgente (che non può fare una gobba sopra il boost). AIR ha Q fisso 0,8 e usa il peaking matched di Vicanek (`matched::computePeakingMatched` in `matched_biquad.h`), quindi la campana tiene la larghezza vicino a Nyquist e non alza i medi; il polinomio del Q della sorgente non si usa per AIR (appiattirebbe un boost a 10 kHz). TUBE è fedele alla sorgente (circa −44 dB di THD a TUBE 10, −56,6 dB a drive 0,2); TUBE 0 è un bypass esatto. `prepareTube(sr)` prepara lo stadio valvolare alla frequenza sovracampionata. Il modello dell'induttore è limitato (eccesso e termini polinomiali non crescono oltre il fondo scala) e il limite di sicurezza dello stato dei filtri è 1e3: prima un ingresso caldo con LOW 10 faceva esplodere l'uscita. La saturazione del nucleo è forte (LOW 10 a −10 dBFS comprime già il picco a circa 0,85): da rivedere nel compito di taratura. Tutto ciò che si tara a orecchio sta in `tuning.h` (`kVibe*`, `kDyn*`).
+Nota (Task 4 fatto): il taglio di LOW è una campana a 2,5 volte la frequenza del boost, non lo shelf basso alla stessa frequenza della sorgente (che non può fare una gobba sopra il boost). AIR ha Q fisso 0,8 e usa il peaking matched di Vicanek (`matched::computePeakingMatched` in `matched_biquad.h`), quindi la campana tiene la larghezza vicino a Nyquist e non alza i medi; il polinomio del Q della sorgente non si usa per AIR (appiattirebbe un boost a 10 kHz). TUBE è fedele alla sorgente (circa −44 dB di THD a TUBE 10, −56,6 dB a drive 0,2); TUBE 0 è un bypass esatto. `prepareTube(sr)` prepara lo stadio valvolare alla frequenza sovracampionata. Il modello dell'induttore è limitato (eccesso e termini polinomiali non crescono oltre il fondo scala), il limite di sicurezza dello stato dei filtri è 1e3 e gli induttori lavorano molto sotto il livello del segnale (`kVibeInductorLevelDb`, −30 dB: i commenti della sorgente dicono 10-15 dB sotto ma il codice li alimenta a livello pieno, e con LOW 10 comprimeva già a −10 dBFS): la saturazione del nucleo ora tocca solo i picchi più alti (LOW 10 a 60 Hz: THD sotto −50 dB a −10 dBFS e sotto −30 dB a +6 dBFS). Il TILT usa lo shelf alto matched (`matched::computeHighShelfMatched`). Tutto ciò che si tara a orecchio sta in `tuning.h` (`kVibe*`, `kDyn*`).
 
 ### Task 5: GLUE
 

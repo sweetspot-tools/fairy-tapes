@@ -146,6 +146,7 @@ private:
   std::array<Section, kSections> sections_{};
   std::array<InductorModel, 2> lowInductor_{}, airInductor_{};
   double lowInductorDrive_ = 0.0, airInductorDrive_ = 0.0;
+  double inductorScale_ = 1.0;  // level of the inductors relative to the signal (Tuning::kVibeInductorLevelDb)
 
   // DYN detectors (power followers on the band each boost works on).
   double attackCoeff_ = 0.0, releaseCoeff_ = 0.0;

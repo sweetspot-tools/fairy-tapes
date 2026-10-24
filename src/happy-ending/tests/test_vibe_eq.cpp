@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <complex>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -200,33 +201,90 @@ void testAirDoesNotLiftMidsNearNyquist() {
   ASSERT_NEAR_EPS(measuredGainDb(eq, 1000.0, 44100.0, -30.0, 1.0), eq.magnitudeDb(1000.0, true), 0.3);
 }
 
-void testHotInputStaysBounded() {
-  // LOW 10 on a 60 Hz sine at +6 dBFS (INPUT allows +12 dB, so internal peaks over full scale are
-  // normal): the core saturation compresses, it never runs away and the filter memory is not
-  // clamped into a distortion at 8.
+// THD of a sine through processLinear (second half of the run), harmonics 2..10, in dB.
+double linearThdDb(VibeEq& eq, double hz, double sr, double ampDb) {
+  const std::vector<float> out = runLinear(eq, hz, sr, ampDb, 2.0);
+  const int from = static_cast<int>(out.size()) / 2;
+  const double fund = toneAmp(out, hz, sr, from);
+  double harm = 0.0;
+  for (int k = 2; k <= 10; ++k) {
+    const double a = toneAmp(out, hz * k, sr, from);
+    harm += a * a;
+  }
+  return dbOf(std::sqrt(harm) / fund);
+}
+
+void testInductorIsMasteringSubtle() {
+  // LOW 10 at 60 Hz, the strongest boost: the core saturation colours, it does not distort.
+  // INPUT allows +12 dB, so +6 dBFS and more is a normal operating case.
   const double sr = 48000.0;
-  VibeEq eq;
-  eq.prepare(sr, 512);
   VibeSettings s = makeSettings();
   s.low = 10;
-  eq.set(s);
-  const std::vector<float> out = runLinear(eq, 60.0, sr, 6.0, 2.0);
-  float peak = 0.0f;
-  for (float v : out) {
-    ASSERT_TRUE(std::isfinite(v));
-    peak = std::max(peak, std::fabs(v));
+  VibeEq a, b;
+  a.prepare(sr, 512);
+  b.prepare(sr, 512);
+  a.set(s);
+  b.set(s);
+  ASSERT_TRUE(linearThdDb(a, 60.0, sr, -10.0) < -50.0);
+  ASSERT_TRUE(linearThdDb(b, 60.0, sr, 6.0) < -30.0);
+
+  // Still a core: at +18 dBFS the boosted peak is compressed well below the linear one.
+  VibeEq lin;
+  lin.prepare(sr, 512);
+  lin.set(s);
+  const double boostDb = measuredGainDb(lin, 60.0, sr, -30.0);
+  VibeEq hot;
+  hot.prepare(sr, 512);
+  hot.set(s);
+  const std::vector<float> hotOut = runLinear(hot, 60.0, sr, 18.0, 1.0);
+  float hotPeak = 0.0f;
+  for (std::size_t i = hotOut.size() / 2; i < hotOut.size(); ++i) hotPeak = std::max(hotPeak, std::fabs(hotOut[i]));
+  ASSERT_TRUE(hotPeak < 0.8 * ampOfDb(18.0 + boostDb));
+
+  // Bounded and finite at any level, and louder in is never quieter out.
+  float prevPeak = 0.0f;
+  for (double db : {-30.0, -10.0, 0.0, 6.0, 12.0, 18.0}) {
+    VibeEq eq;
+    eq.prepare(sr, 512);
+    eq.set(s);
+    const std::vector<float> out = runLinear(eq, 60.0, sr, db, 1.0);
+    float peak = 0.0f;
+    for (std::size_t i = out.size() / 2; i < out.size(); ++i) {
+      ASSERT_TRUE(std::isfinite(out[i]));
+      peak = std::max(peak, std::fabs(out[i]));
+    }
+    ASSERT_TRUE(peak < 40.0f);
+    ASSERT_TRUE(peak >= prevPeak);
+    prevPeak = peak;
   }
-  ASSERT_TRUE(peak < 2.0f);
-  // Louder in, louder out: the compression is monotonic, not a runaway.
-  VibeEq quiet;
-  quiet.prepare(sr, 512);
-  quiet.set(s);
-  const std::vector<float> small = runLinear(quiet, 60.0, sr, -6.0, 2.0);
-  float smallPeak = 0.0f;
-  for (std::size_t i = small.size() / 2; i < small.size(); ++i) smallPeak = std::max(smallPeak, std::fabs(small[i]));
-  float bigPeak = 0.0f;
-  for (std::size_t i = out.size() / 2; i < out.size(); ++i) bigPeak = std::max(bigPeak, std::fabs(out[i]));
-  ASSERT_TRUE(bigPeak >= smallPeak);
+}
+
+// Analog high / low shelf prototype (slope form) in dB, for the TILT curve.
+double analogShelfDb(bool high, double f0, double gainDb, double slope, double hz) {
+  const double a = std::pow(10.0, gainDb / 40.0);
+  const double invQ = std::sqrt((a + 1.0 / a) * (1.0 / slope - 1.0) + 2.0);
+  const std::complex<double> s(0.0, hz / f0);
+  const std::complex<double> num = high ? a * (a * s * s + std::sqrt(a) * invQ * s + 1.0)
+                                        : a * (s * s + std::sqrt(a) * invQ * s + a);
+  const std::complex<double> den = high ? s * s + std::sqrt(a) * invQ * s + a
+                                        : a * s * s + std::sqrt(a) * invQ * s + 1.0;
+  return 20.0 * std::log10(std::abs(num / den));
+}
+
+void testTiltFollowsAnalogPrototype() {
+  for (double sr : {44100.0, 48000.0, 96000.0})
+    for (double tilt : {-3.0, -1.5, 1.5, 3.0}) {
+      VibeEq eq;
+      eq.prepare(sr, 512);
+      VibeSettings s = makeSettings();
+      s.tiltIndex = indexOfValue(kTilt, tilt);
+      eq.set(s);
+      for (double f = 20.0; f <= 20000.0; f *= 1.03) {
+        const double analog = analogShelfDb(false, Tuning::kVibeTiltHz, -tilt, Tuning::kVibeTiltQ, f) +
+                              analogShelfDb(true, Tuning::kVibeTiltHz, tilt, Tuning::kVibeTiltQ, f);
+        ASSERT_NEAR_EPS(eq.magnitudeDb(f, true), analog, 0.5);
+      }
+    }
 }
 
 void testTiltSymmetric() {
@@ -281,7 +339,7 @@ void testDynPullsBackOnLoudProgram() {
   off.set(s);
   const double offGain = measuredGainDb(off, 60.0, sr, -6.0);
   ASSERT_TRUE(off.dynLowAmount() == 0.0f);
-  ASSERT_TRUE(offGain > loudGain);  // (the core saturation, which also acts here, dominates at this level)
+  ASSERT_TRUE(offGain > loudGain + 1.0);
 
   // magnitudeDb: static ignores the pull-back, dynamic follows it.
   s.dynLow = true;
@@ -526,7 +584,8 @@ int main() {
   RUN_TEST(testLowFrequencySteps);
   RUN_TEST(testAirBoost);
   RUN_TEST(testAirDoesNotLiftMidsNearNyquist);
-  RUN_TEST(testHotInputStaysBounded);
+  RUN_TEST(testInductorIsMasteringSubtle);
+  RUN_TEST(testTiltFollowsAnalogPrototype);
   RUN_TEST(testTiltSymmetric);
   RUN_TEST(testDynPullsBackOnLoudProgram);
   RUN_TEST(testDynPullsBackAirOnLoudProgram);

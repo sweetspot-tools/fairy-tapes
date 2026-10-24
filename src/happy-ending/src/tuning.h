@@ -37,6 +37,11 @@ inline constexpr double kVibeAirQ = 0.8;               // broad (built with the 
 inline constexpr double kVibeTiltHz = 1000.0;          // the two opposite shelves of TILT meet here
 inline constexpr double kVibeTiltQ = 0.7071067811865476;
 inline constexpr double kVibeTubeDriveMax = 1.0;       // tube stage drive at TUBE 10 (1.0 = the Multi-Q maximum)
+// The inductors of the LC network work well below the signal level: the Multi-Q source says 10-15 dB
+// in its comments but feeds them the full level, which compresses hard on hot boosted program.
+// Their input is scaled by this many dB (and the output scaled back): core saturation then only
+// colours the hottest peaks.
+inline constexpr double kVibeInductorLevelDb = -30.0;
 inline constexpr int kVibeSubBlock = 32;               // samples between coefficient updates (linear ramp)
 inline constexpr int kVibeTubeRampSamples = 256;       // length of the TUBE drive ramp
 

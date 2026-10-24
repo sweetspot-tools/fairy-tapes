@@ -6,9 +6,11 @@
 #include "dsp/fine_eq.h"
 #include "dsp/ms.h"
 #include "params.h"
+#include "tuning.h"
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <complex>
 #include <cstdio>
 #include <cstdlib>
 #include <new>
@@ -110,6 +112,19 @@ double analogBellDb(double f0, double gainDb, double q, double hz) {
   return 10.0 * std::log10((numRe * numRe + numIm * numIm) / (denRe * denRe + denIm * denIm));
 }
 
+// Analog shelf prototypes (slope form: 1/Q = sqrt((A + 1/A)(1/S - 1) + 2)), in dB. A negative gain
+// is the exact reciprocal of the positive one.
+double analogShelfDb(bool high, double f0, double gainDb, double slope, double hz) {
+  const double a = std::pow(10.0, gainDb / 40.0);
+  const double invQ = std::sqrt((a + 1.0 / a) * (1.0 / slope - 1.0) + 2.0);
+  const std::complex<double> s(0.0, hz / f0);
+  const std::complex<double> num = high ? a * (a * s * s + std::sqrt(a) * invQ * s + 1.0)
+                                        : a * (s * s + std::sqrt(a) * invQ * s + a);
+  const std::complex<double> den = high ? s * s + std::sqrt(a) * invQ * s + a
+                                        : a * s * s + std::sqrt(a) * invQ * s + 1.0;
+  return 20.0 * std::log10(std::abs(num / den));
+}
+
 // Width (Hz) of a bell where the curve stays above half of its peak gain in dB.
 double halfPeakWidthHz(const FineEq& eq, double centre, double peakDb) {
   const double target = peakDb / 2.0;
@@ -172,6 +187,32 @@ void testBellCutIsReciprocalOfBoost() {
           for (double f : {50.0, 500.0, 3000.0, 9000.0, 17000.0})
             ASSERT_NEAR_EPS(up.magnitudeDb(f, sr) + down.magnitudeDb(f, sr), 0.0, 1e-6);
         }
+}
+
+// The shelves follow the analog prototype to Nyquist: every corner, three rates, boost and cut.
+void testShelvesFollowAnalogPrototype() {
+  const double rates[] = {44100.0, 48000.0, 96000.0};
+  const double highCorners[] = {3000.0, 5000.0, 8000.0, 10000.0, 12000.0, 16000.0, 20000.0};
+  const double lowCorners[] = {30.0, 50.0, 70.0, 100.0, 150.0, 200.0, 300.0};
+  for (double sr : rates)
+    for (double gain : {-4.0, -1.5, 1.5, 4.0}) {
+      for (double fc : highCorners) {
+        FineEq eq;
+        eq.prepare(sr, 512);
+        eq.setStageOn(true);
+        eq.setBand(kBandHs, settings(kHsFreq, fc, kHsGain, gain));
+        for (double f = 20.0; f <= 20000.0; f *= 1.03)
+          ASSERT_NEAR_EPS(eq.magnitudeDb(0, f), analogShelfDb(true, fc, gain, Tuning::kFineShelfQ, f), 0.5);
+      }
+      for (double fc : lowCorners) {
+        FineEq eq;
+        eq.prepare(sr, 512);
+        eq.setStageOn(true);
+        eq.setBand(kBandLs, settings(kLsFreq, fc, kLsGain, gain));
+        for (double f = 20.0; f <= 20000.0; f *= 1.03)
+          ASSERT_NEAR_EPS(eq.magnitudeDb(0, f), analogShelfDb(false, fc, gain, Tuning::kFineShelfQ, f), 0.5);
+      }
+    }
 }
 
 void testQCoupling() {
@@ -613,6 +654,7 @@ int main() {
   RUN_TEST(testNoCrampingNearNyquist);
   RUN_TEST(testHiMidBellFollowsAnalogAt44k);
   RUN_TEST(testBellCutIsReciprocalOfBoost);
+  RUN_TEST(testShelvesFollowAnalogPrototype);
   RUN_TEST(testQCoupling);
   RUN_TEST(testHighPassOffIsIdentity);
   RUN_TEST(testHighPassSlope12dB);
