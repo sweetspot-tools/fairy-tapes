@@ -104,6 +104,7 @@ void Engine::prepare(double sampleRate) {
   comp_.prepare(sr_, 2);
   tone_.prepare(sr_, 2);
 
+  clipHoldSamples_ = (long long)std::lround(kClipHoldSeconds * sr_);
   lookahead_ = (int)std::lround(kLookaheadMs * 0.001 * sr_);
   latency_ = lookahead_ + spectral_.latencySamples();
   delayL_.assign((size_t)latency_ + 1, 0.0f);
@@ -144,6 +145,45 @@ void Engine::reset() {
   sampleIndex_ = 0;
   snapPending_ = true;
   snapSmoothers();
+  resetDisplay();
+  clipInLeft_ = clipOutLeft_ = 0;
+}
+
+void Engine::resetDisplay() {
+  inPeakL_ = inPeakR_ = outPeakL_ = outPeakR_ = 0.f;
+  voiceMaxDb_ = -120.f;
+  riderMinGain_ = kNoRiderGain;
+  breathMax_ = 0.f;
+  grMaxDb_ = 0.f;
+}
+
+namespace {
+inline float peakToDb(float peak) { return peak > 1e-6f ? 20.0f * std::log10(peak) : -120.0f; }
+} // namespace
+
+LevelValues Engine::takeLevels() {
+  LevelValues v;
+  v.inL = peakToDb(inPeakL_);
+  v.inR = peakToDb(inPeakR_);
+  v.outL = peakToDb(outPeakL_);
+  v.outR = peakToDb(outPeakR_);
+  v.clipIn = clipInLeft_ > 0;
+  v.clipOut = clipOutLeft_ > 0;
+  inPeakL_ = inPeakR_ = outPeakL_ = outPeakR_ = 0.f;
+  return v;
+}
+
+DisplayValues Engine::takeDisplay() {
+  DisplayValues v;
+  v.voiceDb = voiceMaxDb_;
+  v.riderGainDb = riderMinGain_ == kNoRiderGain ? 0.f : peakToDb(riderMinGain_);
+  v.breathProb = breathMax_;
+  v.grDb = grMaxDb_;
+  voiceMaxDb_ = -120.f;
+  riderMinGain_ = kNoRiderGain;
+  breathMax_ = 0.f;
+  grMaxDb_ = 0.f;
+  return v;
 }
 
 void Engine::snapSmoothers() {
@@ -261,7 +301,17 @@ void Engine::process(const float* inL, const float* inR, float* outL, float* out
     const float ll = xl * gIn, lr = xr * gIn;
     const float mono = 0.5f * (ll + lr);
     const float levelDb = meter_.process(mono);
-    const float prob = lookaheadMax(detector_->process(mono));
+    const float rawProb = detector_->process(mono);
+    const float prob = lookaheadMax(rawProb);
+    voiceMaxDb_ = std::max(voiceMaxDb_, levelDb);
+    breathMax_ = std::max(breathMax_, rawProb);
+    {  // input peaks and clip: before the Input gain
+      const float al_ = std::fabs(xl), ar_ = std::fabs(xr);
+      inPeakL_ = std::max(inPeakL_, al_);
+      inPeakR_ = std::max(inPeakR_, ar_);
+      if (al_ >= 1.0f || ar_ >= 1.0f) clipInLeft_ = clipHoldSamples_;
+      else if (clipInLeft_ > 0) --clipInLeft_;
+    }
 
     // Audio delay.
     delayL_[(size_t)writePos_] = xl;
@@ -276,6 +326,7 @@ void Engine::process(const float* inL, const float* inR, float* outL, float* out
     const float gRider = rider_.processFrame(levelDb, prob > 0.5f);
     const float gBreath = reducer_.process(prob);
     const float gR = xfade(1.0f, gRider, rRider), gB = xfade(1.0f, gBreath, rBreath);
+    riderMinGain_ = std::min(riderMinGain_, gR);
     float l = al * gR * gB, r = ar * gR * gB;
 
     // Corrective EQ.
@@ -294,6 +345,7 @@ void Engine::process(const float* inL, const float* inR, float* outL, float* out
     f[0] = l;
     f[1] = r;
     comp_.processFrame(f);
+    grMaxDb_ = std::max(grMaxDb_, comp_.lastGainReductionDb());
     l = xfade(l, f[0], rComp);
     r = xfade(r, f[1], rComp);
     // Tone.
@@ -315,6 +367,14 @@ void Engine::process(const float* inL, const float* inR, float* outL, float* out
     // Bypass: the delayed input only.
     l = xfade(l, dl, rBypass);
     r = xfade(r, dr, rBypass);
+
+    {  // output peaks and clip: after the Output gain and Bypass
+      const float ol_ = std::fabs(l), or_ = std::fabs(r);
+      outPeakL_ = std::max(outPeakL_, ol_);
+      outPeakR_ = std::max(outPeakR_, or_);
+      if (ol_ >= 1.0f || or_ >= 1.0f) clipOutLeft_ = clipHoldSamples_;
+      else if (clipOutLeft_ > 0) --clipOutLeft_;
+    }
 
     outL[i] = l;
     if (outR) outR[i] = r;

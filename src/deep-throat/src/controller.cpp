@@ -107,6 +107,21 @@ Steinberg::tresult PLUGIN_API Controller::initialize(Steinberg::FUnknown* contex
             d[kCompHpf]);
   parameters.addParameter(STR16("EQ Amount"), STR16("%"), 0, d[kEqAmount], automate, kEqAmount);
 
+  // Hidden read-only display values (processor -> editor), normalized 0..1 (see display.h).
+  const auto display = ParameterInfo::kIsReadOnly | ParameterInfo::kIsHidden;
+  parameters.addParameter(STR16("Display In L"), nullptr, 0, 0.0, display, kDispInL);
+  parameters.addParameter(STR16("Display In R"), nullptr, 0, 0.0, display, kDispInR);
+  parameters.addParameter(STR16("Display Out L"), nullptr, 0, 0.0, display, kDispOutL);
+  parameters.addParameter(STR16("Display Out R"), nullptr, 0, 0.0, display, kDispOutR);
+  parameters.addParameter(STR16("Display GR"), nullptr, 0, 0.0, display, kDispGr);
+  parameters.addParameter(STR16("Display Voice"), nullptr, 0, 0.0, display, kDispVoice);
+  parameters.addParameter(STR16("Display Rider"), nullptr, 0, 0.5, display, kDispRider);
+  parameters.addParameter(STR16("Display Breath"), nullptr, 0, 0.0, display, kDispBreath);
+  parameters.addParameter(STR16("Display Clip In"), nullptr, 1, 0.0, display, kDispClipIn);
+  parameters.addParameter(STR16("Display Clip Out"), nullptr, 1, 0.0, display, kDispClipOut);
+  // Writable (no kIsReadOnly): the editor sets it to 1 to clear the clip LEDs, the processor resets it to 0.
+  parameters.addParameter(STR16("Clear Clips"), nullptr, 1, 0.0, ParameterInfo::kIsHidden, kClearClips);
+
   return Steinberg::kResultOk;
 }
 

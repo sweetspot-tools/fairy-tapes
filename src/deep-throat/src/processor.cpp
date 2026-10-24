@@ -40,16 +40,22 @@ Steinberg::tresult PLUGIN_API Processor::setBusArrangements(
 
 Steinberg::tresult PLUGIN_API Processor::setupProcessing(Steinberg::Vst::ProcessSetup& newSetup) {
   const auto result = AudioEffect::setupProcessing(newSetup);
-  if (result == Steinberg::kResultOk)
+  if (result == Steinberg::kResultOk) {
     engine_.prepare(newSetup.sampleRate);  // latency is known before activation
+    display_limiter_.prepare(newSetup.sampleRate);
+  }
   return result;
 }
 
 Steinberg::tresult PLUGIN_API Processor::setActive(Steinberg::TBool state) {
   // Every (re)activation follows setupProcessing: rebuild all DSP for the current rate. The host
   // re-reads getLatencySamples() after activation.
-  if (state)
+  if (state) {
     engine_.prepare(processSetup.sampleRate);
+    display_limiter_.prepare(processSetup.sampleRate);
+    display_acc_ = DisplayAccumulator{};
+    level_acc_ = LevelAccumulator{};
+  }
   return AudioEffect::setActive(state);
 }
 
@@ -66,13 +72,38 @@ void Processor::updateParamsFromChanges(Steinberg::Vst::IParameterChanges* chang
     if (!queue)
       continue;
     const Steinberg::Vst::ParamID id = queue->getParameterId();
-    if (id >= kNumParams)
-      continue;
     Steinberg::Vst::ParamValue value = 0.;
     Steinberg::int32 sample_offset = 0;
+    if (id == kClearClips) {  // writable display parameter: not part of the persistent table
+      if (queue->getPoint(queue->getPointCount() - 1, sample_offset, value) == Steinberg::kResultOk &&
+          value >= 0.5)
+        clear_clips_requested_ = true;
+      continue;
+    }
+    if (id >= kNumParams)
+      continue;
     if (queue->getPoint(queue->getPointCount() - 1, sample_offset, value) == Steinberg::kResultOk)
       param_value_[id] = value;
   }
+}
+
+void Processor::publishDisplay(Steinberg::Vst::ProcessData& data) {
+  display_acc_.add(engine_.takeDisplay());
+  level_acc_.add(engine_.takeLevels());
+  auto* out = data.outputParameterChanges;
+  const auto put = [out](Steinberg::Vst::ParamID id, double v) {
+    Steinberg::int32 index = 0;
+    if (auto* queue = out->addParameterData(id, index))
+      queue->addPoint(0, v, index);
+  };
+  if (out && clear_clips_ack_) {
+    clear_clips_ack_ = false;
+    put(kClearClips, 0.0);  // acknowledge: the editor's trigger goes back to 0
+  }
+  if (!display_limiter_.advance(data.numSamples) || !out)
+    return;
+  const auto norms = displayNorms(display_acc_.take(), level_acc_.take());
+  for (size_t i = 0; i < norms.size(); ++i) put(kMeterBase + (Steinberg::Vst::ParamID)i, norms[i]);
 }
 
 Steinberg::tresult PLUGIN_API Processor::process(Steinberg::Vst::ProcessData& data) {
@@ -93,7 +124,14 @@ Steinberg::tresult PLUGIN_API Processor::process(Steinberg::Vst::ProcessData& da
   const float* inR = in.numChannels >= 2 ? in.channelBuffers32[1] : nullptr;  // null: mono
   float* outL = out.channelBuffers32[0];
   float* outR = out.numChannels >= 2 ? out.channelBuffers32[1] : nullptr;
+  if (clear_clips_requested_) {
+    engine_.clearClips();
+    level_acc_.clearClips();
+    clear_clips_requested_ = false;
+    clear_clips_ack_ = true;
+  }
   engine_.process(inL, inR, outL, outR, data.numSamples);
+  publishDisplay(data);
   for (Steinberg::int32 ch = 2; ch < out.numChannels; ++ch)  // never with the accepted layouts
     if (float* extra = out.channelBuffers32[ch])
       for (Steinberg::int32 i = 0; i < data.numSamples; ++i) extra[i] = 0.0f;

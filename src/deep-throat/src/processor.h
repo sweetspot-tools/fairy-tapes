@@ -33,9 +33,15 @@ public:
 
 private:
   void updateParamsFromChanges(Steinberg::Vst::IParameterChanges* changes);
+  void publishDisplay(Steinberg::Vst::ProcessData& data);
 
   double param_value_[kNumParams];
   Engine engine_;
+  DisplayRateLimiter display_limiter_;
+  DisplayAccumulator display_acc_;
+  LevelAccumulator level_acc_;
+  bool clear_clips_requested_ = false;
+  bool clear_clips_ack_ = false;
 };
 
 } // namespace FairyTapes::DeepThroat

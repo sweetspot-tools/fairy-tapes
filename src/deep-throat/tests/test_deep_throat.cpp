@@ -17,6 +17,7 @@
 #include "dsp/tone_eq.h"
 #include "mode_table.h"
 #include "engine.h"
+#include "display.h"
 #include <algorithm>
 #include <atomic>
 #include <string>
@@ -2680,6 +2681,284 @@ void test_engine_no_alloc_in_process() {
   ASSERT_TRUE(g_allocs == 0);
 }
 
+
+// ---- Display values (LEVEL meters, clip LEDs, SCOPE) ----
+
+// Runs the engine in blocks and calls `onBlock` after each one (the display values are taken there).
+template <class F>
+void runBlocks(Engine& e, const Settings& s, const std::vector<float>& l, const std::vector<float>& r,
+               int block, F onBlock) {
+  std::vector<float> ol(l.size()), orr(l.size());
+  for (size_t i = 0; i < l.size(); i += (size_t)block) {
+    const int n = (int)std::min<size_t>((size_t)block, l.size() - i);
+    e.setSettings(s);
+    e.process(&l[i], &r[i], &ol[i], &orr[i], n);
+    onBlock(i + (size_t)n);
+  }
+}
+
+void test_display_peaks_and_clip() {
+  const double sr = 48000.0;
+  Settings s = engineDefaults();
+  s.bypass = true;  // the output is the delayed input: its peak is the input peak
+  s.inputDb = 12.0f;  // the input peaks are taken BEFORE the input gain
+  const auto x = sineVec(sr, 1000.0, std::pow(10.0, -6.0 / 20.0), 1.0);
+  std::vector<float> r(x.size());
+  for (size_t i = 0; i < x.size(); ++i) r[i] = 0.5f * x[i];  // R is 6 dB lower
+  Engine e;
+  e.prepare(sr);
+  LevelValues last;
+  runBlocks(e, s, x, r, 256, [&](size_t) { last = e.takeLevels(); });
+  ASSERT_NEAR(last.inL, -6.0, 0.5);
+  ASSERT_NEAR(last.inR, -12.0, 0.5);
+  ASSERT_NEAR(last.outL, -6.0, 0.5);
+  ASSERT_NEAR(last.outR, -12.0, 0.5);
+  ASSERT_TRUE(!last.clipIn && !last.clipOut);
+
+  // Output peak is taken after the Output gain (bypass off: chain + output gain -6 dB).
+  {
+    Settings g = engineDefaults();
+    g.eqOn = g.deEssOn = g.compOn = g.toneOn = g.riderOn = g.breathOn = false;
+    g.outputDb = -6.0f;
+    Engine e2;
+    e2.prepare(sr);
+    LevelValues l2;
+    runBlocks(e2, g, x, x, 256, [&](size_t) { l2 = e2.takeLevels(); });
+    ASSERT_NEAR(l2.inL, -6.0, 0.5);
+    ASSERT_NEAR(l2.outL, -12.0, 0.6);
+  }
+
+  // A full-scale sample lights clipIn at once and holds it for 2 s of audio.
+  std::vector<float> z((size_t)(4.0 * sr), 0.0f);
+  z[100] = 1.0f;
+  Settings b = engineDefaults();
+  b.bypass = true;
+  Engine c;
+  c.prepare(sr);
+  bool in19 = false, in21 = true, outSeen = false, inAtFirst = false;
+  runBlocks(c, b, z, z, 256, [&](size_t end) {
+    const LevelValues v = c.takeLevels();
+    if (end == 256) inAtFirst = v.clipIn;
+    if (v.clipOut) outSeen = true;
+    if (end == (size_t)(1.9 * sr) / 256 * 256) in19 = v.clipIn;
+    if (end == (size_t)(2.2 * sr) / 256 * 256) in21 = v.clipIn;
+  });
+  ASSERT_TRUE(inAtFirst);
+  ASSERT_TRUE(in19);
+  ASSERT_TRUE(!in21);
+  ASSERT_TRUE(outSeen);  // the bypassed sample reaches the output unchanged, after the latency
+
+  // clearClips() turns the held flag off.
+  Engine d;
+  d.prepare(sr);
+  const std::vector<float> one(256, 1.0f);
+  std::vector<float> o1(256), o2(256);
+  const std::vector<float> zero(256, 0.0f);
+  d.setSettings(b);
+  d.process(one.data(), one.data(), o1.data(), o2.data(), 256);
+  ASSERT_TRUE(d.takeLevels().clipIn);
+  d.process(zero.data(), zero.data(), o1.data(), o2.data(), 256);
+  ASSERT_TRUE(d.takeLevels().clipIn);  // still held
+  d.clearClips();
+  d.process(zero.data(), zero.data(), o1.data(), o2.data(), 256);
+  ASSERT_TRUE(!d.takeLevels().clipIn);
+}
+
+void test_display_gr_and_rider() {
+  const double sr = 48000.0;
+  Settings s = engineDefaults();
+  s.compAmount = 1.0f;
+  const auto loud = sineVec(sr, 220.0, 0.8, 1.5);
+  Engine e;
+  e.prepare(sr);
+  float grMax = 0.f;
+  runBlocks(e, s, loud, loud, 256, [&](size_t) { grMax = std::max(grMax, e.takeDisplay().grDb); });
+  ASSERT_TRUE(grMax > 3.0f);
+
+  // Quiet voice under the Rider target: the Rider raises it, gain > 0 dB.
+  Settings q = engineDefaults();
+  q.riderRangeDb = 6.0f;
+  const auto quiet = sineVec(sr, 220.0, 0.02, 3.0);
+  Engine f;
+  f.prepare(sr);
+  DisplayValues dv;
+  runBlocks(f, q, quiet, quiet, 256, [&](size_t) { dv = f.takeDisplay(); });
+  ASSERT_TRUE(dv.riderGainDb > 0.5f);
+  ASSERT_TRUE(dv.voiceDb < -30.0f && dv.voiceDb > -50.0f);  // Rider meter level of the quiet voice
+
+  // Rider IN off: the gain actually applied is unity.
+  q.riderOn = false;
+  Engine g;
+  g.prepare(sr);
+  runBlocks(g, q, quiet, quiet, 256, [&](size_t) { dv = g.takeDisplay(); });
+  ASSERT_NEAR(dv.riderGainDb, 0.0, 1e-3);
+}
+
+void test_display_breath_prob_raw() {
+  const double sr = 48000.0;
+  const auto x = phraseBreathPhrase(sr);  // phrase 0-1 s, breath 1-1.3 s, phrase 1.3-2.3 s
+  Settings s = engineDefaults();
+  Engine e;
+  e.prepare(sr);
+  float inBreath = 0.f, afterBreath = 0.f, inPhrase = 0.f;
+  size_t start = 0;
+  runBlocks(e, s, x, x, 128, [&](size_t end) {
+    const float p = e.takeDisplay().breathProb;
+    const double t0 = (double)start / sr, t1 = (double)end / sr;
+    start = end;
+    if (t0 >= 1.05 && t1 <= 1.3) inBreath = std::max(inBreath, p);
+    if (t0 >= 1.33 && t1 <= 1.39) afterBreath = std::max(afterBreath, p);  // the look-ahead max (D = 101 ms) still holds here
+    if (t0 >= 0.5 && t1 <= 0.9) inPhrase = std::max(inPhrase, p);
+  });
+  ASSERT_TRUE(inBreath > 0.6f);
+  ASSERT_TRUE(afterBreath < 0.3f);  // raw output: the look-ahead max would still hold the breath here
+  ASSERT_TRUE(inPhrase < 0.3f);
+}
+
+void test_display_norms_mapping() {
+  using namespace FairyTapes::DeepThroat;
+  LevelValues l;
+  DisplayValues d;
+  l.inL = 0.f;
+  l.inR = -60.f;
+  l.outL = 6.f;
+  l.outR = -120.f;
+  l.clipIn = true;
+  d.grDb = 21.f;
+  d.voiceDb = -27.f;
+  d.riderGainDb = 6.f;
+  d.breathProb = 0.25f;
+  auto n = displayNorms(d, l);
+  ASSERT_NEAR(n[kDispInL - kMeterBase], 60.0 / 66.0, 1e-6);
+  ASSERT_NEAR(n[kDispInR - kMeterBase], 0.0, 1e-6);
+  ASSERT_NEAR(n[kDispOutL - kMeterBase], 1.0, 1e-6);
+  ASSERT_NEAR(n[kDispOutR - kMeterBase], 0.0, 1e-6);
+  ASSERT_NEAR(n[kDispGr - kMeterBase], 1.0, 1e-6);
+  ASSERT_NEAR(n[kDispVoice - kMeterBase], 33.0 / 66.0, 1e-6);
+  ASSERT_NEAR(n[kDispRider - kMeterBase], 1.0, 1e-6);
+  ASSERT_NEAR(n[kDispBreath - kMeterBase], 0.25, 1e-6);
+  ASSERT_NEAR(n[kDispClipIn - kMeterBase], 1.0, 1e-6);
+  ASSERT_NEAR(n[kDispClipOut - kMeterBase], 0.0, 1e-6);
+  d.grDb = 10.5f;
+  d.riderGainDb = -6.f;
+  n = displayNorms(d, l);
+  ASSERT_NEAR(n[kDispGr - kMeterBase], 0.5, 1e-6);
+  ASSERT_NEAR(n[kDispRider - kMeterBase], 0.0, 1e-6);
+  d.grDb = 50.f;
+  d.riderGainDb = 0.f;
+  d.breathProb = 3.f;
+  n = displayNorms(d, l);
+  ASSERT_NEAR(n[kDispGr - kMeterBase], 1.0, 1e-6);
+  ASSERT_NEAR(n[kDispRider - kMeterBase], 0.5, 1e-6);
+  ASSERT_NEAR(n[kDispBreath - kMeterBase], 1.0, 1e-6);
+  d.grDb = -3.f;
+  ASSERT_NEAR(displayNorms(d, l)[kDispGr - kMeterBase], 0.0, 1e-6);
+  const float nan = std::numeric_limits<float>::quiet_NaN(), inf = std::numeric_limits<float>::infinity();
+  DisplayValues dn{nan, nan, nan, nan};
+  LevelValues ln;
+  ln.inL = nan;
+  ln.inR = inf;
+  ln.outL = -inf;
+  ln.outR = nan;
+  const auto nz = displayNorms(dn, ln);
+  for (double v : nz) ASSERT_NEAR(v, 0.0, 1e-12);
+}
+
+void test_display_rate_limiter_16ms() {
+  for (double sr : {44100.0, 48000.0, 96000.0}) {
+    DisplayRateLimiter lim;
+    lim.prepare(sr);
+    const int period = (int)(sr * 0.016);
+    ASSERT_TRUE(lim.advance(1));  // the first call writes
+    int calls = 1;
+    int since = 0;
+    for (int k = 0; k < 5; ++k) {
+      since = 0;
+      bool fired = false;
+      while (!fired && since < 4 * period) {
+        fired = lim.advance(1);
+        ++since;
+        ++calls;
+      }
+      ASSERT_TRUE(fired);
+      ASSERT_TRUE(since == period);  // exactly one write per 16 ms of audio
+    }
+    // Blocks larger than the interval write on every call.
+    DisplayRateLimiter big;
+    big.prepare(sr);
+    ASSERT_TRUE(big.advance(period + 5));
+    ASSERT_TRUE(big.advance(period + 5));
+    ASSERT_TRUE(!lim.advance(0));
+  }
+}
+
+void test_display_accumulators_hold_extremes() {
+  DisplayAccumulator a;
+  DisplayValues d1;
+  d1.voiceDb = -20.f;
+  d1.riderGainDb = 2.f;
+  d1.breathProb = 0.8f;
+  d1.grDb = 4.f;
+  DisplayValues d2;
+  d2.voiceDb = -10.f;
+  d2.riderGainDb = 1.f;
+  d2.breathProb = 0.2f;
+  d2.grDb = 2.f;
+  a.add(d1);
+  a.add(d2);
+  DisplayValues t = a.take();
+  ASSERT_NEAR(t.voiceDb, -10.0, 1e-6);
+  ASSERT_NEAR(t.riderGainDb, 1.0, 1e-6);  // MIN
+  ASSERT_NEAR(t.breathProb, 0.8, 1e-6);
+  ASSERT_NEAR(t.grDb, 4.0, 1e-6);
+  t = a.take();  // empty: neutral values
+  ASSERT_NEAR(t.riderGainDb, 0.0, 1e-6);
+  ASSERT_NEAR(t.grDb, 0.0, 1e-6);
+  ASSERT_TRUE(t.voiceDb <= -120.f);
+
+  LevelAccumulator la;
+  LevelValues a1, a2;
+  a1.inL = -30.f;
+  a1.clipOut = true;
+  a2.inL = -10.f;
+  la.add(a1);
+  la.add(a2);
+  LevelValues lt = la.take();
+  ASSERT_NEAR(lt.inL, -10.0, 1e-6);
+  ASSERT_TRUE(lt.clipOut && !lt.clipIn);
+  la.add(a1);
+  la.clearClips();
+  ASSERT_TRUE(!la.take().clipOut);
+}
+
+void test_display_no_alloc() {
+  const double sr = 48000.0;
+  const auto x = phraseBreathPhrase(sr);
+  std::vector<float> l(x.size()), r(x.size());
+  Engine e;
+  e.prepare(sr);
+  const Settings s = engineDefaults();
+  DisplayAccumulator da;
+  LevelAccumulator la;
+  double sink = 0.0;
+  g_allocs = 0;
+  g_countAllocs = true;
+  for (size_t at = 0; at + 512 <= x.size(); at += 512) {
+    e.setSettings(s);
+    e.process(&x[at], &x[at], &l[at], &r[at], 512);
+    const LevelValues lv = e.takeLevels();
+    const DisplayValues dv = e.takeDisplay();
+    da.add(dv);
+    la.add(lv);
+    const auto n = displayNorms(da.take(), la.take());
+    sink += n[0] + n[9];
+    e.clearClips();
+  }
+  g_countAllocs = false;
+  ASSERT_TRUE(g_allocs == 0);
+  ASSERT_TRUE(sink == sink);
+}
+
 // ---- BreathReducer ----
 
 void test_reducer_amount_zero_is_unity() {
@@ -2867,6 +3146,13 @@ int main() {
   RUN_TEST(test_engine_gains_are_smoothed);
   RUN_TEST(test_engine_chain_order_matches_reference);
   RUN_TEST(test_engine_no_alloc_in_process);
+  RUN_TEST(test_display_peaks_and_clip);
+  RUN_TEST(test_display_gr_and_rider);
+  RUN_TEST(test_display_breath_prob_raw);
+  RUN_TEST(test_display_norms_mapping);
+  RUN_TEST(test_display_rate_limiter_16ms);
+  RUN_TEST(test_display_accumulators_hold_extremes);
+  RUN_TEST(test_display_no_alloc);
 
   std::fprintf(stdout, "\n%d passed, %d failed.\n", g_passed, g_failed);
   if (g_failed > 0) {

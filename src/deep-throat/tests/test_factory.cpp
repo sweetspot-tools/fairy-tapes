@@ -3,7 +3,7 @@
  * dlopens the built module from dist/ and drives it the way the SDK hosting code
  * does: ModuleEntry, GetPluginFactory (owned reference), class info, createInstance,
  * release of every reference, ModuleExit. Exits 77 (skipped) when the module is absent.
- * The controller is initialized and queried for its 25 parameters (no editor view yet) and
+ * The controller is initialized and queried for its 25 automatable parameters plus the hidden display ones (no editor view yet) and
  * typed values are parsed back; the processor is set up, activated and run (latency, bus
  * layouts, in-place stereo processing, mono -> mono processing compared with the engine's mono path,
  * mono bypass delay).
@@ -235,6 +235,60 @@ void exerciseMono(Steinberg::Vst::IComponent* comp, Steinberg::Vst::IAudioProces
   CHECK(proc->setBusArrangements(&st, 1, &st, 1) == kResultOk);
 }
 
+// Collects the processor's output parameter changes: per block, the points written for each ID.
+class OutQueue : public Steinberg::Vst::IParamValueQueue {
+public:
+  Steinberg::Vst::ParamID id = 0;
+  double last = -1.0;
+  int points = 0;
+  Steinberg::Vst::ParamID PLUGIN_API getParameterId() override { return id; }
+  Steinberg::int32 PLUGIN_API getPointCount() override { return points; }
+  Steinberg::tresult PLUGIN_API getPoint(Steinberg::int32, Steinberg::int32&,
+                                         Steinberg::Vst::ParamValue& v) override {
+    v = last;
+    return Steinberg::kResultOk;
+  }
+  Steinberg::tresult PLUGIN_API addPoint(Steinberg::int32, Steinberg::Vst::ParamValue v,
+                                         Steinberg::int32& index) override {
+    last = v;
+    index = points++;
+    return Steinberg::kResultOk;
+  }
+  Steinberg::tresult PLUGIN_API queryInterface(const Steinberg::TUID, void**) override {
+    return Steinberg::kNoInterface;
+  }
+  Steinberg::uint32 PLUGIN_API addRef() override { return 1; }
+  Steinberg::uint32 PLUGIN_API release() override { return 1; }
+};
+
+class OutChanges : public Steinberg::Vst::IParameterChanges {
+public:
+  OutQueue queues[32];
+  int count = 0;
+  void clear() { count = 0; for (auto& q : queues) { q.points = 0; q.last = -1.0; } }
+  const OutQueue* find(Steinberg::Vst::ParamID id) const {
+    for (int i = 0; i < count; ++i) if (queues[i].id == id) return &queues[i];
+    return nullptr;
+  }
+  Steinberg::int32 PLUGIN_API getParameterCount() override { return count; }
+  Steinberg::Vst::IParamValueQueue* PLUGIN_API getParameterData(Steinberg::int32 i) override {
+    return i >= 0 && i < count ? &queues[i] : nullptr;
+  }
+  Steinberg::Vst::IParamValueQueue* PLUGIN_API addParameterData(const Steinberg::Vst::ParamID& id,
+                                                                Steinberg::int32& index) override {
+    for (int i = 0; i < count; ++i) if (queues[i].id == id) { index = i; return &queues[i]; }
+    if (count >= 32) return nullptr;
+    queues[count].id = id;
+    index = count;
+    return &queues[count++];
+  }
+  Steinberg::tresult PLUGIN_API queryInterface(const Steinberg::TUID, void**) override {
+    return Steinberg::kNoInterface;
+  }
+  Steinberg::uint32 PLUGIN_API addRef() override { return 1; }
+  Steinberg::uint32 PLUGIN_API release() override { return 1; }
+};
+
 void exerciseProcessor(Steinberg::FUnknown* obj) {
   using namespace Steinberg;
   using namespace Steinberg::Vst;
@@ -277,13 +331,27 @@ void exerciseProcessor(Steinberg::FUnknown* obj) {
     data.numInputs = data.numOutputs = 1;
     data.inputs = &in;
     data.outputs = &out;
+    OutChanges outChanges;
+    data.outputParameterChanges = &outChanges;
     long bad = 0;
     double late = 0.0;
     long t = 0;
+    int dispWrites = 0, badNorm = 0;
+    double inPeakNorm = 0.0;
     for (int b = 0; b < 60; ++b) {
       for (int i = 0; i < 512; ++i, ++t)
         bufL[i] = bufR[i] = (float)(0.25 * std::sin(2.0 * 3.141592653589793 * 220.0 * t / rates[k]));
+      outChanges.clear();
       CHECK(proc->process(data) == kResultOk);
+      if (const OutQueue* q = outChanges.find(kDispInL)) {
+        ++dispWrites;
+        inPeakNorm = q->last;
+        CHECK(q->points == 1);
+        for (Steinberg::Vst::ParamID id = kMeterBase; id < kNumDisplayIDs; ++id) {
+          const OutQueue* o = outChanges.find(id);
+          if (!o || !(o->last >= 0.0 && o->last <= 1.0)) ++badNorm;
+        }
+      }
       for (int i = 0; i < 512; ++i) {
         if (!std::isfinite(bufL[i]) || !std::isfinite(bufR[i])) ++bad;
         if (b >= 40) late = std::max(late, (double)std::fabs(bufL[i]));
@@ -291,6 +359,32 @@ void exerciseProcessor(Steinberg::FUnknown* obj) {
     }
     CHECK(bad == 0);
     CHECK(late > 0.05 && late < 2.0);
+    // Display values: at most one write per 16 ms of audio, at block boundaries.
+    CHECK(dispWrites > 0 && dispWrites < 60);
+    const int blocksPerWrite = (int)std::ceil(std::floor(rates[k] * 0.016) / 512.0);
+    CHECK(std::abs(dispWrites - 60 / blocksPerWrite) <= 1);  // block granularity: every ceil(16 ms / 512) blocks
+    CHECK(badNorm == 0);
+    CHECK(std::fabs(inPeakNorm - (20.0 * std::log10(0.25) + 60.0) / 66.0) < 0.02);  // -12 dB peak
+    {  // kClearClips = 1 from the editor is acknowledged with 0
+      OneQueue clr(kClearClips, 1.0);
+      struct In : IParameterChanges {
+        IParamValueQueue* q;
+        int32 PLUGIN_API getParameterCount() override { return 1; }
+        IParamValueQueue* PLUGIN_API getParameterData(int32 i) override { return i == 0 ? q : nullptr; }
+        IParamValueQueue* PLUGIN_API addParameterData(const Steinberg::Vst::ParamID&, int32&) override { return nullptr; }
+        tresult PLUGIN_API queryInterface(const TUID, void**) override { return kNoInterface; }
+        uint32 PLUGIN_API addRef() override { return 1; }
+        uint32 PLUGIN_API release() override { return 1; }
+      } inChanges;
+      inChanges.q = &clr;
+      data.inputParameterChanges = &inChanges;
+      outChanges.clear();
+      CHECK(proc->process(data) == kResultOk);
+      data.inputParameterChanges = nullptr;
+      const OutQueue* ack = outChanges.find(kClearClips);
+      CHECK(ack && ack->last == 0.0);
+    }
+    data.outputParameterChanges = nullptr;
     proc->setProcessing(false);
     CHECK(comp->setActive(false) == kResultOk);
   }
@@ -334,7 +428,35 @@ void exerciseFactory(FactoryFn getFactory) {
         CHECK(obj->queryInterface(Steinberg::Vst::IEditController::iid, (void**)&ctl) == Steinberg::kResultOk);
         if (ctl) {
           CHECK(ctl->initialize(nullptr) == Steinberg::kResultOk);
-          CHECK(ctl->getParameterCount() == 25);
+          // 25 automatable parameters + the hidden display ones (kDisp* and kClearClips).
+          int automatable = 0;
+          for (Steinberg::int32 i = 0; i < ctl->getParameterCount(); ++i) {
+            Steinberg::Vst::ParameterInfo pi{};
+            if (ctl->getParameterInfo(i, pi) == Steinberg::kResultOk &&
+                (pi.flags & Steinberg::Vst::ParameterInfo::kCanAutomate))
+              ++automatable;
+          }
+          CHECK(automatable == 25);
+          CHECK(ctl->getParameterCount() == 25 + (int)kNumDisplayIDs - (int)kMeterBase + 1);
+          const auto hidden = Steinberg::Vst::ParameterInfo::kIsReadOnly | Steinberg::Vst::ParameterInfo::kIsHidden;
+          for (Steinberg::Vst::ParamID id = kMeterBase; id < kNumDisplayIDs; ++id) {
+            Steinberg::Vst::ParameterInfo pi{};
+            bool found = false;
+            for (Steinberg::int32 i = 0; i < ctl->getParameterCount(); ++i)
+              if (ctl->getParameterInfo(i, pi) == Steinberg::kResultOk && pi.id == id) { found = true; break; }
+            CHECK(found);
+            CHECK((pi.flags & hidden) == hidden);
+            CHECK(!(pi.flags & Steinberg::Vst::ParameterInfo::kCanAutomate));
+          }
+          {  // the clear-clips trigger is hidden and writable
+            Steinberg::Vst::ParameterInfo pi{};
+            bool found = false;
+            for (Steinberg::int32 i = 0; i < ctl->getParameterCount(); ++i)
+              if (ctl->getParameterInfo(i, pi) == Steinberg::kResultOk && pi.id == kClearClips) { found = true; break; }
+            CHECK(found);
+            CHECK((pi.flags & Steinberg::Vst::ParameterInfo::kIsHidden) != 0);
+            CHECK((pi.flags & Steinberg::Vst::ParameterInfo::kIsReadOnly) == 0);
+          }
           exerciseController(ctl);
           CHECK(ctl->createView(Steinberg::Vst::ViewType::kEditor) == nullptr);  // no editor yet
           CHECK(ctl->terminate() == Steinberg::kResultOk);

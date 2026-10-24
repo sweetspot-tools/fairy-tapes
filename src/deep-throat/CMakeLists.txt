@@ -91,7 +91,7 @@ else()
   )
 endif()
 
-target_link_libraries(deep_throat PRIVATE sdk)
+target_link_libraries(deep_throat PRIVATE sdk fairy_ui)
 if(APPLE)
   target_link_libraries(deep_throat PRIVATE "-framework CoreFoundation")
   target_link_options(deep_throat PRIVATE
@@ -114,6 +114,7 @@ target_include_directories(deep_throat_tests PRIVATE
   ${VST3_SDK_PATH}/pluginterfaces/base
   ${VST3_SDK_PATH}/pluginterfaces/vst
 )
+target_link_libraries(deep_throat_tests PRIVATE fairy_ui)  # header-only (fairy_ui/knob_math.h)
 add_test(NAME deep_throat_tests COMMAND deep_throat_tests)
 
 # Module/factory lifecycle smoke test: dlopens the built bundle from dist/ (exit 77 = skipped
@@ -130,7 +131,7 @@ if(NOT WIN32)
     ${CMAKE_CURRENT_SOURCE_DIR}/src)
   target_compile_definitions(deep_throat_factory_test PRIVATE
     DEEP_THROAT_MODULE="${DEEP_THROAT_MODULE_PATH}")
-  target_link_libraries(deep_throat_factory_test PRIVATE pluginterfaces ${CMAKE_DL_LIBS})
+  target_link_libraries(deep_throat_factory_test PRIVATE pluginterfaces fairy_ui ${CMAKE_DL_LIBS})
   add_test(NAME deep_throat_factory_test COMMAND deep_throat_factory_test)
   set_tests_properties(deep_throat_factory_test PROPERTIES SKIP_RETURN_CODE 77)
 endif()
