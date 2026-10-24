@@ -118,7 +118,7 @@ target_link_libraries(deep_throat_tests PRIVATE fairy_ui)  # header-only (fairy_
 add_test(NAME deep_throat_tests COMMAND deep_throat_tests)
 
 # Pure editor layout (ui/layout.h): no VSTGUI, only SDK type headers through params.h.
-add_executable(deep_throat_ui_tests tests/test_ui.cpp)
+add_executable(deep_throat_ui_tests tests/test_ui.cpp src/ui/prefs.cpp src/ui/decor.cpp)
 target_include_directories(deep_throat_ui_tests PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src
   ${VST3_SDK_PATH}
