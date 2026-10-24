@@ -10,6 +10,7 @@
 
 #include "fairy_ui/controls.h"
 #include "fairy_ui/draw_util.h"
+#include "fairy_ui/knob_math.h"
 #include "fairy_ui/rack_controls.h"
 #include "fairy_ui/sanitize.h"
 #include "fairy_ui/silkscreen_view.h"
@@ -310,9 +311,23 @@ void Editor::onTimer() {
   if (valueEdit_ && frame && frame->getFocusView() != valueEdit_) closeValueEdit(false);
 }
 
+// The step count of a stepped parameter (0 for the others).
+static int stepCount(ParamID id) {
+  switch (id) {
+  case kMode: return kModeCount;
+  case kCompRatio: return kCompRatioCount;
+  case kCompDist: return kCompDistCount;
+  case kCompHpf: return kCompHpfCount;
+  default: return 0;
+  }
+}
+
 void Editor::syncFromController(ParamID id) {
   if (id >= kNumParams) return;
-  const double v = controllerNorm(getController(), id);
+  double v = controllerNorm(getController(), id);
+  // A stepped parameter off the grid (an automation ramp): the step the DSP and the SDK display use (floor of n * count),
+  // not the nearest one the choice control would pick, so the lit face always agrees with the sound and the texts.
+  if (const int count = stepCount(id)) v = FairyTapes::Ui::normFromChoiceIndex(FairyTapes::DeepThroat::detail::stepIndex(v, count), count);
   if (NormalizedControl* control = controls_[id]) {
     control->setValueNormalized(static_cast<float>(v));
     control->invalid();

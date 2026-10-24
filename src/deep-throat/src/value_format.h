@@ -156,7 +156,7 @@ inline bool parseKnobValue(Steinberg::Vst::ParamID id, const std::string& text, 
     n = std::log(khz / d::kDeEssLowKHz) / std::log(d::kDeEssRatio);
     break;
   }
-  case kTone:
+  case kTone:   // the one knob whose % is its own signed scale (-100..+100), not a share of the travel
     if (!unit.empty() && unit != "%") return false;
     n = x / 200.0 + 0.5;
     break;

@@ -41,6 +41,7 @@
 #include <cstring>
 #include <iterator>
 #include <string>
+#include <vector>
 
 // The SDK's VSTGUI init hook asks the module for its factory; there is none in this test.
 extern "C" Steinberg::IPluginFactory* GetPluginFactory() { return nullptr; }
@@ -99,6 +100,7 @@ struct EditorTest {
   static VSTGUI::CTextEdit* valueEdit(const Editor& ed) { return ed.valueEdit_; }
   static void closeValueEdit(Editor& ed, bool confirm) { ed.closeValueEdit(confirm); }
   static bool handwritten(const Editor& ed) { return ed.valuesHandwritten_; }
+  static void setHandwritten(Editor& ed, bool on) { ed.valuesHandwritten_ = on; }
 };
 
 } // namespace FairyTapes::DeepThroat::Ui
@@ -817,10 +819,82 @@ void test_typed_value_goes_through_the_controller() {
   spy.terminate();
 }
 
-// The values are drawn in the tape font by default (the preferences are wired in Task 10).
+// The values under the knobs are drawn by the handwriting (tape font) by default: the pixels of the Input value differ
+// from the plain bold text drawn when the switch is off, and both draw something there.
 void test_values_handwritten_by_default() {
+  setResourcePath(false);
   Editor ed(g_ctl);
+  auto root = EditorTest::build(ed);
   ASSERT_TRUE(EditorTest::handwritten(ed));
+  auto region = [&]() {
+    std::vector<int> px;
+    auto bmp = drawOffscreen(root);
+    if (!bmp) return px;
+    const Pixels p = pixelsOf(bmp);
+    for (int y = 200; y <= 216; ++y)
+      for (int x = 52; x <= 106; ++x) px.push_back(brightness(p.at(x, y)));
+    return px;
+  };
+  auto amberCount = [](const std::vector<int>& v) { return std::count_if(v.begin(), v.end(), [](int b) { return b > 0x90; }); };
+  const auto hand = region();
+  EditorTest::setHandwritten(ed, false);
+  const auto plain = region();
+  EditorTest::destroy(ed, root);
+  ASSERT_TRUE(!hand.empty() && hand.size() == plain.size());
+  ASSERT_TRUE(amberCount(hand) > 5 && amberCount(plain) > 5);
+  int differing = 0;
+  for (std::size_t i = 0; i < hand.size(); ++i) differing += std::abs(hand[i] - plain[i]) > 0x40 ? 1 : 0;
+  ASSERT_TRUE(differing > 10);
+}
+
+// Off-grid host values of the stepped parameters (automation ramps): the face lit by the control is the step the DSP
+// and the SDK display use (stepIndex = floor(n * count)), and the dynamic texts agree with it.
+void test_stepped_controls_show_the_dsp_step() {
+  Editor ed(g_ctl);
+  auto root = EditorTest::build(ed);
+  auto index = [&](ParamID id) {
+    auto* c = dynamic_cast<FairyTapes::Ui::ChoiceButtons*>(EditorTest::control(ed, id));
+    return c ? c->selectedIndex() : -1;
+  };
+  auto setTick = [&](ParamID id, double n) {
+    g_ctl->setParamNormalized(id, n);
+    EditorTest::tick(ed);
+  };
+  // Mode 0.3: SPEAK for the DSP (floor 0.9 = 0), not SING (round 0.6 = 1)
+  setTick(kMode, 0.3);
+  ASSERT_TRUE(index(kMode) == 0 && modeFromNorm(0.3) == Mode::Speak);
+  ASSERT_TRUE(dynamicTextsMatch(ed) && EditorTest::tag(ed, kTagModeName)->text == modeTagLine1(Mode::Speak));
+  for (double n : {0.26, 0.34, 0.7}) {
+    setTick(kMode, n);
+    ASSERT_TRUE(index(kMode) == FairyTapes::DeepThroat::detail::stepIndex(n, kModeCount));
+    ASSERT_TRUE(dynamicTextsMatch(ed));
+  }
+  setTick(kCompRatio, 0.1);
+  ASSERT_TRUE(index(kCompRatio) == 0 && EditorTest::silkValue(ed, kCompRatio) == ratioText(0, modeFromNorm(g_ctl->getParamNormalized(kMode))));
+  for (double n : {0.49, 0.51, 1.0}) {
+    setTick(kCompRatio, n);
+    ASSERT_TRUE(index(kCompRatio) == FairyTapes::DeepThroat::detail::stepIndex(n, kCompRatioCount));
+  }
+  ASSERT_TRUE(index(kCompRatio) == 7);
+  setTick(kCompDist, 0.2);   // floor 0.8 = 0 (AUTO), round 0.6 + 0.5 = 1
+  ASSERT_TRUE(index(kCompDist) == 0 && dynamicTextsMatch(ed));
+  setTick(kCompHpf, 0.3);    // floor 0.9 = 0 (OFF), round 1.1 = 1
+  ASSERT_TRUE(index(kCompHpf) == 0 && dynamicTextsMatch(ed));
+  // every stepped parameter on a fine grid
+  struct Stepped { ParamID id; int count; };
+  for (const Stepped& st : {Stepped{kMode, kModeCount}, Stepped{kCompRatio, kCompRatioCount}, Stepped{kCompDist, kCompDistCount},
+                            Stepped{kCompHpf, kCompHpfCount}}) {
+    for (int k = 0; k <= 100; ++k) {
+      const double n = k / 100.0;
+      setTick(st.id, n);
+      const int want = FairyTapes::DeepThroat::detail::stepIndex(n, st.count);
+      if (index(st.id) != want) std::fprintf(stderr, "  param %u at %.2f: face %d, DSP step %d\n", (unsigned)st.id, n, index(st.id), want);
+      ASSERT_TRUE(index(st.id) == want);
+    }
+    ASSERT_TRUE(dynamicTextsMatch(ed));
+  }
+  resetParams(g_ctl);
+  EditorTest::destroy(ed, root);
 }
 
 } // namespace
@@ -850,6 +924,7 @@ int main() {
   RUN_TEST(test_bypass_dims_everything_but_itself);
   RUN_TEST(test_typed_value_goes_through_the_controller);
   RUN_TEST(test_values_handwritten_by_default);
+  RUN_TEST(test_stepped_controls_show_the_dsp_step);
   ctl.terminate();
   g_ctl = nullptr;
   VSTGUI::exit();

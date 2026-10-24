@@ -583,6 +583,9 @@ void test_value_text_parse_roundtrip() {
               formatKnobValue(kDeEssFreq, n) == "6.5 kHz");
   ASSERT_TRUE(!parseKnobValue(kDeEssFreq, "0 kHz", n) && !parseKnobValue(kDeEssFreq, "-3", n));
   ASSERT_TRUE(parseKnobValue(kTone, "+50 %", n) && n == 0.75 && !parseKnobValue(kTone, "5 dB", n));
+  // Tone is the one knob whose % is its own signed scale (-100..+100), not a share of the travel
+  ASSERT_TRUE(parseKnobValue(kTone, "-100 %", n) && n == 0.0 && parseKnobValue(kTone, "100", n) && n == 1.0);
+  ASSERT_TRUE(parseKnobValue(kTone, "50 %", n) && n == 0.75 && parseKnobValue(kTone, "0 %", n) && n == 0.5);
   ASSERT_TRUE(parseKnobValue(kEqAmount, "250", n) && n == 1.0 && !parseKnobValue(kEqAmount, "3 dB", n));
   ASSERT_TRUE(!parseKnobValue(kBypass, "1", n) && !parseKnobValue(kMode, "0.5", n));
 }
