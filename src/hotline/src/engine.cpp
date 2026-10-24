@@ -136,7 +136,7 @@ void Engine::prepare(double sampleRate, int maxBlockSize) {
     ch.crush.prepare(fs_);
     ch.comp.prepare(fs_);
     ch.noise.prepare(fs_, kSeed[c]);
-    ch.room.prepare(fs_);
+    ch.room.prepare(fs_, c);  // R gets the stereo spread: decorrelated tails
     ch.dcX = ch.dcY = 0.f;
     ch.bandOn = false;
   }

@@ -776,6 +776,37 @@ void roomDoesNotAllocateAfterPrepare() {
   ASSERT_TRUE(g_allocs == 0);
 }
 
+// Stereo spread: the spread instance has longer delays, stays allocation-free after prepare and
+// its tail still decays below -60 dB after its own tailSamples().
+void roomSpreadDecaysWithoutAllocating() {
+  for (double fs : {8000.0, 48000.0, 192000.0}) {
+    D::Room r; r.prepare(fs, 1);
+    D::Room plain; plain.prepare(fs);
+    ASSERT_TRUE(r.tailSamples() > 0 && r.tailSamples() < (int)(5.0 * fs));
+    Lcg l;
+    g_allocs = 0;
+    g_countAllocs = true;
+    r.set(1.0);
+    const int tail = r.tailSamples(), n = tail + (int)(2.0 * fs);
+    double wetPeak = 0, wetAfter = 0, diff = 0;
+    plain.set(1.0);
+    for (int i = 0; i < n; ++i) {
+      const float x = i == 0 ? 1.f : 0.f, y = r.process(x), yp = plain.process(x);
+      const double w = i == 0 ? y - 1.0 : y;
+      wetPeak = std::max(wetPeak, std::fabs(w));
+      if (i >= tail) wetAfter = std::max(wetAfter, std::fabs(w));
+      diff = std::max(diff, (double)std::fabs(y - yp));
+    }
+    r.clear(); r.set(0.0); r.process(0.5f); r.set(0.3);
+    for (int i = 0; i < 1000; ++i) r.process(l.next());
+    g_countAllocs = false;
+    ASSERT_TRUE(g_allocs == 0);
+    ASSERT_TRUE(wetPeak > 0.01);
+    ASSERT_TRUE(wetAfter < wetPeak * 1e-3);
+    ASSERT_TRUE(diff > 1e-3);  // really a different room
+  }
+}
+
 void roomIsContinuousTowardDry() {
   // y = x + amount * wet, |wet| <= 1 for a +-1 input: the deviation from dry is <= amount * 1
   for (double amount : {1e-6, 1e-4, 1e-2}) {
@@ -1403,6 +1434,51 @@ void deviceSwitchSettles() {
   ASSERT_TRUE(late < 1e-3);       // and it ends on the new one
 }
 
+// Spec 2: with Mono off the room tails of L and R are decorrelated, even for a centred source
+// (L == R, distinct buffers so it is not a mono host track). Wet = output minus the same engine
+// with Room off. With an identical R room the correlation is exactly 1; with the spread R room it
+// measured 0.02 (PA, room x2, 20 ms .. 1 s after the impulse), so 0.5 leaves a wide margin.
+double wetCorrelation(bool mono) {
+  const int n = 48000;
+  std::vector<float> L((size_t)n, 0.f);
+  L[0] = 1.f;
+  const std::vector<float> R = L;
+  Settings s = engineSettings(4, 1.f); s.noise = 0.f; s.room = 2.f; s.mono = mono;
+  Engine a; a.prepare(48000, 512); a.setSettings(s);
+  s.room = 0.f;
+  Engine dry; dry.prepare(48000, 512); dry.setSettings(s);
+  const Out o = runEngine(a, L, R), d = runEngine(dry, L, R);
+  double lr = 0, ll = 0, rr = 0;
+  for (int i = 960; i < n; ++i) {
+    const double wl = o.L[(size_t)i] - d.L[(size_t)i], wr = o.R[(size_t)i] - d.R[(size_t)i];
+    lr += wl * wr; ll += wl * wl; rr += wr * wr;
+  }
+  if (ll <= 0 || rr <= 0) return 2.0;  // no tail at all: fail loudly
+  return lr / std::sqrt(ll * rr);
+}
+
+void roomTailsAreDecorrelated() {
+  ASSERT_TRUE(std::fabs(wetCorrelation(false)) < 0.5);
+}
+
+void roomMonoStaysIdentical() {
+  const int n = 24000;
+  std::vector<float> L = whiteNoise(n, 23, 0.5f);
+  const std::vector<float> R = whiteNoise(n, 24, 0.5f);
+  Settings s = engineSettings(4, 1.f); s.room = 2.f; s.mono = true;
+  Engine e; e.prepare(48000, 512); e.setSettings(s);
+  const Out o = runEngine(e, L, R);
+  ASSERT_TRUE(sameBits(o.L, o.R, 0, n));
+  ASSERT_TRUE(std::fabs(wetCorrelation(true) - 1.0) < 1e-9);
+}
+
+void engineTailCoversBothRooms() {
+  Engine e; e.prepare(48000, 512);
+  D::Room a; a.prepare(48000, 0);
+  D::Room b; b.prepare(48000, 1);
+  ASSERT_TRUE(e.tailSamples() == std::max(a.tailSamples(), b.tailSamples()));
+}
+
 void characterInOffIgnoresMix() {
   const int n = 24000;
   const auto L = whiteNoise(n, 18, 0.5f), R = whiteNoise(n, 19, 0.5f);
@@ -1568,6 +1644,7 @@ int main() {
   RUN_TEST(roomTailDecays);
   RUN_TEST(roomWetScalesWithAmount);
   RUN_TEST(roomDoesNotAllocateAfterPrepare);
+  RUN_TEST(roomSpreadDecaysWithoutAllocating);
   RUN_TEST(roomIsContinuousTowardDry);
   RUN_TEST(roomNoStaleStateAfterNeutral);
   RUN_TEST(roomRejectsNonFinite);
@@ -1596,6 +1673,9 @@ int main() {
   RUN_TEST(morphAutomationHasNoClick);
   RUN_TEST(deviceSwitchDuringRoomTail);
   RUN_TEST(deviceSwitchSettles);
+  RUN_TEST(roomTailsAreDecorrelated);
+  RUN_TEST(roomMonoStaysIdentical);
+  RUN_TEST(engineTailCoversBothRooms);
   RUN_TEST(characterInOffIgnoresMix);
   RUN_TEST(driveDcIsBlocked);
   RUN_TEST(nonFiniteSettingsIgnored);

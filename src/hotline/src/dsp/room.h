@@ -11,20 +11,25 @@ namespace FairyTapes::Hotline::DSP {
  * 192 kHz (delays scale with fs), so set()/process()/clear() never allocate. Feedback is set for
  * a ~0.5 s decay. Cheap set(), keeps the tail; non-finite amount is ignored, non-finite input
  * samples are read as 0.
+ * spread > 0 (Freeverb-style stereo spread) adds spread * round(23 * fs / 44100) samples to every
+ * delay, so a second instance gives a decorrelated tail; spread 0 is the original room.
  */
 class Room {
 public:
-  void prepare(double fs) {
+  void prepare(double fs, int spread = 0) {
     fs_ = std::clamp(fs > 0.0 ? fs : 48000.0, 1000.0, 192000.0);
     const double scale = fs_ / 44100.0;
+    const int sp = std::max(0, spread);
+    const int extra = sp * (int)std::lround(kSpreadBase * scale);           // this rate
+    const int extraMax = sp * (int)std::lround(kSpreadBase * 192000.0 / 44100.0);  // buffer room
     for (int i = 0; i < kCombs; ++i) {
-      comb_[i].len = std::max(1, (int)std::lround(kCombBase[i] * scale));
+      comb_[i].len = std::max(1, (int)std::lround(kCombBase[i] * scale)) + extra;
       comb_[i].g = (float)std::pow(10.0, -3.0 * comb_[i].len / (fs_ * kRt60));
-      comb_[i].buf.assign((size_t)std::ceil(kCombBase[i] * 192000.0 / 44100.0) + 2, 0.f);
+      comb_[i].buf.assign((size_t)std::ceil(kCombBase[i] * 192000.0 / 44100.0) + 2 + (size_t)extraMax, 0.f);
     }
     for (int i = 0; i < kAps; ++i) {
-      ap_[i].len = std::max(1, (int)std::lround(kApBase[i] * scale));
-      ap_[i].buf.assign((size_t)std::ceil(kApBase[i] * 192000.0 / 44100.0) + 2, 0.f);
+      ap_[i].len = std::max(1, (int)std::lround(kApBase[i] * scale)) + extra;
+      ap_[i].buf.assign((size_t)std::ceil(kApBase[i] * 192000.0 / 44100.0) + 2 + (size_t)extraMax, 0.f);
     }
     amount_ = 0.f;
     clear();
@@ -63,6 +68,7 @@ private:
   static constexpr double kRt60 = 0.5, kDamp = 0.25;
   static constexpr int kCombBase[kCombs] = {1116, 1188, 1277, 1356};  // samples at 44.1 kHz
   static constexpr int kApBase[kAps] = {556, 441};
+  static constexpr double kSpreadBase = 23.0;  // samples at 44.1 kHz per unit of spread
   struct Comb { std::vector<float> buf; int len = 1, pos = 0; float g = 0.f, lp = 0.f; };
   struct Ap { std::vector<float> buf; int len = 1, pos = 0; };
 

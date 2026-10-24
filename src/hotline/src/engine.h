@@ -21,6 +21,7 @@
 #include "dsp/noise.h"
 #include "dsp/room.h"
 #include "params.h"
+#include <algorithm>
 #include <vector>
 
 namespace FairyTapes::Hotline {
@@ -71,6 +72,8 @@ public:
   void process(const float* inL, const float* inR, float* outL, float* outR, int numSamples);
   DisplayValues lastDisplay() const;
   void clearClips() { clipInLeft_ = clipDriveLeft_ = clipOutLeft_ = 0; }
+  // Samples after which the longer of the two room tails has fallen below -60 dB.
+  int tailSamples() const { return std::max(ch_[0].room.tailSamples(), ch_[1].room.tailSamples()); }
   // Clears every DSP state and noise generator; smoothed values jump to their targets.
   void reset();
 
