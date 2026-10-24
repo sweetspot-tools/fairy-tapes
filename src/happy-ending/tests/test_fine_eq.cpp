@@ -144,6 +144,36 @@ void testNoCrampingNearNyquist() {
     ASSERT_NEAR_EPS(eq.magnitudeDb(0, f), analogBellDb(12500.0, 4.0, qEff, f), 0.5);
 }
 
+// HI MID 12.5 kHz, Q Wide, at 44.1 kHz: the matched bell (boost and reciprocal cut) follows the
+// analog prototype all the way down the skirt; the bell does not widen into the mids.
+void testHiMidBellFollowsAnalogAt44k() {
+  const double sr = 44100.0;
+  for (double gain : {4.0, -4.0}) {
+    FineEq eq;
+    eq.prepare(sr, 512);
+    eq.setStageOn(true);
+    eq.setBand(kBandHm, settings(kHmFreq, 12500.0, kHmGain, gain, /*Q W*/ 0));
+    const double qEff = DSP::effectiveQ(Tables::kQValues[0], gain);
+    for (double f : {100.0, 1000.0, 5000.0, 10000.0, 12500.0, 15000.0, 20000.0})
+      ASSERT_NEAR_EPS(eq.magnitudeDb(0, f), analogBellDb(12500.0, gain, qEff, f), 0.3);
+  }
+}
+
+// A cut is the exact reciprocal of the boost of the same size, at every frequency and rate.
+void testBellCutIsReciprocalOfBoost() {
+  const double rates[] = {44100.0, 48000.0, 96000.0, 192000.0};
+  for (double sr : rates)
+    for (double fc : {100.0, 1000.0, 5000.0, 12500.0})
+      for (double q : {0.5, 2.0, 5.0})
+        for (double g : {0.5, 4.0}) {
+          DSP::BiquadCoeffs up, down;
+          DSP::matched::computePeakingMatched(up, fc, sr, g, q);
+          DSP::matched::computePeakingMatched(down, fc, sr, -g, q);
+          for (double f : {50.0, 500.0, 3000.0, 9000.0, 17000.0})
+            ASSERT_NEAR_EPS(up.magnitudeDb(f, sr) + down.magnitudeDb(f, sr), 0.0, 1e-6);
+        }
+}
+
 void testQCoupling() {
   // Effective Q = Q * (1 + |gain dB| / 8), the same for boost and cut.
   ASSERT_NEAR_EPS(DSP::effectiveQ(1.0, 0.0), 1.0, 1e-12);
@@ -581,6 +611,8 @@ void testNoAllocationWithListenAndMs() {
 int main() {
   RUN_TEST(testBellCentreGain);
   RUN_TEST(testNoCrampingNearNyquist);
+  RUN_TEST(testHiMidBellFollowsAnalogAt44k);
+  RUN_TEST(testBellCutIsReciprocalOfBoost);
   RUN_TEST(testQCoupling);
   RUN_TEST(testHighPassOffIsIdentity);
   RUN_TEST(testHighPassSlope12dB);

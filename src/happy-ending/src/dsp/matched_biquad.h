@@ -72,17 +72,20 @@ inline void computePeaking(BiquadCoeffs& c, double fc, double sr, double gainDb,
   detail::store(c, 1.0 + kbw * a, -2.0 * cosW, 1.0 - kbw * a, 1.0 + kbw / a, -2.0 * cosW, 1.0 - kbw / a);
 }
 
-// Peaking boost matched to the analog bell (M. Vicanek, "Matched Second Order Digital Filters",
+// Peaking bell matched to the analog one (M. Vicanek, "Matched Second Order Digital Filters",
 // 2016): poles from the analog poles by the matched z-transform, zeros chosen so that the digital
 // magnitude equals the analog one at DC, at fc and at Nyquist. The bell keeps its analog width up
-// to Nyquist: no cramping and, unlike the bandwidth pre-warped peaking above, no widening into the
-// mids for a broad bell high in the spectrum. Boosts only (gainDb > 0); anything else, or a
-// degenerate case, falls back to computePeaking.
-inline void computePeakingMatched(BiquadCoeffs& c, double fc, double sr, double gainDb, double q) {
-  fc = clampFreq(fc, sr);
-  q = std::max(0.01, q);
-  if (gainDb < 0.01) { computePeaking(c, fc, sr, gainDb, q); return; }
+// to Nyquist: no cramping and, unlike the bandwidth pre-warped computePeaking above, no widening
+// into the mids for a broad bell high in the spectrum.
+//
+// A boost is designed directly; a cut is the exact reciprocal of the boost of the same |gain|
+// (numerator and denominator swapped, renormalised so that a0 = 1), which is also the analog
+// prototype of a cut. Degenerate boosts (never met over the whole range of the plugin, checked by
+// the tests) fall back to computePeaking; a degenerate cut stays identity.
+namespace detail {
 
+// Returns false when the matched zeros do not exist (the caller decides what to do).
+inline bool matchedBoost(BiquadCoeffs& c, double fc, double sr, double gainDb, double q) {
   const double kPi = BiquadCoeffs::kPi;
   const double amp = std::pow(10.0, gainDb / 40.0);  // A: the bell peaks at A^2 = gain
   const double w0 = 2.0 * kPi * fc / sr;
@@ -115,13 +118,37 @@ inline void computePeakingMatched(BiquadCoeffs& c, double fc, double sr, double 
   const double sqrtB0 = std::sqrt(bigB0), sqrtB1 = std::sqrt(bigB1);
   const double w = 0.5 * (sqrtB0 + sqrtB1);
   const double disc = w * w + bigB2;
-  if (!(disc > 0.0) || !std::isfinite(disc)) { computePeaking(c, fc, sr, gainDb, q); return; }
+  if (!(disc > 0.0) || !std::isfinite(disc)) return false;
   const double b0 = 0.5 * (w + std::sqrt(disc));
   c.b0 = b0;
   c.b1 = 0.5 * (sqrtB0 - sqrtB1);
   c.b2 = -bigB2 / (4.0 * b0);
   c.a1 = a1;
   c.a2 = a2;
+  return std::isfinite(c.b1) && std::isfinite(c.b2);
+}
+
+} // namespace detail
+
+inline void computePeakingMatched(BiquadCoeffs& c, double fc, double sr, double gainDb, double q) {
+  fc = clampFreq(fc, sr);
+  q = std::max(0.01, q);
+  if (std::abs(gainDb) < 0.01) { c = BiquadCoeffs{}; return; }
+
+  BiquadCoeffs boost;
+  if (!detail::matchedBoost(boost, fc, sr, std::abs(gainDb), q)) {
+    if (gainDb > 0.0) computePeaking(c, fc, sr, gainDb, q);
+    else c = BiquadCoeffs{};
+    return;
+  }
+  if (gainDb > 0.0) { c = boost; return; }
+
+  // Exact reciprocal: (1 + a1 z^-1 + a2 z^-2) / (b0 + b1 z^-1 + b2 z^-2), renormalised by b0.
+  c.b0 = 1.0 / boost.b0;
+  c.b1 = boost.a1 / boost.b0;
+  c.b2 = boost.a2 / boost.b0;
+  c.a1 = boost.b1 / boost.b0;
+  c.a2 = boost.b2 / boost.b0;
 }
 
 inline void computeLowShelf(BiquadCoeffs& c, double fc, double sr, double gainDb, double q) {

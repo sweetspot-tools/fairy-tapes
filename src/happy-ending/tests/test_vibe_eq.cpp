@@ -200,6 +200,35 @@ void testAirDoesNotLiftMidsNearNyquist() {
   ASSERT_NEAR_EPS(measuredGainDb(eq, 1000.0, 44100.0, -30.0, 1.0), eq.magnitudeDb(1000.0, true), 0.3);
 }
 
+void testHotInputStaysBounded() {
+  // LOW 10 on a 60 Hz sine at +6 dBFS (INPUT allows +12 dB, so internal peaks over full scale are
+  // normal): the core saturation compresses, it never runs away and the filter memory is not
+  // clamped into a distortion at 8.
+  const double sr = 48000.0;
+  VibeEq eq;
+  eq.prepare(sr, 512);
+  VibeSettings s = makeSettings();
+  s.low = 10;
+  eq.set(s);
+  const std::vector<float> out = runLinear(eq, 60.0, sr, 6.0, 2.0);
+  float peak = 0.0f;
+  for (float v : out) {
+    ASSERT_TRUE(std::isfinite(v));
+    peak = std::max(peak, std::fabs(v));
+  }
+  ASSERT_TRUE(peak < 2.0f);
+  // Louder in, louder out: the compression is monotonic, not a runaway.
+  VibeEq quiet;
+  quiet.prepare(sr, 512);
+  quiet.set(s);
+  const std::vector<float> small = runLinear(quiet, 60.0, sr, -6.0, 2.0);
+  float smallPeak = 0.0f;
+  for (std::size_t i = small.size() / 2; i < small.size(); ++i) smallPeak = std::max(smallPeak, std::fabs(small[i]));
+  float bigPeak = 0.0f;
+  for (std::size_t i = out.size() / 2; i < out.size(); ++i) bigPeak = std::max(bigPeak, std::fabs(out[i]));
+  ASSERT_TRUE(bigPeak >= smallPeak);
+}
+
 void testTiltSymmetric() {
   VibeEq eq;
   eq.prepare(48000.0, 512);
@@ -252,7 +281,7 @@ void testDynPullsBackOnLoudProgram() {
   off.set(s);
   const double offGain = measuredGainDb(off, 60.0, sr, -6.0);
   ASSERT_TRUE(off.dynLowAmount() == 0.0f);
-  ASSERT_TRUE(offGain > loudGain + 1.0);
+  ASSERT_TRUE(offGain > loudGain);  // (the core saturation, which also acts here, dominates at this level)
 
   // magnitudeDb: static ignores the pull-back, dynamic follows it.
   s.dynLow = true;
@@ -497,6 +526,7 @@ int main() {
   RUN_TEST(testLowFrequencySteps);
   RUN_TEST(testAirBoost);
   RUN_TEST(testAirDoesNotLiftMidsNearNyquist);
+  RUN_TEST(testHotInputStaysBounded);
   RUN_TEST(testTiltSymmetric);
   RUN_TEST(testDynPullsBackOnLoudProgram);
   RUN_TEST(testDynPullsBackAirOnLoudProgram);

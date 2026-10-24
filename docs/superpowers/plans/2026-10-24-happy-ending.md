@@ -76,6 +76,8 @@ Ordine congelato e valori (default in grassetto), da spec §3-§5 e dalla previe
 - [x] **Step 4: Esegui** → PASS.
 - [x] **Step 5: Commit** `feat(happy-ending): matched biquad port and Fine EQ bands`.
 
+Nota (Task 4): le campane del FINE EQ usano ora il progetto matched di Vicanek (`matched::computePeakingMatched`): boost diretto e taglio come reciproco esatto del boost; LISTEN e gli shelf restano com'erano.
+
 ### Task 3: M/S, IN e LISTEN del FINE EQ
 
 **Files:**
@@ -104,7 +106,7 @@ Ordine congelato e valori (default in grassetto), da spec §3-§5 e dalla previe
 - [x] **Step 4: Esegui** → PASS.
 - [x] **Step 5: Commit** `feat(happy-ending): Vibe EQ port (LOW trick, AIR, TILT, DYN, TUBE)`.
 
-Note (Task 4 done): LOW cut is a bell at 2.5x the boost frequency, not the source's same-frequency low shelf (that cannot make a dip above the boost). AIR uses a fixed Q 0.8 with the Vicanek-matched peaking (`matched::computePeakingMatched`, added to `matched_biquad.h`; `computePeaking` of FINE EQ is unchanged), so the bell keeps its width near Nyquist and does not lift the mids; the source's Q polynomial is not used for AIR (it would flatten a 10 kHz boost). TUBE is faithful to the source (about -44 dB THD at TUBE 10, -56.6 dB at drive 0.2), TUBE 0 is an exact bypass. Everything voiced is in `tuning.h` (`kVibe*`, `kDyn*`).
+Nota (Task 4 fatto): il taglio di LOW è una campana a 2,5 volte la frequenza del boost, non lo shelf basso alla stessa frequenza della sorgente (che non può fare una gobba sopra il boost). AIR ha Q fisso 0,8 e usa il peaking matched di Vicanek (`matched::computePeakingMatched` in `matched_biquad.h`), quindi la campana tiene la larghezza vicino a Nyquist e non alza i medi; il polinomio del Q della sorgente non si usa per AIR (appiattirebbe un boost a 10 kHz). TUBE è fedele alla sorgente (circa −44 dB di THD a TUBE 10, −56,6 dB a drive 0,2); TUBE 0 è un bypass esatto. `prepareTube(sr)` prepara lo stadio valvolare alla frequenza sovracampionata. Il modello dell'induttore è limitato (eccesso e termini polinomiali non crescono oltre il fondo scala) e il limite di sicurezza dello stato dei filtri è 1e3: prima un ingresso caldo con LOW 10 faceva esplodere l'uscita. La saturazione del nucleo è forte (LOW 10 a −10 dBFS comprime già il picco a circa 0,85): da rivedere nel compito di taratura. Tutto ciò che si tara a orecchio sta in `tuning.h` (`kVibe*`, `kDyn*`).
 
 ### Task 5: GLUE
 

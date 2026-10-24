@@ -21,7 +21,7 @@ constexpr double kLowSatQ = 0.25;          // core saturation lowers the LOW Q b
 constexpr double kAirSatQ = 0.20;          // the same for the AIR boost
 constexpr double kLowInductorDrive = 0.3;  // inductor drive per step of the LOW amount
 constexpr double kAirInductorDrive = 0.2;  // inductor drive per step of the AIR amount
-constexpr double kStateLimit = 8.0;        // safety clamp of the filter memory
+constexpr double kStateLimit = 1e3;        // safety clamp of the filter memory (far above any level INPUT can bring)
 
 double tableValue(ParamID id, int index) {
   const ValueTable t = valueTable(id);
@@ -98,14 +98,17 @@ double InductorModel::processNonlinearity(double input, double driveLevel) {
   double saturated = input;
   const double absInput = std::abs(input);
   if (absInput > threshold) {
-    const double excess = (absInput - threshold) / (1.0 - threshold);
+    // Bounded: over full scale the compression is complete, and the polynomial terms below (made
+    // for signals inside +-1) cannot grow with the level.
+    const double excess = std::min((absInput - threshold) / (1.0 - threshold), 1.0);
+    const double clipped = std::clamp(input, -1.0, 1.0);
     const double langevin = std::tanh(excess * 2.5 * (1.0 + driveLevel));
     const double compressed = threshold + langevin * (1.0 - threshold) * 0.7;
     saturated = std::copysign(compressed, input);
 
     // H3 dominant (symmetric core), a little H2 from the residual asymmetry.
-    saturated += 0.012 * driveLevel * excess * input * absInput;
-    saturated += 0.018 * driveLevel * driveLevel * excess * input * input * input;
+    saturated += 0.012 * driveLevel * excess * clipped * std::abs(clipped);
+    saturated += 0.018 * driveLevel * driveLevel * excess * clipped * clipped * clipped;
 
     saturation_ = saturation_ * 0.95 + excess * 0.05;
   } else {
