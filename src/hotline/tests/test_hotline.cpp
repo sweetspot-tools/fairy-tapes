@@ -4,6 +4,8 @@
  */
 
 #include "devices.h"
+#include "display.h"
+#include "format.h"
 #include "engine.h"
 #include "dsp/band.h"
 #include "dsp/compander.h"
@@ -1591,10 +1593,84 @@ void displayPeaksAndClipHold() {
   ASSERT_TRUE(!q.lastDisplay().clipDrive);
 }
 
+// ---- Task 6: pure display / format helpers ----
+
+std::string fmt(ParamID id, double v) {
+  char buf[64];
+  return formatParam(id, v, buf, sizeof buf) ? std::string(buf) : std::string("<none>");
+}
+
+void formatGainTone() {
+  ASSERT_TRUE(fmt(kGain, 0.0) == "-20.0 dB");
+  ASSERT_TRUE(fmt(kGain, 0.5) == "0.0 dB");
+  ASSERT_TRUE(fmt(kGain, 1.0) == "20.0 dB");
+  ASSERT_TRUE(fmt(kGain, 0.75) == "10.0 dB");
+  ASSERT_TRUE(fmt(kTone, 0.7) == "+2.0");
+  ASSERT_TRUE(fmt(kTone, 0.3) == "-2.0");
+  ASSERT_TRUE(fmt(kTone, 0.5) == "0.0");
+  ASSERT_TRUE(fmt(kTone, 1.0) == "+5.0");
+}
+
+void formatPercentToggleDevice() {
+  ASSERT_TRUE(fmt(kMorph, 0.5) == "50 %");
+  ASSERT_TRUE(fmt(kMix, 1.0) == "100 %");
+  ASSERT_TRUE(fmt(kDrive, 0.0) == "0 %");
+  ASSERT_TRUE(fmt(kNoise, 0.25) == "25 %");
+  ASSERT_TRUE(fmt(kRoom, 0.5) == "50 %");
+  ASSERT_TRUE(fmt(kMono, 0.0) == "Off");
+  ASSERT_TRUE(fmt(kMono, 1.0) == "On");
+  ASSERT_TRUE(fmt(kBypass, 0.49) == "Off");
+  ASSERT_TRUE(fmt(kCharacterIn, 0.5) == "On");
+  for (int i = 0; i < kNumDevices; ++i)
+    ASSERT_TRUE(fmt(kDevice, i / double(kNumDevices - 1)) == kDevices[i].name);
+  ASSERT_TRUE(fmt(kDevice, 2.0) == kDevices[kNumDevices - 1].name);
+  ASSERT_TRUE(fmt(static_cast<ParamID>(kMeterBase), 0.5) == "<none>");
+  ASSERT_TRUE(fmt(kGain, std::numeric_limits<double>::quiet_NaN()) == "-20.0 dB");
+}
+
+void rateLimiterWritesFirstThenEvery16ms() {
+  DisplayRateLimiter l;
+  l.prepare(48000.0);                 // 16 ms = 768 samples
+  ASSERT_TRUE(l.advance(64));         // first block writes
+  int writes = 0;
+  for (int i = 0; i < 100; ++i) writes += l.advance(64) ? 1 : 0;   // 6400 samples = 133 ms
+  ASSERT_TRUE(writes == 8);           // 6400 / 768 -> 8 writes (every 12 blocks)
+  ASSERT_TRUE(!l.advance(0));
+  l.prepare(48000.0);
+  ASSERT_TRUE(l.advance(512));
+  ASSERT_TRUE(!l.advance(512));
+  ASSERT_TRUE(l.advance(512));        // 1024 >= 768
+  DisplayRateLimiter m;
+  m.prepare(0.0);                     // invalid rate falls back to 48 kHz
+  ASSERT_TRUE(m.advance(16));
+  ASSERT_TRUE(!m.advance(700));
+}
+
+void accumulatorKeepsPeaksAndFlags() {
+  DisplayAccumulator a;
+  DisplayValues d{{-30.f, -40.f}, {-20.f, -50.f}, false, true, false};
+  a.add(d);
+  DisplayValues e{{-10.f, -60.f}, {-25.f, -10.f}, true, false, false};
+  a.add(e);
+  const DisplayValues r = a.take();
+  ASSERT_APPROX(r.inPeakDb[0], -10.0);
+  ASSERT_APPROX(r.inPeakDb[1], -40.0);
+  ASSERT_APPROX(r.outPeakDb[0], -20.0);
+  ASSERT_APPROX(r.outPeakDb[1], -10.0);
+  ASSERT_TRUE(r.clipIn && r.clipDrive && !r.clipOut);
+  const DisplayValues z = a.take();
+  ASSERT_APPROX(z.inPeakDb[0], -120.0);
+  ASSERT_TRUE(!z.clipIn && !z.clipDrive && !z.clipOut);
+}
+
 }  // namespace
 
 int main() {
   RUN_TEST(paramIdsAreFrozen);
+  RUN_TEST(formatGainTone);
+  RUN_TEST(formatPercentToggleDevice);
+  RUN_TEST(rateLimiterWritesFirstThenEvery16ms);
+  RUN_TEST(accumulatorKeepsPeaksAndFlags);
   RUN_TEST(deviceIndexRoundsOverSixEntries);
   RUN_TEST(mappingsHitSpecValues);
   RUN_TEST(defaultsMatchPlan);
