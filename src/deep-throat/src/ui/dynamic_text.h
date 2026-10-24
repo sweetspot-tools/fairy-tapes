@@ -14,7 +14,7 @@
 namespace FairyTapes::DeepThroat::Ui {
 
 namespace detail {
-inline double sane(double v, double fallback = 0.5) { return std::isfinite(v) ? std::clamp(v, 0.0, 1.0) : fallback; }
+inline double sane(double v) { return std::isfinite(v) ? std::clamp(v, 0.0, 1.0) : 0.5; }
 
 inline std::string fmt(const char* f, double v) {
   char buf[48];
@@ -22,14 +22,30 @@ inline std::string fmt(const char* f, double v) {
   return buf;
 }
 
-// Preview fs(+(v).toFixed(1)): at most one decimal, trailing ".0" dropped, "+" for positives, no "-0".
-inline std::string signedShort(double v) {
-  double r = std::round(v * 10.0) / 10.0;
-  if (r == 0.0) return "0";
-  std::string s = fmt("%.1f", r);
-  if (s.size() > 2 && s.compare(s.size() - 2, 2, ".0") == 0) s.resize(s.size() - 2);
-  return (r > 0 ? "+" : "") + s;
+// Tenths of v rounded like JS toFixed(1): the exact binary value of the double decides; only an exactly
+// representable tie (x.x5, e.g. 1.25) goes away from zero. fma gives the exact remainder, so near ties
+// such as 1.15 (stored just below) round down and 1.35 (stored just above) round up.
+inline long long tenths(double v) {
+  const double a = std::fabs(v);
+  double f = std::floor(a * 10.0);
+  double r = std::fma(a, 10.0, -f);
+  if (r >= 1.0) { f += 1.0; r -= 1.0; }
+  else if (r < 0.0) { f -= 1.0; r += 1.0; }
+  const long long n = static_cast<long long>(f) + (r >= 0.5 ? 1 : 0);
+  return v < 0 ? -n : n;
 }
+
+// "+1.3" / "-1.3" / "0.0" (sign only when nonzero); dropZero removes a trailing ".0" ("-2", "0").
+inline std::string signedTenths(double v, bool dropZero) {
+  const long long n = tenths(v);
+  const long long m = n < 0 ? -n : n;
+  std::string s = std::to_string(m / 10);
+  if (!(dropZero && m % 10 == 0)) s += "." + std::to_string(m % 10);
+  return (n > 0 ? "+" : (n < 0 ? "-" : "")) + s;
+}
+
+// Preview fs(+(v).toFixed(1)): "+" for positives, trailing ".0" dropped, never "-0".
+inline std::string signedShort(double v) { return signedTenths(v, true); }
 
 inline std::string intText(double v) { return std::to_string(static_cast<long long>(std::llround(v))); }
 
@@ -55,7 +71,7 @@ inline std::string toneGainText(const ModeRow& r, int band, double tone) {
   const double gain = band == 0 ? r.toneMudDb : (band == 1 ? r.tonePresenceDb : r.toneAirDb);
   const double g = gain * (detail::sane(tone) - 0.5) * 2.0;
   if (std::fabs(g) < 0.05) return "0.0 dB";
-  return (g > 0 ? "+" : "") + detail::fmt("%.1f", g) + " dB";
+  return detail::signedTenths(g, false) + " dB";
 }
 inline std::string ratioText(int choice, const ModeRow& r) {
   if (choice <= 0) return "AUTO " + detail::intText(r.compRatio) + ":1";

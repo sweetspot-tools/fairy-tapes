@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -409,6 +410,34 @@ void test_texts_follow_the_table() {
   ASSERT_TRUE(deEssNote(r) == "MOSTLY OFF IN TEST (X0.50)");
 }
 
+void test_rounding_matches_js_to_fixed() {
+  // exact binary ties round away from zero (JS toFixed), not to even
+  ASSERT_TRUE(toneGainText(Mode::Speak, 0, 0.8125) == "-1.3 dB");  // g = -1.25
+  ASSERT_TRUE(toneGainText(Mode::Speak, 2, 0.8125) == "+1.3 dB");  // g = +1.25
+  ASSERT_TRUE(toneGainText(Mode::Speak, 0, 0.1875) == "+1.3 dB");  // g = +1.25
+  ASSERT_TRUE(toneGainText(Mode::Speak, 2, 0.1875) == "-1.3 dB");  // g = -1.25
+  // near ties: the exact double decides (1.15 is stored below, 1.35 above)
+  ModeRow r = modeRow(Mode::Speak);
+  r.mudCutDb = -1.15;
+  ASSERT_TRUE(eqMudText(r, 0.5) == "-1.1 dB");
+  r.mudCutDb = -1.35;
+  ASSERT_TRUE(eqMudText(r, 0.5) == "-1.4 dB");
+  r.mudCutDb = -1.25;
+  ASSERT_TRUE(eqMudText(r, 0.5) == "-1.3 dB");
+  r.mudCutDb = 1.25;
+  ASSERT_TRUE(eqMudText(r, 0.5) == "+1.3 dB");
+}
+
+void test_hpf_rounding_and_infinite_inputs() {
+  ASSERT_TRUE(eqHpfText(Mode::Sing, 0.25) == "53 Hz");  // 52.5
+  const double inf = std::numeric_limits<double>::infinity();
+  for (double v : {inf, -inf}) {
+    ASSERT_TRUE(eqHpfText(Mode::Speak, v) == eqHpfText(Mode::Speak, 0.5));
+    ASSERT_TRUE(eqMudText(Mode::Sing, v) == eqMudText(Mode::Sing, 0.5));
+    for (int b = 0; b < 3; ++b) ASSERT_TRUE(toneGainText(Mode::Sing, b, v) == toneGainText(Mode::Sing, b, 0.5));
+  }
+}
+
 } // namespace
 
 int main() {
@@ -432,6 +461,8 @@ int main() {
   RUN_TEST(test_rider_max_text);
   RUN_TEST(test_de_ess_note_only_in_puke);
   RUN_TEST(test_texts_follow_the_table);
+  RUN_TEST(test_rounding_matches_js_to_fixed);
+  RUN_TEST(test_hpf_rounding_and_infinite_inputs);
   std::printf("deep_throat_ui_tests: %d passed, %d failed\n", g_passed, g_failed);
   return g_failed ? 1 : 0;
 }
