@@ -318,14 +318,95 @@ void bandClampsBelowNyquist() {
   for (int i = 0; i < 8000; ++i) ASSERT_TRUE(std::isfinite(b.process(r.next())));
 }
 
+// Runs a 1 kHz sine through a filter that is changed mid-stream (`change`) and through an
+// untouched twin (`ref`); returns the max deviation of the two over the 100 samples after the
+// change. Small if the change preserved filter state, large if it reset it.
+template <class F, class R, class C>
+double deviationAfterChange(double fs, F f, R ref, C change) {
+  constexpr double kPi = 3.14159265358979323846;
+  const int n0 = (int)(fs * 0.5) + 3, n = n0 + 100;
+  double dev = 0;
+  for (int i = 0; i < n; ++i) {
+    if (i == n0) change();
+    const float x = (float)std::sin(2 * kPi * 1000.0 * i / fs);
+    const float y = f(x), r = ref(x);
+    if (i >= n0) dev = std::max(dev, (double)std::fabs(y - r));
+  }
+  return dev;
+}
+
 void bandSetKeepsState() {
+  const double fs = 48000;
+  D::Band ref; ref.prepare(fs); ref.set(300, 3400);
+  D::Band b; b.prepare(fs); b.set(300, 3400);
+  const double keep = deviationAfterChange(fs, [&](float x) { return b.process(x); },
+                                           [&](float x) { return ref.process(x); }, [&] { b.set(305, 3450); });
+  D::Band ref2; ref2.prepare(fs); ref2.set(300, 3400);
+  D::Band c; c.prepare(fs); c.set(300, 3400);
+  const double cleared = deviationAfterChange(fs, [&](float x) { return c.process(x); },
+                                              [&](float x) { return ref2.process(x); }, [&] { c.set(305, 3450); c.clear(); });
+  ASSERT_TRUE(keep < 0.05);
+  ASSERT_TRUE(cleared > 4 * keep && cleared > 0.1);  // sensitivity: clearing is detected
+}
+
+void coneSetKeepsState() {
+  const double fs = 48000;
+  D::Cone ref; ref.prepare(fs); ref.set(1000, 6, 2, 0);
+  D::Cone a; a.prepare(fs); a.set(1000, 6, 2, 0);
+  const double keep = deviationAfterChange(fs, [&](float x) { return a.process(x); },
+                                           [&](float x) { return ref.process(x); }, [&] { a.set(1000, 5.5, 2, 0); });
+  D::Cone ref2; ref2.prepare(fs); ref2.set(1000, 6, 2, 0);
+  D::Cone c; c.prepare(fs); c.set(1000, 6, 2, 0);
+  const double cleared = deviationAfterChange(fs, [&](float x) { return c.process(x); },
+                                              [&](float x) { return ref2.process(x); }, [&] { c.set(1000, 5.5, 2, 0); c.clear(); });
+  ASSERT_TRUE(keep < 0.1);
+  ASSERT_TRUE(cleared > 4 * keep && cleared > 0.1);
+}
+
+// While neutral, process() bypasses the filters; leaving neutral must not replay stale state.
+template <class F>
+void feedLoud(F f) {
+  constexpr double kPi = 3.14159265358979323846;
+  for (int i = 0; i < 4800; ++i) f((float)(std::sin(2 * kPi * 1000.0 * i / 48000.0)));
+}
+
+void bandNoTransientAfterNeutral() {
+  constexpr double kPi = 3.14159265358979323846;
   D::Band b; b.prepare(48000); b.set(300, 3400);
-  for (int i = 0; i < 100; ++i) b.process(1.f);
-  b.set(300, 3400);                  // same params: output must continue smoothly
-  const float a = b.process(1.f);
-  b.set(310, 3300);
-  const float c = b.process(1.f);
-  ASSERT_TRUE(std::fabs(a - c) < 0.05);
+  feedLoud([&](float x) { return b.process(x); });     // leaves loud state in the filters
+  b.set(20, 20000);                                     // neutral: bypass, state frozen
+  feedLoud([&](float x) { return b.process(x); });
+  b.set(300, 3400);
+  double pk = 0;
+  for (int i = 0; i < 200; ++i)
+    pk = std::max(pk, (double)std::fabs(b.process((float)(0.1 * std::sin(2 * kPi * 5000.0 * i / 48000.0)))));
+  ASSERT_TRUE(pk <= 0.1 * 1.5);  // 5 kHz sits in the stopband region edge; no 1.0-scale ring
+}
+
+void coneNoTransientAfterNeutral() {
+  D::Cone c; c.prepare(48000); c.set(1800, 6, 2, 0);
+  feedLoud([&](float x) { return c.process(x); });
+  c.set(1800, 0, 2, 0);
+  feedLoud([&](float x) { return c.process(x); });
+  c.set(1800, 6, 2, 0);
+  double pk = 0;
+  for (int i = 0; i < 200; ++i) pk = std::max(pk, (double)std::fabs(c.process(0.f)));
+  ASSERT_TRUE(pk <= 1e-6);  // silence in, silence out: any stale state would ring here
+}
+
+void driveIsContinuousNearZero() {
+  for (int i = -100; i <= 100; ++i) {
+    const float x = i * 0.01f;
+    ASSERT_TRUE(std::fabs(D::shape(x, 1e-4f) - x) < 1e-3);
+  }
+  float prev = D::shape(0.9f, 0.f);
+  for (int i = 1; i <= 200; ++i) {
+    const float y = D::shape(0.9f, i * 0.001f);
+    ASSERT_TRUE(std::fabs(y - prev) <= 0.01);
+    prev = y;
+  }
+  for (float d : {0.1f, 0.5f, 0.99f, 1.f})
+    for (int i = -400; i <= 400; ++i) ASSERT_TRUE(std::fabs(D::shape(i * 0.01f, d)) <= 1.05f);
 }
 
 void driveZeroIsIdentity() {
@@ -399,6 +480,10 @@ int main() {
   RUN_TEST(bandNeutralIsExactPassthrough);
   RUN_TEST(bandClampsBelowNyquist);
   RUN_TEST(bandSetKeepsState);
+  RUN_TEST(coneSetKeepsState);
+  RUN_TEST(bandNoTransientAfterNeutral);
+  RUN_TEST(coneNoTransientAfterNeutral);
+  RUN_TEST(driveIsContinuousNearZero);
   RUN_TEST(driveZeroIsIdentity);
   RUN_TEST(driveIsBoundedAndAsymmetric);
   RUN_TEST(coneBoostsAtCenter);

@@ -9,8 +9,10 @@ class Cone {
 public:
   void prepare(double fs) { fs_ = fs; set(1000.0, 0.0, 1.0, 0.0); clear(); }
   void set(double hz, double gainDb, double q, double hornGainDb) {
+    const bool wasNeutral = neutral_;
     neutral_ = gainDb == 0.0 && hornGainDb == 0.0;
     if (neutral_) return;
+    if (wasNeutral) clear();  // state is frozen while bypassed: drop it on re-activation
     const double f1 = std::clamp(hz, 10.0, 0.45 * fs_);
     const double f2 = std::clamp(1.6 * hz, 10.0, 0.45 * fs_);
     designPeaking(main_, fs_, f1, std::max(q, 0.1), gainDb);

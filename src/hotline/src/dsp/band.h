@@ -12,8 +12,10 @@ public:
     hp_ = std::max(hpHz, 10.0);
     lp_ = std::min(lpHz, 0.45 * fs_);
     hp_ = std::min(hp_, lp_ * 0.99);  // keep the two corners ordered at extreme settings
+    const bool wasNeutral = neutral_;
     neutral_ = hp_ <= 20.5 && lp_ >= 19500.0;
     if (neutral_) return;
+    if (wasNeutral) clear();  // state is frozen while bypassed: drop it on re-activation
     designHighpass(h1_, fs_, hp_, kQ1);
     designHighpass(h2_, fs_, hp_, kQ2);
     designLowpass(l1_, fs_, lp_, kQ1);
