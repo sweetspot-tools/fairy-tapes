@@ -33,6 +33,7 @@ add_library(hotline MODULE
   src/controller.cpp
   src/devices.cpp
   src/engine.cpp
+  src/ui/big_knob.cpp
   src/ui/editor.cpp
   src/ui/panel_view.cpp
 )
@@ -108,6 +109,12 @@ target_include_directories(hotline_tests PRIVATE
 target_link_libraries(hotline_tests PRIVATE fairy_ui)
 add_test(NAME hotline_tests COMMAND hotline_tests)
 
+# Geometry of the big Morph knob (VSTGUI views, no window).
+add_executable(hotline_ui_tests tests/test_ui.cpp src/ui/big_knob.cpp)
+target_include_directories(hotline_ui_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${VST3_SDK_PATH})
+target_link_libraries(hotline_ui_tests PRIVATE sdk fairy_ui_widgets)
+add_test(NAME hotline_ui_tests COMMAND hotline_ui_tests)
+
 # Developer tool: draws the editor offscreen into a PNG (no host needed). Not built by default.
 add_executable(hotline_render EXCLUDE_FROM_ALL
   tools/render_editor.cpp
@@ -116,6 +123,7 @@ add_executable(hotline_render EXCLUDE_FROM_ALL
   src/controller.cpp
   src/devices.cpp
   src/engine.cpp
+  src/ui/big_knob.cpp
   src/ui/editor.cpp
   src/ui/panel_view.cpp
 )

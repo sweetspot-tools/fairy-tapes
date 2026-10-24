@@ -1,6 +1,7 @@
 // Hotline GUI: the plugin editor. Layout from the approved rack preview (docs/mockups/hotline_rack.html, ui/layout.h).
 #include "ui/editor.h"
 
+#include "ui/big_knob.h"
 #include "ui/panel_view.h"
 
 #include "fairy_ui/draw_util.h"
@@ -11,7 +12,6 @@
 
 #include "base/source/updatehandler.h"
 #include "vstgui/lib/cframe.h"
-#include "vstgui/lib/cgraphicstransform.h"
 #include "vstgui/lib/cviewcontainer.h"
 
 #if SMTG_OS_LINUX
@@ -54,21 +54,6 @@ CRect toCRect(const Rect& r) { return CRect(r.x, r.y, r.x + r.w, r.y + r.h); }
 double controllerNorm(Steinberg::Vst::EditController* ctl, ParamID id, double fallback) {
   return FairyTapes::Ui::sanitizeNorm(ctl->getParamNormalized(id), fallback);
 }
-
-// The Morph cap (radius 34) is bigger than the shared knob cell allows: RackKnob draws its cap kCenterOffsetY below the
-// top of its view, so this view is kBigKnobExtra taller above and draws the cap that much lower.
-class BigRackKnob : public RackKnob {
-public:
-  BigRackKnob(const CRect& size, IControlListener* listener, int32_t tag, double capRadius, const FairyTapes::Ui::Skin* skin)
-  : RackKnob(size, listener, tag, capRadius, skin) {}
-
-  void draw(CDrawContext* ctx) override {
-    CGraphicsTransform shift;
-    shift.translate(0, kBigKnobExtra);
-    CDrawContext::Transform transform(*ctx, shift);
-    RackKnob::draw(ctx);
-  }
-};
 
 } // namespace
 

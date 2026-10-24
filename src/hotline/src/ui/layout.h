@@ -82,6 +82,7 @@ struct ControlSpec {
 constexpr float kKnobCellW = 64, kKnobCellH = 88, kKnobCentreOffsetY = 30;
 constexpr float kBigKnobMinRadius = 28, kBigKnobExtra = 8, kBigKnobCellW = 76;
 constexpr bool isBigKnob(float r) { return r >= kBigKnobMinRadius; }
+// The cap centre below the view top; BigRackKnob (ui/big_knob.h) reports and draws the same offset.
 constexpr float knobCentreOffsetY(float r) { return kKnobCentreOffsetY + (isBigKnob(r) ? kBigKnobExtra : 0.f); }
 constexpr Rect knob(float cx, float cy, float r) {
   const float w = isBigKnob(r) ? kBigKnobCellW : kKnobCellW;
@@ -230,10 +231,17 @@ struct PanelText {
 };
 
 constexpr float kRowTagX = kMeterFirstX - 12, kSectionTagX = kMeterFirstX - 34;
-// LED under a dB scale label: the 24 LEDs span kMeterMinDb..kMeterMaxDb (66 dB in 23 steps).
-constexpr float scaleX(int db) {
-  return kMeterFirstX + kMeterPitch * static_cast<int>((db + 60) / (66.0f / (kMeterLeds - 1)) + 0.5f);
+// The shared kit (fairy_ui/meter_math.h: ledColor, PeakHold) hard-codes the -60..+6 dB range; it must equal the range the
+// processor publishes with (kMeterMinDb/kMeterMaxDb), so changing the constants fails the build instead of moving the
+// processor but not the editor.
+static_assert(kMeterMinDb == -60.0 && kMeterMaxDb - kMeterMinDb == 66.0,
+              "fairy_ui/meter_math.h assumes the -60..+6 dB meter range");
+// LED under a dB scale label: the kMeterLeds LEDs span kMeterMinDb..kMeterMaxDb, so the index is
+// round(meterNormFromDb(db) * (kMeterLeds - 1)) (written constexpr here).
+constexpr int scaleLedIndex(int db) {
+  return static_cast<int>((db - kMeterMinDb) / (kMeterMaxDb - kMeterMinDb) * (kMeterLeds - 1) + 0.5);
 }
+constexpr float scaleX(int db) { return kMeterFirstX + kMeterPitch * static_cast<float>(scaleLedIndex(db)); }
 constexpr float kScaleY = 157;
 
 constexpr PanelText kPanelTexts[] = {

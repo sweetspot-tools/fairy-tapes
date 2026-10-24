@@ -1804,6 +1804,28 @@ void meterRangeHelpersRoundTrip() {
   ASSERT_TRUE(UI::kClips[0].id == kClipIn && UI::kClips[1].id == kClipDrive && UI::kClips[2].id == kClipOut);
 }
 
+// The printed dB scale is derived from the shared meter range: the LED index of a label is
+// round(meterNormFromDb(db) * (kMeterLeds - 1)).
+void scaleLabelsFollowTheMeterRange() {
+  for (int db = -60; db <= 6; ++db)
+    ASSERT_TRUE(UI::scaleLedIndex(db) == static_cast<int>(std::lround(meterNormFromDb(db) * (UI::kMeterLeds - 1))));
+  ASSERT_TRUE(UI::scaleLedIndex(0) == 21);   // meterNormFromDb(0) = 60/66 -> 20.9 -> LED 21
+  ASSERT_APPROX(UI::scaleX(0), UI::kMeterFirstX + UI::kMeterPitch * 21);
+}
+
+void scaleEndsLandOnFirstAndLastLed() {
+  ASSERT_TRUE(UI::scaleLedIndex(static_cast<int>(kMeterMinDb)) == 0);
+  ASSERT_TRUE(UI::scaleLedIndex(static_cast<int>(kMeterMaxDb)) == UI::kMeterLeds - 1);
+  ASSERT_APPROX(UI::scaleX(-60), UI::kMeterFirstX);
+  ASSERT_APPROX(UI::scaleX(6), UI::kMeterFirstX + UI::kMeterPitch * (UI::kMeterLeds - 1));
+  int prev = -1;   // the printed labels rise from left to right, none shares an LED
+  for (const auto& t : UI::kPanelTexts) {
+    if (t.style != UI::TextStyle::Scale) continue;
+    ASSERT_TRUE(t.x > prev);
+    prev = static_cast<int>(t.x);
+  }
+}
+
 void panelValueTextMatchesPreview() {
   ASSERT_TRUE(UI::panelValueText(kDrive, 0.4) == "4.0");
   ASSERT_TRUE(UI::panelValueText(kNoise, 0.3) == "3.0");
@@ -1841,6 +1863,8 @@ int main() {
   RUN_TEST(globalBypassDimsEverything);
   RUN_TEST(deviceButtonsMapToSixDistinctChoices);
   RUN_TEST(meterRangeHelpersRoundTrip);
+  RUN_TEST(scaleLabelsFollowTheMeterRange);
+  RUN_TEST(scaleEndsLandOnFirstAndLastLed);
   RUN_TEST(panelValueTextMatchesPreview);
   RUN_TEST(silkscreenPrintsEveryKnobAndButton);
   RUN_TEST(formatGainTone);
