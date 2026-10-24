@@ -116,11 +116,13 @@ Nota (Task 4 fatto): il taglio di LOW è una campana a 2,5 volte la frequenza de
 **Interfaces:**
 - Produces: `struct GlueSettings { bool on; float threshDb; float attackMs; float releaseS; /*0 = Auto*/ float ratio; float makeupDb; float mix; /*0..1*/ float scHpfHz; /*0 = Off*/ bool warm; }`; `class Glue { void prepare(double sr, int maxBlock); void set(const GlueSettings&); void process(float* L, float* R, int n); float grDb() const; float netGrDb() const; }` (`netGrDb` = riduzione dopo il MIX, per lo schermo).
 
-- [ ] **Step 1: Test**: `testMoreRatioMoreReduction` (rumore rosa −6 dBFS, soglia −20: GR con 4:1 > 2:1 > 1,5:1), `testMixZeroIsDry` (uscita == ingresso entro 1e-6, compreso il MAKEUP che vale solo sul ramo compresso), `testMixHalfIsParallel` (rapporto tra uscita e somma metà/metà dei due rami entro 0,1 dB), `testScHpfReducesBassPumping` (seno 40 Hz −6 dBFS: GR con SC HPF 150 almeno 3 dB meno che con Off), `testWarmSoftensAttack` (picco del primo transiente di un clic: con WARM più alto che senza), `testAutoReleaseRuns` (release Auto: GR torna sotto 0,5 dB entro 2 s dopo la fine del segnale).
-- [ ] **Step 2: Esegui** → FAIL.
-- [ ] **Step 3: Implementa** il port; WARM = costante d'attacco ×3 sul rilevatore; MIX parallelo dentro il blocco.
-- [ ] **Step 4: Esegui** → PASS.
-- [ ] **Step 5: Commit** `feat(happy-ending): Glue bus compressor with full controls and parallel mix`.
+- [x] **Step 1: Test**: `testMoreRatioMoreReduction` (rumore rosa −6 dBFS, soglia −20: GR con 4:1 > 2:1 > 1,5:1), `testMixZeroIsDry` (uscita == ingresso entro 1e-6, compreso il MAKEUP che vale solo sul ramo compresso), `testMixHalfIsParallel` (rapporto tra uscita e somma metà/metà dei due rami entro 0,1 dB), `testScHpfReducesBassPumping` (seno 40 Hz −6 dBFS: GR con SC HPF 150 almeno 3 dB meno che con Off), `testWarmSoftensAttack` (picco del primo transiente di un clic: con WARM più alto che senza), `testAutoReleaseRuns` (release Auto: GR torna sotto 0,5 dB entro 2 s dopo la fine del segnale).
+- [x] **Step 2: Esegui** → FAIL.
+- [x] **Step 3: Implementa** il port; WARM = costante d'attacco ×3 sul rilevatore; MIX parallelo dentro il blocco.
+- [x] **Step 4: Esegui** → PASS.
+- [x] **Step 5: Commit** `feat(happy-ending): Glue bus compressor with full controls and parallel mix`.
+
+Nota (Task 5 fatto): il rilevatore resta in retroazione come nella sorgente (prende l'uscita compressa precedente, passa-alto a 2 poli selezionabile Off / 60 / 90 / 150 Hz al posto dei 60 Hz fissi, media RMS di 5 ms), ginocchio morbido di 10 dB, riduzione massima 20 dB, release Auto 150-450 ms. Stereo sempre collegato: un solo guadagno dal rilevatore più forte. Lo stadio colore è quello del profilo Console Bus: trasformatore d'ingresso e d'uscita attivi, armoniche k2/k3, compensazione di guadagno misurata in `prepare()` (a 1 kHz, −18 dBFS il blocco è a guadagno unitario); la convoluzione corta della sorgente è un bypass e non è portata. WARM moltiplica la costante d'attacco per `Tuning::kGlueWarmAttackFactor` (3); MAKEUP e MIX scorrono linearmente in `Tuning::kGlueRampMs` (10 ms) e così l'accensione/spegnimento (a stadio spento: identità esatta); il primo `set()` dopo `prepare()` non scorre. `grDb()` è la riduzione del compressore, `netGrDb()` quella dopo il MIX e prima del MAKEUP. Il rilevatore non dipende da MIX né da MAKEUP, quindi MIX 0 è l'ingresso bit per bit.
 
 ### Task 6: Oversampler a fase lineare
 

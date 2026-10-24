@@ -45,6 +45,11 @@ inline constexpr double kVibeInductorLevelDb = -30.0;
 inline constexpr int kVibeSubBlock = 32;               // samples between coefficient updates (linear ramp)
 inline constexpr int kVibeTubeRampSamples = 256;       // length of the TUBE drive ramp
 
+// GLUE: WARM slows the detector attack by this factor (the attack time constant is multiplied),
+// and the controls glide over this many milliseconds (MAKEUP, MIX and the stage on/off).
+inline constexpr double kGlueWarmAttackFactor = 3.0;
+inline constexpr double kGlueRampMs = 10.0;
+
 // LIMIT: base release of each style (MODERN, PUNCH, DYN); RELEASE trims around it.
 inline constexpr double kLimitReleaseBaseMs[3] = {50.0, 100.0, 250.0};
 

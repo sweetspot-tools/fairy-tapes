@@ -50,3 +50,15 @@ target_include_directories(happy_ending_vibe_eq_tests PRIVATE
   ${VST3_SDK_PATH}/pluginterfaces/vst
 )
 add_test(NAME happy_ending_vibe_eq_tests COMMAND happy_ending_vibe_eq_tests)
+
+add_executable(happy_ending_glue_tests
+  tests/test_glue.cpp
+  src/dsp/glue.cpp
+)
+target_include_directories(happy_ending_glue_tests PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/src
+  ${VST3_SDK_PATH}
+  ${VST3_SDK_PATH}/pluginterfaces/base
+  ${VST3_SDK_PATH}/pluginterfaces/vst
+)
+add_test(NAME happy_ending_glue_tests COMMAND happy_ending_glue_tests)
