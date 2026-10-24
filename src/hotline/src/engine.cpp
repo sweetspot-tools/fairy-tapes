@@ -273,8 +273,6 @@ float Engine::chain(int c, float x) {
     ch.dcX = y;
     ch.dcY = std::fabs(o) < 1e-20f ? 0.f : o;
     y = ch.dcY;
-  } else {
-    drivePeak_ = std::max(drivePeak_, std::fabs(y));
   }
   y = ch.cone.process(y);
   y = ch.crush.process(y);
@@ -301,12 +299,12 @@ void Engine::process(const float* inL, const float* inR, float* outL, float* out
     display_.inPeakDb[c] = toDb(inPeak_[c]);
     display_.outPeakDb[c] = toDb(outPeak_[c]);
   }
-  const auto hold = [&](long long& left, float peak) {
-    left = peak >= 1.f ? clipHoldSamples_ : std::max(0LL, left - numSamples);
+  const auto hold = [&](long long& left, float peak, float threshold) {
+    left = peak >= threshold ? clipHoldSamples_ : std::max(0LL, left - numSamples);
   };
-  hold(clipInLeft_, std::max(inPeak_[0], inPeak_[1]));
-  hold(clipDriveLeft_, drivePeak_);
-  hold(clipOutLeft_, std::max(outPeak_[0], outPeak_[1]));
+  hold(clipInLeft_, std::max(inPeak_[0], inPeak_[1]), 1.f);
+  hold(clipDriveLeft_, drivePeak_, kDriveClipLevel);  // 0 while the drive is off
+  hold(clipOutLeft_, std::max(outPeak_[0], outPeak_[1]), 1.f);
 }
 
 DisplayValues Engine::lastDisplay() const {

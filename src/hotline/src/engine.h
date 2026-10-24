@@ -49,13 +49,15 @@ constexpr double kNoiseCeilingDb = -20.0;
 BlockParams targetParams(const BlockParams& device, const Settings& s);
 
 // Peaks in dB (floor -120) over the last process() call: input after the NaN guard, output after
-// Bypass. Clip flags (|x| >= 1 at the input, after the Drive shaper, at the output) are held for
-// kClipHoldSeconds of audio time or until clearClips().
+// Bypass. Clip flags are held for kClipHoldSeconds of audio time or until clearClips(): IN and OUT
+// at |x| >= 1; DRV only with the drive active, at |y| >= kDriveClipLevel after the shaper (it never
+// lights at drive 0: the IN LED already covers input clipping).
 struct DisplayValues {
   float inPeakDb[2], outPeakDb[2];
   bool clipIn, clipDrive, clipOut;
 };
 constexpr double kClipHoldSeconds = 2.0;
+constexpr float kDriveClipLevel = 0.9f;
 
 // Processed output never leaves +-kOutputCeiling (+24 dBFS); the exact bypass copy is not touched.
 constexpr float kOutputCeiling = 16.f;

@@ -1821,8 +1821,68 @@ void displayPeaksAndClipHold() {
   ASSERT_TRUE(w.lastDisplay().clipDrive);
   Engine q; q.prepare(48000, 512);
   q.setSettings(t);
-  q.process(half.data(), half.data(), o1.data(), o2.data(), 4800);
+  const auto small = sineWave(4800, 48000, 1000, 0.05);  // the shaper output stays well below 0.9
+  q.process(small.data(), small.data(), o1.data(), o2.data(), 4800);
   ASSERT_TRUE(!q.lastDisplay().clipDrive);
+}
+
+// DRV clip LED: lit only with the drive active and the shaper output at |y| >= 0.9; never at drive 0.
+void driveClipLedSemantics() {
+  std::vector<float> z(4800, 0.f), o1(4800), o2(4800);
+  // drive' == 0 (Morph 0 is neutral): a full-scale input lights IN, never DRV
+  Engine n; n.prepare(48000, 512);
+  n.setSettings(engineSettings(2, 0.f));
+  const auto hot = sineWave(4800, 48000, 1000, 1.2);
+  n.process(hot.data(), hot.data(), o1.data(), o2.data(), 4800);
+  ASSERT_TRUE(n.lastDisplay().clipIn && !n.lastDisplay().clipDrive);
+  // drive active, shaper pushed hard: lit, held ~2 s
+  Settings t = engineSettings(2, 1.f); t.drive = 2.f; t.noise = 0.f;
+  Engine w; w.prepare(48000, 512);
+  w.setSettings(t);
+  const auto big = sineWave(4800, 48000, 1000, 0.8);
+  w.process(big.data(), big.data(), o1.data(), o2.data(), 4800);
+  ASSERT_TRUE(w.lastDisplay().clipDrive);
+  for (int k = 0; k < 18; ++k) w.process(z.data(), z.data(), o1.data(), o2.data(), 4800);  // 1.8 s
+  ASSERT_TRUE(w.lastDisplay().clipDrive);
+  for (int k = 0; k < 3; ++k) w.process(z.data(), z.data(), o1.data(), o2.data(), 4800);   // 2.1 s
+  ASSERT_TRUE(!w.lastDisplay().clipDrive);
+  // small input: shaper output below 0.9
+  Engine q; q.prepare(48000, 512);
+  q.setSettings(t);
+  const auto small = sineWave(4800, 48000, 1000, 0.05);
+  q.process(small.data(), small.data(), o1.data(), o2.data(), 4800);
+  ASSERT_TRUE(!q.lastDisplay().clipDrive);
+}
+
+// Threshold of the DRV LED at 0.89 / 0.91 of the shaper output (reference: the same Band + shape).
+void driveClipLedThreshold() {
+  const Settings t = [] { Settings s = engineSettings(2, 1.f); s.drive = 1.f; s.noise = 0.f; return s; }();
+  const BlockParams bp = targetParams(kDevices[2].p, t);
+  ASSERT_TRUE(bp.drive > 0.0);
+  const auto refPeak = [&](double amp) {
+    DSP::Band b; b.prepare(48000); b.set(bp.hpHz, bp.lpHz);
+    const auto x = sineWave(4800, 48000, 1000, amp);
+    float pk = 0.f;
+    for (float v : x) pk = std::max(pk, std::fabs(DSP::shape(b.process(v), (float)bp.drive)));
+    return pk;
+  };
+  // refPeak grows with amp: bisect the amplitude that gives the target shaper peak
+  const auto ampFor = [&](double target) {
+    double lo = 0.0, hi = 8.0;
+    for (int i = 0; i < 60; ++i) { const double m = 0.5 * (lo + hi); (refPeak(m) < target ? lo : hi) = m; }
+    return 0.5 * (lo + hi);
+  };
+  std::vector<float> z(4800, 0.f), o1(4800), o2(4800);
+  const auto lit = [&](double target) {
+    Engine e; e.prepare(48000, 512);
+    e.setSettings(t);
+    for (int k = 0; k < 30; ++k) e.process(z.data(), z.data(), o1.data(), o2.data(), 4800);  // let Drive settle
+    const auto x = sineWave(4800, 48000, 1000, ampFor(target));
+    e.process(x.data(), x.data(), o1.data(), o2.data(), 4800);
+    return e.lastDisplay().clipDrive;
+  };
+  ASSERT_TRUE(!lit(0.89));
+  ASSERT_TRUE(lit(0.91));
 }
 
 // ---- Task 6: pure display / format helpers ----
@@ -2195,6 +2255,8 @@ int main() {
   RUN_TEST(nonFiniteSettingsIgnored);
   RUN_TEST(nonFiniteInputClearsChannel);
   RUN_TEST(displayPeaksAndClipHold);
+  RUN_TEST(driveClipLedSemantics);
+  RUN_TEST(driveClipLedThreshold);
   std::printf("%d tests run, %d failed\n", g_passed + g_failed, g_failed);
   return g_failed ? 1 : 0;
 }
