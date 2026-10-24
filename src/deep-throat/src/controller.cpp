@@ -6,6 +6,7 @@
 #include "messages.h"
 #include "state.h"
 #include "state_stream.h"
+#include "ui/editor.h"
 #include "pluginterfaces/base/ibstream.h"
 #include "public.sdk/source/vst/vstparameters.h"
 #include <algorithm>
@@ -205,6 +206,12 @@ void Controller::sendDecor(const Decor& d) {
   encodeDecorMessage(msg, d);
   sendMessage(msg);
   msg->release();
+}
+
+Steinberg::IPlugView* PLUGIN_API Controller::createView(Steinberg::FIDString name) {
+  if (name && std::strcmp(name, Steinberg::Vst::ViewType::kEditor) == 0)
+    return new Ui::Editor(this);
+  return nullptr;
 }
 
 Steinberg::tresult PLUGIN_API Controller::getParamStringByValue(Steinberg::Vst::ParamID tag,

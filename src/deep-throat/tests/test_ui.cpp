@@ -315,6 +315,34 @@ void test_meters_and_clips() {
   ASSERT_TRUE(kClipCount == 2);
 }
 
+// Printed texts dim like the preview: the global bypass dims only the flagged ones (SCOPE legend, GR row label and scale,
+// module texts); the header, the LEVEL IN / OUT / CLIP and L / R tags and the level scale never dim. A module that is out
+// dims its own texts and nothing else.
+void test_panel_text_dimming_flags() {
+  const std::set<std::string> neverDim = {"DEEP THROAT", "FAIRY TAPES", "IN", "OUT", "CLIP", "L", "R"};
+  DimState bypass;
+  bypass.bypass = true;
+  int flagged = 0;
+  for (const PanelText& t : kPanelTexts) {
+    const std::string s = t.text;
+    const bool header = t.style == TextStyle::Title || t.style == TextStyle::Brand || t.style == TextStyle::Tagline;
+    const bool levelScale = t.style == TextStyle::Scale && t.y == 138;
+    const bool grRow = (s == "GR" && t.style == TextStyle::Section) || (t.style == TextStyle::Scale && t.y == 174);
+    const bool legend = t.style == TextStyle::LegendVoice || t.style == TextStyle::LegendRider || t.style == TextStyle::LegendBreath;
+    if (header || levelScale || (neverDim.count(s) && t.module == Module::None && !grRow)) ASSERT_TRUE(!t.dimsWithBypass);
+    if (grRow || legend || t.module != Module::None) ASSERT_TRUE(t.dimsWithBypass);
+    ASSERT_TRUE(panelTextDimmed(t, bypass) == t.dimsWithBypass);
+    ASSERT_TRUE(!panelTextDimmed(t, DimState{}));
+    flagged += t.dimsWithBypass ? 1 : 0;
+  }
+  ASSERT_TRUE(flagged == 3 + 1 + 4 + 10);   // legend, GR, GR scale, module texts
+  for (int m = 1; m <= 6; ++m) {   // one module out at a time: only its texts dim
+    DimState s;
+    s.in[m - 1] = false;
+    for (const PanelText& t : kPanelTexts) ASSERT_TRUE(panelTextDimmed(t, s) == (t.module == static_cast<Module>(m)));
+  }
+}
+
 void test_panel_texts_and_decor_tables() {
   bool title = false, brand = false, tagline = false;
   for (const PanelText& t : kPanelTexts) {
@@ -863,6 +891,7 @@ int main() {
   RUN_TEST(test_preview_anchor_positions);
   RUN_TEST(test_meters_and_clips);
   RUN_TEST(test_panel_texts_and_decor_tables);
+  RUN_TEST(test_panel_text_dimming_flags);
   RUN_TEST(test_tape_slots_clear_of_controls);
   RUN_TEST(test_eq_texts);
   RUN_TEST(test_tone_gain_texts);

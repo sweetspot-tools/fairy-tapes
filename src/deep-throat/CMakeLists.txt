@@ -37,6 +37,15 @@ set(DEEP_THROAT_DSP_SOURCES
   src/dsp/tone_eq.cpp
 )
 
+# Editor (VSTGUI) sources: the plugin, the editor tests and the render tool.
+set(DEEP_THROAT_EDITOR_SOURCES
+  src/ui/editor.cpp
+  src/ui/panel_view.cpp
+)
+
+# The shared assets (panel grain tile), for the tools and tests that run outside the bundle.
+set(FAIRY_UI_ASSETS "${CMAKE_CURRENT_SOURCE_DIR}/../../shared/ui/assets")
+
 # ---------------------------------------------------------------------------
 # Plugin
 # ---------------------------------------------------------------------------
@@ -48,6 +57,7 @@ add_library(deep_throat MODULE
   src/processor.cpp
   src/controller.cpp
   ${DEEP_THROAT_DSP_SOURCES}
+  ${DEEP_THROAT_EDITOR_SOURCES}
 )
 
 target_include_directories(deep_throat PRIVATE
@@ -91,7 +101,15 @@ else()
   )
 endif()
 
-target_link_libraries(deep_throat PRIVATE sdk fairy_ui)
+# Bitmap resources go to Contents/Resources of the bundle, where VSTGUI looks for them: the panel grain tile shared by
+# the suite. Without it the panel is drawn in plain #161617.
+add_custom_command(TARGET deep_throat POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E make_directory "${DEEP_THROAT_BUNDLE}/Contents/Resources"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${FAIRY_UI_ASSETS}/panel_grain.png"
+          "${DEEP_THROAT_BUNDLE}/Contents/Resources/panel_grain.png"
+  VERBATIM)
+
+target_link_libraries(deep_throat PRIVATE sdk fairy_ui fairy_ui_widgets)
 if(APPLE)
   target_link_libraries(deep_throat PRIVATE "-framework CoreFoundation")
   target_link_options(deep_throat PRIVATE
@@ -127,6 +145,39 @@ target_include_directories(deep_throat_ui_tests PRIVATE
 )
 target_link_libraries(deep_throat_ui_tests PRIVATE fairy_ui)
 add_test(NAME deep_throat_ui_tests COMMAND deep_throat_ui_tests)
+
+# Editor behaviour without a window (tests/test_editor.cpp): a real Controller as host, the views built in a container by
+# the EditorTest friend, offscreen drawing. Built like the render tool (SDK module init and factory, no plugin entry).
+add_executable(deep_throat_editor_tests
+  tests/test_editor.cpp
+  ${VST3_SDK_PATH}/public.sdk/source/main/moduleinit.cpp
+  ${VST3_SDK_PATH}/public.sdk/source/main/pluginfactory.cpp
+  src/controller.cpp
+  ${DEEP_THROAT_EDITOR_SOURCES}
+)
+target_include_directories(deep_throat_editor_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${VST3_SDK_PATH})
+target_compile_definitions(deep_throat_editor_tests PRIVATE DEEP_THROAT_ASSETS="${FAIRY_UI_ASSETS}/")
+target_link_libraries(deep_throat_editor_tests PRIVATE sdk pluginterfaces fairy_ui fairy_ui_widgets)
+add_test(NAME deep_throat_editor_tests COMMAND deep_throat_editor_tests)
+
+# Developer tool: draws the editor offscreen into PNG files (no host needed). Not built by default:
+#   cmake --build <build> --target deep_throat_render -j2
+add_executable(deep_throat_render EXCLUDE_FROM_ALL
+  tools/render_editor.cpp
+  ${VST3_SDK_PATH}/public.sdk/source/main/moduleinit.cpp
+  ${VST3_SDK_PATH}/public.sdk/source/main/pluginfactory.cpp
+  src/controller.cpp
+  ${DEEP_THROAT_EDITOR_SOURCES}
+)
+target_include_directories(deep_throat_render PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${VST3_SDK_PATH})
+target_compile_definitions(deep_throat_render PRIVATE DEEP_THROAT_ASSETS="${FAIRY_UI_ASSETS}/")
+target_link_libraries(deep_throat_render PRIVATE sdk pluginterfaces fairy_ui fairy_ui_widgets)
+
+# The render tool writes front.png (PNG signature, 1000 x 614); skipped while the tool is not built.
+add_test(NAME deep_throat_render_smoke
+  COMMAND ${CMAKE_COMMAND} -DTOOL=$<TARGET_FILE:deep_throat_render> -DOUT=${CMAKE_CURRENT_BINARY_DIR}/render_smoke
+          -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/render_smoke.cmake)
+set_tests_properties(deep_throat_render_smoke PROPERTIES SKIP_REGULAR_EXPRESSION "SKIP:")
 
 # Module/factory lifecycle smoke test: dlopens the built bundle from dist/ (exit 77 = skipped
 # when the plugin has not been built). Links only the pluginterfaces IIDs, not the plugin.
