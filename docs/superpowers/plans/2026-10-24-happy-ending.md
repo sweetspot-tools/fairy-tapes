@@ -68,7 +68,7 @@ Ordine congelato e valori (default in grassetto), da spec §3-§5 e dalla previe
 
 **Interfaces:**
 - Consumes: tabelle di frequenza, `kEqGains`, `kQValues` (Task 1).
-- Produces: `struct BandSettings { bool on; int ms; int freqIndex; int gainIndex; int qIndex; }`; `class FineEq { void prepare(double sr, int maxBlock); void setBand(int band, const BandSettings&); void setStageOn(bool); void setListen(int bellOrMinus1); void process(float* L, float* R, int n); double magnitudeDb(int target, double hz) const; }` con `target` 0 = ST, 1 = MID, 2 = SIDE (per lo schermo, piano grafico). **Stato:** in questo compito `setListen` non esiste ancora e `ms` è memorizzato ma ignorato (tutto su ST, `magnitudeDb` con `target` ≠ 0 vale 0): LISTEN e instradamento M/S arrivano nel Task 3. Il Q delle shelf è 0,7071 (`tuning.h`, `kFineShelfQ`), come quello del passa-alto; `testQCoupling` misura la larghezza a metà del picco in dB (a −3 dB non esiste per la campana a +1 dB); `testGainStepNoZipper` usa una HI SHELF (una campana non scatta).
+- Produces: `struct BandSettings { bool on; int ms; int freqIndex; int gainIndex; int qIndex; }`; `class FineEq { void prepare(double sr, int maxBlock); void setBand(int band, const BandSettings&); void setStageOn(bool); void setListen(int bellOrMinus1); void process(float* L, float* R, int n); double magnitudeDb(int target, double hz) const; }` con `target` 0 = ST, 1 = MID, 2 = SIDE (per lo schermo, piano grafico). **Stato (dopo il Task 3):** `setListen` e l'instradamento M/S esistono; `magnitudeDb(0)` somma le bande su ST, `magnitudeDb(1)`/`(2)` aggiungono quelle su MID/SIDE (le curve ignorano LISTEN). Il Q delle shelf è 0,7071 (`tuning.h`, `kFineShelfQ`), come quello del passa-alto; `testQCoupling` misura la larghezza a metà del picco in dB (a −3 dB non esiste per la campana a +1 dB); `testGainStepNoZipper` usa una HI SHELF (una campana non scatta).
 
 - [x] **Step 1: Test**: `testBellCentreGain` (campana a 1 kHz, +4 dB, Q M: guadagno misurato a 1 kHz = +4 dB ±0,1 a 44,1, 48, 96 kHz), `testNoCrampingNearNyquist` (HI MID 12,5 kHz +4 dB a 44,1 kHz: errore contro il prototipo analogico ≤ 0,5 dB a 10 e 14 kHz), `testQCoupling` (larghezza a −3 dB della campana a +4 dB minore di quella a +1 dB; Q effettivo = Q × (1 + |gain|/8)), `testHighPassOffIsIdentity`, `testHighPassSlope12dB` (HP 40 Hz: −12 dB/ottava ±1 dB tra 10 e 20 Hz), `testStableAt192kAnd44k` (HI SHELF 20 kHz a 44,1 e 192 kHz: uscita finita su rumore bianco), `testGainStepNoZipper` (seno −6 dBFS, gain da 0 a +4 dB a metà blocco: nessun |y[n]−y[n−1]| oltre 0,05).
 - [x] **Step 2: Esegui** `happy_ending_fine_eq_tests` → FAIL (simboli mancanti).
@@ -82,13 +82,13 @@ Ordine congelato e valori (default in grassetto), da spec §3-§5 e dalla previe
 - Modify: `src/happy-ending/src/dsp/fine_eq.{h,cpp}`; Create: `src/happy-ending/src/dsp/ms.h`; Test: `src/happy-ending/tests/test_fine_eq.cpp`
 
 **Interfaces:**
-- Produces: `inline void msEncode(float L, float R, float& M, float& S)` (M = (L+R)/2, S = (L−R)/2) e `msDecode`; comportamento di `setListen` e del SIDE descritto qui sotto.
+- Produces: `msEncode(L, R, M, S)` (M = (L+R)/2, S = (L−R)/2) e `msDecode`, template su float/double in `dsp/ms.h`; comportamento di `setListen` e del SIDE descritto qui sotto. LISTEN suona la campana sulla propria via (ST, solo MID o solo SIDE); `matched::computeBandPass` in `matched_biquad.h`.
 
-- [ ] **Step 1: Test**: `testMsRoundTripLossless` (rumore stereo: decode(encode(x)) == x entro 1e-6), `testSideBandOnMonoIsSilent` (L = R, banda in SIDE +4 dB: uscita identica all'ingresso entro 1e-6 e L == R), `testMidBandLeavesSideUntouched`, `testHpSideUsesMonoBassScale` (HP in SIDE indice 5 = 200 Hz: il SIDE a 100 Hz cala di almeno 5 dB, il MID resta invariato), `testListenSolosBell` (LISTEN sulla campana 0 a 1 kHz: un seno a 100 Hz cala di almeno 20 dB, uno a 1 kHz resta entro 1 dB), `testBandOffAndStageOffAreIdentity`.
-- [ ] **Step 2: Esegui** → FAIL.
-- [ ] **Step 3: Implementa** il percorso a tre filtri per banda (ST, MID, SIDE scelti dal selettore) e LISTEN come passa-banda alla frequenza e al Q effettivo della campana scelta (le altre bande non suonano).
-- [ ] **Step 4: Esegui** → PASS.
-- [ ] **Step 5: Commit** `feat(happy-ending): Fine EQ M/S, band IN and LISTEN`.
+- [x] **Step 1: Test**: `testMsRoundTripLossless` (rumore stereo: decode(encode(x)) == x entro 1e-6), `testSideBandOnMonoIsSilent` (L = R, banda in SIDE +4 dB: uscita identica all'ingresso entro 1e-6 e L == R), `testMidBandLeavesSideUntouched`, `testHpSideUsesMonoBassScale` (HP in SIDE indice 5 = 200 Hz: il SIDE a 100 Hz cala di almeno 5 dB, il MID resta invariato), `testListenSolosBell` (LISTEN: un seno a 100 Hz cala di almeno 20 dB, uno alla frequenza della campana resta entro 1 dB; LO MID arriva solo a 800 Hz, quindi 1 kHz è provato sulla MID), `testBandOffAndStageOffAreIdentity`.
+- [x] **Step 2: Esegui** → FAIL.
+- [x] **Step 3: Implementa** il percorso a tre filtri per banda (ST, MID, SIDE scelti dal selettore) e LISTEN come passa-banda alla frequenza e al Q effettivo della campana scelta (le altre bande non suonano).
+- [x] **Step 4: Esegui** → PASS.
+- [x] **Step 5: Commit** `feat(happy-ending): Fine EQ M/S, band IN and LISTEN`.
 
 ### Task 4: VIBE EQ
 

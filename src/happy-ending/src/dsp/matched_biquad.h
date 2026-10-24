@@ -129,5 +129,19 @@ inline void computeHighPass(BiquadCoeffs& c, double fc, double sr, double q) {
   c.a2 = (k * k - k / q + 1.0) * norm;
 }
 
+// 2nd-order band-pass, 0 dB at fc (constant peak gain), bandwidth fc / Q. Used by the FINE EQ
+// LISTEN to solo a bell. Not part of the Multi-Q port: written for this plugin.
+inline void computeBandPass(BiquadCoeffs& c, double fc, double sr, double q) {
+  fc = clampFreq(fc, sr);
+  q = std::max(0.01, q);
+  const double k = std::tan(BiquadCoeffs::kPi * fc / sr);
+  const double norm = 1.0 / (k * k + k / q + 1.0);
+  c.b0 = k / q * norm;
+  c.b1 = 0.0;
+  c.b2 = -c.b0;
+  c.a1 = 2.0 * (k * k - 1.0) * norm;
+  c.a2 = (k * k - k / q + 1.0) * norm;
+}
+
 } // namespace matched
 } // namespace FairyTapes::HappyEnding::DSP

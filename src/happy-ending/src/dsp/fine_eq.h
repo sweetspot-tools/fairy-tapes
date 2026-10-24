@@ -3,6 +3,10 @@
  *
  * Band order: 0 HI PASS, 1 LOW SHELF, 2 LO MID, 3 MID, 4 HI MID, 5 HI SHELF. Zero latency,
  * minimum phase. Coefficient changes glide linearly over Tuning::kFineRampSamples samples.
+ *
+ * Each band works on ST (left and right), MID or SIDE (one filter on M or S, the other
+ * component untouched; no decode when nothing works in M/S). LISTEN solos one bell as a band-pass
+ * at its frequency and effective Q, on the route of that bell; the six bands then step to identity.
  */
 
 #pragma once
@@ -18,10 +22,12 @@ double effectiveQ(double q, double gainDb);
 // Positions of a band's controls (indices into the value tables of params.h).
 struct BandSettings {
   bool on = true;
-  int ms = 0;          // 0 ST, 1 MID, 2 SIDE: routed by the M/S stage, ignored here for now
+  int ms = 0;          // 0 ST, 1 MID, 2 SIDE (HI PASS on SIDE reads the mono-bass scale)
   int freqIndex = 0;
   int gainIndex = 8;   // 0 dB
   int qIndex = 1;      // Medium
+
+  bool operator==(const BandSettings&) const = default;
 };
 
 class FineEq {
@@ -31,15 +37,21 @@ public:
   void prepare(double sampleRate, int maxBlock);
   void setBand(int band, const BandSettings& settings);
   void setStageOn(bool on);
+  // LISTEN: bell 0-2 (LO MID, MID, HI MID) is soloed, -1 = off. Not a saved state.
+  void setListen(int bellOrMinus1);
   void process(float* left, float* right, int n);
 
-  // Response in dB of the whole stage at `hz`; target 0 = ST. MID and SIDE curves come with the
-  // M/S routing: they read flat until then.
+  // Response in dB of the stage settings at `hz` (LISTEN does not change it). Target 0 = the
+  // bands working on ST; 1 = MID: those plus the bands on MID; 2 = SIDE: those plus the bands on SIDE.
   double magnitudeDb(int target, double hz) const;
 
 private:
+  static constexpr int kListenSlot = kNumBands;  // the LISTEN band-pass runs in a seventh slot
+
   struct Band {
     BandSettings settings;
+    int route = 0;          // route in use by the filter below: 0 ST, 1 MID, 2 SIDE
+    BiquadCoeffs design;    // response of the settings alone (what the screen draws)
     BiquadCoeffs target;
     BiquadCoeffs current;
     BiquadCoeffs step;
@@ -48,11 +60,13 @@ private:
     double zr[2] = {0.0, 0.0};
   };
 
-  void updateTarget(int band);
+  BiquadCoeffs designFor(int band) const;
+  void updateTarget(int slot);
 
   double sampleRate_ = 48000.0;
   bool stageOn_ = true;
-  std::array<Band, kNumBands> bands_{};
+  int listen_ = -1;
+  std::array<Band, kNumBands + 1> bands_{};
 };
 
 } // namespace FairyTapes::HappyEnding::DSP
