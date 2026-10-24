@@ -70,11 +70,12 @@ void Limiter::apply(bool snap) {
   if (static_cast<double>(cf) > c) cf = std::nextafter(cf, 0.0f);
   ceilLin_ = static_cast<double>(cf);
 
-  targetDb_ = s_.set ? Tuning::kSetThresholdDb
-                     : std::clamp(static_cast<double>(s_.threshDb), kMinThreshDb, 0.0);
+  knobTargetDb_ = std::clamp(static_cast<double>(s_.threshDb), kMinThreshDb, 0.0);
+  targetDb_ = s_.set ? std::min(Tuning::kSetThresholdDb, knobTargetDb_) : knobTargetDb_;
   mixTarget_ = s_.on ? 1.0 : 0.0;
   if (snap) {
     effDb_ = targetDb_;
+    knobDb_ = knobTargetDb_;
     mix_ = mixTarget_;
   }
   refreshLevels();
@@ -84,7 +85,9 @@ void Limiter::apply(bool snap) {
 
 void Limiter::refreshLevels() {
   threshLin_ = linOf(effDb_);
-  makeupLin_ = ceilLin_ / threshLin_;
+  // gain recovery from THRESH, not from the forced SET threshold; effDb_ never rises above it for
+  // long (both glide at the same speed), so the peaks stay at or under the ceiling
+  makeupLin_ = ceilLin_ / linOf(knobDb_);
 }
 
 void Limiter::resetState() {
@@ -126,9 +129,13 @@ void Limiter::process(float* left, float* right, int n) {
 
   for (int i = 0; i < n; ++i) {
     // threshold glide (SET and THRESH steps)
-    if (effDb_ != targetDb_) {
-      const double diff = targetDb_ - effDb_;
-      effDb_ = std::fabs(diff) <= glidePerSample_ ? targetDb_ : effDb_ + std::copysign(glidePerSample_, diff);
+    if (effDb_ != targetDb_ || knobDb_ != knobTargetDb_) {
+      auto glide = [this](double v, double target) {
+        const double diff = target - v;
+        return std::fabs(diff) <= glidePerSample_ ? target : v + std::copysign(glidePerSample_, diff);
+      };
+      effDb_ = glide(effDb_, targetDb_);
+      knobDb_ = glide(knobDb_, knobTargetDb_);
       refreshLevels();
     }
 

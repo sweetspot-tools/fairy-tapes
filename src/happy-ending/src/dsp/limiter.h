@@ -8,8 +8,10 @@
  * as the attack ramp. The delayed signal is multiplied by that gain, so the peaks arrive at the
  * ceiling with the ramp already complete (sample peak only, no true peak: spec §2).
  *
- * L2-style gain recovery: the gain is expressed as a total gain whose cap is ceiling / threshold, so
+ * L2-style gain recovery: the gain is expressed as a total gain whose cap is ceiling / THRESH, so
  * a sample at the threshold comes out at the ceiling and everything is brought up with the reduction.
+ * SET lowers only the threshold the reduction works from; the recovery stays that of THRESH, so the
+ * squeeze is audible without a loudness jump (peaks then sit below the ceiling).
  *
  * Styles: MODERN (hard knee, look-ahead 1.5 ms), PUNCH (look-ahead 0.3 ms, ramp longer than the
  * look-ahead: the first instant of a transient passes), DYN (look-ahead 0.8 ms, soft knee, release
@@ -71,7 +73,9 @@ private:
 
   // Threshold and gain recovery.
   double effDb_ = 0.0;
-  double targetDb_ = 0.0;
+  double targetDb_ = 0.0;      // where effDb_ is heading (THRESH, or the SET value)
+  double knobDb_ = 0.0;        // THRESH, gliding: the gain recovery follows this one, even in SET
+  double knobTargetDb_ = 0.0;
   double threshLin_ = 1.0;
   double ceilLin_ = 1.0;     // linear ceiling, as the largest float not above it
   double makeupLin_ = 1.0;

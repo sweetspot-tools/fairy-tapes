@@ -155,7 +155,8 @@ void testNeverAboveCeiling() {
           ASSERT_TRUE(peakOf(l) <= cl);
           ASSERT_TRUE(peakOf(r) <= cl);
           // it must be limiting, not muting: the output gets close to the ceiling
-          ASSERT_TRUE(peakOf(l) > 0.9 * cl);
+          // (with SET the peaks sit below the ceiling by the distance between THRESH and -8 dB)
+          if (!set) ASSERT_TRUE(peakOf(l) > 0.9 * cl);
         }
 }
 
@@ -361,6 +362,40 @@ void testSetSqueezesAudibly() {
   ASSERT_TRUE(settledGr(true) > 4.0f);  // 0.7 (-3 dBFS) against a threshold of -8 dB: about 4.9 dB
 }
 
+void testSetKeepsLoudness() {
+  // pink noise at -12 dBFS RMS: SET squeezes more but the gain recovery stays that of THRESH,
+  // so the output is not louder than without SET
+  std::vector<float> pl, pr;
+  pinkPair(pl, pr, 96000, 1.0, 2024u);
+  double rms = 0.0;
+  for (float x : pl) rms += static_cast<double>(x) * x;
+  rms = std::sqrt(rms / static_cast<double>(pl.size()));
+  const float g = static_cast<float>(ampOfDb(-12.0) / rms);
+  for (auto& x : pl) x *= g;
+  for (auto& x : pr) x *= g;
+  double outRms[2] = {0, 0};
+  float gr[2] = {0, 0};
+  for (int set = 0; set < 2; ++set) {
+    Limiter lim;
+    lim.prepare(kSr, 64);
+    lim.set(make(0, -2.0f, -0.3f, 4, set != 0));
+    std::vector<float> l = pl, r = pr;
+    float maxGr = 0.0f;
+    const int n = static_cast<int>(l.size());
+    for (int i = 0; i + 64 <= n; i += 64) {
+      lim.process(l.data() + i, r.data() + i, 64);
+      if (i >= n / 2) maxGr = std::max(maxGr, lim.grDb());
+    }
+    ASSERT_TRUE(peakOf(l) <= ceilLin(-0.3));
+    double s = 0.0;
+    for (int i = n / 2; i < n; ++i) s += static_cast<double>(l[static_cast<std::size_t>(i)]) * l[static_cast<std::size_t>(i)];
+    outRms[set] = std::sqrt(s / (n - n / 2));
+    gr[set] = maxGr;
+  }
+  ASSERT_TRUE(gr[1] > gr[0]);
+  ASSERT_TRUE(dbOf(outRms[1]) <= dbOf(outRms[0]) + 0.5);
+}
+
 void testOffIsDelayedIdentity() {
   std::vector<float> pl, pr;
   pinkPair(pl, pr, 20000, 1.8, 4242u);
@@ -526,6 +561,7 @@ int main() {
   RUN_TEST(testPunchLetsTransientThrough);
   RUN_TEST(testSetForcesThreshold);
   RUN_TEST(testSetSqueezesAudibly);
+  RUN_TEST(testSetKeepsLoudness);
   RUN_TEST(testOffIsDelayedIdentity);
   RUN_TEST(testGainRecoveryLikeL2);
   RUN_TEST(testStereoLinked);
