@@ -20,7 +20,7 @@
 - `kStateVersion = 2` (v1: int32 versione + 25 `double`; v2: v1 + `uint32` seme + 4 × `float32` angoli viti + `uint32` numero testi + per testo `uint32` lunghezza e byte); la v1 si carica con il decor di default; stato corrotto = rifiutato intero.
 - Preferenze: `<cartella preferenze>/FairyTapes/DeepThroat.prefs`, chiavi `wear=Off|Light|Heavy`, `notes=Show|Hide`, `tapeFont=Zeyada|RockSalt|HomemadeApple`, `valuesFont=Tape|Standard`.
 - Test: harness `RUN_TEST`/`ASSERT_TRUE` del plugin; ogni comportamento nasce con un test che prima fallisce; ogni test deve poter fallire per un'implementazione sbagliata (nel rapporto: come; mutazione dimostrata per i 2-3 più importanti).
-- Build fuori dal repo, `-j2`, **solo** i target del plugin: `cmake -S . -B /tmp/dt-build -DCMAKE_BUILD_TYPE=Release -DGPU_NAM_DISABLE_CUDA=ON`, poi `cmake --build /tmp/dt-build --target deep_throat deep_throat_tests deep_throat_factory_test deep_throat_ui_tests deep_throat_render -j2` e `ctest --test-dir /tmp/dt-build -R deep_throat --output-on-failure`. I nuovi test puri dell'interfaccia stanno in `tests/test_ui.cpp` (eseguibile `deep_throat_ui_tests`, collegato a `fairy_ui`); i test di motore, stato e tabella restano in `tests/test_deep_throat.cpp`.
+- Build fuori dal repo, `-j2`, **solo** i target del plugin: `cmake -S . -B /tmp/dt-build -DCMAKE_BUILD_TYPE=Release -DGPU_NAM_DISABLE_CUDA=ON`, poi `cmake --build /tmp/dt-build --target deep_throat deep_throat_tests deep_throat_factory_test deep_throat_ui_tests deep_throat_state_module_test deep_throat_editor_tests deep_throat_render -j2` e `ctest --test-dir /tmp/dt-build -R deep_throat --output-on-failure`. I nuovi test puri dell'interfaccia stanno in `tests/test_ui.cpp` (eseguibile `deep_throat_ui_tests`, collegato a `fairy_ui`); i test di motore, tabella e display restano in `tests/test_deep_throat.cpp`; stato, decor e messaggi si provano tramite le interfacce VST3 in `tests/test_state_module.cpp` (`deep_throat_state_module_test`, Task 3); il comportamento dell'editor (controlli, timer, meter, nastri, viti, flip) in `tests/test_editor.cpp` (`deep_throat_editor_tests`, banco di prova creato nel Task 7); `tests/test_factory.cpp` resta per il ciclo di vita del modulo, i flag dei parametri e `createView`.
 - Commit per nome (mai `git add -A`), messaggi in inglese, **senza** riga `Co-Authored-By` (regola dell'utente); niente push.
 
 ## Review Focus
@@ -74,14 +74,14 @@
 
 **Files:**
 - Create: `src/deep-throat/src/messages.h`
-- Modify: `src/deep-throat/src/{state.h,controller.h,controller.cpp,processor.h,processor.cpp}`, `src/deep-throat/tests/test_deep_throat.cpp`, `src/deep-throat/tests/test_factory.cpp`
+- Modify: `src/deep-throat/src/{state.h,controller.h,controller.cpp,processor.h,processor.cpp}`, `src/deep-throat/tests/test_deep_throat.cpp`, `src/deep-throat/tests/test_state_module.cpp` (nuovo: `deep_throat_state_module_test`, modello `src/pillow-talk/tests/test_state_module.cpp` e il suo blocco in `src/pillow-talk/CMakeLists.txt`, con le classi host dell'SDK; si salta con exit 77 se il bundle manca)
 
 **Interfaces:**
 - Produces in `state.h` (modello: `src/pillow-talk/src/state.h`, senza le impostazioni di comportamento): `constexpr int32_t kStateVersion = 2; constexpr int kNumScrews = 4, kMaxTapeTexts = 6, kMaxTapeChars = 14; struct Decor { uint32_t seed = 0; float screwAngles[4] = {}; std::vector<std::string> tapeTexts; };` `void serializeDecor(const Decor&, std::vector<uint8_t>&)`, `bool deserializeDecor(const uint8_t*, size_t, Decor&)`, `void serializeState(const double* values, const Decor&, std::vector<uint8_t>&)`, `bool deserializeState(const uint8_t*, size_t, double* values, Decor&)` (v1 e v2), `void ensureSeed(Decor&)` (seme non nullo, mai nel thread audio), `constexpr size_t kMaxStateBytes`. Sanificazione come Pillow Talk: parametri clampati a [0,1] (un valore non finito rifiuta tutto), angoli non finiti → 0 e riportati a [0,360), testi ASCII stampabili, tagliati, al massimo 14 caratteri e 6 testi.
 - Produces in `messages.h` (modello `src/pillow-talk/src/messages.h`): `constexpr const char* kMsgDecor = "Decor"; template <class Msg> void encodeDecorMessage(Msg*, const Decor&); template <class Msg> bool decodeDecorMessage(Msg*, Decor&);`
 - Produces in `Controller`: `Decor decor(); uint32_t decorRevision() const; void editDecor(Decor d); tresult notify(IMessage*) override;` (copia per l'editor, scambio con il processor tramite messaggi `Decor`, mai nel thread audio). `Processor::getState/setState` salvano e caricano il decor e lo inviano al controller dopo `setState` e alla connessione.
 
-- [ ] **Step 1: Scrivere i test:** in `test_deep_throat.cpp`: `test_state_v2_roundtrip` (valori e decor con seme, 4 angoli e due testi tornano identici), `test_state_v1_loads_with_default_decor` (un blob v1 costruito a mano carica i 25 valori e dà `seed == 0`; `ensureSeed` poi dà un seme ≠ 0 e un secondo `ensureSeed` non lo cambia), `test_state_rejects_corrupt` (blob troncato a ogni lunghezza da 0 a `size-1`, versione 3, valore non finito, numero di testi enorme, lunghezza di testo oltre il blob → `false`, `values` intatti), `test_decor_sanitised` (angoli NaN/inf/±1000 → [0,360); testo con caratteri non stampabili e 40 caratteri → ASCII stampabile e 14 caratteri; più di 6 testi → 6), `test_decor_message_roundtrip` (con un messaggio finto: encode/decode identici, messaggio di altro tipo o blob corrotto → `false`). In `test_factory.cpp`: `setState` con un blob v2 seguito da `getState` restituisce lo stesso blob; il controller riceve il decor tramite `notify`.
+- [ ] **Step 1: Scrivere i test:** in `test_deep_throat.cpp`: `test_state_v2_roundtrip` (valori e decor con seme, 4 angoli e due testi tornano identici), `test_state_v1_loads_with_default_decor` (un blob v1 costruito a mano carica i 25 valori e dà `seed == 0`; `ensureSeed` poi dà un seme ≠ 0 e un secondo `ensureSeed` non lo cambia), `test_state_rejects_corrupt` (blob troncato a ogni lunghezza da 0 a `size-1`, versione 3, valore non finito, numero di testi enorme, lunghezza di testo oltre il blob → `false`, `values` intatti), `test_decor_sanitised` (angoli NaN/inf/±1000 → [0,360); testo con caratteri non stampabili e 40 caratteri → ASCII stampabile e 14 caratteri; più di 6 testi → 6), `test_decor_message_roundtrip` (con un messaggio finto: encode/decode identici, messaggio di altro tipo o blob corrotto → `false`). In `test_state_module.cpp` (tramite le interfacce VST3: `IComponent::setState/getState`, `IConnectionPoint`, `IMessage`): `setState` con un blob v2 seguito da `getState` restituisce lo stesso blob; il controller riceve il decor tramite `notify`.
 - [ ] **Step 2: Eseguire e vedere fallire.**
 - [ ] **Step 3: Implementare** stato, messaggi e il passaggio nel controller e nel processor sul modello di Pillow Talk.
 - [ ] **Step 4: Eseguire i test del plugin** → PASS; i test di stato v1 esistenti restano verdi (la v1 si carica ancora).
@@ -145,7 +145,7 @@
 ### Task 7: Scheletro dell'editor, pannello, createView e render fuori schermo
 
 **Files:**
-- Create: `src/deep-throat/src/ui/{editor.h,editor.cpp,panel_view.h,panel_view.cpp}`, `src/deep-throat/tools/render_editor.cpp`
+- Create: `src/deep-throat/src/ui/{editor.h,editor.cpp,panel_view.h,panel_view.cpp}`, `src/deep-throat/tools/render_editor.cpp`, `src/deep-throat/tests/test_editor.cpp`
 - Modify: `src/deep-throat/src/{controller.h,controller.cpp}` (`createView`), `src/deep-throat/CMakeLists.txt` (sorgenti UI nel plugin, `sdk fairy_ui fairy_ui_widgets`, asset della grana, target `deep_throat_render`), `src/deep-throat/tests/test_factory.cpp`
 
 **Interfaces:**
@@ -154,7 +154,7 @@
 
 - [ ] **Step 1: Scrivere i test** in `test_factory.cpp`: `test_create_view_returns_editor` (per `kEditor` una vista con dimensione 1000 × 614 e conteggio dei riferimenti corretto; per un nome diverso `nullptr`), `test_editor_open_close_repeatedly` (creare, rilasciare, ricreare 50 volte senza finestra: nessun crash, conteggio dei riferimenti a zero alla fine). Per il render: il target si costruisce e, lanciato con una cartella scratch, scrive `front.png` con dimensioni 1000 × 614 (controllo del file: esiste, intestazione PNG, larghezza e altezza) — in `test_ui.cpp` non (richiede VSTGUI): in `test_factory.cpp` o in un test CTest dedicato `deep_throat_render_smoke` che esegue il tool.
 - [ ] **Step 2: Eseguire e vedere fallire.**
-- [ ] **Step 3: Implementare** editor (solo livello pannello: nessun controllo ancora), `createView` e il tool di render; VSTGUI compila con `-j2`, un target alla volta.
+- [ ] **Step 3: Creare il banco di prova dell'editor** `deep_throat_editor_tests` (`tests/test_editor.cpp`, harness `RUN_TEST`): si costruisce come `pillow_talk_render` (compila `controller.cpp`, i sorgenti del motore e dell'editor, `sdk`, `pluginterfaces`, `fairy_ui`, `fairy_ui_widgets`; nessuna finestra, `moduleinit.cpp` e `pluginfactory.cpp` dell'SDK) con una struct amica `EditorTest` dell'`Editor` (come `EditorPreview`) che espone: costruzione delle viste senza finestra, un tick del timer UI a comando, accesso al controllo di un `ParamID` e alle stringhe della serigrafia. Un `Controller` reale pilotato direttamente fa da host (`setParamNormalized`, i listener dei parametri). Lo usano i Task 8-11. Poi implementare editor (solo livello pannello: nessun controllo ancora), `createView` e il tool di render; VSTGUI compila con `-j2`, un target alla volta.
 - [ ] **Step 4: Eseguire** build di `deep_throat deep_throat_factory_test deep_throat_render` e i test → PASS; aprire `front.png` e controllare a occhio titoli in basso, bordi e testi (dichiararlo nel rapporto).
 - [ ] **Step 5: Commit:** `feat(deep-throat): editor skeleton with the panel layer, createView and the offscreen render tool`.
 
@@ -163,14 +163,14 @@
 ### Task 8: Controlli legati ai parametri
 
 **Files:**
-- Modify: `src/deep-throat/src/ui/{editor.h,editor.cpp}`, `src/deep-throat/tests/test_factory.cpp`
+- Modify: `src/deep-throat/src/ui/{editor.h,editor.cpp}`, `src/deep-throat/tests/test_editor.cpp`
 - Create: `src/deep-throat/src/ui/value_text.h` (formattazione dei valori stampati sotto le manopole e analisi dei valori digitati: modello `src/the-stripper/src/ui/value_text.h`, adattato; test in `test_ui.cpp`)
 
 **Interfaces:**
 - Consumes: `kControls` e `silkscreenItems()` (Task 4), `dynamic_text.h` (Task 5).
 - Produces: nell'editor, una vista per ogni `ControlSpec` (`RackKnob`, `RackToggle`, `RackLitChoice` per Mode con le tre facce impilate, `RackCycle` per Ratio, Dist e SC HPF), la `SilkscreenView` con i nomi, le scale e i valori correnti (anche le scritte dinamiche: sigla del rilevatore, descrizione della modalità, `MAX ±`, HPF e MUD CUT, i tre dB del Tone, nota del de-esser), i valori delle manopole con il font dei valori delle preferenze, `valueChanged` / `controlBeginEdit` / `controlEndEdit` → `beginEdit` / `performEdit` / `endEdit`, il timer UI che applica i cambi dell'host (i `Parameter` sono dipendenti: `update` imposta solo un flag), l'attenuazione (IN, Bypass) e la regola della manopola con campo di testo (clic sul valore → campo modificabile; invio conferma, Esc annulla; il testo digitato passa per `Controller::getParamValueByString`); `std::string formatKnobValue(ParamID id, double norm)` e `bool parseKnobValue(ParamID id, const std::string&, double& norm)` in `value_text.h` (db, percentuale, kHz con una cifra, dBFS, "+100 %").
 
-- [ ] **Step 1: Scrivere i test:** in `test_ui.cpp`: `test_value_text_formats` (Input 0.5 → "0.0 dB", 1 → "+12.0 dB"; Rider Target 0.5 → "-20.0 dBFS"; Range 0.5 → "50 %"; De-ess Freq 0.53 → "6.5 kHz"; Comp Amount 0.5 → "-18.0 dB"; Tone 1 → "+100 %"), `test_value_text_parse_roundtrip` (per ogni manopola: `parse(format(v))` entro la risoluzione della cifra stampata; testo non valido → `false`), `test_value_text_matches_controller` (le stringhe coincidono con `Controller::getParamStringByValue` per tutte le manopole a 0, 0.25, 0.5, 1: confronto di tipi tramite funzione pura condivisa o stesso formattatore: se il controller ha già un formattatore puro, usarlo). In `test_factory.cpp`: `test_editor_controls_follow_host` (con il fake host: `setParamNormalized` per ognuno dei 25 parametri → il valore del controllo corrispondente cambia entro un tick del timer, senza richiamare `performEdit`), `test_user_edit_reaches_host_once` (un `valueChanged` genera esattamente un `beginEdit/performEdit/endEdit` e nessun ritorno), `test_double_click_resets_default`, `test_mode_change_updates_dynamic_texts` (cambiando Mode da host, la serigrafia dinamica mostra le stringhe di `dynamic_text.h` per la nuova modalità), `test_in_off_dims_module_controls`.
+- [ ] **Step 1: Scrivere i test:** in `test_ui.cpp`: `test_value_text_formats` (Input 0.5 → "0.0 dB", 1 → "+12.0 dB"; Rider Target 0.5 → "-20.0 dBFS"; Range 0.5 → "50 %"; De-ess Freq 0.53 → "6.5 kHz"; Comp Amount 0.5 → "-18.0 dB"; Tone 1 → "+100 %"), `test_value_text_parse_roundtrip` (per ogni manopola: `parse(format(v))` entro la risoluzione della cifra stampata; testo non valido → `false`), `test_value_text_matches_controller` (le stringhe coincidono con `Controller::getParamStringByValue` per tutte le manopole a 0, 0.25, 0.5, 1: confronto di tipi tramite funzione pura condivisa o stesso formattatore: se il controller ha già un formattatore puro, usarlo). In `test_editor.cpp`: `test_editor_controls_follow_host` (con il fake host: `setParamNormalized` per ognuno dei 25 parametri → il valore del controllo corrispondente cambia entro un tick del timer, senza richiamare `performEdit`), `test_user_edit_reaches_host_once` (un `valueChanged` genera esattamente un `beginEdit/performEdit/endEdit` e nessun ritorno), `test_double_click_resets_default`, `test_mode_change_updates_dynamic_texts` (cambiando Mode da host, la serigrafia dinamica mostra le stringhe di `dynamic_text.h` per la nuova modalità), `test_in_off_dims_module_controls`.
 - [ ] **Step 2: Eseguire e vedere fallire.**
 - [ ] **Step 3: Implementare** modello `src/pillow-talk/src/ui/editor.cpp` (costruzione per livelli, `bindControl`, timer, dipendenti); mutazione dimostrata: se `update` smette di segnare il parametro, `test_editor_controls_follow_host` fallisce.
 - [ ] **Step 4: Eseguire** build e test → PASS; `deep_throat_render` e controllo a occhio di `front.png` (controlli al loro posto, valori leggibili).
@@ -182,7 +182,7 @@
 
 **Files:**
 - Create: `src/deep-throat/src/ui/{scope_view.h,scope_view.cpp}`
-- Modify: `src/deep-throat/src/ui/{editor.h,editor.cpp}`, `src/deep-throat/tests/test_factory.cpp`
+- Modify: `src/deep-throat/src/ui/{editor.h,editor.cpp}`, `src/deep-throat/tests/test_editor.cpp`
 
 **Interfaces:**
 - Consumes: `kMeterRows`, `kClips`, `kScopeRect` (Task 4), `History`/`ScopeColumn` (Task 6), `displayNorms` (Task 2).
@@ -200,7 +200,7 @@
 
 **Files:**
 - Create: `src/deep-throat/src/ui/{tape_view.h,tape_view.cpp}`
-- Modify: `src/deep-throat/src/ui/{editor.h,editor.cpp}`, `src/deep-throat/tests/test_factory.cpp`
+- Modify: `src/deep-throat/src/ui/{editor.h,editor.cpp}`, `src/deep-throat/tests/test_editor.cpp`
 
 **Interfaces:**
 - Consumes: `Decor` e `Controller::decor/editDecor/decorRevision` (Task 3), `layoutFromSeed` e `Prefs` (Task 6), `WearView`, `ScrewView`, `TapeView` (Pillow Talk: `tape_view`).
@@ -218,13 +218,13 @@
 
 **Files:**
 - Create: `src/deep-throat/src/ui/back_settings.h`
-- Modify: `src/deep-throat/src/ui/{editor.h,editor.cpp}`, `src/deep-throat/tests/test_ui.cpp`, `src/deep-throat/tests/test_factory.cpp`
+- Modify: `src/deep-throat/src/ui/{editor.h,editor.cpp}`, `src/deep-throat/tests/test_ui.cpp`, `src/deep-throat/tests/test_editor.cpp`
 
 **Interfaces:**
 - Consumes: `FairyTapes::Ui::BackView`, `PanelFlip` (`fairy_ui/back_view.h`, `flip_view.h`, `back_panel.h`), `Prefs` (Task 6).
 - Produces: `back_settings.h` (modello `src/pillow-talk/src/ui/back_settings.h`): le voci di APPEARANCE (Wear: Off/Light/Heavy; Tape font: Zeyada/Rock Salt/Homemade Apple; Values font: Tape font/Standard; RE-ROLL) e di NOTES come nella preview, con le funzioni pure `std::vector<...> settingsItems(const Prefs&)` e la corrispondenza voce → modifica delle preferenze; nell'editor: il link "BACK →" in alto a destra dell'intestazione, il flip (circa 0,8 s, un campo di testo aperto su un nastro si conferma prima), "← BACK" per tornare, scheda SETTINGS con il template fisso del retro (titolo corsivo 38 px = scheda corrente, "FAIRY TAPES", "DEEP THROAT · VOCAL CHANNEL STRIP VST3", link SETTINGS, MODES, ROUTING, CREDITS); le modifiche alle preferenze sono applicate subito e salvate (una scrittura fallita è ignorata).
 
-- [ ] **Step 1: Scrivere i test:** in `test_ui.cpp`: `test_settings_items_reflect_prefs` (per ogni combinazione dei campi, la voce attiva è quella giusta), `test_settings_item_to_prefs` (ogni clic produce la `Prefs` attesa e non tocca gli altri campi). In `test_factory.cpp`: `test_flip_roundtrip_and_text_edit_confirmed_first`, `test_settings_apply_wear_at_once`, `test_settings_failed_write_is_ignored` (cartella delle preferenze non scrivibile: l'editor continua e il valore resta applicato per la sessione), `test_tab_links_order` (SETTINGS, MODES, ROUTING, CREDITS).
+- [ ] **Step 1: Scrivere i test:** in `test_ui.cpp`: `test_settings_items_reflect_prefs` (per ogni combinazione dei campi, la voce attiva è quella giusta), `test_settings_item_to_prefs` (ogni clic produce la `Prefs` attesa e non tocca gli altri campi). In `test_editor.cpp`: `test_flip_roundtrip_and_text_edit_confirmed_first`, `test_settings_apply_wear_at_once`, `test_settings_failed_write_is_ignored` (cartella delle preferenze non scrivibile: l'editor continua e il valore resta applicato per la sessione), `test_tab_links_order` (SETTINGS, MODES, ROUTING, CREDITS).
 - [ ] **Step 2: Eseguire e vedere fallire.**
 - [ ] **Step 3: Implementare** flip e SETTINGS; le altre tre schede restano per ora vuote ma selezionabili.
 - [ ] **Step 4: Eseguire** build e test → PASS; render della scheda SETTINGS e controllo a occhio contro la preview.
