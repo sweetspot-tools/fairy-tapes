@@ -2,10 +2,12 @@
  * Fairy Tapes · Deep Throat — tests for the pure editor layout (ui/editor_size.h, ui/layout.h): no VSTGUI.
  * Build target: deep_throat_ui_tests.
  */
+#include "ui/dynamic_text.h"
 #include "ui/editor_size.h"
 #include "ui/layout.h"
 
 #include <cctype>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -330,6 +332,83 @@ void test_tape_slots_clear_of_controls() {
     for (const Placed& p : placedItems()) ASSERT_TRUE(!overlap(Rect{s[0] - 7, s[1] - 7, 14, 14}, p.rect));
 }
 
+void test_eq_texts() {
+  ASSERT_TRUE(eqHpfText(Mode::Speak, 0.5) == "80 Hz" && eqMudText(Mode::Speak, 0.5) == "-2 dB");
+  ASSERT_TRUE(eqHpfText(Mode::Speak, 1.0) == "120 Hz" && eqMudText(Mode::Speak, 1.0) == "-4 dB");
+  ASSERT_TRUE(eqHpfText(Mode::Puke, 0.0) == "30 Hz" && eqMudText(Mode::Puke, 0.0) == "0 dB");
+  ASSERT_TRUE(eqHpfText(Mode::Sing, 0.5) == "70 Hz" && eqMudText(Mode::Sing, 0.5) == "-3 dB");
+  ASSERT_TRUE(eqMudText(Mode::Sing, 0.25) == "-1.5 dB");
+  const double nan = std::nan("");
+  ASSERT_TRUE(eqHpfText(Mode::Speak, nan) == eqHpfText(Mode::Speak, 0.5));
+  ASSERT_TRUE(eqMudText(Mode::Sing, nan) == eqMudText(Mode::Sing, 0.5));
+}
+
+void test_tone_gain_texts() {
+  ASSERT_TRUE(toneGainText(Mode::Speak, 0, 1.0) == "-2.0 dB");
+  ASSERT_TRUE(toneGainText(Mode::Speak, 1, 1.0) == "+3.0 dB");
+  ASSERT_TRUE(toneGainText(Mode::Speak, 2, 1.0) == "+2.0 dB");
+  for (int b = 0; b < 3; ++b) ASSERT_TRUE(toneGainText(Mode::Speak, b, 0.5) == "0.0 dB");
+  ASSERT_TRUE(toneGainText(Mode::Sing, 0, 0.0) == "+1.5 dB");
+  ASSERT_TRUE(toneGainText(Mode::Sing, 1, 0.0) == "-2.0 dB");
+  ASSERT_TRUE(toneGainText(Mode::Sing, 2, 0.0) == "-4.0 dB");
+  for (double t : {0.0, 0.3, 0.5, 0.8, 1.0}) ASSERT_TRUE(toneGainText(Mode::Puke, 2, t) == "0.0 dB");
+  ASSERT_TRUE(toneGainText(Mode::Speak, 2, std::nan("")) == "0.0 dB");
+  ASSERT_TRUE(toneGainText(Mode::Speak, 1, 0.51) == "+0.1 dB");   // |g| = 0.06 >= 0.05
+  ASSERT_TRUE(toneGainText(Mode::Speak, 1, 0.508) == "0.0 dB");   // |g| = 0.048 < 0.05
+}
+
+void test_ratio_dist_texts() {
+  ASSERT_TRUE(ratioText(0, Mode::Sing) == "AUTO 3:1");
+  ASSERT_TRUE(ratioText(0, Mode::Speak) == "AUTO 2:1" && ratioText(0, Mode::Puke) == "AUTO 8:1");
+  ASSERT_TRUE(ratioText(7, Mode::Speak) == "20:1" && ratioText(1, Mode::Puke) == "2:1");
+  ASSERT_TRUE(ratioText(4, Mode::Sing) == "6:1");
+  ASSERT_TRUE(distText(0, Mode::Puke) == "AUTO DIST 3" && distText(0, Mode::Speak) == "AUTO OFF");
+  ASSERT_TRUE(distText(0, Mode::Sing) == "AUTO DIST 2");
+  ASSERT_TRUE(distText(1, Mode::Sing) == "OFF" && distText(2, Mode::Speak) == "DIST 2" && distText(3, Mode::Speak) == "DIST 3");
+  ASSERT_TRUE(hpfChoiceText(0) == "OFF" && hpfChoiceText(1) == "80 Hz" && hpfChoiceText(2) == "150 Hz");
+}
+
+void test_mode_tags() {
+  ASSERT_TRUE(modeTagLine1(Mode::Speak) == "SPOKEN WORD" && modeTagLine2(Mode::Speak) == "PODCAST, VOICE-OVER");
+  ASSERT_TRUE(modeTagLine1(Mode::Sing) == "SUNG VOICE" && modeTagLine2(Mode::Sing).empty());
+  ASSERT_TRUE(modeTagLine1(Mode::Puke) == "EXTREME VOICES" && modeTagLine2(Mode::Puke) == "SCREAM, GROWL");
+  ASSERT_TRUE(std::strcmp(detectorTag(Mode::Speak), "SPECTRAL") == 0);
+  ASSERT_TRUE(std::strcmp(detectorTag(Mode::Sing), "SPECTRAL") == 0);
+  ASSERT_TRUE(std::strcmp(detectorTag(Mode::Puke), "LEVEL") == 0);
+}
+
+void test_rider_max_text() {
+  ASSERT_TRUE(riderMaxText(Mode::Speak) == "MAX \xC2\xB1" "6 dB \xC2\xB7 8 dB/s");
+  ASSERT_TRUE(riderMaxText(Mode::Sing) == "MAX \xC2\xB1" "4 dB \xC2\xB7 4 dB/s");
+  ASSERT_TRUE(riderMaxText(Mode::Puke) == "MAX \xC2\xB1" "3 dB \xC2\xB7 2 dB/s");
+}
+
+void test_de_ess_note_only_in_puke() {
+  ASSERT_TRUE(deEssNote(Mode::Speak).empty() && deEssNote(Mode::Sing).empty());
+  ASSERT_TRUE(deEssNote(Mode::Puke) == "MOSTLY OFF IN PUKE (X0.15)");
+}
+
+void test_texts_follow_the_table() {
+  for (Mode m : {Mode::Speak, Mode::Sing, Mode::Puke}) {
+    const ModeRow& r = modeRow(m);
+    ASSERT_TRUE(eqHpfText(m, 0.7) == eqHpfText(r, 0.7) && eqMudText(m, 0.7) == eqMudText(r, 0.7));
+    for (int b = 0; b < 3; ++b) ASSERT_TRUE(toneGainText(m, b, 0.9) == toneGainText(r, b, 0.9));
+    ASSERT_TRUE(ratioText(0, m) == ratioText(0, r) && distText(0, m) == distText(0, r));
+    ASSERT_TRUE(riderMaxText(m) == riderMaxText(r) && modeTagLine1(m) == modeTagLine1(r));
+  }
+  ModeRow r = modeRow(Mode::Speak);
+  r.hpfHz = 100; r.mudCutDb = -6; r.toneMudDb = 4; r.tonePresenceDb = -1; r.toneAirDb = 6;
+  r.compRatio = 4; r.compDist = 3; r.riderMaxRangeDb = 9; r.riderSlewDbPerSec = 5; r.levelDetector = true;
+  r.description = "Test voice: line two"; r.deEssScale = 0.5; r.name = "TEST";
+  ASSERT_TRUE(eqHpfText(r, 0.5) == "100 Hz" && eqMudText(r, 0.5) == "-6 dB");
+  ASSERT_TRUE(toneGainText(r, 0, 1.0) == "+4.0 dB" && toneGainText(r, 1, 1.0) == "-1.0 dB" && toneGainText(r, 2, 1.0) == "+6.0 dB");
+  ASSERT_TRUE(ratioText(0, r) == "AUTO 4:1" && distText(0, r) == "AUTO DIST 3");
+  ASSERT_TRUE(riderMaxText(r) == "MAX \xC2\xB1" "9 dB \xC2\xB7 5 dB/s");
+  ASSERT_TRUE(modeTagLine1(r) == "TEST VOICE" && modeTagLine2(r) == "LINE TWO");
+  ASSERT_TRUE(std::strcmp(detectorTag(r), "LEVEL") == 0);
+  ASSERT_TRUE(deEssNote(r) == "MOSTLY OFF IN TEST (X0.50)");
+}
+
 } // namespace
 
 int main() {
@@ -346,6 +425,13 @@ int main() {
   RUN_TEST(test_meters_and_clips);
   RUN_TEST(test_panel_texts_and_decor_tables);
   RUN_TEST(test_tape_slots_clear_of_controls);
+  RUN_TEST(test_eq_texts);
+  RUN_TEST(test_tone_gain_texts);
+  RUN_TEST(test_ratio_dist_texts);
+  RUN_TEST(test_mode_tags);
+  RUN_TEST(test_rider_max_text);
+  RUN_TEST(test_de_ess_note_only_in_puke);
+  RUN_TEST(test_texts_follow_the_table);
   std::printf("deep_throat_ui_tests: %d passed, %d failed\n", g_passed, g_failed);
   return g_failed ? 1 : 0;
 }
