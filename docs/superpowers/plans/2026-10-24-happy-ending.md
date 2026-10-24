@@ -68,13 +68,13 @@ Ordine congelato e valori (default in grassetto), da spec §3-§5 e dalla previe
 
 **Interfaces:**
 - Consumes: tabelle di frequenza, `kEqGains`, `kQValues` (Task 1).
-- Produces: `struct BandSettings { bool on; int ms; int freqIndex; int gainIndex; int qIndex; }`; `class FineEq { void prepare(double sr, int maxBlock); void setBand(int band, const BandSettings&); void setStageOn(bool); void setListen(int bellOrMinus1); void process(float* L, float* R, int n); double magnitudeDb(int target, double hz) const; }` con `target` 0 = ST, 1 = MID, 2 = SIDE (per lo schermo, piano grafico).
+- Produces: `struct BandSettings { bool on; int ms; int freqIndex; int gainIndex; int qIndex; }`; `class FineEq { void prepare(double sr, int maxBlock); void setBand(int band, const BandSettings&); void setStageOn(bool); void setListen(int bellOrMinus1); void process(float* L, float* R, int n); double magnitudeDb(int target, double hz) const; }` con `target` 0 = ST, 1 = MID, 2 = SIDE (per lo schermo, piano grafico). **Stato:** in questo compito `setListen` non esiste ancora e `ms` è memorizzato ma ignorato (tutto su ST, `magnitudeDb` con `target` ≠ 0 vale 0): LISTEN e instradamento M/S arrivano nel Task 3. Il Q delle shelf è 0,7071 (`tuning.h`, `kFineShelfQ`), come quello del passa-alto; `testQCoupling` misura la larghezza a metà del picco in dB (a −3 dB non esiste per la campana a +1 dB); `testGainStepNoZipper` usa una HI SHELF (una campana non scatta).
 
-- [ ] **Step 1: Test**: `testBellCentreGain` (campana a 1 kHz, +4 dB, Q M: guadagno misurato a 1 kHz = +4 dB ±0,1 a 44,1, 48, 96 kHz), `testNoCrampingNearNyquist` (HI MID 12,5 kHz +4 dB a 44,1 kHz: errore contro il prototipo analogico ≤ 0,5 dB a 10 e 14 kHz), `testQCoupling` (larghezza a −3 dB della campana a +4 dB minore di quella a +1 dB; Q effettivo = Q × (1 + |gain|/8)), `testHighPassOffIsIdentity`, `testHighPassSlope12dB` (HP 40 Hz: −12 dB/ottava ±1 dB tra 10 e 20 Hz), `testStableAt192kAnd44k` (HI SHELF 20 kHz a 44,1 e 192 kHz: uscita finita su rumore bianco), `testGainStepNoZipper` (seno −6 dBFS, gain da 0 a +4 dB a metà blocco: nessun |y[n]−y[n−1]| oltre 0,05).
-- [ ] **Step 2: Esegui** `happy_ending_fine_eq_tests` → FAIL (simboli mancanti).
-- [ ] **Step 3: Implementa** i coefficienti matched di peak, shelf e passa-alto 12 dB/ott (Q 0,707), con frequenza limitata da `clampFreq`; le variazioni di coefficienti si interpolano linearmente su 64 campioni per non scattare.
-- [ ] **Step 4: Esegui** → PASS.
-- [ ] **Step 5: Commit** `feat(happy-ending): matched biquad port and Fine EQ bands`.
+- [x] **Step 1: Test**: `testBellCentreGain` (campana a 1 kHz, +4 dB, Q M: guadagno misurato a 1 kHz = +4 dB ±0,1 a 44,1, 48, 96 kHz), `testNoCrampingNearNyquist` (HI MID 12,5 kHz +4 dB a 44,1 kHz: errore contro il prototipo analogico ≤ 0,5 dB a 10 e 14 kHz), `testQCoupling` (larghezza a −3 dB della campana a +4 dB minore di quella a +1 dB; Q effettivo = Q × (1 + |gain|/8)), `testHighPassOffIsIdentity`, `testHighPassSlope12dB` (HP 40 Hz: −12 dB/ottava ±1 dB tra 10 e 20 Hz), `testStableAt192kAnd44k` (HI SHELF 20 kHz a 44,1 e 192 kHz: uscita finita su rumore bianco), `testGainStepNoZipper` (seno −6 dBFS, gain da 0 a +4 dB a metà blocco: nessun |y[n]−y[n−1]| oltre 0,05).
+- [x] **Step 2: Esegui** `happy_ending_fine_eq_tests` → FAIL (simboli mancanti).
+- [x] **Step 3: Implementa** i coefficienti matched di peak, shelf e passa-alto 12 dB/ott (Q 0,707), con frequenza limitata da `clampFreq`; le variazioni di coefficienti si interpolano linearmente su 64 campioni per non scattare.
+- [x] **Step 4: Esegui** → PASS.
+- [x] **Step 5: Commit** `feat(happy-ending): matched biquad port and Fine EQ bands`.
 
 ### Task 3: M/S, IN e LISTEN del FINE EQ
 
