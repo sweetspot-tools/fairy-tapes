@@ -37,7 +37,7 @@ int main() {
   CHECK(std::fabs(c.x - 144.0) < 1e-6 && std::fabs(c.y - 337.0) < 1e-6);
   CHECK(std::fabs(c.y - view.top - Ui::knobCentreOffsetY(spec.capRadius)) < 1e-6);
   CHECK(std::fabs(c.y - Ui::knobCentreY(spec)) < 1e-6);
-  // the shared offset is the base one plus the extra height above the big cap; draw() uses center() (shared tests pin that)
+  // the shared offset is the base one plus the extra height above the big cap; the shared drawing test pins that draw() follows it
   CHECK(std::fabs(knob->centerOffsetY() - FairyTapes::Ui::AnalogKnob::kCenterOffsetY - Ui::kBigKnobExtra) < 1e-6);
 
   // the value area is printed under the name at the silkscreen's baseline for this centre

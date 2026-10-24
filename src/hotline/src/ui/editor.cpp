@@ -288,7 +288,7 @@ void Editor::applyControlWear() {
     NormalizedControl* control = controls_[spec.id];
     if (!control) continue;
     const uint32_t cseed = controlWearSeed(seed_, spec.id);
-    if (auto* k = dynamic_cast<RackKnob*>(control)) k->setWear(cseed, amount);   
+    if (auto* k = dynamic_cast<RackKnob*>(control)) k->setWear(cseed, amount);
     else if (auto* t = dynamic_cast<RackToggle*>(control)) t->setWear(cseed, amount);
     else if (auto* c = dynamic_cast<RackLitChoice*>(control)) c->setWear(cseed, amount);
     control->invalid();
