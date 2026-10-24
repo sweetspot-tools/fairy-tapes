@@ -108,7 +108,8 @@ int brightness(const VSTGUI::CColor& c) { return std::max({c.red, c.green, c.blu
 // The brightest of the two pixel rows a 2 px line at `y` covers.
 int lineBrightness(const Pixels& p, int x, int y) { return std::max(brightness(p.at(x, y - 1)), brightness(p.at(x, y))); }
 
-// Width of a box title as drawTitledBox measures it (Arial 14 bold).
+// Width of a box title as drawTitledBox measures it. Duplicates private details of shared/ui/src/draw_util.cpp
+// (drawTitledBox: title font Arial 14 bold): keep in step with it.
 double titleWidth(const char* title) {
   auto ctx = VSTGUI::COffscreenContext::create(VSTGUI::CPoint(8, 8), 1.0);
   if (!ctx) return 0;
@@ -258,6 +259,7 @@ void test_render_smoke() {
     ASSERT_TRUE(lineBrightness(px, left - 3, midY) < 0x40);   // outside it (the box on the left ends 6 px before)
     const double half = titleWidth(b.title) / 2;
     ASSERT_TRUE(half > 4);
+    // 13 = kTitleGap of shared/ui/src/draw_util.cpp (blank run on each side of a box title): keep in step with it.
     const int inGap = static_cast<int>(cx - half - 13.0 / 2), besideGap = static_cast<int>(cx - half - 13 - 8);
     ASSERT_TRUE(lineBrightness(px, inGap, bottom) < 0x60);    // the blank run before the title
     ASSERT_TRUE(lineBrightness(px, besideGap, bottom) > 0xc0);   // the bottom border goes on outside the gap
@@ -265,6 +267,29 @@ void test_render_smoke() {
     ASSERT_TRUE(lineBrightness(px, cx, static_cast<int>(b.rect.y)) > 0xc0);
   }
   EditorTest::destroy(ed, root);
+}
+
+// The texts are really drawn, not only recorded: the white bold italic "DEEP THROAT" (layout x 34, baseline 58, 38 px)
+// lights many pixels of its block well above the dark panel.
+void test_title_text_is_drawn() {
+  setResourcePath(false);
+  Editor ed(g_ctl);
+  auto root = EditorTest::build(ed);
+  auto bmp = drawOffscreen(root);
+  ASSERT_TRUE(bmp != nullptr);
+  const Pixels px = pixelsOf(bmp);
+  const PanelText& title = kPanelTexts[0];
+  ASSERT_TRUE(!std::strcmp(title.text, "DEEP THROAT"));
+  int bright = 0, dark = 0;
+  for (int y = static_cast<int>(title.y) - 24; y <= static_cast<int>(title.y) - 2; ++y)
+    for (int x = static_cast<int>(title.x); x <= static_cast<int>(title.x) + 220; ++x) {
+      const int b = brightness(px.at(x, y));
+      bright += b > 0xc0 ? 1 : 0;
+      dark += b < 0x40 ? 1 : 0;
+    }
+  EditorTest::destroy(ed, root);
+  ASSERT_TRUE(bright > 300);   // letter strokes
+  ASSERT_TRUE(dark > 300);     // and the panel between them
 }
 
 // The grain tile is drawn when the asset is found (pixels of a blank row vary) and the panel is plain when it is
@@ -308,6 +333,7 @@ int main() {
   RUN_TEST(test_tick_applies_controller_dimming);
   RUN_TEST(test_editor_open_close_repeatedly);
   RUN_TEST(test_render_smoke);
+  RUN_TEST(test_title_text_is_drawn);
   RUN_TEST(test_panel_grain_when_asset_found);
   ctl.terminate();
   g_ctl = nullptr;

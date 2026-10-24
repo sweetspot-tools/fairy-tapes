@@ -424,6 +424,7 @@ void test_create_view_returns_editor(Steinberg::Vst::IEditController* ctl) {
     CHECK(view->isPlatformTypeSupported(Steinberg::kPlatformTypeX11EmbedWindowID) == Steinberg::kResultTrue);
     CHECK(view->isPlatformTypeSupported(Steinberg::kPlatformTypeWaylandSurfaceID) != Steinberg::kResultTrue);
 #endif
+#if !defined(__APPLE__)  // macOS scales natively: setContentScaleFactor answers kResultFalse there
     if (i == 0) {  // content scale before attach: getSize and the size constraint follow it
       Steinberg::IPlugViewContentScaleSupport* scale = nullptr;
       CHECK(view->queryInterface(Steinberg::IPlugViewContentScaleSupport::iid, (void**)&scale) == Steinberg::kResultOk);
@@ -441,6 +442,7 @@ void test_create_view_returns_editor(Steinberg::Vst::IEditController* ctl) {
         CHECK(scale->release() == 1);  // the view keeps the host's reference
       }
     }
+#endif
     CHECK(view->release() == 0);  // the host owned the only reference: the view is gone
   }
 }

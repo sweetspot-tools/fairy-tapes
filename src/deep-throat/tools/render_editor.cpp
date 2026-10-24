@@ -24,6 +24,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <string>
 
@@ -68,6 +69,7 @@ struct EditorPreview {
       ctx->endDraw();
       const std::string path = dir + "/front.png";
       ok = writePng(*ctx, path);
+      if (!ok) std::fprintf(stderr, "cannot write %s\n", path.c_str());
       int dimmed = 0;
       if (ed.panel_)
         for (const auto& t : ed.panel_->drawnTexts()) dimmed += t.alpha < 1.f ? 1 : 0;
@@ -89,6 +91,12 @@ int main(int argc, char** argv) {
                  "usage: %s <out-dir> [bypass] [no-grain] [module-off=rider|breath|eq|deess|comp|tone] [cycles=<n>]\n",
                  argv[0]);
     return 2;
+  }
+  std::error_code ec;
+  std::filesystem::create_directories(argv[1], ec);
+  if (ec) {
+    std::fprintf(stderr, "cannot create %s: %s\n", argv[1], ec.message().c_str());
+    return 1;
   }
   VSTGUI::init(nullptr);
   bool grain = true;

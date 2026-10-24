@@ -146,19 +146,23 @@ target_include_directories(deep_throat_ui_tests PRIVATE
 target_link_libraries(deep_throat_ui_tests PRIVATE fairy_ui)
 add_test(NAME deep_throat_ui_tests COMMAND deep_throat_ui_tests)
 
-# Editor behaviour without a window (tests/test_editor.cpp): a real Controller as host, the views built in a container by
-# the EditorTest friend, offscreen drawing. Built like the render tool (SDK module init and factory, no plugin entry).
-add_executable(deep_throat_editor_tests
-  tests/test_editor.cpp
-  ${VST3_SDK_PATH}/public.sdk/source/main/moduleinit.cpp
-  ${VST3_SDK_PATH}/public.sdk/source/main/pluginfactory.cpp
-  src/controller.cpp
-  ${DEEP_THROAT_EDITOR_SOURCES}
-)
-target_include_directories(deep_throat_editor_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${VST3_SDK_PATH})
-target_compile_definitions(deep_throat_editor_tests PRIVATE DEEP_THROAT_ASSETS="${FAIRY_UI_ASSETS}/")
-target_link_libraries(deep_throat_editor_tests PRIVATE sdk pluginterfaces fairy_ui fairy_ui_widgets)
-add_test(NAME deep_throat_editor_tests COMMAND deep_throat_editor_tests)
+# Linux only: the offscreen drawing and the grain lookup rely on the Linux VSTGUI factory (resource path); the SDK
+# factory stub and moduleHandle are only checked there.
+if(UNIX AND NOT APPLE)
+  # Editor behaviour without a window (tests/test_editor.cpp): a real Controller as host, the views built in a container by
+  # the EditorTest friend, offscreen drawing. Built like the render tool (SDK module init and factory, no plugin entry).
+  add_executable(deep_throat_editor_tests
+    tests/test_editor.cpp
+    ${VST3_SDK_PATH}/public.sdk/source/main/moduleinit.cpp
+    ${VST3_SDK_PATH}/public.sdk/source/main/pluginfactory.cpp
+    src/controller.cpp
+    ${DEEP_THROAT_EDITOR_SOURCES}
+  )
+  target_include_directories(deep_throat_editor_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${VST3_SDK_PATH})
+  target_compile_definitions(deep_throat_editor_tests PRIVATE DEEP_THROAT_ASSETS="${FAIRY_UI_ASSETS}/")
+  target_link_libraries(deep_throat_editor_tests PRIVATE sdk pluginterfaces fairy_ui fairy_ui_widgets)
+  add_test(NAME deep_throat_editor_tests COMMAND deep_throat_editor_tests)
+endif()
 
 # Developer tool: draws the editor offscreen into PNG files (no host needed). Not built by default:
 #   cmake --build <build> --target deep_throat_render -j2
