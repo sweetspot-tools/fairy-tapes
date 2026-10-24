@@ -11,7 +11,7 @@
 #include "params.h"
 #include "ui/editor_size.h"
 
-#include "fairy_ui/sanitize.h"
+#include "fairy_ui/rack_geometry.h"
 #include "fairy_ui/silkscreen.h"
 
 #include <vector>
@@ -122,11 +122,15 @@ struct ControlSpec {
 // Cell of a knob: AnalogKnob::kPreferredWidth x kPreferredHeight, cap centre kCenterOffsetY below the top.
 constexpr float kKnobCellW = 64, kKnobCellH = 88, kKnobCentreOffsetY = 30;
 constexpr Rect knob(float cx, float cy) { return {cx - kKnobCellW / 2, cy - kKnobCentreOffsetY, kKnobCellW, kKnobCellH}; }
-// Button face centred on (cx, cy): 24 x 22 (Rack::kFaceWidth x kFaceHeight).
-constexpr Rect face(float cx, float cy) { return {cx - 12, cy - 11, 24, 22}; }
-// Room under a face for its LED; a Cycle button adds the printed value under the LED (baseline 39 px below the centre).
+// Button face centred on (cx, cy): Rack::kFaceWidth x kFaceHeight (24 x 22).
+constexpr float kFaceW = static_cast<float>(FairyTapes::Ui::Rack::kFaceWidth), kFaceH = static_cast<float>(FairyTapes::Ui::Rack::kFaceHeight);
+constexpr Rect face(float cx, float cy) { return {cx - kFaceW / 2, cy - kFaceH / 2, kFaceW, kFaceH}; }
+// Room under a face for its LED; a Cycle button adds the printed value under the LED (Rack::kCycleValueOffsetY below the
+// centre of the face).
 constexpr float kLedZone = 14;
-constexpr float kCycleViewW = 60, kCycleViewH = 53;   // from the face top to 3 px under the value baseline
+constexpr float kCycleViewW = 60;
+// from the face top to 3 px under the value baseline
+constexpr float kCycleViewH = kFaceH / 2 + static_cast<float>(FairyTapes::Ui::Rack::kCycleValueOffsetY) + 3;
 
 // MODE: three faces 56 x 20, centres (89, 302 + 26 i).
 constexpr float kModeFaceW = 56, kModeFaceH = 20, kModeFacePitch = 26, kModeCentreX = 89, kModeFirstCentreY = 302;
@@ -136,7 +140,7 @@ constexpr Rect modeFaceRect(int i) {
 }
 constexpr Rect modeStack() { return {modeFaceRect(0).x, modeFaceRect(0).y, kModeFaceW, modeFaceRect(2).y + kModeFaceH - modeFaceRect(0).y}; }
 
-constexpr float kKnobRadius = 19, kLargeRadius = 22, kToneRadius = 30;
+constexpr float kKnobRadius = static_cast<float>(FairyTapes::Ui::Rack::kDefaultCapRadius), kLargeRadius = 22, kToneRadius = 30;
 
 // IN button of a module box: centre (x + w - inset, y + 38). The preview passes a larger inset for BREATH and DE-ESS.
 constexpr float kInDefaultInset = 24, kInBreathInset = 34, kInDeEssInset = 36, kInOffsetY = 38;
@@ -145,8 +149,10 @@ constexpr Rect inFace(Box b, float inset) {
   return face(r.x + r.w - inset, r.y + kInOffsetY);
 }
 
+// One entry per parameter, in ParamID order (kControls[i].id == i: the tests pin it). The comments name the box of the
+// entries that follow, so the same box appears more than once.
 constexpr ControlSpec kControls[25] = {
-    // OUTPUT: global bypass at the top right, Output gain
+    // OUTPUT: the global bypass at the top right
     {kBypass, Kind::Toggle, Box::Output, face(946, 130), "BYPASS", nullptr, nullptr, 0, Led::Red, 0, {}},
     // MODE
     {kMode, Kind::Choice, Box::Mode, modeStack(), nullptr, nullptr, nullptr, 0, Led::None, kModeCount, {"SPEAK", "SING", "PUKE"}},
@@ -402,20 +408,26 @@ inline std::vector<FairyTapes::Ui::PrintedItem> silkscreenItems() {
 }
 
 // ---- Decor: base positions of the paper tapes and the corner screws (ui/decor.h adds the seeded variation) ---------
-// Base centre and how far the seed may move it (+-jx, +-jy). Chosen so that no tape (up to 96 x 26, turned up to 9 degrees,
-// with its torn ends: at most 50 x 22 around its centre) ever covers a control, the scope, the LEVEL rows or the clip LEDs,
-// nor another tape: in the header, in the 12 px bands between the rows of boxes (the controls stop 28 px from them) and in
-// the empty top of COMP. A tape may lie over printed text and box borders, as real tape would.
+// Base centre and how far the seed may move it (+-jx, +-jy). A tape is up to 96 x 26 and turned up to 9 degrees; with its
+// torn ends and shadow it reaches 54 px either side of its centre in x and 25 px in y. The slots sit in the places where
+// that fits clear of every control (with its printed scale, name and value), the scope, the LEVEL rows, the clip LEDs,
+// the plug-in title, brand and tagline, the printed texts, readouts and block tags, the box titles and the screws (the
+// tests model all of these). A tape may still lie over box borders, as real tape would. The pockets are narrow and few (most drawn tapes do not fit in the 85 px gap between title and tagline):
+//   0, 1  the header band under the tagline, right of the title and brand, above the first row of boxes
+//   2     the empty top of RIDER, above its knobs
+//   3     the band between the second and third row, between RIDER/BREATH above and COMP below
+//   4     the band between the second and third row, above TONE and under EQ
+//   5     the empty top of BREATH, left of its IN button
 struct TapeSlot {
   float cx, cy, jx, jy;
 };
 constexpr TapeSlot kTapeSlots[6] = {
-    {330.f, 48.f, 40.f, 10.f},   // header, between the title and the tagline
-    {100.f, 234.f, 25.f, 2.f},   // band between INPUT and MODE
-    {300.f, 234.f, 40.f, 2.f},   // band under SCOPE
-    {890.f, 234.f, 40.f, 2.f},   // band under OUTPUT, above EQ
-    {400.f, 418.f, 60.f, 2.f},   // band between BREATH / RIDER and COMP
-    {540.f, 482.f, 30.f, 2.f},   // COMP, above the cycle buttons
+    {450.f, 77.f, 60.f, 2.f},    // header, under the tagline
+    {800.f, 77.f, 90.f, 2.f},    // header, under the tagline, right
+    {195.f, 246.f, 12.f, 2.f},   // top of RIDER
+    {440.f, 404.f, 35.f, 6.f},   // between the rows, left
+    {752.f, 424.f, 35.f, 8.f},   // between the rows, right
+    {526.f, 246.f, 14.f, 2.f},   // top of BREATH, left of its IN button
 };
 constexpr int kNumTapeSlots = 6;
 constexpr float kScrewPos[4][2] = {{18.f, 18.f}, {982.f, 18.f}, {18.f, 596.f}, {982.f, 596.f}};
