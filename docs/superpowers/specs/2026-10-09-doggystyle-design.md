@@ -101,4 +101,5 @@ Il modello NAM si carica come nello Stripper (spec dello Stripper §3), ma senza
 
 ## 10. Decisioni aperte
 
+- **OVERSAMPLING (proposto 2026-10-24, da decidere):** come in Happy Ending, impostazione OVERSAMPLING in BEHAVIOUR (Off / 2× / 4×, default 2×, filtri a fase lineare, latenza dichiarata e costante durante la riproduzione), applicata solo agli stadi non lineari di questo plugin: il ramo Slap (stile FET, fino a 20:1, attacchi da 0,02 ms); non lo stadio NAM.
 - **SET per la release (proposto 2026-10-24, da decidere):** lo schema comune di `docs/DESIGN_SYSTEM.md` ("Taratura guidata della release") applicato ai due rami: SET fa sentire solo il ramo che si sta tarando (Slap o Thump), lo schiaccia e blocca tutto tranne la sua Release. Da decidere se un SET per ramo o uno solo con la scelta del ramo.

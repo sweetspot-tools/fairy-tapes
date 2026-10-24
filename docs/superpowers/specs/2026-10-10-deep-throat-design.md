@@ -78,6 +78,7 @@ Ogni blocco ha un test che prima fallisce: Rider (guadagno verso il Target, ness
 
 ## 9. Decisioni aperte
 
+- **OVERSAMPLING (proposto 2026-10-24, da decidere):** come in Happy Ending, impostazione OVERSAMPLING in BEHAVIOUR (Off / 2× / 4×, default 2×, filtri a fase lineare, latenza dichiarata e costante durante la riproduzione), applicata solo agli stadi non lineari di questo plugin: le armoniche Dist 2 / Dist 3 del compressore stile Distressor (con Dist OFF lo stadio è lineare e l'oversampling non serve).
 - (risolta) Nome: Deep Throat.
 - Registrazioni di riferimento per tarare **tutte** le soglie (rilevatori, de-esser, notch, compressore), soprattutto in Puke (growl e scream): oggi sono tarate su segnali sintetici. Sibilanti contro respiri mai provati su voce reale.
 - Dati etichettati per il livello 2 (rete RTNeural).
