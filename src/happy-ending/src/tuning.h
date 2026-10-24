@@ -10,6 +10,13 @@
 
 namespace FairyTapes::HappyEnding::Tuning {
 
+// FINE EQ: Q-coupling (a bell narrows as its gain grows: Q_eff = Q * (1 + |gain dB| / divisor)),
+// the Q of the shelves and of the 12 dB/octave high pass, and the coefficient ramp length.
+inline constexpr double kFineQCouplingDb = 8.0;
+inline constexpr double kFineShelfQ = 0.7071067811865476;
+inline constexpr double kFineHighPassQ = 0.7071067811865476;
+inline constexpr int kFineRampSamples = 64;
+
 // VIBE EQ: DYN pulls the LOW / AIR boost back on loud program (provisional starting values).
 inline constexpr double kDynThresholdDb = -18.0;  // level above which the boost retreats
 inline constexpr double kDynAttackMs = 10.0;
