@@ -3,6 +3,7 @@
  * Run via CTest; build target: hotline_tests.
  */
 
+#include "devices.h"
 #include "params.h"
 #include "state.h"
 #include <atomic>
@@ -11,6 +12,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <limits>
+#include <set>
+#include <string>
 #include <new>
 #include <vector>
 
@@ -169,6 +172,75 @@ void stateClampsOutOfRange() {
   for (int i = 0; i < (int)kNumParams; ++i) ASSERT_APPROX(out[i], (i % 2 == 0) ? 1.0 : 0.0);
 }
 
+bool sameParams(const BlockParams& a, const BlockParams& b) {
+  return a.hpHz == b.hpHz && a.lpHz == b.lpHz && a.drive == b.drive && a.coneHz == b.coneHz &&
+         a.coneGainDb == b.coneGainDb && a.coneQ == b.coneQ && a.hornGainDb == b.hornGainDb &&
+         a.crushRateHz == b.crushRateHz && a.crushBits == b.crushBits && a.compRatio == b.compRatio &&
+         a.squelchDb == b.squelchDb && a.noiseDb == b.noiseDb && a.room == b.room;
+}
+
+void morphZeroIsNeutral() {
+  for (int i = 0; i < kNumDevices; ++i)
+    ASSERT_TRUE(sameParams(morphParams(kDevices[i].p, 0.0), neutralParams()));
+}
+
+void morphOneIsDevice() {
+  for (int i = 0; i < kNumDevices; ++i)
+    ASSERT_TRUE(sameParams(morphParams(kDevices[i].p, 1.0), kDevices[i].p));
+}
+
+void morphLogMidpoint() {
+  const BlockParams m = morphParams(kDevices[1].p, 0.5);  // Telephone
+  ASSERT_APPROX(m.hpHz, std::sqrt(20.0 * 300.0));
+  ASSERT_APPROX(m.lpHz, std::sqrt(20000.0 * 3400.0));
+  ASSERT_APPROX(m.coneGainDb, 1.5);   // dB are linear
+  ASSERT_APPROX(m.noiseDb, -87.0);
+  ASSERT_APPROX(m.drive, 0.125);      // linear
+}
+
+void morphClampsAmount() {
+  for (int i = 0; i < kNumDevices; ++i) {
+    ASSERT_TRUE(sameParams(morphParams(kDevices[i].p, -1.0), neutralParams()));
+    ASSERT_TRUE(sameParams(morphParams(kDevices[i].p, 2.0), kDevices[i].p));
+    ASSERT_TRUE(sameParams(morphParams(kDevices[i].p, std::numeric_limits<double>::quiet_NaN()), neutralParams()));
+  }
+}
+
+void deviceTableIsConsistent() {
+  std::set<std::string> buttons, names;
+  for (int i = 0; i < kNumDevices; ++i) {
+    const DeviceSpec& d = kDevices[i];
+    ASSERT_TRUE(d.button && d.button[0] && d.name && d.name[0]);
+    buttons.insert(d.button);
+    names.insert(d.name);
+    const BlockParams& p = d.p;
+    ASSERT_TRUE(p.hpHz < p.lpHz);
+    const double all[] = {p.hpHz, p.lpHz, p.drive, p.coneHz, p.coneGainDb, p.coneQ, p.hornGainDb,
+                          p.crushRateHz, p.crushBits, p.compRatio, p.squelchDb, p.noiseDb, p.room};
+    for (double v : all) ASSERT_TRUE(std::isfinite(v));
+  }
+  ASSERT_TRUE(buttons.size() == static_cast<size_t>(kNumDevices));
+  ASSERT_TRUE(names.size() == static_cast<size_t>(kNumDevices));
+  ASSERT_TRUE(std::string(kDevices[3].button) == "AM RADIO");
+  ASSERT_TRUE(std::string(kDevices[2].name) == "Walkie-talkie");
+}
+
+void describeTelephone() {
+  const std::string s = describeDevice(1);
+  ASSERT_TRUE(s.find("300 Hz") != std::string::npos);
+  ASSERT_TRUE(s.find("3.4 kHz") != std::string::npos);
+  ASSERT_TRUE(s.find("HIGH PASS") != std::string::npos);
+  ASSERT_TRUE(s.find("HORN") == std::string::npos);
+  ASSERT_TRUE(s.find("ROOM") == std::string::npos);
+}
+
+void describeCoversAllDevices() {
+  for (int i = 0; i < kNumDevices; ++i) ASSERT_TRUE(!describeDevice(i).empty());
+  ASSERT_TRUE(describeDevice(0).find("HORN") != std::string::npos);
+  ASSERT_TRUE(describeDevice(-1).empty());           // out-of-range must not crash
+  ASSERT_TRUE(describeDevice(kNumDevices).empty());
+}
+
 }  // namespace
 
 int main() {
@@ -179,6 +251,13 @@ int main() {
   RUN_TEST(stateRoundTrip);
   RUN_TEST(stateRejectsUnknownVersionShortDataAndNaN);
   RUN_TEST(stateClampsOutOfRange);
+  RUN_TEST(morphZeroIsNeutral);
+  RUN_TEST(morphOneIsDevice);
+  RUN_TEST(morphLogMidpoint);
+  RUN_TEST(morphClampsAmount);
+  RUN_TEST(deviceTableIsConsistent);
+  RUN_TEST(describeTelephone);
+  RUN_TEST(describeCoversAllDevices);
   std::printf("%d tests run, %d failed\n", g_passed + g_failed, g_failed);
   return g_failed ? 1 : 0;
 }

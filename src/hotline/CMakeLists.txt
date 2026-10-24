@@ -19,6 +19,7 @@ endif()
 # ---------------------------------------------------------------------------
 add_executable(hotline_tests
   tests/test_hotline.cpp
+  src/devices.cpp
 )
 target_include_directories(hotline_tests PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src
