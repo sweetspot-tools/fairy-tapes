@@ -1837,6 +1837,7 @@ void driveClipLedSemantics() {
   ASSERT_TRUE(n.lastDisplay().clipIn && !n.lastDisplay().clipDrive);
   // drive active, shaper pushed hard: lit, held ~2 s
   Settings t = engineSettings(2, 1.f); t.drive = 2.f; t.noise = 0.f;
+  ASSERT_TRUE(targetParams(kDevices[2].p, t).drive > DSP::kFullBlendDrive);  // drive' > 0.1: shaper fully engaged
   Engine w; w.prepare(48000, 512);
   w.setSettings(t);
   const auto big = sineWave(4800, 48000, 1000, 0.8);
@@ -1854,11 +1855,66 @@ void driveClipLedSemantics() {
   ASSERT_TRUE(!q.lastDisplay().clipDrive);
 }
 
+// Settings with an effective drive' (device 2: 0.7 * amount) of `drivePrime`.
+Settings settingsWithDrivePrime(double drivePrime) {
+  Settings s = engineSettings(2, 1.f); s.noise = 0.f;
+  s.drive = (float)(drivePrime / kDevices[2].p.drive);
+  return s;
+}
+
+// DRV counts only with the shaper fully engaged (drive' >= 0.1, where the dry blend is complete).
+void driveClipLedNeedsFullBlend() {
+  // coupling with the shaper: from kFullBlendDrive up the blend is complete (pure tanh shaper)
+  {
+    const float d = DSP::kFullBlendDrive, k = 1.f + 9.f * d, b = 0.1f * d, off = std::tanh(k * b);
+    for (float x : {-0.8f, -0.1f, 0.3f, 0.9f})
+      ASSERT_APPROX(DSP::shape(x, d), (std::tanh(k * (x + b)) - off) / (1.f + off));
+  }
+  std::vector<float> z(4800, 0.f), o1(4800), o2(4800);
+  const auto hot = sineWave(4800, 48000, 1000, 1.0);
+  const auto run = [&](const Settings& s) {
+    Engine e; e.prepare(48000, 512);
+    e.setSettings(s);
+    for (int k = 0; k < 30; ++k) e.process(z.data(), z.data(), o1.data(), o2.data(), 4800);
+    e.process(hot.data(), hot.data(), o1.data(), o2.data(), 4800);
+    return e;
+  };
+  const Settings low = settingsWithDrivePrime(0.05), on = settingsWithDrivePrime(0.12);
+  ASSERT_TRUE(targetParams(kDevices[2].p, low).drive < DSP::kFullBlendDrive);
+  ASSERT_TRUE(targetParams(kDevices[2].p, on).drive > DSP::kFullBlendDrive);
+  ASSERT_TRUE(!run(low).lastDisplay().clipDrive);
+  Engine e = run(on);
+  ASSERT_TRUE(e.lastDisplay().clipDrive);
+  for (int k = 0; k < 18; ++k) e.process(z.data(), z.data(), o1.data(), o2.data(), 4800);  // 1.8 s
+  ASSERT_TRUE(e.lastDisplay().clipDrive);
+  for (int k = 0; k < 3; ++k) e.process(z.data(), z.data(), o1.data(), o2.data(), 4800);   // 2.1 s
+  ASSERT_TRUE(!e.lastDisplay().clipDrive);
+
+  // smooth ramp of drive' 0.3 -> 0.05 (then held) under a hot input: no new events once below 0.1
+  Engine r; r.prepare(48000, 512);
+  const std::vector<float> hotBlk(sineWave(480, 48000, 1000, 1.0));
+  std::vector<float> a(480), b(480);
+  r.setSettings(settingsWithDrivePrime(0.3));
+  for (int k = 0; k < 100; ++k) r.process(z.data(), z.data(), a.data(), b.data(), 480);
+  for (int k = 0; k <= 100; ++k) {
+    r.setSettings(settingsWithDrivePrime(0.3 - 0.25 * (k / 100.0)));
+    r.process(hotBlk.data(), hotBlk.data(), a.data(), b.data(), 480);
+  }
+  bool wasOff = false, relit = false;
+  for (int k = 0; k < 400; ++k) {  // 4 s more at drive' 0.05 with the hot input
+    r.process(hotBlk.data(), hotBlk.data(), a.data(), b.data(), 480);
+    const bool lit = r.lastDisplay().clipDrive;
+    if (!lit) wasOff = true;
+    else if (wasOff) relit = true;
+  }
+  ASSERT_TRUE(wasOff && !relit && !r.lastDisplay().clipDrive);
+}
+
 // Threshold of the DRV LED at 0.89 / 0.91 of the shaper output (reference: the same Band + shape).
 void driveClipLedThreshold() {
   const Settings t = [] { Settings s = engineSettings(2, 1.f); s.drive = 1.f; s.noise = 0.f; return s; }();
   const BlockParams bp = targetParams(kDevices[2].p, t);
-  ASSERT_TRUE(bp.drive > 0.0);
+  ASSERT_TRUE(bp.drive > DSP::kFullBlendDrive);  // 0.7: the shaper is fully engaged
   const auto refPeak = [&](double amp) {
     DSP::Band b; b.prepare(48000); b.set(bp.hpHz, bp.lpHz);
     const auto x = sineWave(4800, 48000, 1000, amp);
@@ -2257,6 +2313,7 @@ int main() {
   RUN_TEST(displayPeaksAndClipHold);
   RUN_TEST(driveClipLedSemantics);
   RUN_TEST(driveClipLedThreshold);
+  RUN_TEST(driveClipLedNeedsFullBlend);
   std::printf("%d tests run, %d failed\n", g_passed + g_failed, g_failed);
   return g_failed ? 1 : 0;
 }

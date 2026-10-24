@@ -268,7 +268,7 @@ float Engine::chain(int c, float x) {
   }
   if (dcOn_) {
     y = DSP::shape(y, drive_);
-    drivePeak_ = std::max(drivePeak_, std::fabs(y));
+    if (drive_ >= DSP::kFullBlendDrive) drivePeak_ = std::max(drivePeak_, std::fabs(y));
     const float o = y - ch.dcX + dcR_ * ch.dcY;
     ch.dcX = y;
     ch.dcY = std::fabs(o) < 1e-20f ? 0.f : o;
@@ -303,7 +303,7 @@ void Engine::process(const float* inL, const float* inR, float* outL, float* out
     left = peak >= threshold ? clipHoldSamples_ : std::max(0LL, left - numSamples);
   };
   hold(clipInLeft_, std::max(inPeak_[0], inPeak_[1]), 1.f);
-  hold(clipDriveLeft_, drivePeak_, kDriveClipLevel);  // 0 while the drive is off
+  hold(clipDriveLeft_, drivePeak_, kDriveClipLevel);  // peak stays 0 below drive' 0.1
   hold(clipOutLeft_, std::max(outPeak_[0], outPeak_[1]), 1.f);
 }
 

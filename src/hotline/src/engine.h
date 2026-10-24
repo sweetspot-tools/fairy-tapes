@@ -50,8 +50,8 @@ BlockParams targetParams(const BlockParams& device, const Settings& s);
 
 // Peaks in dB (floor -120) over the last process() call: input after the NaN guard, output after
 // Bypass. Clip flags are held for kClipHoldSeconds of audio time or until clearClips(): IN and OUT
-// at |x| >= 1; DRV only with the drive active, at |y| >= kDriveClipLevel after the shaper (it never
-// lights at drive 0: the IN LED already covers input clipping).
+// at |x| >= 1; DRV only with the shaper fully engaged (drive' >= DSP::kFullBlendDrive, 0.1) and at
+// |y| >= kDriveClipLevel after it (it never lights below: the IN LED covers input clipping).
 struct DisplayValues {
   float inPeakDb[2], outPeakDb[2];
   bool clipIn, clipDrive, clipOut;

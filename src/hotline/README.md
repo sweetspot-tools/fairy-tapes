@@ -13,7 +13,7 @@ Megaphone, Telephone, Walkie-talkie, AM radio, Station PA, Cheap speaker. Each o
 - **Device** (six buttons) and **Morph** (0 = transparent, 1 = the device; automatable without clicks).
 - **CHARACTER** (one block with its own **IN**): Drive, Tone, Noise, Room, Mix. IN off ignores the five of them.
 - **Gain**, **Mono**, **Bypass** (bit-exact copy of the input).
-- LEVEL: stereo IN and OUT meters, clip LEDs for IN, DRV and OUT (DRV lights only with Drive active, when the shaper output reaches 0.9).
+- LEVEL: stereo IN and OUT meters, clip LEDs for IN, DRV and OUT (DRV lights only with the shaper fully engaged (effective drive 10 % or more), when its output reaches 0.9).
 - Editor: 1000 x 470 rack panel with wear, paper tapes and screws; back panel with SETTINGS, DEVICES, ROUTING and CREDITS. Preferences (wear, tape font) in `FairyTapes/Hotline.prefs`.
 
 ## Build
