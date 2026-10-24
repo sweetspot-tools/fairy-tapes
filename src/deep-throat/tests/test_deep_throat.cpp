@@ -696,6 +696,29 @@ void test_puke_no_unlock_without_clear_rise() {
   }
 }
 
+// A bump that unlocks a capped passage (+9 dB over it, then back to the passage level and a
+// further drop) must not let the same quiet passage re-enter as a breath: on unlock the stale
+// (decayed scream) phrase level is dropped to the current level, so the passage is the
+// reference for what follows. Without that reset the passage would look 14+ dB under the
+// decayed phrase level and re-enter.
+void test_puke_unlock_resets_phrase_level() {
+  for (double sr : kRates) {
+    SignalBuilder s(sr);
+    s.wideNoise(-5.0, 1.0);
+    s.wideNoise(-50.0, 2.0);   // 1.0 .. 3.0 s, capped at ~2.55 s
+    s.wideNoise(-41.0, 0.3);   // 3.0 .. 3.3 s: +9 dB over the passage, unlocks
+    s.wideNoise(-50.0, 1.0);   // 3.3 .. 4.3 s: back to the passage level
+    s.wideNoise(-58.0, 0.5);   // 4.3 .. 4.8 s: a further drop inside the same passage
+    s.wideNoise(-5.0, 1.0);
+    DSP::LevelBreathDetector d;
+    d.prepare(sr);
+    d.setSensitivity(1.0f);
+    const auto p = runDetector(d, s.x);
+    ASSERT_TRUE(minIn(p, sr, 1.15, 2.45) > 0.6f);
+    ASSERT_TRUE(maxIn(p, sr, 2.56, 4.8) < 0.05f);
+  }
+}
+
 // ---- Corrective EQ ----------------------------------------------------------------------
 
 // Runs one channel of the EQ over x and returns the output.
@@ -2687,6 +2710,7 @@ int main() {
   RUN_TEST(test_puke_unlock_on_softer_voice);
   RUN_TEST(test_puke_unlock_on_small_clear_rise);
   RUN_TEST(test_puke_no_unlock_without_clear_rise);
+  RUN_TEST(test_puke_unlock_resets_phrase_level);
   RUN_TEST(test_reducer_amount_zero_is_unity);
   RUN_TEST(test_reducer_full_amount_is_minus_12_db);
   RUN_TEST(test_reducer_scales_with_prob);
