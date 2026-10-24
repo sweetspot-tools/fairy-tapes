@@ -5,8 +5,12 @@
 
 #include "devices.h"
 #include "dsp/band.h"
+#include "dsp/compander.h"
 #include "dsp/cone.h"
+#include "dsp/crush.h"
 #include "dsp/drive.h"
+#include "dsp/noise.h"
+#include "dsp/room.h"
 #include "params.h"
 #include "state.h"
 #include <algorithm>
@@ -457,6 +461,379 @@ void blocksStableAtExtremeSampleRates() {
   }
 }
 
+
+// ---- DSP blocks (Task 4): crush, compander, noise, room ----
+constexpr double kPiT = 3.14159265358979323846;
+const float kNaN = std::numeric_limits<float>::quiet_NaN();
+const float kInf = std::numeric_limits<float>::infinity();
+
+void crushOffIsExactPassthrough() {
+  D::Crush c; c.prepare(48000); c.set(192000, 24);
+  ASSERT_TRUE(c.neutral());
+  Lcg r;
+  for (int i = 0; i < 1000; ++i) { const float x = r.next(); ASSERT_TRUE(c.process(x) == x); }
+  c.set(48000, 24);  // rate == fs is neutral too
+  ASSERT_TRUE(c.neutral());
+  for (int i = 0; i < 1000; ++i) { const float x = r.next(); ASSERT_TRUE(c.process(x) == x); }
+  c.set(8000, 24);
+  ASSERT_TRUE(!c.neutral());
+  c.set(48000, 8);
+  ASSERT_TRUE(!c.neutral());
+}
+
+void crushQuantizes() {
+  D::Crush c; c.prepare(48000); c.set(48000, 8);
+  std::set<float> seen;
+  for (int i = 0; i < 4096; ++i) seen.insert(c.process((float)(-1.0 + 2.0 * i / 4096.0)));
+  ASSERT_TRUE(seen.size() <= 256);
+  ASSERT_TRUE(seen.size() >= 200);  // and it really uses the levels
+}
+
+void crushHoldsSamples() {
+  D::Crush c; c.prepare(48000); c.set(12000, 24);  // fs/4
+  Lcg r;
+  float held = 0;
+  for (int i = 0; i < 400; ++i) {
+    const float x = r.next(), y = c.process(x);
+    if (i % 4 == 0) { held = y; ASSERT_TRUE(y == x); }  // 24 bit: a new sample is taken as is
+    else ASSERT_TRUE(y == held);
+  }
+}
+
+void crushIsContinuousTowardNeutral() {
+  // bits -> 24 at rate == fs: error bounded by one quantiser step 2^(1-bits)
+  for (double bits : {8.0, 12.0, 16.0, 20.0, 23.0, 23.9}) {
+    D::Crush c; c.prepare(48000); c.set(48000, bits);
+    double err = 0;
+    for (int i = 0; i < 4800; ++i) {
+      const float x = (float)(0.9 * std::sin(2 * kPiT * 440.0 * i / 48000.0));
+      err = std::max(err, (double)std::fabs(c.process(x) - x));
+    }
+    ASSERT_TRUE(err <= std::ldexp(1.0, 1 - (int)std::ceil(bits)) + 1e-7);
+  }
+  // rate -> fs at 24 bit: a held sample repeats at most every 1/(1-ratio) samples; for a
+  // 100 Hz sine at 0.5 the repeat error is at most one sample step, 0.5*2*pi*100/48000 = 0.0065
+  for (double ratio : {0.9, 0.99, 0.999, 0.9999}) {
+    D::Crush c; c.prepare(48000); c.set(48000 * ratio, 24);
+    double err = 0;
+    for (int i = 0; i < 48000; ++i) {
+      const float x = (float)(0.5 * std::sin(2 * kPiT * 100.0 * i / 48000.0));
+      err = std::max(err, (double)std::fabs(c.process(x) - x));
+    }
+    ASSERT_TRUE(err <= 0.01);
+  }
+}
+
+void crushNoStaleHoldAfterNeutral() {
+  D::Crush c; c.prepare(48000); c.set(12000, 24);
+  for (int i = 0; i < 4802; ++i) c.process((float)std::sin(2 * kPiT * 1000.0 * i / 48000.0));  // loud hold
+  c.set(192000, 24);                                    // neutral: process() bypasses the hold
+  for (int i = 0; i < 4800; ++i) c.process((float)std::sin(2 * kPiT * 1000.0 * i / 48000.0));
+  c.set(12000, 24);                                     // back to active: hold must start fresh
+  ASSERT_TRUE(c.process(0.f) == 0.f);
+  ASSERT_TRUE(c.process(0.f) == 0.f);
+  // active -> active keeps the hold (no spurious clear)
+  D::Crush d; d.prepare(48000); d.set(12000, 24);
+  d.process(0.5f); d.process(0.25f);                    // hold = 0.5, phase mid-group
+  d.set(12000, 24);
+  ASSERT_TRUE(d.process(0.125f) == 0.5f);
+}
+
+void crushRejectsNonFinite() {
+  D::Crush c; c.prepare(48000); c.set(12000, 8);
+  D::Crush ref; ref.prepare(48000); ref.set(12000, 8);
+  c.set((double)kNaN, (double)kNaN);                   // ignored
+  c.set(std::numeric_limits<double>::infinity(), -std::numeric_limits<double>::infinity());
+  Lcg r;
+  for (int i = 0; i < 200; ++i) { const float x = r.next(); ASSERT_TRUE(c.process(x) == ref.process(x)); }
+  for (float bad : {kNaN, kInf, -kInf}) ASSERT_TRUE(std::isfinite(c.process(bad)));
+  for (int i = 0; i < 100; ++i) ASSERT_TRUE(std::isfinite(c.process(r.next())));
+  // a NaN sampled into the hold must not stay there
+  D::Crush q; q.prepare(48000); q.set(1000, 8);
+  q.process(kNaN);
+  for (int i = 0; i < 200; ++i) ASSERT_TRUE(std::isfinite(q.process(0.3f)));
+}
+
+void companderIdentityAtRatioOne() {
+  D::Compander c; c.prepare(48000); c.set(1.0, -120.0);
+  ASSERT_TRUE(c.neutral());
+  Lcg r;
+  for (int i = 0; i < 1000; ++i) { const float x = r.next(); ASSERT_TRUE(c.process(x) == x); }
+  c.set(0.5, -130.0);  // below 1 / below -120 is still neutral
+  ASSERT_TRUE(c.neutral());
+  c.set(6.0, -120.0);
+  ASSERT_TRUE(!c.neutral());
+  c.set(1.0, -50.0);
+  ASSERT_TRUE(!c.neutral());
+}
+
+void companderReducesLoudSignal() {
+  const double fs = 48000, amp = std::pow(10.0, -6.0 / 20.0);
+  D::Compander a; a.prepare(fs); a.set(6.0, -120.0);
+  D::Compander b; b.prepare(fs); b.set(1.0, -120.0);
+  const double pa = sinePeak(fs, 1000, amp, [&](float x) { return a.process(x); });
+  const double pb = sinePeak(fs, 1000, amp, [&](float x) { return b.process(x); });
+  ASSERT_TRUE(toDb(pa / pb) <= -6.0);
+}
+
+void companderSquelchesQuiet() {
+  const double fs = 48000;
+  D::Compander c; c.prepare(fs); c.set(1.0, -50.0);
+  const double amp = std::pow(10.0, -70.0 / 20.0);
+  ASSERT_TRUE(toDb(sinePeak(fs, 1000, amp, [&](float x) { return c.process(x); }) / amp) <= -20.0);
+  D::Compander d; d.prepare(fs); d.set(1.0, -50.0);
+  const double loud = std::pow(10.0, -30.0 / 20.0);
+  ASSERT_TRUE(std::fabs(toDb(sinePeak(fs, 1000, loud, [&](float x) { return d.process(x); }) / loud)) <= 1.0);
+}
+
+void companderIsContinuousTowardNeutral() {
+  // ratio -> 1: gain reduction is at most 24 dB * (1 - 1/R) < 3*(R-1) in amplitude for a 0 dB sine
+  for (double R : {1.0001, 1.001, 1.01, 1.1}) {
+    D::Compander c; c.prepare(48000); c.set(R, -120.0);
+    double err = 0;
+    for (int i = 0; i < 48000; ++i) {
+      const float x = (float)std::sin(2 * kPiT * 1000.0 * i / 48000.0);
+      err = std::max(err, (double)std::fabs(c.process(x) - x));
+    }
+    ASSERT_TRUE(err <= 3.0 * (R - 1.0));
+  }
+  // squelch -> -120: a -60 dB signal is far above any gate with squelch <= -100 (gain exactly 1)
+  for (double sq : {-119.0, -110.0, -100.0}) {
+    D::Compander c; c.prepare(48000); c.set(1.0, sq);
+    double err = 0;
+    for (int i = 0; i < 48000; ++i) {
+      const float x = (float)(0.001 * std::sin(2 * kPiT * 1000.0 * i / 48000.0));
+      if (i > 4800) err = std::max(err, (double)std::fabs(c.process(x) - x)); else c.process(x);
+    }
+    ASSERT_TRUE(err <= 1e-9);
+  }
+}
+
+void companderNoTransientAfterNeutral() {
+  D::Compander c; c.prepare(48000); c.set(6.0, -120.0);
+  feedLoud([&](float x) { return c.process(x); });     // envelope tracks a 0 dB signal
+  c.set(1.0, -120.0);                                   // neutral: process() bypasses the envelope
+  feedLoud([&](float x) { return c.process(x); });
+  c.set(6.0, -120.0);
+  // quiet signal below the -24 dB threshold: a fresh envelope leaves it alone, a stale one
+  // would keep compressing it for the release time
+  double err = 0;
+  for (int i = 0; i < 480; ++i) {
+    const float x = (float)(0.001 * std::sin(2 * kPiT * 1000.0 * i / 48000.0));
+    err = std::max(err, (double)std::fabs(c.process(x) - x));
+  }
+  ASSERT_TRUE(err <= 1e-6);
+  // active -> active keeps the envelope (no clear): compression carries on across a set()
+  D::Compander d; d.prepare(48000); d.set(6.0, -120.0);
+  feedLoud([&](float x) { return d.process(x); });
+  d.set(6.0, -120.0);
+  ASSERT_TRUE(std::fabs(d.process(0.001f) - 0.001f) > 1e-5);
+}
+
+void companderRejectsNonFinite() {
+  D::Compander c; c.prepare(48000); c.set(6.0, -50.0);
+  D::Compander ref; ref.prepare(48000); ref.set(6.0, -50.0);
+  c.set((double)kNaN, (double)kNaN);
+  c.set(std::numeric_limits<double>::infinity(), -std::numeric_limits<double>::infinity());
+  Lcg r;
+  for (int i = 0; i < 200; ++i) { const float x = r.next(); ASSERT_TRUE(c.process(x) == ref.process(x)); }
+  for (float bad : {kNaN, kInf, -kInf}) ASSERT_TRUE(std::isfinite(c.process(bad)));
+  for (int i = 0; i < 2000; ++i) ASSERT_TRUE(std::isfinite(c.process(r.next())));
+  // the envelope must have recovered: a loud signal is compressed again
+  D::Compander a; a.prepare(48000); a.set(6.0, -120.0);
+  a.process(kNaN);
+  const double pk = sinePeak(48000, 1000, 0.5, [&](float x) { return a.process(x); });
+  ASSERT_TRUE(pk < 0.5 && pk > 0.0);
+}
+
+void noiseIsDeterministicPerSeed() {
+  D::Noise a, b, c;
+  a.prepare(48000, 7); b.prepare(48000, 7); c.prepare(48000, 8);
+  a.set(-30); b.set(-30); c.set(-30);
+  bool diff = false;
+  for (int i = 0; i < 4800; ++i) {
+    const float x = a.next(), y = b.next(), z = c.next();
+    ASSERT_TRUE(x == y);
+    if (x != z) diff = true;
+  }
+  ASSERT_TRUE(diff);
+  D::Noise z0; z0.prepare(48000, 0); z0.set(-30);  // seed 0 must not lock the xorshift at 0
+  double s = 0;
+  for (int i = 0; i < 4800; ++i) s += std::fabs(z0.next());
+  ASSERT_TRUE(s > 0.0);
+}
+
+double noiseRmsDb(double fs, uint32_t seed, double level) {
+  D::Noise n; n.prepare(fs, seed); n.set(level);
+  const int len = (int)fs;
+  double acc = 0;
+  for (int i = 0; i < len; ++i) { const double v = n.next(); acc += v * v; }
+  return 10.0 * std::log10(acc / len);
+}
+
+void noiseLevelIsRms() {
+  for (double fs : {48000.0, 44100.0, 96000.0, 192000.0})
+    for (uint32_t seed : {1u, 2u, 3u, 12345u})
+      ASSERT_TRUE(std::fabs(noiseRmsDb(fs, seed, -40.0) + 40.0) <= 2.0);
+  ASSERT_TRUE(std::fabs(noiseRmsDb(48000, 5, -60.0) + 60.0) <= 2.0);
+  ASSERT_TRUE(std::fabs(noiseRmsDb(48000, 5, -20.0) + 20.0) <= 2.0);
+}
+
+void noiseOffIsExactZero() {
+  D::Noise n; n.prepare(48000, 3);
+  for (double lv : {-120.0, -121.0, -200.0, -1e9}) {
+    n.set(lv);
+    for (int i = 0; i < 2000; ++i) ASSERT_TRUE(n.next() == 0.f);
+  }
+  n.set(-60.0);
+  double s = 0;
+  for (int i = 0; i < 2000; ++i) s += std::fabs(n.next());
+  ASSERT_TRUE(s > 0.0);
+}
+
+void noiseIsContinuousTowardOff() {
+  // just above -120 dB the output is already ~1e-6 (peak incl. crackle < 1e-4): no step at the switch-off
+  D::Noise n; n.prepare(48000, 9); n.set(-119.99);
+  double pk = 0;
+  for (int i = 0; i < 48000; ++i) pk = std::max(pk, (double)std::fabs(n.next()));
+  ASSERT_TRUE(pk > 0.0 && pk <= 1e-4);
+}
+
+void noiseRejectsNonFiniteLevel() {
+  D::Noise n; n.prepare(48000, 4); n.set(-40.0);
+  n.set((double)kNaN);
+  n.set(std::numeric_limits<double>::infinity());
+  n.set(-std::numeric_limits<double>::infinity());
+  double acc = 0;
+  for (int i = 0; i < 48000; ++i) { const double v = n.next(); ASSERT_TRUE(std::isfinite(v)); acc += v * v; }
+  ASSERT_TRUE(std::fabs(10.0 * std::log10(acc / 48000) + 40.0) <= 2.0);
+  D::Noise m; m.prepare(48000, 4); m.set(40.0);  // absurdly hot: clamped to 0 dB RMS
+  double a2 = 0;
+  for (int i = 0; i < 48000; ++i) { const double v = m.next(); a2 += v * v; }
+  ASSERT_TRUE(10.0 * std::log10(a2 / 48000) <= 2.0);
+}
+
+void roomZeroIsExactDry() {
+  D::Room r; r.prepare(48000); r.set(0.0);
+  ASSERT_TRUE(r.neutral());
+  Lcg l;
+  for (int i = 0; i < 1000; ++i) { const float x = l.next(); ASSERT_TRUE(r.process(x) == x); }
+  r.set(-1.0);  // clamped to 0
+  ASSERT_TRUE(r.neutral());
+  r.set(0.3);
+  ASSERT_TRUE(!r.neutral());
+}
+
+void roomTailDecays() {
+  for (double fs : {8000.0, 44100.0, 48000.0, 192000.0}) {
+    D::Room r; r.prepare(fs); r.set(1.0);
+    const int tail = r.tailSamples();
+    ASSERT_TRUE(tail > (int)(0.05 * fs) && tail < (int)(5.0 * fs));
+    const int n = tail + (int)(2.0 * fs);
+    double peak = 0, wetPeak = 0, after = 0, wetAfter = 0;
+    for (int i = 0; i < n; ++i) {
+      const float x = i == 0 ? 1.f : 0.f, y = r.process(x);
+      const double w = i == 0 ? y - 1.0 : y;  // wet part (the dry impulse is exactly 1.0)
+      peak = std::max(peak, (double)std::fabs(y));
+      wetPeak = std::max(wetPeak, std::fabs(w));
+      if (i >= tail) { after = std::max(after, (double)std::fabs(y)); wetAfter = std::max(wetAfter, std::fabs(w)); }
+    }
+    ASSERT_TRUE(wetPeak > 0.01);
+    ASSERT_TRUE(after < peak * 1e-3);          // below -60 dB re the output peak
+    ASSERT_TRUE(wetAfter < wetPeak * 1e-3);    // and re the wet response itself
+  }
+}
+
+void roomWetScalesWithAmount() {
+  D::Room a; a.prepare(48000); a.set(1.0);
+  D::Room b; b.prepare(48000); b.set(0.5);
+  for (int i = 0; i < 4800; ++i) {
+    const float x = i == 0 ? 1.f : 0.f;
+    const double wa = a.process(x) - x, wb = b.process(x) - x;
+    ASSERT_TRUE(std::fabs(wa - 2.0 * wb) <= 1e-6);
+  }
+}
+
+void roomDoesNotAllocateAfterPrepare() {
+  D::Room r; r.prepare(192000);  // may allocate
+  Lcg l;
+  g_allocs = 0;
+  g_countAllocs = true;
+  r.set(0.7);
+  float acc = 0;
+  for (int i = 0; i < 20000; ++i) acc += r.process(l.next());
+  r.set(0.0);
+  r.process(0.5f);
+  r.set(0.4);
+  r.clear();
+  acc += (float)r.tailSamples();
+  r.set(0.2);
+  for (int i = 0; i < 2000; ++i) acc += r.process(l.next());
+  g_countAllocs = false;
+  ASSERT_TRUE(std::isfinite(acc));
+  ASSERT_TRUE(g_allocs == 0);
+}
+
+void roomIsContinuousTowardDry() {
+  // y = x + amount * wet, |wet| <= 1 for a +-1 input: the deviation from dry is <= amount * 1
+  for (double amount : {1e-6, 1e-4, 1e-2}) {
+    D::Room r; r.prepare(48000); r.set(amount);
+    Lcg l;
+    double err = 0;
+    for (int i = 0; i < 48000; ++i) { const float x = l.next(); err = std::max(err, (double)std::fabs(r.process(x) - x)); }
+    ASSERT_TRUE(err <= amount * 2.0);
+  }
+}
+
+void roomNoStaleStateAfterNeutral() {
+  D::Room r; r.prepare(48000); r.set(1.0);
+  Lcg l;
+  for (int i = 0; i < 9600; ++i) r.process(l.next());   // loud wet state in the buffers
+  r.set(0.0);                                            // neutral: process() bypasses the buffers
+  for (int i = 0; i < 9600; ++i) r.process(l.next());
+  r.set(1.0);
+  for (int i = 0; i < 9600; ++i) ASSERT_TRUE(r.process(0.f) == 0.f);
+  // active -> active keeps the tail
+  D::Room k; k.prepare(48000); k.set(1.0);
+  for (int i = 0; i < 9600; ++i) k.process(l.next());
+  k.set(0.9);
+  double pk = 0;
+  for (int i = 0; i < 9600; ++i) pk = std::max(pk, (double)std::fabs(k.process(0.f)));
+  ASSERT_TRUE(pk > 1e-3);
+}
+
+void roomRejectsNonFinite() {
+  D::Room r; r.prepare(48000); r.set(0.6);
+  D::Room ref; ref.prepare(48000); ref.set(0.6);
+  r.set((double)kNaN);
+  r.set(std::numeric_limits<double>::infinity());
+  Lcg l;
+  for (int i = 0; i < 500; ++i) { const float x = l.next(); ASSERT_TRUE(r.process(x) == ref.process(x)); }
+  for (float bad : {kNaN, kInf, -kInf}) ASSERT_TRUE(std::isfinite(r.process(bad)));
+  for (int i = 0; i < 20000; ++i) ASSERT_TRUE(std::isfinite(r.process(i == 0 ? 1.f : 0.f)));
+  // the reverb tail must have recovered from the bad samples and then decay to silence
+  for (int i = 0; i < 48000 * 6; ++i) r.process(0.f);
+  ASSERT_TRUE(std::fabs(r.process(0.f)) < 1e-6);
+}
+
+void newBlocksStableAtExtremeSampleRates() {
+  for (double fs : {8000.0, 192000.0}) {
+    D::Crush c; c.prepare(fs); c.set(5000, 4);
+    D::Compander p; p.prepare(fs); p.set(8.0, -40.0);
+    D::Noise n; n.prepare(fs, 1); n.set(-30.0);
+    D::Room r; r.prepare(fs); r.set(1.0);
+    Lcg l;
+    for (int i = 0; i < (int)fs; ++i) {
+      const float x = l.next();
+      ASSERT_TRUE(std::isfinite(c.process(x)));
+      ASSERT_TRUE(std::isfinite(p.process(x)));
+      ASSERT_TRUE(std::isfinite(n.next()));
+      const float y = r.process(x);
+      ASSERT_TRUE(std::isfinite(y) && std::fabs(y) < 20.f);
+    }
+  }
+}
+
 }  // namespace
 
 int main() {
@@ -489,6 +866,31 @@ int main() {
   RUN_TEST(coneBoostsAtCenter);
   RUN_TEST(coneNeutralIsExactPassthrough);
   RUN_TEST(blocksStableAtExtremeSampleRates);
+  RUN_TEST(crushOffIsExactPassthrough);
+  RUN_TEST(crushQuantizes);
+  RUN_TEST(crushHoldsSamples);
+  RUN_TEST(crushIsContinuousTowardNeutral);
+  RUN_TEST(crushNoStaleHoldAfterNeutral);
+  RUN_TEST(crushRejectsNonFinite);
+  RUN_TEST(companderIdentityAtRatioOne);
+  RUN_TEST(companderReducesLoudSignal);
+  RUN_TEST(companderSquelchesQuiet);
+  RUN_TEST(companderIsContinuousTowardNeutral);
+  RUN_TEST(companderNoTransientAfterNeutral);
+  RUN_TEST(companderRejectsNonFinite);
+  RUN_TEST(noiseIsDeterministicPerSeed);
+  RUN_TEST(noiseLevelIsRms);
+  RUN_TEST(noiseOffIsExactZero);
+  RUN_TEST(noiseIsContinuousTowardOff);
+  RUN_TEST(noiseRejectsNonFiniteLevel);
+  RUN_TEST(roomZeroIsExactDry);
+  RUN_TEST(roomTailDecays);
+  RUN_TEST(roomWetScalesWithAmount);
+  RUN_TEST(roomDoesNotAllocateAfterPrepare);
+  RUN_TEST(roomIsContinuousTowardDry);
+  RUN_TEST(roomNoStaleStateAfterNeutral);
+  RUN_TEST(roomRejectsNonFinite);
+  RUN_TEST(newBlocksStableAtExtremeSampleRates);
   std::printf("%d tests run, %d failed\n", g_passed + g_failed, g_failed);
   return g_failed ? 1 : 0;
 }
