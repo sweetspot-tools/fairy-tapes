@@ -81,7 +81,7 @@ cmake --build /tmp/dt-build --target deep_throat deep_throat_tests deep_throat_f
 ctest --test-dir /tmp/dt-build -R deep_throat --output-on-failure
 ```
 
-Il bundle è `DeepThroat.vst3`, costruito in locale in `dist/`. L'integrazione nella CI (build e upload del bundle) non è ancora configurata. Non costruire tutti i target insieme.
+Il bundle è `DeepThroat.vst3`, costruito in locale in `dist/`. La CI (al merge verso `master`) costruisce tutti i target e carica il bundle come artifact `deep-throat-linux`, `deep-throat-windows` e `deep-throat-macos`; non esegue `ctest`. Non costruire tutti i target insieme.
 
 ## Test
 

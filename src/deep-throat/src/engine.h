@@ -116,8 +116,11 @@ private:
   int lookahead_ = 0;
   int window_ = 0;  // sliding-max length - 1 (= latency_)
 
-  // Audio delay (raw sanitized input), length latency_ + 1.
+  // Audio delays, length latency_ + 1: the raw sanitized input (Bypass plays it) and the input
+  // after the Input gain (the chain processes it): the gain belongs to the input timeline, so a
+  // change reaches the audio when the audio of that moment leaves the delay.
   std::vector<float> delayL_, delayR_;
+  std::vector<float> gainedL_, gainedR_;
   int writePos_ = 0;
 
   // Sliding maximum of the breath probability over the look-ahead window (monotonic deque).

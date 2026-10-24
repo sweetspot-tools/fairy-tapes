@@ -30,7 +30,7 @@ body{margin:0;padding:16px;background:#e9e8e4;font-family:system-ui,sans-serif;c
   <label>Signal <input type="range" id="lvl" min="0" max="100" value="55" style="width:120px"></label>
   <span style="color:#555">Rack-style panel preview (1000 × 628, landscape). Knobs: drag vertically, Shift = fine, double-click = default. Click a clip LED to clear all. When a module IN button is off (all on by default) its controls dim; the BYPASS button at the top right (Output) dims everything and puts the plugin in bypass.</span>
 </div>
-<div class="stage"><div class="scene"><div class="card" id="card"><svg id="ui" viewBox="0 0 1000 428" role="img" aria-label="Hotline editor, rack-style panel"></svg><svg id="back" viewBox="0 0 1000 628" role="img" aria-label="Credits, references and licenses"></svg></div></div></div>
+<div class="stage"><div class="scene"><div class="card" id="card"><svg id="ui" viewBox="0 0 1000 470" role="img" aria-label="Hotline editor, rack-style panel"></svg><svg id="back" viewBox="0 0 1000 628" role="img" aria-label="Credits, references and licenses"></svg></div></div></div>
 <script>
 var NS='http://www.w3.org/2000/svg',svg=document.getElementById('ui');
 function el(n,a,p){var e=document.createElementNS(NS,n);for(var k in a)e.setAttribute(k,a[k]);(p||CUR||ROOT).appendChild(e);return e;}
@@ -283,8 +283,8 @@ function grad(id,type,attrs,stops){var g=el(type,Object.assign({id:id},attrs),de
 grad('gk','radialGradient',{cx:'35%',cy:'30%',r:'80%'},[[0,'#4a4a4e'],[0.55,'#161617'],[1,'#050505']]);
 grad('gb','linearGradient',{x1:0,y1:0,x2:0,y2:1},[[0,'#e6e6e6'],[1,'#8f8f92']]);
 grad('gp','linearGradient',{x1:0,y1:0,x2:0,y2:1},[[0,'#1b1b1d'],[0.5,'#0b0b0c'],[1,'#121213']]);
-el('rect',{width:1000,height:428,rx:14,fill:'#161617'});texLayer(428);
-el('rect',{x:2,y:2,width:996,height:424,rx:13,fill:'none',stroke:'#2c2c2f','stroke-width':2});
+el('rect',{width:1000,height:470,rx:14,fill:'#161617'});texLayer(470);
+el('rect',{x:2,y:2,width:996,height:466,rx:13,fill:'none',stroke:'#2c2c2f','stroke-width':2});
 LY=layers();addWear(LY.wear,0x51,false);screws(LY.screw);
 
 /* header */
@@ -367,10 +367,10 @@ var MODELNAME='Megaphone',devBtns=[];
 var tone=withNum(function(v){var d=(v-0.5)*10;return (d>0?'+':'')+d.toFixed(1);},function(v){return (v-0.5)*10;});
 
 /* ROW A */
-box(24,92,306,136,'DEVICE','bottom');
+box(24,92,306,156,'DEVICE','bottom');
 reg(grp(),false);
 DEV.forEach(function(d,i){
-  var cx=[87,177,267][i%3],cy=i<3?131:191;
+  var cx=[87,177,267][i%3],cy=i<3?141:203;
   var bt=gbtn(choice(cx,cy,d[0],i===0,function(){
     devBtns.forEach(function(x,j){x._on=(j===i);x._paint(x._on);});
     MODELNAME=d[1];},64));devBtns.push(bt);});
@@ -378,7 +378,7 @@ endGrp();
 function fitName(){}
 
 /* level meters, before the output */
-box(336,92,448,136,'LEVEL','bottom');
+box(336,92,448,156,'LEVEL','bottom');
 var LX=398,STEP=14.5,N=24;
 function ledRow(y,label,colFn,n){
   txt(label,LX-12,y+4,11,W,'end',800);
@@ -386,37 +386,37 @@ function ledRow(y,label,colFn,n){
   return {a:a,col:colFn};
 }
 function dbCol(i){var d=-60+i*(66/(N-1));return d>=0?RED:(d>=-9?YEL:(d>=-18?'#9fe03a':GRN));}
-var rIL=ledRow(114,'L',dbCol),rIR=ledRow(128,'R',dbCol),rOL=ledRow(158,'L',dbCol),rOR=ledRow(172,'R',dbCol);
-txt('IN',LX-34,124,11,YEL,'middle',800);txt('OUT',LX-34,168,11,YEL,'middle',800);
+var rIL=ledRow(124,'L',dbCol),rIR=ledRow(138,'R',dbCol),rOL=ledRow(170,'L',dbCol),rOR=ledRow(184,'R',dbCol);
+txt('IN',LX-34,134,11,YEL,'middle',800);txt('OUT',LX-34,180,11,YEL,'middle',800);
 [-60,-48,-36,-24,-18,-12,-9,-6,-3,0,3].forEach(function(d){
-  var idx=Math.round((d+60)/(66/(N-1)));txt((d>0?'+':'')+d,LX+idx*STEP,146,9,DIMW,'middle',700);});
+  var idx=Math.round((d+60)/(66/(N-1)));txt((d>0?'+':'')+d,LX+idx*STEP,157,9,DIMW,'middle',700);});
 var clipNames=['IN','DRV','OUT'],clips=[],clipOn=[0,0,0];
 clipNames.forEach(function(n,i){
   var x=LX+4+i*70;var g=el('g',{style:'cursor:pointer'});
-  var d=el('circle',{cx:x,cy:202,r:3.4,fill:OFFL,stroke:'#000','stroke-width':.6},g);
-  txt(n,x+9,206,10,W,'start',800,g);
+  var d=el('circle',{cx:x,cy:218,r:3.4,fill:OFFL,stroke:'#000','stroke-width':.6},g);
+  txt(n,x+9,222,10,W,'start',800,g);
   g.addEventListener('click',function(){clipOn=[0,0,0];paintClips();});clips.push(d);
   if(i===1)gbtn(g);
 });
-txt('CLIP',LX-34,206,11,YEL,'middle',800);
+txt('CLIP',LX-34,222,11,YEL,'middle',800);
 function paintClips(){clips.forEach(function(d,i){var on=clipOn[i]>0;d.setAttribute('fill',on?RED:OFFL);});}
 function setLeds(r,n){r.a.forEach(function(c,i){var on=i<n;c.setAttribute('fill',on?r.col(i):OFFL);});}
 function dbN(d){return Math.max(0,Math.min(N,Math.round((d+60)/(66/(N-1))+0.5)));}
 
-box(790,92,186,136,'OUTPUT','bottom');
-reg(grp(),false);knob(842,152,'GAIN',0.5,'-20','+20','',{def:0.5,fmt:db(20),r:22});endGrp();
-btn(940,124,'BYPASS',false,function(b){toggle(b);GB=b._on;MODS.forEach(paint);GBTN.forEach(function(x){x.style.opacity=GB?DIM:1;if(x._lg)x._lg.style.opacity=GB?DIM:1;});});
-gbtn(btn(940,184,'MONO',false,function(b){toggle(b);},YEL));
+box(790,92,186,156,'OUTPUT','bottom');
+reg(grp(),false);knob(842,164,'GAIN',0.5,'-20','+20','',{def:0.5,fmt:db(20),r:22});endGrp();
+btn(940,134,'BYPASS',false,function(b){toggle(b);GB=b._on;MODS.forEach(paint);GBTN.forEach(function(x){x.style.opacity=GB?DIM:1;if(x._lg)x._lg.style.opacity=GB?DIM:1;});});
+gbtn(btn(940,206,'MONO',false,function(b){toggle(b);},YEL));
 
 /* ROW B */
-box(24,248,240,150,'MORPH','bottom');reg(grp(),false);knob(144,306,'MORPH',1,'CLEAN','FULL','',{def:1,fmt:pct,r:34});endGrp();
-box(270,248,706,150,'CHARACTER','bottom');var g1=grp();
-knob(354,318,'DRIVE',0.4,'0','10','',{def:0,fmt:num,r:22});
-knob(482,318,'TONE',0.5,'DARK','BRIGHT','',{def:0.5,fmt:tone,r:22});
-knob(610,318,'NOISE',0.3,'0','10','',{def:0,fmt:num,r:22});
-knob(738,318,'ROOM',0.2,'0','10','',{def:0,fmt:num,r:22});
-knob(866,318,'MIX',1,'DRY','WET','',{def:1,fmt:pct,r:22});
-endGrp();byp(948,284,g1);
+box(24,268,240,172,'MORPH','bottom');reg(grp(),false);knob(144,337,'MORPH',1,'CLEAN','FULL','',{def:1,fmt:pct,r:34});endGrp();
+box(270,268,706,172,'CHARACTER','bottom');var g1=grp();
+knob(354,349,'DRIVE',0.4,'0','10','',{def:0,fmt:num,r:22});
+knob(482,349,'TONE',0.5,'DARK','BRIGHT','',{def:0.5,fmt:tone,r:22});
+knob(610,349,'NOISE',0.3,'0','10','',{def:0,fmt:num,r:22});
+knob(738,349,'ROOM',0.2,'0','10','',{def:0,fmt:num,r:22});
+knob(866,349,'MIX',1,'DRY','WET','',{def:1,fmt:pct,r:22});
+endGrp();byp(948,304,g1);
 
 
 

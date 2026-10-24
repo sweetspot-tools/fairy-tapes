@@ -2259,6 +2259,41 @@ void test_engine_all_in_off_is_passthrough() {
   }
 }
 
+// The Input gain belongs to the input timeline: a change made at input time T must reach the
+// audio when the audio of time T leaves the delay (T + latency), not immediately at the output.
+void test_engine_input_gain_follows_the_input_timeline() {
+  for (double sr : kRates) {
+    const size_t total = (size_t)(3.0 * sr);
+    std::vector<float> x(total);
+    for (size_t i = 0; i < total; ++i)
+      x[i] = (float)(0.1 * std::sin(2.0 * 3.14159265358979 * 220.0 * (double)i / sr));
+    Settings s1 = engineDefaults();
+    setAllIn(s1, false);
+    s1.inputDb = 0.0f;
+    Settings s2 = s1;
+    s2.inputDb = 12.0f;
+    const size_t block = 256;
+    const size_t n0 = block * (size_t)std::ceil(sr / (double)block);  // change at input time ~1 s
+    Engine e;
+    e.prepare(sr);
+    const size_t L = (size_t)e.latencySamples();
+    std::vector<float> y(total);
+    for (size_t i = 0; i < total; i += block) {
+      const size_t n = std::min(block, total - i);
+      e.setSettings(i < n0 ? s1 : s2);
+      e.process(&x[i], &x[i], &y[i], &y[i], (int)n);
+    }
+    const size_t w = (size_t)(0.020 * sr);
+    const double ref = rmsDb(y, L + (size_t)(0.2 * sr), L + (size_t)(0.2 * sr) + w);
+    // Output time n0 + 20 ms is still the audio of input time n0 - L + 20 ms: old gain.
+    const double before = rmsDb(y, n0 + (size_t)(0.020 * sr), n0 + (size_t)(0.020 * sr) + w);
+    ASSERT_NEAR(before, ref, 1.0);
+    // 60 ms after the audio of input time n0 leaves the delay the new gain is settled.
+    const double after = rmsDb(y, n0 + L + (size_t)(0.060 * sr), n0 + L + (size_t)(0.060 * sr) + w);
+    ASSERT_NEAR(after, ref + 12.0, 1.0);
+  }
+}
+
 void test_engine_breath_in_off_disables_reduction() {
   const double sr = 48000.0;
   const auto x = phraseBreathPhrase(sr);
@@ -2450,8 +2485,11 @@ void test_engine_gains_are_smoothed() {
   for (size_t i = 1; i < y.size(); ++i) maxStep = std::max(maxStep, (double)std::fabs(y[i] - y[i - 1]));
   // Natural step of the loudest part: 2 pi 1000 / 48000 x 1.0 = 0.13; a jump would be ~0.9.
   ASSERT_TRUE(maxStep < 0.2);
-  // Settled values: +12 dB then +12 - 12 = 0 dB on the 0.25 sine (-15.05 dBFS RMS).
-  ASSERT_NEAR(rmsDb(y, (size_t)(L + 9600), (size_t)(L + 14400)), -15.05 + 12.0, 0.1);
+  // Settled values: +12 dB then +12 - 12 = 0 dB on the 0.25 sine (-15.05 dBFS RMS). The input
+  // gain step (made at input time ~L + 4800, block aligned) reaches the output one latency
+  // later, plus its 60 ms settling; the output gain step acts at the output immediately.
+  const size_t inStep = (size_t)L + 4800 + 256;
+  ASSERT_NEAR(rmsDb(y, inStep + (size_t)L + 2880, (size_t)(L + 14400)), -15.05 + 12.0, 0.1);
   ASSERT_NEAR(rmsDb(y, (size_t)(L + 24000), y.size()), -15.05, 0.1);
 }
 
@@ -2787,6 +2825,7 @@ int main() {
   RUN_TEST(test_engine_mode_switch_no_blowup);
   RUN_TEST(test_engine_sample_rates);
   RUN_TEST(test_engine_all_in_off_is_passthrough);
+  RUN_TEST(test_engine_input_gain_follows_the_input_timeline);
   RUN_TEST(test_engine_breath_in_off_disables_reduction);
   RUN_TEST(test_engine_in_toggle_no_click);
   RUN_TEST(test_engine_breath_listen_outputs_removed);
