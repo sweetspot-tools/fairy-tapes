@@ -508,38 +508,49 @@ void test_prefs_roundtrip() {
 }
 
 void test_prefs_file_missing_or_oversized_or_binary() {
-  const fs::path cfg = scratchDir() / "xdg";
-  setenv("XDG_CONFIG_HOME", cfg.c_str(), 1);
-  const fs::path file = prefsPath();
-  ASSERT_TRUE(file == cfg / "FairyTapes" / "DeepThroat.prefs");
-  ASSERT_TRUE(isDefaultPrefs(loadPrefs()));   // absent
+  const fs::path file = scratchDir() / "cfg" / "FairyTapes" / "DeepThroat.prefs";   // no environment changes: explicit paths
+  ASSERT_TRUE(isDefaultPrefs(loadPrefs(file)));   // absent
   std::error_code ec;
   fs::create_directories(file.parent_path(), ec);
   writeFile(file, "wear=Heavy\n" + std::string(kMaxPrefsBytes, '#'));   // oversized, with a valid line in it
-  ASSERT_TRUE(isDefaultPrefs(loadPrefs()));
+  ASSERT_TRUE(isDefaultPrefs(loadPrefs(file)));
   writeFile(file, std::string("wear=Off\n\0\0\0binary", 18));   // binary
-  ASSERT_TRUE(isDefaultPrefs(loadPrefs()));
+  ASSERT_TRUE(isDefaultPrefs(loadPrefs(file)));
   writeFile(file, std::string("wear=Heavy\n") + std::string(kMaxPrefsBytes - 20, '#'));   // large but allowed
-  ASSERT_TRUE(loadPrefs().wear == WearLevel::Heavy);
+  ASSERT_TRUE(loadPrefs(file).wear == WearLevel::Heavy);
   fs::remove(file, ec);
   Prefs p;
   p.wear = WearLevel::Off;
   p.notes = false;
   p.tapeFont = TapeFont::RockSalt;
   p.handwrittenValues = false;
-  ASSERT_TRUE(savePrefs(p));
-  const Prefs q = loadPrefs();
+  ASSERT_TRUE(savePrefs(file, p));
+  const Prefs q = loadPrefs(file);
   ASSERT_TRUE(q.wear == WearLevel::Off && !q.notes && q.tapeFont == TapeFont::RockSalt && !q.handwrittenValues);
   ASSERT_TRUE(!fs::exists(fs::path(file) += ".tmp", ec));
   int files = 0;
   for (const auto& e : fs::directory_iterator(file.parent_path(), ec)) { (void)e; ++files; }
   ASSERT_TRUE(files == 1);   // only DeepThroat.prefs
-  // a blocked parent (a file where the folder should be) and a folder as target both fail cleanly
-  writeFile(scratchDir() / "blocker", "x");
+  writeFile(scratchDir() / "blocker", "x");   // a file where the folder should be, and a folder as target: both fail cleanly
   ASSERT_TRUE(!savePrefs(scratchDir() / "blocker" / "DeepThroat.prefs", p));
   ASSERT_TRUE(!savePrefs(fs::path(), p));
+  ASSERT_TRUE(!savePrefs(file.parent_path(), p));
+  ASSERT_TRUE(isDefaultPrefs(loadPrefs(fs::path())) && isDefaultPrefs(loadPrefs(file.parent_path())));
+}
+
+void test_prefs_path_per_os() {
+#if defined(_WIN32)
+  ASSERT_TRUE(prefsPathFor("C:/Users/u", "", "C:/Users/u/AppData/Roaming") ==
+              fs::path("C:/Users/u/AppData/Roaming") / "FairyTapes" / "DeepThroat.prefs");
+#elif defined(__APPLE__)
+  ASSERT_TRUE(prefsPathFor("/Users/u", "", "") == fs::path("/Users/u/Library/Application Support/FairyTapes/DeepThroat.prefs"));
+#else
+  ASSERT_TRUE(prefsPathFor("/home/u", "", "") == fs::path("/home/u/.config/FairyTapes/DeepThroat.prefs"));
+  ASSERT_TRUE(prefsPathFor("/home/u", "/xdg", "") == fs::path("/xdg/FairyTapes/DeepThroat.prefs"));
   ASSERT_TRUE(prefsPathFor("/home/u", "relative/xdg", "") == fs::path("/home/u/.config/FairyTapes/DeepThroat.prefs"));
+#endif
   ASSERT_TRUE(prefsPathFor("", "", "").empty());
+  ASSERT_TRUE(prefsPath().empty() || prefsPath().filename() == "DeepThroat.prefs");
 }
 
 // ---- decor ------------------------------------------------------------------------------------------------------------
@@ -596,6 +607,13 @@ void test_decor_layout_deterministic() {
   const Rect small{10, 20, 500, 307};
   for (uint32_t seed = 0; seed < 300; ++seed)
     for (const auto& t : layoutFromSeed(seed, WearLevel::Heavy, small).tapes) ASSERT_TRUE(tapeInsidePanel(t, small));
+  // the drawn tape (ragged ends and shadow) stays inside the panel too, at the edge where the clamp acts
+  const Rect tight{0, 0, 120, 80};
+  for (uint32_t seed = 0; seed < 300; ++seed)
+    for (const auto& t : layoutFromSeed(seed, WearLevel::Heavy, tight).tapes) {
+      const auto b = FairyTapes::Ui::tapeBounds(t.cx, t.cy, t.w, t.h, t.rotDeg, FairyTapes::Ui::kTapeRaggedX + 1.0);
+      ASSERT_TRUE(b.left >= -1e-3 && b.top >= -1e-3 && b.right <= tight.w + 1e-3 && b.bottom <= tight.h + 1e-3);
+    }
 }
 
 // ---- what a tape must never touch ------------------------------------------------------------------------------------
@@ -793,6 +811,12 @@ void test_history_ring_and_columns() {
   ASSERT_TRUE(h.size() == 4);
   ASSERT_TRUE(nearD(h.at(0).voice, 0.7) && nearD(h.at(3).voice, 1.0));   // 0 = the oldest
   ASSERT_TRUE(h.at(-1).voice == 0.f && h.at(4).voice == 0.f);              // out of range: neutral point
+  // exactly N and N+1 pushes
+  History<4> w;
+  for (int i = 1; i <= 4; ++i) w.push({static_cast<float>(i) / 10.f, 0.5f, 0.f});
+  ASSERT_TRUE(w.size() == 4 && nearD(w.at(0).voice, 0.1) && nearD(w.at(3).voice, 0.4));
+  w.push({0.5f, 0.5f, 0.f});
+  ASSERT_TRUE(w.size() == 4 && nearD(w.at(0).voice, 0.2) && nearD(w.at(3).voice, 0.5));
   h.clear();
   ASSERT_TRUE(h.size() == 0);
   h.push({0.25f, 0.5f, 0.f});
@@ -853,6 +877,7 @@ int main() {
   RUN_TEST(test_prefs_parse_defaults_and_bad_values);
   RUN_TEST(test_prefs_roundtrip);
   RUN_TEST(test_prefs_file_missing_or_oversized_or_binary);
+  RUN_TEST(test_prefs_path_per_os);
   RUN_TEST(test_decor_layout_deterministic);
   RUN_TEST(test_decor_tapes_never_cover_controls);
   RUN_TEST(test_text_model_matches_preview_extents);

@@ -2,6 +2,7 @@
 #include "ui/decor.h"
 
 #include "fairy_ui/screws.h"
+#include "fairy_ui/tape_paper.h"
 
 #include <algorithm>
 #include <cmath>
@@ -55,7 +56,8 @@ WearLayout layoutFromSeed(uint32_t seed, WearLevel w, const Rect& panel) {
       if (t >= want) continue;
       TapePlacement p{panel.x + (s.cx + jx) * kx, panel.y + (s.cy + jy) * ky, tw * kx, th * kx, rot, order[t]};
       const float rad = rot * kPi / 180.f, c = std::fabs(std::cos(rad)), sn = std::fabs(std::sin(rad));
-      const float hx = 0.5f * (p.w * c + p.h * sn) + 1.f, hy = 0.5f * (p.w * sn + p.h * c) + 1.f;
+      const float pad = static_cast<float>(FairyTapes::Ui::kTapeRaggedX) + 1.f;   // ragged ends and shadow, as the drawn box
+      const float hx = 0.5f * (p.w * c + p.h * sn) + pad, hy = 0.5f * (p.w * sn + p.h * c) + pad;
       p.cx = std::clamp(p.cx, panel.x + hx, std::max(panel.x + hx, panel.x + panel.w - hx));
       p.cy = std::clamp(p.cy, panel.y + hy, std::max(panel.y + hy, panel.y + panel.h - hy));
       out.tapes.push_back(p);

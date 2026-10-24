@@ -412,7 +412,7 @@ inline std::vector<FairyTapes::Ui::PrintedItem> silkscreenItems() {
 // torn ends and shadow it reaches 54 px either side of its centre in x and 25 px in y. The slots sit in the places where
 // that fits clear of every control (with its printed scale, name and value), the scope, the LEVEL rows, the clip LEDs,
 // the plug-in title, brand and tagline, the printed texts, readouts and block tags, the box titles and the screws (the
-// tests model all of these). A tape may still lie over box borders, as real tape would. The pockets are narrow and few:
+// tests model all of these). A tape may still lie over box borders, as real tape would. The pockets are narrow and few (most drawn tapes do not fit in the 85 px gap between title and tagline):
 //   0, 1  the header band under the tagline, right of the title and brand, above the first row of boxes
 //   2     the empty top of RIDER, above its knobs
 //   3     the band between the second and third row, between RIDER/BREATH above and COMP below
