@@ -1864,6 +1864,9 @@ Settings settingsWithDrivePrime(double drivePrime) {
 
 // DRV counts only with the shaper fully engaged (drive' >= 0.1, where the dry blend is complete).
 void driveClipLedNeedsFullBlend() {
+  // the blend weight is drive * kBlendSlope: exactly 10 * drive, and exactly 1 at kFullBlendDrive
+  ASSERT_TRUE(DSP::kBlendSlope == 10.f && DSP::kFullBlendDrive * DSP::kBlendSlope == 1.f);
+  for (float d : {0.01f, 0.037f, 0.0999f}) ASSERT_TRUE(d * DSP::kBlendSlope == d * 10.f);
   // coupling with the shaper: from kFullBlendDrive up the blend is complete (pure tanh shaper)
   {
     const float d = DSP::kFullBlendDrive, k = 1.f + 9.f * d, b = 0.1f * d, off = std::tanh(k * b);

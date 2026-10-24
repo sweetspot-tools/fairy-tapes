@@ -4,7 +4,6 @@
 #include "controller.h"
 #include "state.h"
 #include "ui/back_settings.h"
-#include "ui/big_knob.h"
 #include "ui/decor.h"
 #include "ui/devices_tab.h"
 #include "ui/panel_view.h"
@@ -289,7 +288,7 @@ void Editor::applyControlWear() {
     NormalizedControl* control = controls_[spec.id];
     if (!control) continue;
     const uint32_t cseed = controlWearSeed(seed_, spec.id);
-    if (auto* k = dynamic_cast<RackKnob*>(control)) k->setWear(cseed, amount);   // BigRackKnob included
+    if (auto* k = dynamic_cast<RackKnob*>(control)) k->setWear(cseed, amount);   
     else if (auto* t = dynamic_cast<RackToggle*>(control)) t->setWear(cseed, amount);
     else if (auto* c = dynamic_cast<RackLitChoice*>(control)) c->setWear(cseed, amount);
     control->invalid();
@@ -441,8 +440,11 @@ void Editor::createViews(CViewContainer* parent) {
     NormalizedControl* control = nullptr;
     switch (spec.kind) {
     case Kind::Knob:
-      if (isBigKnob(spec.capRadius)) control = new BigRackKnob(rect, this, tag, spec.capRadius, &skin_);
-      else control = new RackKnob(rect, this, tag, spec.capRadius, &skin_);
+      {
+        auto* knob = new RackKnob(rect, this, tag, spec.capRadius, &skin_);
+        knob->setCenterOffsetY(knobCentreOffsetY(spec.capRadius));   // the big cap's view is taller above its centre
+        control = knob;
+      }
       break;
     case Kind::Toggle:
       control = new RackToggle(rect, this, tag, spec.led == Led::Yellow ? RackLed::Yellow : RackLed::Red, false, &skin_);

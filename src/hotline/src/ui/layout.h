@@ -79,11 +79,11 @@ struct ControlSpec {
 
 // A knob cell is AnalogKnob::kPreferredWidth x kPreferredHeight with the cap centre 30 px below the top. The Morph cap
 // (radius 34, skirt 37) does not fit, so the cell of a big knob is wider and 8 px taller above: the editor draws the cap
-// that much lower in it (BigRackKnob).
+// that much lower in it (RackKnob::setCenterOffsetY).
 constexpr float kKnobCellW = 64, kKnobCellH = 88, kKnobCentreOffsetY = 30;
 constexpr float kBigKnobMinRadius = 28, kBigKnobExtra = 8, kBigKnobCellW = 76;
 constexpr bool isBigKnob(float r) { return r >= kBigKnobMinRadius; }
-// The cap centre below the view top; BigRackKnob (ui/big_knob.h) reports and draws the same offset.
+// The cap centre below the view top; the editor passes it to RackKnob::setCenterOffsetY, so center(), valueArea() and the drawing use the same offset.
 constexpr float knobCentreOffsetY(float r) { return kKnobCentreOffsetY + (isBigKnob(r) ? kBigKnobExtra : 0.f); }
 constexpr Rect knob(float cx, float cy, float r) {
   const float w = isBigKnob(r) ? kBigKnobCellW : kKnobCellW;

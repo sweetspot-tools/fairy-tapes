@@ -1,7 +1,9 @@
 /**
- * Fairy Tapes · Hotline — VSTGUI-side geometry tests without a window (BigRackKnob).
+ * Fairy Tapes · Hotline — VSTGUI-side geometry tests without a window (the Morph knob: shared RackKnob with a centre offset).
  */
-#include "ui/big_knob.h"
+#include "ui/layout.h"
+
+#include "fairy_ui/rack_controls.h"
 
 #include "vstgui/lib/cframe.h"
 
@@ -15,10 +17,12 @@ namespace {
 int g_failed = 0;
 #define CHECK(expr) do { if (!(expr)) { std::fprintf(stderr, "  FAIL [%d]: %s\n", __LINE__, #expr); ++g_failed; } } while (0)
 
-Ui::BigRackKnob* morphKnob() {
+FairyTapes::Ui::RackKnob* morphKnob() {
   const Ui::ControlSpec& spec = *Ui::controlOf(kMorph);
   const Ui::Rect v = Ui::viewRect(spec);
-  return new Ui::BigRackKnob(CRect(v.x, v.y, v.x + v.w, v.y + v.h), nullptr, kMorph, spec.capRadius, nullptr);
+  auto* k = new FairyTapes::Ui::RackKnob(CRect(v.x, v.y, v.x + v.w, v.y + v.h), nullptr, kMorph, spec.capRadius, nullptr);
+  k->setCenterOffsetY(Ui::knobCentreOffsetY(spec.capRadius));   // the same call as the editor's
+  return k;
 }
 }
 
@@ -33,8 +37,8 @@ int main() {
   CHECK(std::fabs(c.x - 144.0) < 1e-6 && std::fabs(c.y - 337.0) < 1e-6);
   CHECK(std::fabs(c.y - view.top - Ui::knobCentreOffsetY(spec.capRadius)) < 1e-6);
   CHECK(std::fabs(c.y - Ui::knobCentreY(spec)) < 1e-6);
-  // draw() shifts the base's cap (kCenterOffsetY below the top) by the same constant
-  CHECK(std::fabs(view.top + FairyTapes::Ui::AnalogKnob::kCenterOffsetY + Ui::kBigKnobExtra - c.y) < 1e-6);
+  // the shared offset is the base one plus the extra height above the big cap; draw() uses center() (shared tests pin that)
+  CHECK(std::fabs(knob->centerOffsetY() - FairyTapes::Ui::AnalogKnob::kCenterOffsetY - Ui::kBigKnobExtra) < 1e-6);
 
   // the value area is printed under the name at the silkscreen's baseline for this centre
   const CRect va = knob->valueArea();

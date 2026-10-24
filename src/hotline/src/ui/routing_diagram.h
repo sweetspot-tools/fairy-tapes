@@ -88,8 +88,7 @@ inline FairyTapes::Ui::BackRouting hotlineRouting() {
   b.ln("M210 " + s(Y2) + " H253");
   b.block(217, 307, Y2 - 42, 30, "NOISE", {"hiss " + std::string(K) + " crackle"}, false);
   b.ln("M262 " + s(Y2 - 27) + " V" + s(Y2 - 9));
-  b.ring(262, Y2, 9);                                   // the sum
-  b.ln("M257 " + s(Y2) + " H267 M262 " + s(Y2 - 5) + " V" + s(Y2 + 5), false, 1.8);
+  b.sum(262, Y2);
   b.ln("M271 " + s(Y2) + " H316");
   b.block(316, 436, Y2, 44, "ROOM", {"short reverb"});
   b.ln("M436 " + s(Y2) + " H480");

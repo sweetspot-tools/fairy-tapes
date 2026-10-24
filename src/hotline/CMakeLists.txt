@@ -33,7 +33,6 @@ add_library(hotline MODULE
   src/controller.cpp
   src/devices.cpp
   src/engine.cpp
-  src/ui/big_knob.cpp
   src/ui/decor.cpp
   src/ui/devices_tab.cpp
   src/ui/editor.cpp
@@ -132,7 +131,7 @@ target_link_libraries(hotline_back_tests PRIVATE fairy_ui)
 add_test(NAME hotline_back_tests COMMAND hotline_back_tests)
 
 # Geometry of the big Morph knob (VSTGUI views, no window).
-add_executable(hotline_ui_tests tests/test_ui.cpp src/ui/big_knob.cpp)
+add_executable(hotline_ui_tests tests/test_ui.cpp)
 target_include_directories(hotline_ui_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${VST3_SDK_PATH})
 target_link_libraries(hotline_ui_tests PRIVATE sdk fairy_ui_widgets)
 add_test(NAME hotline_ui_tests COMMAND hotline_ui_tests)
@@ -145,7 +144,6 @@ add_executable(hotline_render EXCLUDE_FROM_ALL
   src/controller.cpp
   src/devices.cpp
   src/engine.cpp
-  src/ui/big_knob.cpp
   src/ui/decor.cpp
   src/ui/devices_tab.cpp
   src/ui/editor.cpp
