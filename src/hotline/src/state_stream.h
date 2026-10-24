@@ -12,13 +12,13 @@
 
 namespace FairyTapes::Hotline {
 
-// Reads up to kStateSize bytes (the layout is fixed; extra bytes are not needed).
+// Reads up to kMaxStateBytes bytes (the largest valid v2 blob; extra bytes are not needed).
 inline bool readStateBytes(Steinberg::IBStream* stream, std::vector<uint8_t>& out) {
   out.clear();
   if (!stream) return false;
   uint8_t chunk[256];
-  while (out.size() < kStateSize) {
-    const auto want = static_cast<Steinberg::int32>(std::min<size_t>(sizeof chunk, kStateSize - out.size()));
+  while (out.size() < kMaxStateBytes) {
+    const auto want = static_cast<Steinberg::int32>(std::min<size_t>(sizeof chunk, kMaxStateBytes - out.size()));
     Steinberg::int32 got = 0;
     if (stream->read(chunk, want, &got) != Steinberg::kResultOk) break;
     if (got <= 0) break;

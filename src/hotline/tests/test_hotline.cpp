@@ -6,6 +6,7 @@
 #include "devices.h"
 #include "display.h"
 #include "format.h"
+#include "messages.h"
 #include "engine.h"
 #include "dsp/band.h"
 #include "dsp/compander.h"
@@ -25,6 +26,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <limits>
+#include <map>
 #include <set>
 #include <string>
 #include <new>
@@ -126,63 +128,292 @@ void defaultsMatchPlan() {
   ASSERT_APPROX(kDefaultBypass, 0.0);
 }
 
-void stateRoundTrip() {
-  double in[kNumParams];
-  for (int i = 0; i < (int)kNumParams; ++i) in[i] = (i + 1) / 12.0;
-  std::vector<uint8_t> blob;
-  serializeState(in, blob);
-  ASSERT_TRUE(blob.size() == kStateSize);
-  double out[kNumParams];
-  for (double& v : out) v = -7.0;
-  ASSERT_TRUE(deserializeState(blob.data(), blob.size(), out));
-  for (int i = 0; i < (int)kNumParams; ++i) ASSERT_APPROX(out[i], in[i]);
+// ---- State: v2 = v1 (int32 version + kNumParams doubles) + the instance decor ---------------------------------------
+// A v1 blob, as written before the decor existed (Tasks 1-7).
+std::vector<uint8_t> v1Bytes(const double* p) {
+  std::vector<uint8_t> out;
+  detail::putLE(out, 1u, 4);
+  for (int i = 0; i < (int)kNumParams; ++i) {
+    uint64_t bits;
+    std::memcpy(&bits, &p[i], sizeof bits);
+    detail::putLE(out, bits, 8);
+  }
+  return out;
 }
 
-void stateRejectsUnknownVersionShortDataAndNaN() {
-  double in[kNumParams];
-  for (double& v : in) v = 0.25;
+PluginState sampleState() {
+  PluginState s;
+  defaultState(s);
+  for (int i = 0; i < (int)kNumParams; ++i) s.params[i] = (i + 1) / 12.0;
+  s.decor.seed = 0xC0FFEEu;
+  const float angles[kNumScrews] = {0.f, 45.5f, 180.f, 359.f};
+  for (int i = 0; i < kNumScrews; ++i) s.decor.screwAngles[i] = angles[i];
+  s.decor.tapeTexts = {"VOX", "", "take 3"};
+  return s;
+}
+
+bool sameState(const PluginState& a, const PluginState& b) {
+  for (int i = 0; i < (int)kNumParams; ++i)
+    if (a.params[i] != b.params[i]) return false;
+  if (a.decor.seed != b.decor.seed || a.decor.tapeTexts != b.decor.tapeTexts) return false;
+  for (int i = 0; i < kNumScrews; ++i)
+    if (a.decor.screwAngles[i] != b.decor.screwAngles[i]) return false;
+  return true;
+}
+
+void stateV2RoundTripsParamsAndDecor() {
+  ASSERT_TRUE(kStateVersion == 2);
+  ASSERT_TRUE(kStateSizeV1 == 4 + 8 * kNumParams);
+  const PluginState a = sampleState();
   std::vector<uint8_t> blob;
-  serializeState(in, blob);
+  serializeState(a, blob);
+  ASSERT_TRUE(detail::getLE(blob.data(), 4) == 2u);
+  // v1 payload, then seed, four angles, text count and the texts (3 + 0 + 6 bytes)
+  ASSERT_TRUE(blob.size() == kStateSizeV1 + 4 + 4 * kNumScrews + 4 + 3 * 4 + 3 + 0 + 6);
+  ASSERT_TRUE(detail::getLE(blob.data() + kStateSizeV1, 4) == 0xC0FFEEu);
+  PluginState b;
+  defaultState(b);
+  ASSERT_TRUE(deserializeState(blob.data(), blob.size(), b));
+  ASSERT_TRUE(sameState(a, b));
+  ASSERT_TRUE(blob.size() <= kMaxStateBytes);
+}
 
-  double out[kNumParams];
-  auto fill = [&] { for (int i = 0; i < (int)kNumParams; ++i) out[i] = 0.125 + i; };
-  auto intact = [&] {
-    for (int i = 0; i < (int)kNumParams; ++i)
-      if (out[i] != 0.125 + i) return false;
-    return true;
-  };
+void stateV1StillLoadsWithDefaultDecor() {
+  double p[kNumParams];
+  for (int i = 0; i < (int)kNumParams; ++i) p[i] = (i + 1) / 13.0;
+  const std::vector<uint8_t> bytes = v1Bytes(p);
+  ASSERT_TRUE(bytes.size() == kStateSizeV1);
+  PluginState s = sampleState();   // a decor that must be replaced by the defaults
+  ASSERT_TRUE(deserializeState(bytes.data(), bytes.size(), s));
+  for (int i = 0; i < (int)kNumParams; ++i) ASSERT_TRUE(s.params[i] == p[i]);
+  ASSERT_TRUE(s.decor.seed == 0);   // "none yet": the caller generates one (ensureSeed)
+  for (int i = 0; i < kNumScrews; ++i) ASSERT_TRUE(s.decor.screwAngles[i] == 0.f);
+  ASSERT_TRUE(s.decor.tapeTexts.empty());
+  ASSERT_TRUE(ensureSeed(s.decor) && s.decor.seed != 0);
+  // the v1 rules still hold: short data, NaN and out-of-range values
+  PluginState untouched = sampleState();
+  ASSERT_TRUE(!deserializeState(bytes.data(), bytes.size() - 1, untouched));
+  ASSERT_TRUE(sameState(untouched, sampleState()));
+  double bad[kNumParams];
+  for (double& v : bad) v = 0.5;
+  bad[4] = std::numeric_limits<double>::quiet_NaN();
+  const std::vector<uint8_t> nanBytes = v1Bytes(bad);
+  ASSERT_TRUE(!deserializeState(nanBytes.data(), nanBytes.size(), untouched));
+  ASSERT_TRUE(sameState(untouched, sampleState()));
+  double wide[kNumParams];
+  for (int i = 0; i < (int)kNumParams; ++i) wide[i] = (i % 2 == 0) ? 2.0 : -1.0;
+  const std::vector<uint8_t> wideBytes = v1Bytes(wide);
+  ASSERT_TRUE(deserializeState(wideBytes.data(), wideBytes.size(), s));
+  for (int i = 0; i < (int)kNumParams; ++i) ASSERT_APPROX(s.params[i], (i % 2 == 0) ? 1.0 : 0.0);
+}
 
-  fill();
-  std::vector<uint8_t> bad = blob;
-  bad[0] = 99;  // unknown version
-  ASSERT_TRUE(!deserializeState(bad.data(), bad.size(), out));
-  ASSERT_TRUE(intact());
-
-  fill();
-  ASSERT_TRUE(!deserializeState(blob.data(), blob.size() - 1, out));
-  ASSERT_TRUE(intact());
-  ASSERT_TRUE(!deserializeState(blob.data(), 0, out));
-  ASSERT_TRUE(!deserializeState(nullptr, 0, out));
-  ASSERT_TRUE(intact());
-
-  double withNaN[kNumParams];
-  for (double& v : withNaN) v = 0.5;
-  withNaN[4] = std::numeric_limits<double>::quiet_NaN();
-  std::vector<uint8_t> nanBlob;
-  serializeState(withNaN, nanBlob);
-  fill();
-  ASSERT_TRUE(!deserializeState(nanBlob.data(), nanBlob.size(), out));
-  ASSERT_TRUE(intact());
+void stateRejectsUnknownVersionTruncationAndNaN() {
+  const PluginState a = sampleState();
+  std::vector<uint8_t> blob;
+  serializeState(a, blob);
+  PluginState untouched;
+  defaultState(untouched);
+  untouched.params[kMix] = 0.75;
+  untouched.decor.seed = 7;
+  for (int32_t v : {0, 3, 99, -1}) {
+    std::vector<uint8_t> other(blob);
+    for (int i = 0; i < 4; ++i) other[i] = static_cast<uint8_t>(static_cast<uint32_t>(v) >> (8 * i));
+    PluginState b = untouched;
+    ASSERT_TRUE(!deserializeState(other.data(), other.size(), b));
+    ASSERT_TRUE(sameState(b, untouched));
+  }
+  for (size_t cut = 0; cut < blob.size(); ++cut) {   // every truncation of a v2 blob (decor included) is refused
+    PluginState b = untouched;
+    ASSERT_TRUE(!deserializeState(blob.data(), cut, b));
+    ASSERT_TRUE(sameState(b, untouched));
+  }
+  PluginState b = untouched;
+  ASSERT_TRUE(!deserializeState(nullptr, 100, b));
+  PluginState withNaN = sampleState();
+  withNaN.params[kDrive] = std::numeric_limits<double>::quiet_NaN();
+  serializeState(withNaN, blob);
+  ASSERT_TRUE(!deserializeState(blob.data(), blob.size(), b));
+  ASSERT_TRUE(sameState(b, untouched));
 }
 
 void stateClampsOutOfRange() {
-  double in[kNumParams];
-  for (int i = 0; i < (int)kNumParams; ++i) in[i] = (i % 2 == 0) ? 2.0 : -1.0;
+  PluginState a = sampleState();
+  for (int i = 0; i < (int)kNumParams; ++i) a.params[i] = (i % 2 == 0) ? 2.0 : -1.0;
   std::vector<uint8_t> blob;
-  serializeState(in, blob);
-  double out[kNumParams];
-  ASSERT_TRUE(deserializeState(blob.data(), blob.size(), out));
-  for (int i = 0; i < (int)kNumParams; ++i) ASSERT_APPROX(out[i], (i % 2 == 0) ? 1.0 : 0.0);
+  serializeState(a, blob);
+  PluginState b;
+  ASSERT_TRUE(deserializeState(blob.data(), blob.size(), b));
+  for (int i = 0; i < (int)kNumParams; ++i) ASSERT_APPROX(b.params[i], (i % 2 == 0) ? 1.0 : 0.0);
+}
+
+void stateSanitizesScrewAngles() {
+  ASSERT_TRUE(sanitizeScrewAngle(std::nanf("")) == 0.f);
+  ASSERT_TRUE(sanitizeScrewAngle(INFINITY) == 0.f && sanitizeScrewAngle(-INFINITY) == 0.f);
+  ASSERT_TRUE(sanitizeScrewAngle(370.f) == 10.f && sanitizeScrewAngle(-90.f) == 270.f && sanitizeScrewAngle(360.f) == 0.f);
+  ASSERT_TRUE(sanitizeScrewAngle(1e30f) >= 0.f && sanitizeScrewAngle(1e30f) < 360.f);
+  // in a stored state a non-finite angle becomes 0 and the state still loads
+  PluginState a = sampleState();
+  a.decor.screwAngles[0] = std::nanf("");
+  a.decor.screwAngles[1] = INFINITY;
+  a.decor.screwAngles[2] = -45.f;
+  std::vector<uint8_t> blob;
+  serializeState(a, blob);
+  // write the raw NaN past serializeState's own sanitizing, as a corrupt file would
+  const float nan = std::nanf("");
+  uint32_t bits;
+  std::memcpy(&bits, &nan, sizeof bits);
+  for (int i = 0; i < 4; ++i) blob[kStateSizeV1 + 4 + 4 * 3 + i] = static_cast<uint8_t>(bits >> (8 * i));
+  PluginState b;
+  ASSERT_TRUE(deserializeState(blob.data(), blob.size(), b));
+  ASSERT_TRUE(b.decor.screwAngles[0] == 0.f && b.decor.screwAngles[1] == 0.f);
+  ASSERT_TRUE(b.decor.screwAngles[2] == 315.f && b.decor.screwAngles[3] == 0.f);
+}
+
+void stateSanitizesTapeTexts() {
+  ASSERT_TRUE(kMaxTapeChars == 14);
+  ASSERT_TRUE(sanitizeTapeText("  padded  ") == "padded");
+  ASSERT_TRUE(sanitizeTapeText("caf\xC3\xA9\t!") == "caf!");
+  ASSERT_TRUE(sanitizeTapeText("0123456789ABCDEFGHIJ") == "0123456789ABCD");
+  PluginState a = sampleState();
+  a.decor.tapeTexts = {"a very long tape text indeed", "bad\x01\x02 chars", "\xff\xfe", "4", "5", "6", "7", "8"};
+  std::vector<uint8_t> blob;
+  serializeState(a, blob);
+  PluginState b;
+  ASSERT_TRUE(deserializeState(blob.data(), blob.size(), b));
+  ASSERT_TRUE((int)b.decor.tapeTexts.size() == kMaxTapeTexts);
+  ASSERT_TRUE(b.decor.tapeTexts[0] == "a very long ta" && b.decor.tapeTexts[1] == "bad chars");
+  ASSERT_TRUE(b.decor.tapeTexts[2].empty() && b.decor.tapeTexts[5] == "6");
+}
+
+void stateRejectsAbsurdTextCountsAndLengths() {
+  PluginState a = sampleState();
+  a.decor.tapeTexts.clear();
+  std::vector<uint8_t> blob;
+  serializeState(a, blob);
+  const size_t count = blob.size() - 4;   // the text count is the last uint32 of a blob without texts
+  std::vector<uint8_t> many(blob);
+  many[count] = 0xFF; many[count + 1] = 0xFF; many[count + 2] = 0xFF; many[count + 3] = 0x7F;
+  PluginState b;
+  ASSERT_TRUE(!deserializeState(many.data(), many.size(), b));
+  std::vector<uint8_t> longText(blob.begin(), blob.begin() + (long)count);
+  detail::putLE(longText, 1u, 4);
+  detail::putLE(longText, 1u << 20, 4);   // one text of 1 MiB announced, nothing follows
+  ASSERT_TRUE(!deserializeState(longText.data(), longText.size(), b));
+  // a text longer than kMaxStoredTextBytes is refused even when all its bytes are there
+  for (uint32_t len : {kMaxStoredTextBytes, kMaxStoredTextBytes + 1}) {
+    std::vector<uint8_t> big(blob.begin(), blob.begin() + (long)count);
+    detail::putLE(big, 1u, 4);
+    detail::putLE(big, len, 4);
+    big.insert(big.end(), len, static_cast<uint8_t>('a'));
+    PluginState c;
+    ASSERT_TRUE(deserializeState(big.data(), big.size(), c) == (len <= kMaxStoredTextBytes));
+  }
+}
+
+void seedZeroGetsANewSeedThatIsSaved() {
+  PluginState a = sampleState();
+  a.decor.seed = 0;
+  std::vector<uint8_t> blob;
+  serializeState(a, blob);
+  PluginState b;
+  ASSERT_TRUE(deserializeState(blob.data(), blob.size(), b));
+  ASSERT_TRUE(b.decor.seed == 0);
+  ASSERT_TRUE(ensureSeed(b.decor));    // generated once...
+  const uint32_t seed = b.decor.seed;
+  ASSERT_TRUE(seed != 0);
+  ASSERT_TRUE(!ensureSeed(b.decor));   // ...and kept afterwards
+  ASSERT_TRUE(b.decor.seed == seed);
+  serializeState(b, blob);
+  PluginState c;
+  ASSERT_TRUE(deserializeState(blob.data(), blob.size(), c));
+  ASSERT_TRUE(c.decor.seed == seed);
+  Decor d;   // a generator that answers 0 still yields a non-zero seed
+  ASSERT_TRUE(ensureSeed(d, [] { return 0u; }));
+  ASSERT_TRUE(d.seed != 0);
+  for (int i = 0; i < 64; ++i) {
+    Decor e;
+    ASSERT_TRUE(ensureSeed(e) && e.seed != 0);
+  }
+  const uint32_t first = newRandomSeed();
+  bool varied = false;
+  for (int i = 0; i < 16; ++i) {
+    const uint32_t s = newRandomSeed();
+    ASSERT_TRUE(s != 0);
+    varied = varied || s != first;
+  }
+  ASSERT_TRUE(first != 0 && varied);
+}
+
+void decorBlobRoundTripAndRejects() {
+  Decor a = sampleState().decor;
+  a.screwAngles[3] = std::nanf("");
+  a.tapeTexts.push_back("\x01\x02 x ");
+  std::vector<uint8_t> blob;
+  serializeDecor(a, blob);
+  Decor b;
+  ASSERT_TRUE(deserializeDecor(blob.data(), blob.size(), b));
+  ASSERT_TRUE(b.seed == a.seed && b.screwAngles[1] == 45.5f && b.screwAngles[3] == 0.f);
+  ASSERT_TRUE(b.tapeTexts.size() == 4 && b.tapeTexts[3] == "x");
+  Decor untouched;
+  untouched.seed = 7;
+  for (size_t cut = 0; cut < blob.size(); ++cut) {
+    Decor c = untouched;
+    ASSERT_TRUE(!deserializeDecor(blob.data(), cut, c));
+    ASSERT_TRUE(c.seed == 7);
+  }
+  Decor c = untouched;
+  ASSERT_TRUE(!deserializeDecor(nullptr, 40, c) && c.seed == 7);
+}
+
+// Fake IMessage / IAttributeList: only what messages.h uses.
+struct FakeAttributes {
+  std::map<std::string, std::string> bin;
+  int setBinary(const char* id, const void* data, unsigned size) {
+    bin[id].assign(static_cast<const char*>(data), size);
+    return 0;
+  }
+  int getBinary(const char* id, const void*& data, unsigned& size) {
+    auto it = bin.find(id);
+    if (it == bin.end()) return 1;
+    data = it->second.data();
+    size = static_cast<unsigned>(it->second.size());
+    return 0;
+  }
+};
+struct FakeMessage {
+  std::string id;
+  FakeAttributes attrs;
+  const char* getMessageID() { return id.c_str(); }
+  void setMessageID(const char* m) { id = m; }
+  FakeAttributes* getAttributes() { return &attrs; }
+};
+
+void decorMessageRoundTripAndRejects() {
+  const Decor a = sampleState().decor;
+  FakeMessage m;
+  encodeDecorMessage(&m, a);
+  ASSERT_TRUE(m.id == std::string(kMsgDecor) && m.id == "Decor");
+  Decor b;
+  ASSERT_TRUE(decodeDecorMessage(&m, b));
+  ASSERT_TRUE(b.seed == a.seed && b.tapeTexts == a.tapeTexts && b.screwAngles[2] == 180.f);
+  Decor c;
+  c.seed = 9;
+  FakeMessage other;
+  other.id = "Other";
+  other.attrs = m.attrs;
+  ASSERT_TRUE(!decodeDecorMessage(&other, c) && c.seed == 9);   // another message id
+  FakeMessage empty;
+  empty.id = kMsgDecor;
+  ASSERT_TRUE(!decodeDecorMessage(&empty, c) && c.seed == 9);   // no attribute
+  FakeMessage junk;
+  junk.id = kMsgDecor;
+  junk.attrs.bin["decor"] = "xy";
+  ASSERT_TRUE(!decodeDecorMessage(&junk, c) && c.seed == 9);    // corrupt blob
+  FakeMessage huge;
+  huge.id = kMsgDecor;
+  huge.attrs.bin["decor"] = m.attrs.bin["decor"] + std::string(kMaxStateBytes, 'x');
+  ASSERT_TRUE(!decodeDecorMessage(&huge, c) && c.seed == 9);    // oversized
+  ASSERT_TRUE(!decodeDecorMessage(static_cast<FakeMessage*>(nullptr), c));
 }
 
 bool sameParams(const BlockParams& a, const BlockParams& b) {
@@ -1874,9 +2105,16 @@ int main() {
   RUN_TEST(deviceIndexRoundsOverSixEntries);
   RUN_TEST(mappingsHitSpecValues);
   RUN_TEST(defaultsMatchPlan);
-  RUN_TEST(stateRoundTrip);
-  RUN_TEST(stateRejectsUnknownVersionShortDataAndNaN);
+  RUN_TEST(stateV2RoundTripsParamsAndDecor);
+  RUN_TEST(stateV1StillLoadsWithDefaultDecor);
+  RUN_TEST(stateRejectsUnknownVersionTruncationAndNaN);
   RUN_TEST(stateClampsOutOfRange);
+  RUN_TEST(stateSanitizesScrewAngles);
+  RUN_TEST(stateSanitizesTapeTexts);
+  RUN_TEST(stateRejectsAbsurdTextCountsAndLengths);
+  RUN_TEST(seedZeroGetsANewSeedThatIsSaved);
+  RUN_TEST(decorBlobRoundTripAndRejects);
+  RUN_TEST(decorMessageRoundTripAndRejects);
   RUN_TEST(morphZeroIsNeutral);
   RUN_TEST(morphOneIsDevice);
   RUN_TEST(morphLogMidpoint);

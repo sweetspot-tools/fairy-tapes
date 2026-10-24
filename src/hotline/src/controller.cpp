@@ -6,6 +6,7 @@
 #include "devices.h"
 #include "engine.h"
 #include "format.h"
+#include "messages.h"
 #include "state.h"
 #include "state_stream.h"
 #include "ui/editor.h"
@@ -77,12 +78,80 @@ Steinberg::tresult PLUGIN_API Controller::setComponentState(Steinberg::IBStream*
   std::vector<uint8_t> bytes;
   if (!readStateBytes(state, bytes))
     return Steinberg::kResultFalse;
-  double values[kNumParams];
-  if (!deserializeState(bytes.data(), bytes.size(), values))
+  PluginState st;
+  defaultState(st);
+  if (!deserializeState(bytes.data(), bytes.size(), st))
     return Steinberg::kResultFalse;
   for (int i = 0; i < static_cast<int>(kNumParams); ++i)
-    setParamNormalized(static_cast<Steinberg::Vst::ParamID>(i), values[i]);
+    setParamNormalized(static_cast<Steinberg::Vst::ParamID>(i), st.params[i]);
+  bool generated = false;
+  Decor copy;
+  {
+    std::lock_guard<std::mutex> lk(decor_mutex_);
+    // No seed in the state (v1 or 0): keep the one already known (usually the processor's, sent from its setState);
+    // with none, generate one and tell the processor.
+    if (st.decor.seed == 0) st.decor.seed = decor_.seed;
+    generated = ensureSeed(st.decor);
+    decor_ = std::move(st.decor);
+    copy = decor_;
+  }
+  ++decor_revision_;
+  if (generated) sendDecor(copy);
   return Steinberg::kResultOk;
+}
+
+Steinberg::tresult PLUGIN_API Controller::notify(Steinberg::Vst::IMessage* message) {
+  Decor d;
+  if (!decodeDecorMessage(message, d))
+    return EditController::notify(message);
+  {
+    std::lock_guard<std::mutex> lk(decor_mutex_);
+    if (d.seed == 0) d.seed = decor_.seed;
+    decor_ = std::move(d);
+  }
+  ++decor_revision_;
+  return Steinberg::kResultOk;
+}
+
+Decor Controller::decor() {
+  bool generated = false;
+  Decor copy;
+  {
+    std::lock_guard<std::mutex> lk(decor_mutex_);
+    generated = ensureSeed(decor_);
+    copy = decor_;
+  }
+  if (generated) {
+    ++decor_revision_;
+    sendDecor(copy);
+  }
+  return copy;
+}
+
+void Controller::editDecor(Decor d) {
+  sanitizeDecor(d);
+  {
+    std::lock_guard<std::mutex> lk(decor_mutex_);
+    if (d.seed == 0) d.seed = decor_.seed;
+    ensureSeed(d);
+    decor_ = d;
+  }
+  ++decor_revision_;
+  sendDecor(d);
+  // Not a parameter: tell the host the project changed so the new decor gets saved.
+  if (Steinberg::FUnknownPtr<Steinberg::Vst::IComponentHandler2> handler2{componentHandler})
+    handler2->setDirty(true);
+}
+
+void Controller::sendDecor(const Decor& d) {
+  if (!getPeer())
+    return;
+  Steinberg::Vst::IMessage* msg = allocateMessage();
+  if (!msg)
+    return;
+  encodeDecorMessage(msg, d);
+  sendMessage(msg);
+  msg->release();
 }
 
 Steinberg::tresult PLUGIN_API Controller::getParamStringByValue(Steinberg::Vst::ParamID tag,

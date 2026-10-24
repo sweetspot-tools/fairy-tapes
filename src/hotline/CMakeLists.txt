@@ -146,4 +146,19 @@ if(NOT WIN32)
   target_link_libraries(hotline_factory_test PRIVATE pluginterfaces ${CMAKE_DL_LIBS})
   add_test(NAME hotline_factory_test COMMAND hotline_factory_test)
   set_tests_properties(hotline_factory_test PROPERTIES SKIP_RETURN_CODE 77)
+
+  # State v2 (seed, screw angles, tape texts) and the Decor messages on the real module, with the SDK's minimal host
+  # classes (IHostApplication, IMessage); skipped when the module is absent.
+  add_executable(hotline_state_module_test tests/test_state_module.cpp
+    ${VST3_SDK_PATH}/public.sdk/source/vst/vstinitiids.cpp
+    ${VST3_SDK_PATH}/public.sdk/source/vst/hosting/hostclasses.cpp
+    ${VST3_SDK_PATH}/public.sdk/source/vst/hosting/pluginterfacesupport.cpp
+    ${VST3_SDK_PATH}/public.sdk/source/vst/utility/stringconvert.cpp
+    ${VST3_SDK_PATH}/public.sdk/source/common/commonstringconvert.cpp
+    src/devices.cpp src/engine.cpp)
+  target_include_directories(hotline_state_module_test PRIVATE ${VST3_SDK_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_compile_definitions(hotline_state_module_test PRIVATE HOTLINE_MODULE="${HOTLINE_MODULE_PATH}")
+  target_link_libraries(hotline_state_module_test PRIVATE pluginterfaces fairy_ui ${CMAKE_DL_LIBS})
+  add_test(NAME hotline_state_module_test COMMAND hotline_state_module_test)
+  set_tests_properties(hotline_state_module_test PROPERTIES SKIP_RETURN_CODE 77)
 endif()
