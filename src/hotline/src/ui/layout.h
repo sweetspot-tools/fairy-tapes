@@ -3,7 +3,8 @@
  * Header-only and free of VSTGUI so it is unit tested (tests/test_hotline.cpp). Every coordinate is a logical px of the
  * 1000 x 470 panel of src/hotline/docs/mockups/hotline_rack.html, front side (rows A and B, as tuned on 2026-10-21:
  * narrower Device buttons, CHARACTER knobs closer, IN a bit lower). The preview wins over any number in the plan.
- * The back of the panel, wear, screws and paper tapes are not here (Task 8).
+ * Wear, screws and paper tapes: the corner screws (kScrewPos) and the tape slots (kTapeSlots) are here, their seeded look
+ * in ui/decor.h. The back of the panel is not here (Task 8b).
  */
 
 #pragma once
@@ -299,5 +300,27 @@ inline std::vector<FairyTapes::Ui::PrintedItem> silkscreenItems() {
   }
   return out;
 }
+
+// ---- Decor: corner screws and paper tapes (ui/decor.h) ----------------------------------------------------------------
+// The corners of the 1000 x 470 panel, 18 px in (docs/DESIGN_SYSTEM.md, as Pillow Talk's 470 panel). The preview still
+// draws the bottom pair at y 610 of the 628 template, below its 470 px front: the corners win.
+constexpr float kScrewPos[4][2] = {{18.f, 18.f}, {982.f, 18.f}, {18.f, 452.f}, {982.f, 452.f}};
+
+// Where a strip of writable paper tape may land (centre and jitter, panel px): the empty bands of the front panel, never
+// over a control, a meter row, a clip LED, a screw or "BACK ->" (tested in tests/test_decor.cpp for every seed). The
+// preview throws its tapes anywhere in 70..900 x 110..560; fixed slots keep them off the controls (as Pillow Talk).
+// The index is the tape's slot: the index of its text in the instance decor (Decor::tapeTexts).
+struct TapeSlot {
+  float cx, cy, jx, jy;
+};
+constexpr TapeSlot kTapeSlots[] = {
+    {320.f, 50.f, 40.f, 8.f},    // header, between the title and the tagline
+    {375.f, 258.f, 6.f, 2.f},    // band between LEVEL and CHARACTER, under the clip IN LED
+    {690.f, 220.f, 25.f, 3.f},   // LEVEL, right of the clip LEDs
+    {545.f, 292.f, 45.f, 1.f},   // CHARACTER, above TONE and NOISE
+    {800.f, 292.f, 25.f, 1.f},   // CHARACTER, above ROOM and MIX, left of IN
+    {430.f, 452.f, 50.f, 2.f},   // band under the boxes, between the MORPH and CHARACTER titles
+};
+constexpr int kNumTapeSlots = static_cast<int>(sizeof(kTapeSlots) / sizeof(kTapeSlots[0]));
 
 } // namespace FairyTapes::Hotline::Ui

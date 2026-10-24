@@ -34,8 +34,11 @@ add_library(hotline MODULE
   src/devices.cpp
   src/engine.cpp
   src/ui/big_knob.cpp
+  src/ui/decor.cpp
   src/ui/editor.cpp
   src/ui/panel_view.cpp
+  src/ui/prefs.cpp
+  src/ui/tape_view.cpp
 )
 
 target_include_directories(hotline PRIVATE
@@ -109,6 +112,17 @@ target_include_directories(hotline_tests PRIVATE
 target_link_libraries(hotline_tests PRIVATE fairy_ui)
 add_test(NAME hotline_tests COMMAND hotline_tests)
 
+# Front panel decor (pure C++, no VSTGUI): tapes and screws from the seed, screw rotations, writing on the tapes, wear
+# seeds, user preferences file. The wear marks themselves are shared (fairy_ui/wear.h).
+add_executable(hotline_decor_tests
+  tests/test_decor.cpp
+  src/ui/decor.cpp
+  src/ui/prefs.cpp
+)
+target_include_directories(hotline_decor_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${VST3_SDK_PATH})
+target_link_libraries(hotline_decor_tests PRIVATE fairy_ui)
+add_test(NAME hotline_decor_tests COMMAND hotline_decor_tests)
+
 # Geometry of the big Morph knob (VSTGUI views, no window).
 add_executable(hotline_ui_tests tests/test_ui.cpp src/ui/big_knob.cpp)
 target_include_directories(hotline_ui_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${VST3_SDK_PATH})
@@ -124,8 +138,11 @@ add_executable(hotline_render EXCLUDE_FROM_ALL
   src/devices.cpp
   src/engine.cpp
   src/ui/big_knob.cpp
+  src/ui/decor.cpp
   src/ui/editor.cpp
   src/ui/panel_view.cpp
+  src/ui/prefs.cpp
+  src/ui/tape_view.cpp
 )
 target_include_directories(hotline_render PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${VST3_SDK_PATH})
 target_compile_definitions(hotline_render PRIVATE

@@ -1,8 +1,13 @@
 // Developer tool: draws the Hotline editor offscreen into a PNG, no host or window needed.
 //   hotline_render out.png [bypass] [characterin=off] [device=<0..5>] [mono] [meters] [clips] [no-grain]
+//                  [wear=off|light|heavy] [seed=<N>] [tape<slot>=<text>] [screw<i>=<degrees>] [tapefont=<0..2>]
+// The wear level and tape font come from the options (default Light, Zeyada), never from the user's preferences file; the
+// seed, screw rotations and tape texts go through the controller's decor, as an editor edit would.
 // Used to check the look of the code-drawn GUI against docs/mockups/hotline_rack.html on a machine without a host.
 #include "controller.h"
+#include "state.h"
 #include "ui/editor.h"
+#include "ui/tapes.h"
 
 #include "fairy_ui/meters.h"
 #include "fairy_ui/rack_controls.h"
@@ -30,8 +35,12 @@ void* moduleHandle = nullptr;   // normally set by the platform module entry poi
 namespace FairyTapes::Hotline::Ui {
 
 struct EditorPreview {
-  static bool render(Steinberg::Vst::EditController& ctl, const char* path) {
+  static bool render(Steinberg::Vst::EditController& ctl, const char* path, FairyTapes::Ui::WearLevel wear,
+                     FairyTapes::Ui::TapeFontId font) {
     Editor ed(&ctl);
+    ed.wearLevel_ = wear;
+    ed.tapeFont_ = font;
+    ed.refreshDecor();   // seed, screws and tape texts of the controller's decor (open() does the same)
     auto root = VSTGUI::makeOwned<VSTGUI::CViewContainer>(VSTGUI::CRect(0, 0, Editor::kWidth, Editor::kHeight));
     ed.createViews(root);
     for (Steinberg::Vst::ParamID id = 0; id < kNumParams; ++id) ed.syncFromController(id);
@@ -55,7 +64,10 @@ struct EditorPreview {
 int main(int argc, char** argv) {
   using namespace FairyTapes::Hotline;
   if (argc < 2) {
-    std::fprintf(stderr, "usage: %s out.png [bypass] [characterin=off] [device=<0..5>] [mono] [meters] [clips] [no-grain]\n", argv[0]);
+    std::fprintf(stderr,
+                 "usage: %s out.png [bypass] [characterin=off] [device=<0..5>] [mono] [meters] [clips] [no-grain]\n"
+                 "       [wear=off|light|heavy] [seed=<N>] [tape<slot>=<text>] [screw<i>=<degrees>] [tapefont=<0..2>]\n",
+                 argv[0]);
     return 2;
   }
   VSTGUI::init(nullptr);
@@ -83,7 +95,26 @@ int main(int argc, char** argv) {
       ctl.setParamNormalized(kClipDrive, 1.0);
     }
   }
-  const bool ok = Ui::EditorPreview::render(ctl, argv[1]);
+  FairyTapes::Ui::WearLevel wear = FairyTapes::Ui::WearLevel::Light;
+  FairyTapes::Ui::TapeFontId font = FairyTapes::Ui::TapeFontId::Zeyada;
+  Decor decor = ctl.decor();
+  for (int i = 2; i < argc; ++i) {
+    const char* a = argv[i];
+    if (!std::strcmp(a, "wear=off")) wear = FairyTapes::Ui::WearLevel::Off;
+    else if (!std::strcmp(a, "wear=light")) wear = FairyTapes::Ui::WearLevel::Light;
+    else if (!std::strcmp(a, "wear=heavy")) wear = FairyTapes::Ui::WearLevel::Heavy;
+    else if (!std::strncmp(a, "seed=", 5)) decor.seed = static_cast<uint32_t>(std::strtoul(a + 5, nullptr, 0));
+    else if (!std::strncmp(a, "tapefont=", 9)) {
+      const int f = std::atoi(a + 9);
+      font = f == 1 ? FairyTapes::Ui::TapeFontId::RockSalt : f == 2 ? FairyTapes::Ui::TapeFontId::HomemadeApple
+                                                                    : FairyTapes::Ui::TapeFontId::Zeyada;
+    } else if (!std::strncmp(a, "tape", 4) && a[4] >= '0' && a[4] <= '9' && a[5] == '=')
+      decor = Ui::withTapeText(decor, a[4] - '0', a + 6);
+    else if (!std::strncmp(a, "screw", 5) && a[5] >= '0' && a[5] <= '3' && a[6] == '=')
+      decor.screwAngles[a[5] - '0'] = static_cast<float>(std::atof(a + 7));
+  }
+  ctl.editDecor(decor);
+  const bool ok = Ui::EditorPreview::render(ctl, argv[1], wear, font);
   ctl.terminate();
   return ok ? 0 : 1;
 }
