@@ -5,6 +5,8 @@
  */
 
 #include "processor.h"
+#include "messages.h"
+#include "state_stream.h"
 #include "pluginterfaces/base/ibstream.h"
 #include "pluginterfaces/vst/ivstparameterchanges.h"
 #include <cstdint>
@@ -16,6 +18,7 @@ namespace FairyTapes::DeepThroat {
 Processor::Processor() {
   setControllerClass(kControllerUID);
   loadDefaults(param_value_);
+  ensureSeed(decor_);   // a fresh instance saves a seed with its first getState
 }
 
 Steinberg::tresult PLUGIN_API Processor::initialize(Steinberg::FUnknown* context) {
@@ -140,26 +143,71 @@ Steinberg::tresult PLUGIN_API Processor::process(Steinberg::Vst::ProcessData& da
 }
 
 Steinberg::tresult PLUGIN_API Processor::setState(Steinberg::IBStream* state) {
-  if (!state)
+  std::vector<uint8_t> bytes;
+  if (!readStateBytes(state, bytes))
     return Steinberg::kResultFalse;
-  uint8_t buf[kStateSize];
-  Steinberg::int32 read = 0;
-  if (state->read(buf, (Steinberg::int32)kStateSize, &read) != Steinberg::kResultOk)
+  double values[kNumParams];
+  Decor decor;
+  if (!deserializeState(bytes.data(), bytes.size(), values, decor))
     return Steinberg::kResultFalse;
-  return deserializeState(buf, (size_t)read, param_value_) ? Steinberg::kResultOk
-                                                            : Steinberg::kResultFalse;
+  ensureSeed(decor);   // v1 or seed 0: a new seed, saved by the next getState
+  for (int i = 0; i < (int)kNumParams; ++i) param_value_[i] = values[i];
+  {
+    std::lock_guard<std::mutex> lk(decor_mutex_);
+    decor_ = std::move(decor);
+  }
+  sendDecor();
+  return Steinberg::kResultOk;
 }
 
 Steinberg::tresult PLUGIN_API Processor::getState(Steinberg::IBStream* state) {
   if (!state)
     return Steinberg::kResultFalse;
+  Decor decor;
+  {
+    std::lock_guard<std::mutex> lk(decor_mutex_);
+    decor = decor_;
+  }
   std::vector<uint8_t> bytes;
-  serializeState(param_value_, bytes);
+  serializeState(param_value_, decor, bytes);
   Steinberg::int32 written = 0;
   if (state->write(bytes.data(), (Steinberg::int32)bytes.size(), &written) != Steinberg::kResultOk ||
       written != (Steinberg::int32)bytes.size())
     return Steinberg::kResultFalse;
   return Steinberg::kResultOk;
+}
+
+void Processor::sendDecor() {
+  if (!getPeer())
+    return;
+  Steinberg::Vst::IMessage* msg = allocateMessage();
+  if (!msg)
+    return;
+  Decor d;
+  {
+    std::lock_guard<std::mutex> lk(decor_mutex_);
+    d = decor_;
+  }
+  encodeDecorMessage(msg, d);
+  sendMessage(msg);
+  msg->release();
+}
+
+Steinberg::tresult PLUGIN_API Processor::connect(Steinberg::Vst::IConnectionPoint* other) {
+  const auto r = AudioEffect::connect(other);
+  sendDecor();   // the controller learns the seed of this instance
+  return r;
+}
+
+Steinberg::tresult PLUGIN_API Processor::notify(Steinberg::Vst::IMessage* message) {
+  Decor d;
+  if (decodeDecorMessage(message, d)) {   // an editor edit, or the seed the controller had to generate
+    std::lock_guard<std::mutex> lk(decor_mutex_);
+    if (d.seed == 0) d.seed = decor_.seed;   // never clears the seed
+    decor_ = std::move(d);
+    return Steinberg::kResultOk;
+  }
+  return AudioEffect::notify(message);
 }
 
 } // namespace FairyTapes::DeepThroat
