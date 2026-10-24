@@ -296,7 +296,10 @@ struct PanelText {
   float x, y;   // y is the baseline
   TextStyle style;
   TextAlign align;
-  Module module;   // dimmed with this module's IN (None: only by the global bypass)
+  Module module;   // dimmed with this module's IN (None: not by any IN)
+  // Dimmed by the global bypass, as in the preview: the SCOPE legend, the GR row of LEVEL (label and scale) and the
+  // module texts. The header, the LEVEL IN / OUT / CLIP tags, the L / R tags and the level scale never dim.
+  bool dimsWithBypass;
 };
 
 // Exact index of the LED under a scale mark, as the preview: round((d + 60) / (66 / 14)), d in dB.
@@ -306,49 +309,54 @@ constexpr float grScaleX(int db) { return kMeterFirstX + kMeterPitch * static_ca
 constexpr float kRowTagX = kMeterFirstX - 12, kSectionTagX = kMeterFirstX - 34;
 
 constexpr PanelText kPanelTexts[] = {
-    {"DEEP THROAT", 34, 58, TextStyle::Title, TextAlign::Left, Module::None},
-    {"FAIRY TAPES", 36, 78, TextStyle::Brand, TextAlign::Left, Module::None},
+    {"DEEP THROAT", 34, 58, TextStyle::Title, TextAlign::Left, Module::None, false},
+    {"FAIRY TAPES", 36, 78, TextStyle::Brand, TextAlign::Left, Module::None, false},
     {"VOCAL CHANNEL STRIP  \xC2\xB7  RIDER  \xC2\xB7  BREATH  \xC2\xB7  EQ  \xC2\xB7  DE-ESS  \xC2\xB7  COMP  \xC2\xB7  TONE", 966, 46,
-     TextStyle::Tagline, TextAlign::Right, Module::None},
+     TextStyle::Tagline, TextAlign::Right, Module::None, false},
     // SCOPE legend
-    {"VOICE", 156, 206, TextStyle::LegendVoice, TextAlign::Left, Module::None},
-    {"RIDER GAIN", 200, 206, TextStyle::LegendRider, TextAlign::Left, Module::None},
-    {"BREATH", 274, 206, TextStyle::LegendBreath, TextAlign::Left, Module::None},
+    {"VOICE", 156, 206, TextStyle::LegendVoice, TextAlign::Left, Module::None, true},
+    {"RIDER GAIN", 200, 206, TextStyle::LegendRider, TextAlign::Left, Module::None, true},
+    {"BREATH", 274, 206, TextStyle::LegendBreath, TextAlign::Left, Module::None, true},
     // LEVEL
-    {"IN", kSectionTagX, 120, TextStyle::Section, TextAlign::Centre, Module::None},
-    {"OUT", kSectionTagX, 158, TextStyle::Section, TextAlign::Centre, Module::None},
-    {"GR", kSectionTagX, 188, TextStyle::Section, TextAlign::Centre, Module::None},
-    {"CLIP", kSectionTagX, 214, TextStyle::Section, TextAlign::Centre, Module::None},
-    {"L", kRowTagX, 114, TextStyle::RowTag, TextAlign::Right, Module::None},
-    {"R", kRowTagX, 126, TextStyle::RowTag, TextAlign::Right, Module::None},
-    {"L", kRowTagX, 152, TextStyle::RowTag, TextAlign::Right, Module::None},
-    {"R", kRowTagX, 164, TextStyle::RowTag, TextAlign::Right, Module::None},
-    {"-60", levelScaleX(-60), 138, TextStyle::Scale, TextAlign::Centre, Module::None},
-    {"-48", levelScaleX(-48), 138, TextStyle::Scale, TextAlign::Centre, Module::None},
-    {"-36", levelScaleX(-36), 138, TextStyle::Scale, TextAlign::Centre, Module::None},
-    {"-24", levelScaleX(-24), 138, TextStyle::Scale, TextAlign::Centre, Module::None},
-    {"-18", levelScaleX(-18), 138, TextStyle::Scale, TextAlign::Centre, Module::None},
-    {"-12", levelScaleX(-12), 138, TextStyle::Scale, TextAlign::Centre, Module::None},
-    {"-6", levelScaleX(-6), 138, TextStyle::Scale, TextAlign::Centre, Module::None},
-    {"0", levelScaleX(0), 138, TextStyle::Scale, TextAlign::Centre, Module::None},
-    {"0", grScaleX(0), 174, TextStyle::Scale, TextAlign::Centre, Module::None},
-    {"-6", grScaleX(6), 174, TextStyle::Scale, TextAlign::Centre, Module::None},
-    {"-12", grScaleX(12), 174, TextStyle::Scale, TextAlign::Centre, Module::None},
-    {"-18", grScaleX(18), 174, TextStyle::Scale, TextAlign::Centre, Module::None},
+    {"IN", kSectionTagX, 120, TextStyle::Section, TextAlign::Centre, Module::None, false},
+    {"OUT", kSectionTagX, 158, TextStyle::Section, TextAlign::Centre, Module::None, false},
+    {"GR", kSectionTagX, 188, TextStyle::Section, TextAlign::Centre, Module::None, true},
+    {"CLIP", kSectionTagX, 214, TextStyle::Section, TextAlign::Centre, Module::None, false},
+    {"L", kRowTagX, 114, TextStyle::RowTag, TextAlign::Right, Module::None, false},
+    {"R", kRowTagX, 126, TextStyle::RowTag, TextAlign::Right, Module::None, false},
+    {"L", kRowTagX, 152, TextStyle::RowTag, TextAlign::Right, Module::None, false},
+    {"R", kRowTagX, 164, TextStyle::RowTag, TextAlign::Right, Module::None, false},
+    {"-60", levelScaleX(-60), 138, TextStyle::Scale, TextAlign::Centre, Module::None, false},
+    {"-48", levelScaleX(-48), 138, TextStyle::Scale, TextAlign::Centre, Module::None, false},
+    {"-36", levelScaleX(-36), 138, TextStyle::Scale, TextAlign::Centre, Module::None, false},
+    {"-24", levelScaleX(-24), 138, TextStyle::Scale, TextAlign::Centre, Module::None, false},
+    {"-18", levelScaleX(-18), 138, TextStyle::Scale, TextAlign::Centre, Module::None, false},
+    {"-12", levelScaleX(-12), 138, TextStyle::Scale, TextAlign::Centre, Module::None, false},
+    {"-6", levelScaleX(-6), 138, TextStyle::Scale, TextAlign::Centre, Module::None, false},
+    {"0", levelScaleX(0), 138, TextStyle::Scale, TextAlign::Centre, Module::None, false},
+    {"0", grScaleX(0), 174, TextStyle::Scale, TextAlign::Centre, Module::None, true},
+    {"-6", grScaleX(6), 174, TextStyle::Scale, TextAlign::Centre, Module::None, true},
+    {"-12", grScaleX(12), 174, TextStyle::Scale, TextAlign::Centre, Module::None, true},
+    {"-18", grScaleX(18), 174, TextStyle::Scale, TextAlign::Centre, Module::None, true},
     // BREATH
-    {"BREATH", 632, 342, TextStyle::Label10, TextAlign::Left, Module::Breath},
+    {"BREATH", 632, 342, TextStyle::Label10, TextAlign::Left, Module::Breath, true},
     // EQ
-    {"HPF", 904, 298, TextStyle::Label11, TextAlign::Centre, Module::Eq},
-    {"MUD CUT", 904, 338, TextStyle::Label11, TextAlign::Centre, Module::Eq},
-    {"at 300 Hz", 904, 370, TextStyle::Small, TextAlign::Centre, Module::Eq},
+    {"HPF", 904, 298, TextStyle::Label11, TextAlign::Centre, Module::Eq, true},
+    {"MUD CUT", 904, 338, TextStyle::Label11, TextAlign::Centre, Module::Eq, true},
+    {"at 300 Hz", 904, 370, TextStyle::Small, TextAlign::Centre, Module::Eq, true},
     // TONE
-    {"MUD", 822, 500, TextStyle::Label12, TextAlign::Left, Module::Tone},
-    {"250 Hz", 822, 512, TextStyle::Small, TextAlign::Left, Module::Tone},
-    {"PRESENCE", 822, 532, TextStyle::Label12, TextAlign::Left, Module::Tone},
-    {"3.5 kHz", 822, 544, TextStyle::Small, TextAlign::Left, Module::Tone},
-    {"AIR", 822, 564, TextStyle::Label12, TextAlign::Left, Module::Tone},
-    {"12 kHz", 822, 576, TextStyle::Small, TextAlign::Left, Module::Tone},
+    {"MUD", 822, 500, TextStyle::Label12, TextAlign::Left, Module::Tone, true},
+    {"250 Hz", 822, 512, TextStyle::Small, TextAlign::Left, Module::Tone, true},
+    {"PRESENCE", 822, 532, TextStyle::Label12, TextAlign::Left, Module::Tone, true},
+    {"3.5 kHz", 822, 544, TextStyle::Small, TextAlign::Left, Module::Tone, true},
+    {"AIR", 822, 564, TextStyle::Label12, TextAlign::Left, Module::Tone, true},
+    {"12 kHz", 822, 576, TextStyle::Small, TextAlign::Left, Module::Tone, true},
 };
+
+// Whether a printed panel text is drawn dimmed (35 %): its module is out, or the global bypass is on and it dims with it.
+constexpr bool panelTextDimmed(const PanelText& t, const DimState& s) {
+  return (s.bypass && t.dimsWithBypass) || moduleOut(t.module, s);
+}
 
 // Read-only values printed on the panel (filled from the mode table and the parameters, Task 5). The Comp cycle values
 // are printed by the Cycle items of the silkscreen.
