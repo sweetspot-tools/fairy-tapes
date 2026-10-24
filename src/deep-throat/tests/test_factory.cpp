@@ -94,7 +94,8 @@ void exerciseController(Steinberg::Vst::IEditController* ctl) {
       const int steps = info.stepCount;
       const double expected =
           steps > 0 ? std::min<double>(steps, std::floor(n * (steps + 1))) / steps : n;
-      const double tol = steps > 0 ? 1e-9 : 0.006;
+      // De-ess Freq prints kHz with one decimal (value_format.h): half a 0.05 kHz step is up to 0.0137 of the travel.
+      const double tol = steps > 0 ? 1e-9 : id == kDeEssFreq ? 0.014 : 0.006;
       if (!(std::fabs(back - expected) <= tol)) {
         std::fprintf(stderr, "  param %u: %.3f -> %.3f\n", (unsigned)id, n, back);
         ++g_failed;

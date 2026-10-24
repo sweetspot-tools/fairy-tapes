@@ -10,6 +10,7 @@
 #include "ui/prefs.h"
 #include "ui/screw_angles.h"
 #include "ui/tapes.h"
+#include "ui/value_text.h"
 
 #include "fairy_ui/knob_math.h"
 #include "fairy_ui/rack_geometry.h"
@@ -185,7 +186,7 @@ void test_dimming_rules() {
   DimState bp = all;
   bp.bypass = true;
   for (const ControlSpec& c : kControls) ASSERT_TRUE(controlDimmed(c.id, bp) == (c.id != kBypass));
-  // Module IN off: the module's controls (not its IN, not its Listen), nothing else.
+  // Module IN off: the module's controls (its Listen too, not its IN), nothing else.
   struct Case { int in; Module mod; };
   for (const Case& k : {Case{0, Module::Rider}, Case{1, Module::Breath}, Case{2, Module::Eq}, Case{3, Module::DeEss},
                         Case{4, Module::Comp}, Case{5, Module::Tone}}) {
@@ -204,12 +205,13 @@ void test_dimming_rules() {
   ASSERT_TRUE(moduleOf(kDeEssAmount) == Module::DeEss && moduleOf(kDeEssFreq) == Module::DeEss);
   for (ParamID id : {kCompAmount, kCompMix, kCompRatio, kCompDist, kCompHpf}) ASSERT_TRUE(moduleOf(id) == Module::Comp);
   ASSERT_TRUE(moduleOf(kTone) == Module::Tone);
-  for (ParamID id : {kBypass, kMode, kInput, kOutput, kBreathListen, kDeEssListen, kRiderIn, kToneIn})
+  for (ParamID id : {kBypass, kMode, kInput, kOutput, kRiderIn, kBreathIn, kEqIn, kDeEssIn, kCompIn, kToneIn})
     ASSERT_TRUE(moduleOf(id) == Module::None);
-  // Listen: out of the module's attenuation, but dimmed by the bypass.
+  // Listen: dimmed with its module (as in the preview) and by the bypass.
+  ASSERT_TRUE(moduleOf(kBreathListen) == Module::Breath && moduleOf(kDeEssListen) == Module::DeEss);
   DimState off = all;
   off.in[1] = off.in[3] = false;
-  ASSERT_TRUE(!controlDimmed(kBreathListen, off) && !controlDimmed(kDeEssListen, off));
+  ASSERT_TRUE(controlDimmed(kBreathListen, off) && controlDimmed(kDeEssListen, off));
   ASSERT_TRUE(controlDimmed(kBreathListen, bp));
 }
 
@@ -506,6 +508,109 @@ bool isDefaultPrefs(const Prefs& p) {
 
 void test_controls_are_in_enum_order() {
   for (int i = 0; i < kControlCount; ++i) ASSERT_TRUE(static_cast<int>(kControls[i].id) == i);
+}
+
+// ---- Values under the knobs (ui/value_text.h, src/value_format.h) ---------------------------------------------------
+constexpr ParamID kKnobIds[12] = {kInput, kOutput, kRiderTarget, kRiderRange, kBreathAmount, kBreathSens,
+                                  kEqAmount, kDeEssAmount, kDeEssFreq, kCompAmount, kCompMix, kTone};
+
+bool formats(ParamID id, double n, const char* expected) {
+  const std::string s = formatKnobValue(id, n);
+  if (s != expected) std::fprintf(stderr, "  param %u at %.3f: \"%s\" (expected \"%s\")\n", (unsigned)id, n, s.c_str(), expected);
+  return s == expected;
+}
+
+// The preview's formats (deep_throat_rack.html: db(12), tgf, pct, brf, dsf, cmf, tonef).
+void test_value_text_formats() {
+  ASSERT_TRUE(formats(kInput, 0.5, "0.0 dB") && formats(kInput, 1.0, "+12.0 dB") && formats(kInput, 0.0, "-12.0 dB"));
+  ASSERT_TRUE(formats(kOutput, 0.75, "+6.0 dB"));
+  ASSERT_TRUE(formats(kRiderTarget, 0.5, "-20.0 dBFS") && formats(kRiderTarget, 1.0, "-10.0 dBFS"));
+  ASSERT_TRUE(formats(kRiderRange, 0.5, "50 %") && formats(kBreathSens, 0.0, "0 %") && formats(kCompMix, 1.0, "100 %"));
+  ASSERT_TRUE(formats(kEqAmount, 0.125, "13 %"));   // Math.round: halves go up
+  ASSERT_TRUE(formats(kBreathAmount, 0.5, "6.0 dB") && formats(kBreathAmount, 1.0, "12.0 dB"));
+  ASSERT_TRUE(formats(kDeEssFreq, 0.53, "6.5 kHz") && formats(kDeEssFreq, 0.0, "4.0 kHz") && formats(kDeEssFreq, 1.0, "10.0 kHz"));
+  ASSERT_TRUE(formats(kCompAmount, 0.5, "-18.0 dB") && formats(kCompAmount, 0.0, "-6.0 dB") && formats(kCompAmount, 1.0, "-30.0 dB"));
+  ASSERT_TRUE(formats(kTone, 1.0, "+100 %") && formats(kTone, 0.5, "0 %") && formats(kTone, 0.0, "-100 %"));
+  ASSERT_TRUE(formats(kInput, 0.4999, "0.0 dB"));   // never "-0.0"
+  ASSERT_TRUE(formats(kInput, std::nan(""), "-12.0 dB") && formats(kTone, 7.0, "+100 %"));   // bad input: limited
+  ASSERT_TRUE(formatKnobValue(kBypass, 1.0).empty() && formatKnobValue(kMode, 0.5).empty() && formatKnobValue(kCompRatio, 0).empty());
+  ASSERT_TRUE(editFieldText(kInput, 0.75) == "+6.0" && editFieldText(kDeEssFreq, 0.53) == "6.5" && editFieldText(kTone, 0.25) == "-50");
+}
+
+// Printed resolution of each knob, in normalized units at the worst point: half a printed step over the slope.
+double printedResolution(ParamID id) {
+  switch (id) {
+  case kInput: case kOutput: return 0.05 / 24.0;
+  case kRiderTarget: return 0.05 / 20.0;
+  case kBreathAmount: return 0.05 / 12.0;
+  case kCompAmount: return 0.05 / 24.0;
+  case kDeEssFreq: return 0.05 / (4.0 * std::log(2.5));   // kHz per norm is smallest at the low end
+  case kTone: return 0.5 / 200.0;
+  default: return 0.5 / 100.0;
+  }
+}
+
+void test_value_text_parse_roundtrip() {
+  for (ParamID id : kKnobIds) {
+    for (int k = 0; k <= 200; ++k) {
+      const double n = k / 200.0;
+      const std::string s = formatKnobValue(id, n);
+      double back = -1;
+      ASSERT_TRUE(parseKnobValue(id, s, back));
+      if (std::fabs(back - n) > printedResolution(id) + 1e-9)
+        std::fprintf(stderr, "  param %u: %.4f -> \"%s\" -> %.4f\n", (unsigned)id, n, s.c_str(), back);
+      ASSERT_TRUE(std::fabs(back - n) <= printedResolution(id) + 1e-9);
+      ASSERT_TRUE(formatKnobValue(id, back) == s);   // the same printed value
+      double typed = -1;   // the field text (number without the unit) reads back the same
+      ASSERT_TRUE(parseKnobValue(id, editFieldText(id, n), typed) && formatKnobValue(id, typed) == s);
+    }
+    double v = 0.42;
+    for (const char* bad : {"", "  ", "loud", "dB", "+", "1.2.3", "5 apples", "5 dB extra", "nan", "inf", "1e999", "--3"}) {
+      if (parseKnobValue(id, bad, v)) std::fprintf(stderr, "  param %u accepted \"%s\"\n", (unsigned)id, bad);
+      ASSERT_TRUE(!parseKnobValue(id, bad, v));
+    }
+    ASSERT_TRUE(v == 0.42);   // left alone
+  }
+  double n = -1;
+  ASSERT_TRUE(parseKnobValue(kInput, "+6", n) && n == 0.75);
+  ASSERT_TRUE(parseKnobValue(kInput, " -12 DB ", n) && n == 0.0);
+  ASSERT_TRUE(parseKnobValue(kInput, "99", n) && n == 1.0);   // limited
+  ASSERT_TRUE(parseKnobValue(kRiderTarget, "-25,0 dBFS", n) && std::fabs(n - 0.25) < 1e-12);
+  ASSERT_TRUE(parseKnobValue(kBreathAmount, "50 %", n) && n == 0.5 && parseKnobValue(kBreathAmount, "3 dB", n) && n == 0.25);
+  ASSERT_TRUE(parseKnobValue(kCompAmount, "-12", n) && std::fabs(n - 0.25) < 1e-12);
+  ASSERT_TRUE(parseKnobValue(kDeEssFreq, "10000 Hz", n) && std::fabs(n - 1.0) < 1e-12);
+  ASSERT_TRUE(parseKnobValue(kDeEssFreq, "4k", n) && std::fabs(n) < 1e-12 && parseKnobValue(kDeEssFreq, "6500", n) &&
+              formatKnobValue(kDeEssFreq, n) == "6.5 kHz");
+  ASSERT_TRUE(!parseKnobValue(kDeEssFreq, "0 kHz", n) && !parseKnobValue(kDeEssFreq, "-3", n));
+  ASSERT_TRUE(parseKnobValue(kTone, "+50 %", n) && n == 0.75 && !parseKnobValue(kTone, "5 dB", n));
+  ASSERT_TRUE(parseKnobValue(kEqAmount, "250", n) && n == 1.0 && !parseKnobValue(kEqAmount, "3 dB", n));
+  ASSERT_TRUE(!parseKnobValue(kBypass, "1", n) && !parseKnobValue(kMode, "0.5", n));
+}
+
+// Listen dims with its own module (as in the preview); the IN buttons and the rest stay out of every module.
+void test_listen_belongs_to_its_module() {
+  ASSERT_TRUE(moduleOf(kBreathListen) == Module::Breath && moduleOf(kDeEssListen) == Module::DeEss);
+  DimState s{};
+  s.in[static_cast<int>(Module::Breath) - 1] = false;
+  ASSERT_TRUE(controlDimmed(kBreathListen, s) && !controlDimmed(kDeEssListen, s) && !controlDimmed(kBreathIn, s));
+  DimState d{};
+  d.in[static_cast<int>(Module::DeEss) - 1] = false;
+  ASSERT_TRUE(controlDimmed(kDeEssListen, d) && !controlDimmed(kBreathListen, d) && !controlDimmed(kDeEssIn, d));
+}
+
+// The Mode view holds three equal cells, one per face: the shared lit-choice geometry puts every face where the layout
+// (the preview) has it.
+void test_mode_view_cells_match_faces() {
+  const ControlSpec& m = *controlOf(kMode);
+  const Rect v = viewRect(m);
+  for (int i = 0; i < kModeCount; ++i) {
+    const auto cell = FairyTapes::Ui::Rack::litChoiceCell(v.w, v.h, kModeCount, 1, i);
+    const auto f = FairyTapes::Ui::Rack::litFace(cell, kModeFaceW, FairyTapes::Ui::Rack::kLitFaceHeight);
+    const Rect want = modeFaceRect(i);
+    ASSERT_TRUE(std::fabs(v.x + f.left - want.x) < 1e-4 && std::fabs(v.y + f.top - want.y) < 1e-4);
+    ASSERT_TRUE(std::fabs(f.right - f.left - want.w) < 1e-4 && std::fabs(f.bottom - f.top - want.h) < 1e-4);
+  }
+  ASSERT_TRUE(inside(v, boxOf(Box::Mode).rect));
 }
 
 void test_prefs_parse_defaults_and_bad_values() {
@@ -903,6 +1008,10 @@ int main() {
   RUN_TEST(test_rounding_matches_js_to_fixed);
   RUN_TEST(test_hpf_rounding_and_infinite_inputs);
   RUN_TEST(test_controls_are_in_enum_order);
+  RUN_TEST(test_value_text_formats);
+  RUN_TEST(test_value_text_parse_roundtrip);
+  RUN_TEST(test_listen_belongs_to_its_module);
+  RUN_TEST(test_mode_view_cells_match_faces);
   RUN_TEST(test_prefs_parse_defaults_and_bad_values);
   RUN_TEST(test_prefs_roundtrip);
   RUN_TEST(test_prefs_file_missing_or_oversized_or_binary);

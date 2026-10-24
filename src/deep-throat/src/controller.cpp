@@ -7,6 +7,7 @@
 #include "state.h"
 #include "state_stream.h"
 #include "ui/editor.h"
+#include "value_format.h"
 #include "pluginterfaces/base/ibstream.h"
 #include "public.sdk/source/vst/vstparameters.h"
 #include <algorithm>
@@ -216,7 +217,6 @@ Steinberg::IPlugView* PLUGIN_API Controller::createView(Steinberg::FIDString nam
 
 Steinberg::tresult PLUGIN_API Controller::getParamStringByValue(Steinberg::Vst::ParamID tag,
     Steinberg::Vst::ParamValue v, Steinberg::Vst::String128 string) {
-  char buf[64];
   switch (tag) {
   case kBypass:
   case kDeEssListen:
@@ -229,33 +229,15 @@ Steinberg::tresult PLUGIN_API Controller::getParamStringByValue(Steinberg::Vst::
   case kToneIn:
     asciiToStr128(v >= 0.5 ? "On" : "Off", string);
     return Steinberg::kResultOk;
-  case kInput:
-    std::snprintf(buf, sizeof(buf), "%+.1f dB", inputDbFromNorm(v));
+  default:
     break;
-  case kOutput:
-    std::snprintf(buf, sizeof(buf), "%+.1f dB", outputDbFromNorm(v));
-    break;
-  case kRiderTarget:
-    std::snprintf(buf, sizeof(buf), "%.1f dBFS", riderTargetDbFromNorm(v));
-    break;
-  case kDeEssFreq:
-    std::snprintf(buf, sizeof(buf), "%.0f Hz", deEssFreqHzFromNorm(v));
-    break;
-  case kRiderRange:
-  case kBreathAmount:
-  case kDeEssAmount:
-  case kCompAmount:
-  case kTone:
-  case kBreathSens:
-  case kCompMix:
-  case kEqAmount:
-    std::snprintf(buf, sizeof(buf), "%.0f %%", v * 100.0);
-    break;
-  default:  // choice lists: the StringListParameter formats itself
-    return EditController::getParamStringByValue(tag, v, string);
   }
-  asciiToStr128(buf, string);
-  return Steinberg::kResultOk;
+  if (isKnobParam(tag)) {   // the same text the editor prints under the knob (value_format.h)
+    asciiToStr128(formatKnobValue(tag, v).c_str(), string);
+    return Steinberg::kResultOk;
+  }
+  // choice lists: the StringListParameter formats itself
+  return EditController::getParamStringByValue(tag, v, string);
 }
 
 Steinberg::tresult PLUGIN_API Controller::getParamValueByString(Steinberg::Vst::ParamID tag,
@@ -274,37 +256,13 @@ Steinberg::tresult PLUGIN_API Controller::getParamValueByString(Steinberg::Vst::
     valueNormalized = n;
     return Steinberg::kResultOk;
   }
-  switch (tag) {
-  case kInput:
-  case kOutput:
-    if (!parseNumber(t, x)) return Steinberg::kResultFalse;
-    n = (x + 12.0) / 24.0;
-    break;
-  case kRiderTarget:
-    if (!parseNumber(t, x)) return Steinberg::kResultFalse;
-    n = (x + 30.0) / 20.0;
-    break;
-  case kDeEssFreq:
-    if (!parseNumber(t, x) || x <= 0.0) return Steinberg::kResultFalse;
-    if (std::strstr(t, "k")) x *= 1000.0;  // "6.5 kHz"
-    n = std::log(x / 4000.0) / std::log(10000.0 / 4000.0);
-    break;
-  case kRiderRange:
-  case kBreathAmount:
-  case kDeEssAmount:
-  case kCompAmount:
-  case kTone:
-  case kBreathSens:
-  case kCompMix:
-  case kEqAmount:
-    if (!parseNumber(t, x)) return Steinberg::kResultFalse;
-    n = x / 100.0;
-    break;
-  default:  // choice lists: the StringListParameter matches its entries
-    return EditController::getParamValueByString(tag, string, valueNormalized);
+  if (isKnobParam(tag)) {   // the knob's own units, as the editor reads a typed value (value_format.h)
+    if (!parseKnobValue(tag, t, n)) return Steinberg::kResultFalse;
+    valueNormalized = n;
+    return Steinberg::kResultOk;
   }
-  valueNormalized = std::clamp(n, 0.0, 1.0);
-  return Steinberg::kResultOk;
+  // choice lists: the StringListParameter matches its entries
+  return EditController::getParamValueByString(tag, string, valueNormalized);
 }
 
 } // namespace FairyTapes::DeepThroat

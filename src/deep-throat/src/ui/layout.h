@@ -66,17 +66,19 @@ constexpr Module moduleOf(Box b) {
   }
 }
 
-// The module a parameter is attenuated with when that module's IN is off. The IN buttons and the two Listen buttons are
-// not part of it (they stay usable to switch the module back on / to listen); they are still dimmed by the global bypass.
+// The module a parameter is attenuated with when that module's IN is off. The IN buttons are not part of it (they stay
+// bright to switch the module back on); the two Listen buttons are, as in the preview. All are dimmed by the global bypass.
 constexpr Module moduleOf(ParamID id) {
   switch (id) {
   case kRiderTarget:
   case kRiderRange: return Module::Rider;
   case kBreathAmount:
-  case kBreathSens: return Module::Breath;
+  case kBreathSens:
+  case kBreathListen: return Module::Breath;
   case kEqAmount: return Module::Eq;
   case kDeEssAmount:
-  case kDeEssFreq: return Module::DeEss;
+  case kDeEssFreq:
+  case kDeEssListen: return Module::DeEss;
   case kCompAmount:
   case kCompMix:
   case kCompRatio:
@@ -206,11 +208,13 @@ constexpr float knobCentreX(const ControlSpec& c) { return c.rect.x + c.rect.w /
 constexpr float knobCentreY(const ControlSpec& c) { return c.rect.y + kKnobCentreOffsetY; }
 
 // The rect of the control's view: the knob cell, the face plus the LED zone under it (a Cycle also the value text), or
-// the stack of Mode faces.
+// for Mode one equal cell of kModeFacePitch per face (RackLitChoice centres each face in its cell: fairy_ui/rack_geometry.h).
 constexpr Rect viewRect(const ControlSpec& c) {
   switch (c.kind) {
   case Kind::Toggle: return {c.rect.x, c.rect.y, c.rect.w, c.rect.h + kLedZone};
   case Kind::Cycle: return {c.rect.x + c.rect.w / 2 - kCycleViewW / 2, c.rect.y, kCycleViewW, kCycleViewH};
+  case Kind::Choice:
+    return {c.rect.x, c.rect.y + kModeFaceH / 2 - kModeFacePitch / 2, c.rect.w, kModeFacePitch * static_cast<float>(c.choiceCount)};
   default: return c.rect;
   }
 }
@@ -388,6 +392,9 @@ constexpr TagSpec kTags[6] = {
     {{kTagModeName, 40, 260}, Module::None}, {{kTagModeInfo, 40, 270}, Module::None}, {{kTagBreath, 416, 260}, Module::Breath},
     {{kTagEq, 777, 260}, Module::Eq},        {{kTagDeEss, 40, 446}, Module::DeEss},   {{kTagComp, 271, 446}, Module::Comp},
 };
+// The two tags that do not change (the others come from ui/dynamic_text.h).
+constexpr const char* kTagEqText = "FOLLOWS MODE \xC2\xB7 AMOUNT";
+constexpr const char* kTagCompText = "THRESHOLD SET BY AMOUNT \xC2\xB7 GAIN REDUCTION: SEE LEVEL";
 
 // ---- Silkscreen: the printed parts of every control (fairy_ui/silkscreen.h), ids are ParamIDs ---------------------
 inline std::vector<FairyTapes::Ui::PrintedItem> silkscreenItems() {
