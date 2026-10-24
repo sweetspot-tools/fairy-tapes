@@ -417,7 +417,7 @@ btn(940,130,'BYPASS',false,function(b){toggle(b);GB=b._on;MODS.forEach(paint);GB
 
 /* ============ ROW B : EQ ============ */
 box(24,282,952,150,'EQUALISER','top');var gEq=grp();
-var ex=[134,216,296,378,460,540,622,704,784,866];   /* 10 knobs (Saturate moved to Drive), centred in the box */
+var ex=[78,160,240,322,404,484,566,648,728,810,891];   /* 10 band knobs + SATURATE: the 4K console saturation is the last step of the EQ (back from the Drive, 2026-10-24) */
 knob(ex[0],352,'GAIN',0.5,'-20','+20','',{def:0.5,fmt:db(20)});
 knob(ex[1],352,'FREQ',0.2,'30','480','',{def:0.1556,fmt:hz(30,480)});
 knob(ex[2],352,'GAIN',0.57,'-20','+20','',{def:0.5,fmt:db(20)});
@@ -428,7 +428,7 @@ knob(ex[6],352,'FREQ',0.5,'.6k','7k','',{def:0.2188,fmt:hz(600,7000)});
 knob(ex[7],352,'Q',0.2,'.4','4','',{def:0.0833,fmt:qfmt});
 knob(ex[8],352,'GAIN',0.5,'-20','+20','',{def:0.5,fmt:db(20)});
 knob(ex[9],352,'FREQ',0.6,'1.5k','16k','',{def:0.4483,fmt:hz(1500,16000)});
-/* Saturate moved to the Drive box (shared DRIVE knob, NAM switch) */
+knob(ex[10],352,'SATURATE',0.2,'0','10','',{def:0,fmt:num,r:22});
 /* pulsante shelf/bell: icona della campana sulla riga d'intestazione della banda */
 function bellBtn(cx,cy){
   var g=el('g',{style:'cursor:pointer'});
@@ -455,10 +455,19 @@ knob(170,552,'MIX',1,'DRY','WET','',{def:1,fmt:pct});
   var b=choice(262,530+i*26,n,i===0,function(){modeBtns.forEach(function(m,j){m._on=(j===i);m._paint(m._on);});refreshTags();},44);modeBtns.push(b);});
 boxTag(40,506,function(){if(!chan._on)return '4K-G';var k=0;modeBtns.forEach(function(m,j){if(m._on)k=j;});return ['OPTO-2A','FET-76','VCA-160'][k];});endGrp();byp(330,522,gCm);
 box(372,484,300,146,'DRIVE','bottom');var gDr=grp();
-var DRVK={},namOn=true,DV={nam:0.3,sat:0.2};
-knob(428,552,'DRIVE',0.3,'0','10','',{def:0,fmt:num,r:21,api:DRVK});
+/* Two engines in series, each with its knob and its on/off switch (2026-10-24): NAM (a capture: preamp, pedal, outboard)
+   then TAPE (Airwindows Tape: one knob over slam and head bump). The block moves with CHAN / BUS: right after the INPUT in
+   CHAN (preamp + multitrack tape), before the LIMITER in BUS (2-track mixdown); the TAPE voicing follows (see ROUTING).
+   The 4K saturation is back in the EQUALISER. */
+var namOn=true,tapeOn=true;
+/* sub-group of one engine: its controls and printed scale dim (35%) when its switch is off, on top of the module dimming */
+function engine(){var g=el('g',{});g.style.transition='opacity .15s';var prev=CUR;CUR=g;
+  return {g:g,done:function(){CUR=prev;(prev._x=prev._x||[]).push.apply(prev._x,g._x||[]);},
+    set:function(on){g.style.opacity=on?1:DIM;(g._x||[]).forEach(function(x){x._mm=on?1:DIM;});MODS.forEach(paint);}};}
+var eNam=engine();
+knob(416,552,'DRIVE',0.3,'0','10','',{def:0,fmt:num,r:21});
 /* model name: a fixed strip of tape written in the tape font; the name is cut by measured width (never by character count) and ends with an ellipsis */
-var nam=el('g',{style:'cursor:pointer'}),NX=478,NY=578,NW=174,NH=28,MODELNAME=lsGet('st_model','JCM_clean_v2.nam'),GPUC='#6b6347';
+var nam=el('g',{style:'cursor:pointer'}),NX=540,NY=578,NW=122,NH=28,MODELNAME=lsGet('st_model','JCM_clean_v2.nam'),GPUC='#6b6347';
 el('title',{},nam).textContent='Click to choose a NAM model';
 (function(){var R=mulberry32(SEED^0x99),pts=['0,'+rnd(R,0,2).toFixed(1)],k,q;
   for(k=1;k<=6;k++)pts.push((NW*k/6).toFixed(1)+','+rnd(R,-1,1).toFixed(1));
@@ -473,20 +482,19 @@ el('title',{},nam).textContent='Click to choose a NAM model';
 var NAMMAX=NW-12-12;
 function fitName(){var t=window.NAMT,fam="'"+TAPEFONT+"',cursive",k=NORM[TAPEFONT]||TAPEFONTS[TAPEFONT];
   t.setAttribute('font-family',fam);t.setAttribute('font-size',(13*k).toFixed(1));t.setAttribute('font-weight',400);
-  if(!namOn){t.textContent='4K Saturate';nam.querySelector('title').textContent='4K Saturate (NAM is off)';return;}
   var base=MODELNAME.replace(/\.nam$/i,''),txtv=base;t.textContent=txtv;
   if(t.getComputedTextLength()>NAMMAX){var n=base.length;while(n>1){txtv=base.slice(0,n).replace(/[\s_\-.]+$/,'')+'\u2026';t.textContent=txtv;if(t.getComputedTextLength()<=NAMMAX)break;n--;}}
   nam.querySelector('title').textContent=MODELNAME+' · click to choose a NAM model';}
-/* engine selectors NAM / 4K: two exclusive buttons like the other presets (lit = engine in use; same DRIVE knob, each engine keeps its own value) */
-var engBtns=[];
-function setEngine(on){DV[namOn?'nam':'sat']=DRVK.get();namOn=on;DRVK.set(DV[namOn?'nam':'sat']);
-  engBtns[0]._on=on;engBtns[1]._on=!on;engBtns.forEach(function(b){b._paint(b._on);});
-  nam.style.pointerEvents=namOn?'auto':'none';nam.style.cursor=namOn?'pointer':'default';fitName();refreshTags();}
-var namBtn=choice(526,522,'NAM',true,function(){if(!namOn)setEngine(true);},34);
-var satBtn=choice(566,522,'4K',false,function(){if(namOn)setEngine(false);},34);engBtns=[namBtn,satBtn];
+eNam.done();
+var eTape=engine();
+knob(498,552,'TAPE',0.4,'0','10','',{def:0,fmt:num});
+eTape.done();
+/* on/off switches of the two engines (label above, red LED below, like IN), in a row left of the module IN */
+btn(566,522,'NAM',true,function(b){toggle(b);namOn=b._on;eNam.set(namOn);refreshTags();});
+btn(601,522,'TAPE',true,function(b){toggle(b);tapeOn=b._on;eTape.set(tapeOn);refreshTags();});
 /* GPU icon on the NAM button removed (2026-10-21); placeholder kept for the GPU checkbox of the bar */
 window.GPUCHIP=el('g',{});
-boxTag(388,506,function(){return namOn?'NAM':series();});endGrp();byp(636,522,gDr);
+boxTag(388,506,function(){return namOn&&tapeOn?'NAM \u00b7 TAPE':namOn?'NAM':tapeOn?'TAPE':'';});endGrp();byp(636,522,gDr);
 box(678,484,162,146,'LIMITER','bottom');
 var gLi=grp();knob(752,552,'POUND',0.4,'0','10','',{def:0.5,fmt:num});boxTag(694,506,function(){return 'B-PARTY';});endGrp();byp(811,522,gLi);
 box(846,484,130,146,'GATE','bottom');
@@ -563,7 +571,7 @@ txt('Double-click on a knob returns it to its neutral default.',50,588,12,DIMW,'
 /* ---- BUTTONS tab: what the buttons that impose settings do (generated from the layout table in the plug-in) ---- */
 CUR=PANES.buttons;BOXOVR=BOXES.buttons;
 box(24,102,952,508,'WHAT THE BUTTONS DO','top');
-(function(){var E=[["BYPASS", ["Bypasses the whole plug-in."], ["The output equals the input: every module is out, the gain reduction meters are at zero and only the IN and OUT", "clip LEDs stay on. No parameter value is changed; the modules and their IN buttons dim."]], ["CHAN / BUS", ["Chooses the processing: a channel strip (CHAN) or a mix bus (BUS)."], ["CHAN: EQ \"Black\" (G series), compressor character selectable (VOICE, DRUMS, CLASSIC), 4K saturation of the G", "series. BUS: EQ \"Brown\" (E series), 4K saturation of the E series, compressor fixed to the Bus compressor, VOICE", "/ DRUMS / CLASSIC hidden and the Bell buttons out of use. No knob value is changed."]], ["VOICE / DRUMS / CLASSIC", ["Chooses the character of the compressor (CHAN only)."], ["VOICE: OPTO compressor (smooth, program dependent). DRUMS: FET compressor (fast, punchy). CLASSIC: VCA", "compressor (soft knee, all round). Amount and Mix keep their values. In BUS the Bus compressor is always used."]], ["NAM / 4K", ["Chooses what drives the Drive stage."], ["NAM: the loaded .nam model, with the Drive knob as its amount; without a model the signal passes through", "unchanged. 4K: the 4K console saturation, with its own amount on the same knob. Each engine keeps its own knob", "value; the paper strip reads \"4K Saturate\" while 4K is on."]], ["IN", ["Puts a module in or out of the signal path: FILTERS, EQUALISER, COMPRESSION, DRIVE, LIMITER, GATE."], ["Lit: the module is in (its bypass parameter is 0). Off: the module is bypassed (parameter 1) and its controls", "dim. FILTERS has one button for High Pass and Low Pass together. Knob values are not changed."]], ["BELL", ["Chooses the shape of the LF and HF bands of the equaliser."], ["Lit: bell (peak) filter. Off: shelf filter. Only the CHAN equaliser has the bell; in BUS the buttons are out of", "use. The band's frequency and gain are not changed."]], ["NO MODEL", ["Unloads the NAM model (button of the model picker)."], ["The model path is cleared and saved empty. With NAM selected the Drive passes the signal through unchanged. The", "Drive knob value is not changed."]], ["MODEL STRIP", ["The paper strip in the Drive box: click it to pick a .nam model (NAM only)."], ["LOAD loads the chosen file on a separate thread (the audio never stops) and saves its path with the project. A", "file that cannot be loaded shows its error on the strip and the Drive passes the signal through."]]],y=142;
+(function(){var E=[["BYPASS", ["Bypasses the whole plug-in."], ["The output equals the input: every module is out, the gain reduction meters are at zero and only the IN and OUT", "clip LEDs stay on. No parameter value is changed; the modules and their IN buttons dim."]], ["CHAN / BUS", ["Chooses the processing: a channel strip (CHAN) or a mix bus (BUS)."], ["CHAN: EQ \"Black\" (G series) and its saturation, compressor character selectable (VOICE, DRUMS, CLASSIC), DRIVE", "right after the INPUT with TAPE as a multitrack machine. BUS: EQ \"Brown\" (E series) and its saturation, Bus", "compressor, DRIVE before the LIMITER with TAPE as the 2-track mixdown machine; VOICE / DRUMS / CLASSIC hidden and", "the Bell buttons out of use. No knob value is changed."]], ["VOICE / DRUMS / CLASSIC", ["Chooses the character of the compressor (CHAN only)."], ["VOICE: OPTO compressor (smooth, program dependent). DRUMS: FET compressor (fast, punchy). CLASSIC: VCA", "compressor (soft knee, all round). Amount and Mix keep their values. In BUS the Bus compressor is always used."]], ["NAM / TAPE", ["Switch the two engines of the DRIVE block on or off; with both on, NAM comes first."], ["NAM: the loaded .nam model, driven by the DRIVE knob; without a model it passes the signal through. TAPE:", "tape saturation and head bump, one knob, output level matched to the input. Off: the engine is skipped and its", "knob dims. Knob values are not changed."]], ["IN", ["Puts a module in or out of the signal path: FILTERS, EQUALISER, COMPRESSION, DRIVE, LIMITER, GATE."], ["Lit: the module is in (its bypass parameter is 0). Off: the module is bypassed (parameter 1) and its controls", "dim. FILTERS has one button for High Pass and Low Pass together. Knob values are not changed."]], ["BELL", ["Chooses the shape of the LF and HF bands of the equaliser."], ["Lit: bell (peak) filter. Off: shelf filter. Only the CHAN equaliser has the bell; in BUS the buttons are out of", "use. The band's frequency and gain are not changed."]], ["NO MODEL", ["Unloads the NAM model (button of the model picker)."], ["The model path is cleared and saved empty. With NAM on, the NAM passes the signal through unchanged. The", "Drive knob value is not changed."]], ["MODEL STRIP", ["The paper strip in the Drive box: click it to pick a .nam model."], ["LOAD loads the chosen file on a separate thread (the audio never stops) and saves its path with the project. A", "file that cannot be loaded shows its error on the strip and the Drive passes the signal through."]]],y=142;
   E.forEach(function(e){txt(e[0],50,y,13,AMBL,'start',800);var ly=y;e[1].forEach(function(l){txt(l,270,ly,12,W,'start',800);ly+=14;});e[2].forEach(function(l){txt(l,270,ly,11,DIMW,'start',700);ly+=13;});y=Math.max(ly,y+16)+12;});})();
 /* ---- ROUTING tab (design system, 2026-10-23): fixed block diagram of the signal path, outboard-manual style; order of the audio engine ---- */
 CUR=PANES.routing;BOXOVR=BOXES.routing;
@@ -586,23 +594,30 @@ var RT=(function(){
   return {ln:ln,arrow:arrow,arrowUp:arrowUp,dot:dot,ring:ring,jack:jack,amp:amp,block:block,inSwitch:inSwitch,tap:tap,conn:conn};})();
 box(24,102,952,388,'SIGNAL FLOW','top');
 (function(){var Y1=200,Y2=392,L=RT.ln;
-  /* row 1: input, filters, equaliser, compression */
+  /* CHAN / BUS deviator of the DRIVE block: closed = the block is played here; drawn in the default position (CHAN) */
+  function modeSwitch(px,y,rx,top,label,closed){RT.ring(px,y);RT.ring(px+12,y);RT.ring(px+12,y-14);
+    if(closed)L('M'+px+' '+y+' L'+(px+11)+' '+(y-2),false,1.8);else L('M'+px+' '+y+' L'+(px+11)+' '+(y-12.6),false,1.8);
+    L('M'+(px+12)+' '+(y-16.6)+' V'+top+' H'+rx+' V'+y);RT.dot(rx,y);txt(label,(px+rx)/2,top-6,9,AMBL,'middle',800);}
+  /* row 1: input, DRIVE in CHAN, filters, equaliser, compression */
   RT.jack(60,Y1,'IN L · R');L('M69 '+Y1+' H100');RT.dot(82,Y1);
-  RT.amp(100,Y1,'INPUT');L('M128 '+Y1+' H178');RT.tap(150,Y1,50,'IN METER','CLIP IN');
-  L('M190 '+Y1+' H194');RT.block(194,304,Y1,48,'FILTERS',['HP · LP']);RT.inSwitch(178,Y1,322,150);L('M304 '+Y1+' H344');
-  L('M356 '+Y1+' H360');RT.block(360,490,Y1,48,'EQUALISER',['4K-G · 4K-E']);RT.inSwitch(344,Y1,508,150);L('M490 '+Y1+' H556');RT.tap(528,Y1,50,'CLIP EQ');
-  L('M568 '+Y1+' H572');RT.block(572,722,Y1,48,'COMPRESSION',['OPTO-2A · FET-76','VCA-160 · BUS']);RT.inSwitch(556,Y1,740,150);L('M722 '+Y1+' H910');RT.tap(762,Y1,50,'GR C','CLIP CMP');
+  RT.amp(100,Y1,'INPUT');L('M128 '+Y1+' H176');RT.tap(148,Y1,50,'IN METER','CLIP IN');
+  L('M188 '+Y1+' H192');RT.block(192,282,Y1,48,'DRIVE',['NAM · TAPE']);modeSwitch(176,Y1,298,150,'CHAN',true);L('M282 '+Y1+' H314');
+  L('M326 '+Y1+' H330');RT.block(330,420,Y1,48,'FILTERS',['HP · LP']);RT.inSwitch(314,Y1,436,150);L('M420 '+Y1+' H462');
+  L('M474 '+Y1+' H478');RT.block(478,588,Y1,48,'EQUALISER',['4K-G · 4K-E','+ SATURATE']);RT.inSwitch(462,Y1,604,150);L('M588 '+Y1+' H658');RT.tap(626,Y1,50,'CLIP EQ');
+  L('M670 '+Y1+' H674');RT.block(674,810,Y1,48,'COMPRESSION',['OPTO-2A · FET-76','VCA-160 · BUS']);RT.inSwitch(658,Y1,826,150);L('M810 '+Y1+' H910');RT.tap(856,Y1,50,'GR C','CLIP CMP');
   RT.arrow(910,Y1);RT.conn(920,Y1,'A');
   /* sidechain: control line into the compressor detector */
-  RT.jack(60,290,'SC IN');L('M69 290 H680 V232',true);RT.arrowUp(680,226);txt('SIDECHAIN',380,284,9,DIMW,'middle',800);
+  RT.jack(60,290,'SC IN');L('M69 290 H770 V232',true);RT.arrowUp(770,226);txt('SIDECHAIN',420,284,9,DIMW,'middle',800);
   /* global BYPASS: from the input jack straight to the output switch */
   L('M82 '+Y1+' V128 H958 V300 H886 V'+(Y2-16.6));txt('BYPASS',520,122,9,DIMW,'middle',800);txt('output = input, bit for bit',950,292,9,DIMW,'end',700);
-  /* row 2: drive (NAM or 4K), limiter, gate, output */
-  RT.conn(60,Y2,'A');L('M70 '+Y2+' H90');
-  RT.inSwitch(90,Y2,292,316);L('M102 '+Y2+' H118');RT.ring(118,Y2);RT.ring(134,Y2-30);RT.ring(134,Y2+30);L('M118 '+Y2+' L133 '+(Y2-28),false,1.8);
-  L('M134 '+(Y2-32.6)+' V'+(Y2-30)+' M136.6 '+(Y2-30)+' H144');L('M136.6 '+(Y2+30)+' H144');
-  RT.block(144,264,Y2-30,36,'NAM',['.nam model']);RT.block(144,264,Y2+30,36,'4K',['saturation']);txt('DRIVE',204,Y2-56,10,W,'middle',900);
-  L('M264 '+(Y2-30)+' H278 V'+(Y2+30)+' H264');RT.dot(278,Y2);L('M278 '+Y2+' H330');RT.tap(306,Y2,52,'CLIP DRV');
+  /* row 2: DRIVE in BUS (NAM then TAPE, each with its own switch), limiter, gate, output */
+  RT.conn(60,Y2,'A');L('M70 '+Y2+' H86');
+  modeSwitch(84,Y2,320,318,'BUS',false);RT.inSwitch(100,Y2,312,338);L('M112 '+Y2+' H118');
+  /* the DRIVE module: NAM then TAPE, each with its own on/off switch */
+  el('rect',{x:118,y:Y2-38,width:186,height:76,rx:3,fill:'none',stroke:W,'stroke-width':2});RT.arrow(118,Y2);txt('DRIVE',211,Y2+54,10,W,'middle',900);
+  L('M118 '+Y2+' H126');RT.inSwitch(126,Y2,206,Y2-22,'NAM');RT.block(144,196,Y2,30,'NAM',[]);L('M196 '+Y2+' H210');
+  RT.inSwitch(210,Y2,294,Y2-22,'TAPE');RT.block(228,284,Y2,30,'TAPE',[]);L('M284 '+Y2+' H304');
+  L('M304 '+Y2+' H342');RT.tap(328,Y2,52,'CLIP DRV');
   L('M342 '+Y2+' H346');RT.block(346,476,Y2,48,'LIMITER',['B-PARTY']);RT.inSwitch(330,Y2,494,342);L('M476 '+Y2+' H540');RT.tap(514,Y2,52,'GR L','CLIP LIM');
   L('M552 '+Y2+' H556');RT.block(556,686,Y2,48,'GATE',['D-NOISE']);RT.inSwitch(540,Y2,704,342);L('M686 '+Y2+' H744');RT.tap(722,Y2,52,'GR G');
   RT.amp(744,Y2,'OUTPUT');L('M772 '+Y2+' H884');
@@ -617,7 +632,7 @@ box(24,508,952,102,'LEGEND','top');
   L('M552 '+y+' H600',true);txt('control signal',608,y+4,10,DIMW,'start',700);
   RT.dot(712,y);L('M712 '+y+' V'+(y-12),false,1.4);txt('meter / clip point',722,y+4,10,DIMW,'start',700);
   RT.conn(858,y,'A');txt('continues',874,y+4,10,DIMW,'start',700);
-  txt('CHAN / BUS, VOICE / DRUMS / CLASSIC and NAM / 4K change the character of the blocks; the order of the blocks never changes.',50,y+40,11,DIMW,'start',700);})();
+  txt('CHAN / BUS moves the DRIVE block (CHAN: after the INPUT, BUS: before the LIMITER) and sets the TAPE voicing; the other modes only change the character.',50,y+40,11,DIMW,'start',700);})();
 CUR=null;BOXOVR=null;showTab(lsGet('st_tab','settings'));
 ROOT=svg;
 
