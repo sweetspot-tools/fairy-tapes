@@ -3,7 +3,11 @@
 #include "fairy_ui/knob_math.h"
 #include "fairy_ui/rack_controls.h"
 
+#include "vstgui/lib/cbitmap.h"
 #include "vstgui/lib/cbuttonstate.h"
+#include "vstgui/lib/cdrawcontext.h"
+#include "vstgui/lib/vstguiinit.h"
+#include "vstgui/lib/coffscreencontext.h"
 #include "vstgui/lib/cpoint.h"
 #include "vstgui/lib/crect.h"
 
@@ -114,13 +118,68 @@ void test_plain_analog_knob_center_offset() {
   k->setCenterOffsetY(36);
   CHECK(near(static_cast<float>(k->center().y), 36.f) && near(static_cast<float>(k->center().x), 32.f));
 }
+
+// Draws the knob into an offscreen bitmap of 120 x 120 and returns it.
+SharedPointer<CBitmap> snapKnob(RackKnob* k) {
+  auto ctx = COffscreenContext::create(CPoint(120, 120), 1.0);
+  if (!ctx) return nullptr;
+  ctx->beginDraw();
+  ctx->setFillColor(CColor(10, 20, 30, 255));
+  ctx->drawRect(CRect(0, 0, 120, 120), kDrawFilled);
+  k->draw(ctx);
+  ctx->endDraw();
+  return SharedPointer<CBitmap>(ctx->getBitmap());
+}
+
+// draw() puts the cap at center(): a knob with offset 38 in a view 8 px higher draws the same cap, pixel for pixel, as the
+// default-offset knob whose cap centre is at the same absolute point; and the cap really is at that point.
+void test_draw_follows_center_offset() {
+  auto a = owned(new RackKnob(CRect(10, 10, 86, 106), nullptr, 1, 34));        // centre (48, 40) with the default 30
+  auto b = owned(new RackKnob(CRect(10, 2, 86, 98), nullptr, 1, 34));          // centre (48, 40) with 38
+  b->setCenterOffsetY(38);
+  CHECK(near(static_cast<float>(a->center().y), static_cast<float>(b->center().y)));
+  auto ia = snapKnob(a), ib = snapKnob(b);
+  CHECK(ia && ib);
+  if (!ia || !ib) return;
+  auto pa = owned(CBitmapPixelAccess::create(ia)), pb = owned(CBitmapPixelAccess::create(ib));
+  CHECK(pa && pb);
+  if (!pa || !pb) return;
+  int diff = 0, capPixels = 0;
+  for (uint32_t y = 0; y < 120; ++y)
+    for (uint32_t x = 0; x < 120; ++x) {
+      pa->setPosition(x, y); pb->setPosition(x, y);
+      CColor ca, cb;
+      pa->getColor(ca); pb->getColor(cb);
+      if (ca != cb) ++diff;
+      if (ca != CColor(10, 20, 30, 255)) ++capPixels;
+    }
+  CHECK(diff == 0);
+  CHECK(capPixels > 3000);   // something was drawn: a cap of radius 34 is about 3600 px
+  // the centre pixel is cap, the pixel just outside the skirt (37) above it is background
+  CColor c, o;
+  pb->setPosition(48, 40); pb->getColor(c);
+  pb->setPosition(48, 40 - 40); pb->getColor(o);
+  CHECK(c != CColor(10, 20, 30, 255) && o == CColor(10, 20, 30, 255));
+}
+
+void test_center_offset_ignores_non_finite() {
+  auto k = owned(new RackKnob(CRect(0, 0, 76, 96), nullptr, 1, 34));
+  k->setCenterOffsetY(38);
+  k->setCenterOffsetY(std::nan(""));
+  CHECK(k->centerOffsetY() == 38);
+  k->setCenterOffsetY(HUGE_VAL);
+  CHECK(k->centerOffsetY() == 38);
+}
 } // namespace
 
 int main() {
+  VSTGUI::init(nullptr);   // platform factory, for the offscreen drawing test
   test_cycle_steps_and_wraps();
   test_default_center_offset_is_unchanged();
   test_custom_center_offset_moves_everything();
   test_plain_analog_knob_center_offset();
+  test_draw_follows_center_offset();
+  test_center_offset_ignores_non_finite();
   std::puts("knob gesture tests");
   test_double_click_goes_to_default();
   test_alt_double_click_goes_to_target();

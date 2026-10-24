@@ -7,6 +7,7 @@
 #include "vstgui/lib/controls/ccontrol.h"
 #include "vstgui/lib/controls/icontrollistener.h"
 
+#include <cmath>
 #include <functional>
 #include <string>
 #include <vector>
@@ -53,7 +54,12 @@ public:
   // Where the knob centre sits below the top of the view (default kCenterOffsetY). A bigger cap needs a taller view above
   // the centre: the caller picks the view rect and the offset together. center(), the drawing and (in RackKnob) the value
   // area all follow this value.
-  void setCenterOffsetY(VSTGUI::CCoord offset) { centerOffsetY_ = offset; invalid(); }
+  // Expected range: 0 .. view height. A non-finite value is ignored (the previous offset stays).
+  void setCenterOffsetY(VSTGUI::CCoord offset) {
+    if (!std::isfinite(offset)) return;
+    centerOffsetY_ = offset;
+    invalid();
+  }
   VSTGUI::CCoord centerOffsetY() const { return centerOffsetY_; }
   VSTGUI::CPoint center() const;   // the knob centre in the parent's coordinates
   // Alt (or Ctrl/Cmd) + double click goes here instead of to the default value: return true and set `value` (0..1)
