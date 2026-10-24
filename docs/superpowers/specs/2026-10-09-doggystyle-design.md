@@ -98,3 +98,7 @@ Il modello NAM si carica come nello Stripper (spec dello Stripper §3), ma senza
 - GUI custom.
 - Sidechain esterno.
 - Motori Opto, VCA e Bus dello Stripper.
+
+## 10. Decisioni aperte
+
+- **SET per la release (proposto 2026-10-24, da decidere):** lo schema comune di `docs/DESIGN_SYSTEM.md` ("Taratura guidata della release") applicato ai due rami: SET fa sentire solo il ramo che si sta tarando (Slap o Thump), lo schiaccia e blocca tutto tranne la sua Release. Da decidere se un SET per ramo o uno solo con la scelta del ramo.

@@ -1,7 +1,7 @@
 # Happy Ending — Design
 
 **Data:** 2026-10-21
-**Stato:** bozza per revisione (brainstorming dal 2026-10-15)
+**Stato:** decisioni chiuse il 2026-10-24, in revisione prima del piano (brainstorming dal 2026-10-15)
 **Suite:** Fairy Tapes (catena di mastering "tutto dentro")
 **Nome:** Happy Ending (deciso il 2026-10-21); cartella `src/happy-ending/`, bundle `HappyEnding.vst3`
 **Preview:** `src/happy-ending/docs/mockups/happy_ending_rack.html` (anche nella pagina `docs/mockups/index.html`)
@@ -26,14 +26,14 @@ Successo: su un mix finito, con pochi gesti (un ritocco di EQ, un po' di colla, 
 - **LEVEL:**
   - meter di picco IN e OUT stereo (stessa scala e colori di The Stripper);
   - blocco **GR** con cinque righe ambra, 0-12 dB, rosse in cima: **G** glue, **C** clip, **L** limit, **F** final, **M** metalhead; ogni riga si attenua con l'IN del suo stadio e con il BYPASS;
-  - **LED di clip per modulo**, in ordine di segnale: IN, FEQ, VEQ, GLU, CLP, LIM, FIN, MTL, OUT (sigle provvisorie); un clic su uno li azzera tutti; quelli degli stadi si attenuano con il BYPASS e con il loro IN;
+  - **LED di clip per modulo**, in ordine di segnale: IN, FEQ, VEQ, GLU, CLP, LIM, FIN, MTL, OUT (sigle confermate, §7); un clic su uno li azzera tutti; quelli degli stadi si attenuano con il BYPASS e con il loro IN;
   - lettura **LUFS** su uno schermo piccolo accanto ai LED: short-term, integrata (clic per azzerare) e **TO TARGET** (scarto dal target, LED verde entro ±0,5 LU); la riga dei LED di clip continua sotto lo schermo.
 - **LOUDNESS** (blocco tra LEVEL e OUTPUT, deciso 2026-10-21): manopola LOUDNESS 0-10 a passi di 0,5; **MATCH** (azione, in alto a destra); **TARGET** −14 / −11 / −9 / −7 LUFS (selettore a ciclo, in basso a destra). Sta tra LEVEL e OUTPUT perché legge i LUFS accanto e agisce sugli ultimi stadi prima dell'uscita. INPUT e OUTPUT sono più stretti per farle posto.
 - **OUTPUT:** GAIN ±12 dB, **BYPASS** (attenua e blocca tutto tranne meter e LUFS; uscita = ingresso), **CEIL**: ceiling d'uscita unico −0,1 / −0,3 / −0,5 / −1,0 dB (default −0,3), selettore a clic con LED giallo e valore scritto sotto. Vale per LIMIT, FINAL (clip e inflate) e METALHEAD.
 
 ## 4. Schermo condiviso
 
-Un solo schermo in un riquadro senza titolo, sopra il FINE EQ, con a destra una colonna di pulsanti a faccia accesa **EQ · GLUE · CLIP · LIMIT · FINAL**:
+Un solo schermo in un riquadro senza titolo, accanto al FINE EQ, con a destra una colonna di pulsanti a faccia accesa **EQ · GLUE · CLIP · LIMIT · FINAL**:
 
 - **EQ:** curve del FINE EQ (una curva STEREO, oppure MID e SIDE appena una banda lavora in M/S) e curva del VIBE EQ in ambra (tratteggiata l'impostazione statica quando il DYN ritira un boost); durante LISTEN la zona ascoltata.
 - **GLUE / LIMIT:** livello, gain reduction e soglia (GLUE, più la riduzione netta dopo il MIX) o ceiling (LIMIT), che scorrono.
@@ -71,7 +71,7 @@ Gli schermi propri di VIBE, GLUE, CLIP, LIMIT e FINAL sono stati tolti: le loro 
 
 - **DSP:** `MultiCompBus` (stile SSL G, da Multi-Comp di Dusk Audio), già portato senza JUCE in The Stripper; in parallelo.
 - **Comandi:** THRESH −20…0 dB (1 dB), ATTACK 0,1 / 0,3 / 1 / 3 / 10 / 30 ms, RELEASE 0,1 / 0,3 / 0,6 / 1,2 s / Auto, MAKEUP 0…+6 dB (0,5), **MIX** 0-100 % a passi di 5 (default 50 %); selettori a clic **RATIO** 1,5 / 2 / 4 (default 2:1) e **SC HPF** Off / 60 / 90 / 150 Hz (default 60); **WARM** (attacco ammorbidito); IN.
-- Provvisorio: da rivedere alla fine con tutta la catena davanti.
+- Parametri congelati il 2026-10-24 (servono per fissare gli ID); il suono si rivede a orecchio con tutta la catena nel compito di taratura (§9).
 
 ### 5.4 CLIP
 
@@ -94,25 +94,26 @@ Gli schermi propri di VIBE, GLUE, CLIP, LIMIT e FINAL sono stati tolti: le loro 
 
 ### 5.7 METALHEAD
 
-- Stadio facoltativo, **spento di default**: limiter digitale brickwall dopo il FINAL, per la loudness estrema. Spento: riquadro attenuato e bloccato tranne l'IN.
+- Nome confermato il 2026-10-24. Stadio facoltativo, **spento di default**: limiter digitale brickwall dopo il FINAL, per la loudness estrema. Spento: riquadro attenuato e bloccato tranne l'IN.
 - **PUSH** 0…+6 dB contro il ceiling d'uscita. Serigrafia "SHAME ON YOU" nell'angolo, con il carattere delle sigle.
 
 ## 6. Automatismi
 
-- **Macro LOUDNESS (decisa 2026-10-15):** una manopola distribuisce la spinta tra CLIP, LIMIT e FINAL tenendo ciascuno nella sua zona buona (circa 1,5 dB di clip, 2-3 dB di limiter, fino a +2 del FINAL). Come si combina con i comandi singoli è aperto (§11).
+- **Macro LOUDNESS (decisa 2026-10-15; rapporto con i comandi deciso 2026-10-24):** una manopola aggiunge spinta **sopra** le regolazioni degli stadi, con una curva fissa: prima CLIP (fino a +1,5 dB di drive), poi LIMIT (soglia fino a −3 dB, cioè 2-3 dB di riduzione), infine FINAL (EFFECT o DRIVE in più, sempre sotto il ceiling). Le manopole degli stadi non si muovono e fissano il punto di partenza; a LOUDNESS 0 il suono è esattamente quello delle regolazioni. Quanto lavora ogni stadio si legge nelle righe GR. Distribuzione legata allo stile o manopola CHARACTER: scartate per ora, si possono aggiungere sopra questo schema.
 - **Target LUFS con MATCH (deciso 2026-10-15):** scelta del target (−14, −11, −9, −7 LUFS); il pannello indica lo scarto; il tasto MATCH, premuto sulla parte più forte del brano, porta una sola volta la LOUDNESS al valore che centra il target, poi resta ferma.
 - Scartati: livello compensato in ogni stadio (MAKEUP resta nel GLUE), LEARN sull'INPUT.
 
 ## 7. Grafica
 
 - Regole comuni di `docs/DESIGN_SYSTEM.md`: titoli dei riquadri sul bordo basso, IN nell'angolo in alto a destra, selettori di modo in basso a destra, sigla del motore esterno in alto a sinistra, tre tipi di pulsante (scelte esclusive a faccia accesa ambra; acceso/spento con LED rosso; selettori a ciclo con LED giallo e valore sotto), retro con il template di The Stripper.
-- **Sigle dei blocchi (provvisorie):** FINE EQ `MULTI-Q`, VIBE EQ `TUBE-1A`, GLUE `4K-G`, CLIP `C-SOFTLY`, FINAL `ZL-INFL` / `C-ONLY2`; LIMIT e METALHEAD sono motori nostri e non hanno sigla.
-- **Pannello attuale (2026-10-22):** 1280 × 934, su quattro righe: servizio (INPUT, LEVEL, LOUDNESS, OUTPUT); FINE EQ con lo schermo delle curve accanto (viste EQ, GLUE, CLIP, LIMIT, FINAL); VIBE EQ e GLUE affiancati; CLIP, LIMIT, FINAL e METALHEAD affiancati su tutta la larghezza. Compattato dall'utente riga per riga (prima 1000 × 1256, poi 1280 × 1036); per ora non si riesce a fare di meglio (§11).
+- **Sigle dei blocchi (confermate il 2026-10-24):** FINE EQ `MULTI-Q`, VIBE EQ `TUBE-1A`, GLUE `4K-G`, CLIP `C-SOFTLY`, FINAL `INFL-Z` / `C-ONLY2`; LIMIT e METALHEAD sono motori nostri e non hanno sigla. Sigle dei LED di clip confermate: IN, FEQ, VEQ, GLU, CLP, LIM, FIN, MTL, OUT.
+- **Pannello (deciso 2026-10-24):** **1280 × 890**, su quattro righe: servizio (INPUT, LEVEL, LOUDNESS, OUTPUT); FINE EQ con lo schermo delle curve accanto (viste EQ, GLUE, CLIP, LIMIT, FINAL); VIBE EQ e GLUE affiancati; CLIP, LIMIT, FINAL e METALHEAD affiancati su tutta la larghezza. Compattato dall'utente riga per riga (prima 1000 × 1256, poi 1280 × 1036, 934). Su 1080p al 100 % sta con circa 100 px di margine; per gli schermi piccoli c'è **SIZE** nel retro (75 / 90 / 100 / 125 %, comune a tutti i plugin, `docs/DESIGN_SYSTEM.md`).
+- **Tutti i comandi sul pannello (deciso 2026-10-24):** il principio a due livelli (davanti i comandi musicali, il resto in un dettaglio a un clic) è stato provato in uno schizzo (1280 × 772) e scartato: nasconde le frequenze del FINE EQ, toglie la vista d'insieme della catena e guadagna meno di SIZE.
 - **FINE EQ:** bande su una fila come in The Stripper, con le manopole alternate su due quote per incastrare le bande vicine: HI PASS una manopola; LOW SHELF e HI SHELF con FREQ e GAIN in diagonale (LOW SHELF: GAIN in alto, FREQ in basso; HI SHELF al contrario); LO MID e HI MID ribaltate (Q in alto al centro, FREQ e GAIN sotto); MID con FREQ e GAIN in alto e Q sotto. Etichette abbreviate: HI PASS, LOW SHELF, LO MID, MID, HI MID, HI SHELF.
 - **GLUE:** IN da solo in alto a destra; WARM, RATIO e SC HPF in fila in basso a destra, a partire dalla colonna dell'IN.
 - **LIMIT:** THRESH e RELEASE a sinistra, SET sulla diagonale in alto a destra di RELEASE, IN in alto a destra, stili MODERN / PUNCH / DYN in colonna tra SET e IN, centrati anche in altezza. **FINAL:** EFFECT e CURVE (o DRIVE) a sinistra, INFLATE / CLIP tra le manopole e IN, centrati in altezza. **CLIP:** la scritta "level matched" sta sotto l'IN, su due righe.
 - **Valori, usura e viti come negli altri plugin:** valori in TAPE FONT (selezionabile dal retro), graffi, macchie, residui, nastro scrivibile e viti girevoli da un seme per istanza; usura sopra serigrafia e valori, sotto manopole, pulsanti e LED.
-- **Retro:** SETTINGS (Appearance comune; Behaviour per ora vuota), BUTTONS (spiega BYPASS, IN, M/S, LISTEN, DYN, viste, RATIO/SC HPF, WARM, stili, SET, CEILING, INFLATE/CLIP, METALHEAD), CREDITS.
+- **Retro:** SETTINGS (Appearance comune, con SIZE; Behaviour con **OVERSAMPLING**, §9), BUTTONS (spiega BYPASS, IN, M/S, LISTEN, DYN, viste, RATIO/SC HPF, WARM, stili, SET, CEILING, INFLATE/CLIP, METALHEAD), CREDITS.
 - **Scheda ROUTING (regola comune del 2026-10-23, fatta nella preview):** schema a blocchi fisso nello stile dei manuali dell'outboard (simboli del `DESIGN_SYSTEM.md`), link tra BUTTONS e CREDITS. Riga 1: INPUT → FINE EQ (codifica M/S, percorsi M e S, decodifica) → VIBE EQ (rilevatore DYN tratteggiato su LOW e AIR) → GLUE in parallelo (percorso DRY, nodo MIX, SC HPF sul rilevatore); riga 2: CLIP → LIMIT → FINAL (INFLATE o CLIP in parallelo con selettore) → METALHEAD (IN disegnato spento, come di default) → OUTPUT → BYPASS globale. Linee di controllo tratteggiate: CEILING verso LIMIT, FINAL e METALHEAD; macro LOUDNESS verso CLIP, LIMIT e FINAL; MATCH dal meter LUFS alla LOUDNESS. Punti di misura: meter IN e OUT, righe GR e LED di clip di ogni stadio.
 - Testo dell'editor in inglese.
 
@@ -132,7 +133,9 @@ Licenze da ricontrollare sui file `LICENSE` prima del rilascio. ZL Equalizer è 
 ## 9. Stato, latenza, robustezza
 
 - **Non salvati nello stato:** LISTEN e SET (sempre spenti all'apertura del progetto e alla chiusura dell'editor).
-- **Latenza:** FINE EQ, VIBE, GLUE, CLIP a latenza zero; il look-ahead del LIMIT (e del METALHEAD, se lo usa) va dichiarato all'host e resta costante cambiando stile.
+- **Latenza:** FINE EQ e GLUE a latenza zero; il look-ahead del LIMIT (e del METALHEAD, se lo usa) va dichiarato all'host e resta costante cambiando stile.
+- **Oversampling (deciso 2026-10-24):** impostazione **OVERSAMPLING** in BEHAVIOUR (salvata nel progetto): Off / 2× / 4×, default 2×; vale solo per gli stadi non lineari (CLIP, TUBE del VIBE EQ, FINAL, METALHEAD). Filtri a fase lineare; la latenza aggiunta si somma a quella del LIMIT, è dichiarata all'host e cambia solo cambiando l'impostazione.
+- **Valori da tarare a orecchio (deciso 2026-10-24):** soglie e tempi del DYN del VIBE, basi di release degli stili, soglia forzata di SET, curva della LOUDNESS. Si parte dai valori della preview, raccolti in un'unica tabella nel codice; il piano ha un compito di taratura con una build di prova, che comprende anche l'ascolto finale di FINE EQ e GLUE con tutta la catena.
 - Parametri con ID fissati da subito e tabella congelata come The Stripper; ordine e default nel piano.
 
 ## 10. Test
@@ -148,13 +151,7 @@ Scritti prima del codice, devono prima fallire:
 
 ## 11. Decisioni aperte
 
-- **Principio a due livelli** (davanti i comandi musicali, il dettaglio a un clic) e layout "panoramica più dettaglio": proposto, non deciso; oggi tutti i comandi stanno sul pannello.
-- **Macro LOUDNESS e comandi singoli:** lo stile decide anche la distribuzione / una manopola CHARACTER tra clip e limiter / ritocchi ± nel dettaglio di ogni stadio. Nella preview la LOUDNESS sposta le manopole dei tre stadi (solo per vederne l'effetto).
-- **Dimensioni del pannello:** 1280 × 934 dopo le compattazioni del 2026-10-22 (prima 1000 × 1256); su uno schermo 1080p a 1:1 sta a fatica con la barra dell'host. Da decidere se basta o se serve una scala (circa 90 %) o il principio a due livelli.
-- **Oversampling** per CLIP, FINAL e TUBE (aliasing delle armoniche): da decidere.
-- **Valori da tarare a orecchio:** soglie e tempi del DYN del VIBE, basi di release degli stili, soglia forzata di SET.
-- **Revisione finale** degli stadi con tutta la catena davanti, in particolare FINE EQ (l'utente vuole tornarci) e GLUE.
-- Sigle dei blocchi e dei LED di clip, conferma del nome METALHEAD.
+Nessuna decisione di progetto aperta (chiuse il 2026-10-24: LOUDNESS sopra i comandi §6, oversampling §9, valori da tarare §9, parametri di FINE EQ e GLUE congelati §5, sigle §7, nome METALHEAD §5.7, dimensioni del pannello e principio a due livelli §7). Restano compiti di implementazione: taratura a orecchio (§9) e verifica delle licenze sui file `LICENSE` prima del rilascio (§8).
 
 ## 12. Storia del brainstorming
 
