@@ -10,6 +10,8 @@
 #include "dsp/blockparty.h"
 #include "dsp/denoise.h"
 #include "nam_drive.h"
+#include "dsp/tape_saturation.h"
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -847,6 +849,190 @@ void test_namdrive_coloration_at_zero_drive() {
 }
 
 // ---------------------------------------------------------------------------
+// 12c. Tape stage DSP (Airwindows Tape port, one-knob macro, voicing, auto-compensation)
+// ---------------------------------------------------------------------------
+
+double bufferRms(const std::vector<float>& buf, size_t from = 0) {
+  double acc = 0.0;
+  for (size_t i = from; i < buf.size(); ++i)
+    acc += static_cast<double>(buf[i]) * buf[i];
+  return std::sqrt(acc / static_cast<double>(buf.size() - from));
+}
+
+// Runs a stereo sine through the tape in blocks; returns the left channel output.
+std::vector<float> runTapeSine(DSP::TapeSaturation& tape, float amplitude, float freq,
+                               int numBlocks, int blockSize = 512, double sr = 48000.0) {
+  std::vector<float> out;
+  std::vector<float> left(blockSize), right(blockSize);
+  for (int b = 0; b < numBlocks; ++b) {
+    for (int i = 0; i < blockSize; ++i) {
+      const double t = static_cast<double>(b * blockSize + i) / sr;
+      left[i] = right[i] = amplitude * static_cast<float>(std::sin(2.0 * 3.14159265358979 * freq * t));
+    }
+    tape.process(left.data(), right.data(), blockSize);
+    out.insert(out.end(), left.begin(), left.end());
+  }
+  return out;
+}
+
+void test_tape_macro_slam_range() {
+  using V = DSP::TapeSaturation::Voicing;
+  ASSERT_APPROX(DSP::TapeSaturation::slamDb(0.0f, V::Tracking), 0.0);
+  ASSERT_APPROX(DSP::TapeSaturation::slamDb(0.0f, V::Mixdown), 0.0);
+  ASSERT_APPROX(DSP::TapeSaturation::slamDb(1.0f, V::Tracking), 12.0);
+  // Mixdown is gentler than tracking at the same knob position.
+  ASSERT_TRUE(DSP::TapeSaturation::slamDb(1.0f, V::Mixdown) < DSP::TapeSaturation::slamDb(1.0f, V::Tracking));
+  ASSERT_TRUE(DSP::TapeSaturation::slamDb(1.0f, V::Mixdown) > 0.0f);
+}
+
+void test_tape_macro_bump_monotonic() {
+  using V = DSP::TapeSaturation::Voicing;
+  for (V v : {V::Tracking, V::Mixdown}) {
+    float prev = -1.0f;
+    for (float a = 0.0f; a <= 1.0001f; a += 0.1f) {
+      const float b = DSP::TapeSaturation::bump(a, v);
+      ASSERT_TRUE(b > prev);
+      ASSERT_TRUE(b >= 0.0f && b <= 1.0f);
+      prev = b;
+    }
+  }
+  ASSERT_TRUE(DSP::TapeSaturation::bump(1.0f, V::Mixdown) < DSP::TapeSaturation::bump(1.0f, V::Tracking));
+}
+
+// Low-end lift (head bump) relative to 1 kHz, measured with a two-tone signal at -20 dBFS per tone.
+double tapeLowLiftDb(float amount, DSP::TapeSaturation::Voicing v) {
+  DSP::TapeSaturation tape;
+  tape.setSampleRate(48000.0);
+  tape.setParams(amount, v);
+  constexpr int N = 512;
+  constexpr int blocks = 200;
+  std::vector<float> left(N), right(N), out;
+  for (int b = 0; b < blocks; ++b) {
+    for (int i = 0; i < N; ++i) {
+      const double t = static_cast<double>(b * N + i) / 48000.0;
+      left[i] = right[i] = static_cast<float>(0.1 * std::sin(2.0 * 3.14159265358979 * 40.0 * t) +
+                                              0.1 * std::sin(2.0 * 3.14159265358979 * 1000.0 * t));
+    }
+    tape.process(left.data(), right.data(), N);
+    if (b >= blocks - 75)
+      out.insert(out.end(), left.begin(), left.end());
+  }
+  auto mag = [&out](double f) {
+    double re = 0.0, im = 0.0;
+    for (size_t i = 0; i < out.size(); ++i) {
+      const double ph = 2.0 * 3.14159265358979 * f * static_cast<double>(i) / 48000.0;
+      re += out[i] * std::cos(ph);
+      im += out[i] * std::sin(ph);
+    }
+    return std::sqrt(re * re + im * im);
+  };
+  return 20.0 * std::log10(mag(40.0) / mag(1000.0));
+}
+
+void test_tape_head_bump_grows_with_amount() {
+  using V = DSP::TapeSaturation::Voicing;
+  for (V v : {V::Tracking, V::Mixdown}) {
+    const double lo = tapeLowLiftDb(0.0f, v);
+    const double hi = tapeLowLiftDb(1.0f, v);
+    ASSERT_TRUE(lo > 0.0);
+    ASSERT_TRUE(hi > lo + 0.25);
+  }
+  // Tracking has the fatter low end at full amount.
+  ASSERT_TRUE(tapeLowLiftDb(1.0f, V::Tracking) > tapeLowLiftDb(1.0f, V::Mixdown));
+}
+
+void test_tape_near_unity_at_zero_amount() {
+  DSP::TapeSaturation tape;
+  tape.setSampleRate(48000.0);
+  tape.setParams(0.0f, DSP::TapeSaturation::Voicing::Tracking);
+  const std::vector<float> out = runTapeSine(tape, 0.25f, 1000.0f, 40);
+  const double in_rms = 0.25 / std::sqrt(2.0);
+  const double db = 20.0 * std::log10(bufferRms(out, out.size() / 2) / in_rms);
+  ASSERT_APPROX_EPS(db, 0.0, 1.0);
+}
+
+void test_tape_auto_compensation_holds_level() {
+  using V = DSP::TapeSaturation::Voicing;
+  for (V v : {V::Tracking, V::Mixdown}) {
+    DSP::TapeSaturation tape;
+    tape.setSampleRate(48000.0);
+    tape.setParams(1.0f, v);
+    const std::vector<float> out = runTapeSine(tape, 0.25f, 1000.0f, 60);
+    const double in_rms = 0.25 / std::sqrt(2.0);
+    const double db = 20.0 * std::log10(bufferRms(out, out.size() / 2) / in_rms);
+    ASSERT_APPROX_EPS(db, 0.0, 1.5);
+  }
+}
+
+void test_tape_colors_signal_at_full_amount() {
+  DSP::TapeSaturation tape;
+  tape.setSampleRate(48000.0);
+  tape.setParams(1.0f, DSP::TapeSaturation::Voicing::Tracking);
+  const float amp = 0.5f;
+  const std::vector<float> out = runTapeSine(tape, amp, 1000.0f, 40);
+  // Saturation reshapes the waveform: crest factor drops below a pure sine's sqrt(2).
+  const size_t from = out.size() / 2;
+  float peak = 0.0f;
+  for (size_t i = from; i < out.size(); ++i)
+    peak = std::max(peak, std::fabs(out[i]));
+  const double crest = peak / bufferRms(out, from);
+  ASSERT_TRUE(crest < std::sqrt(2.0) - 0.02);
+}
+
+void test_tape_voicings_differ() {
+  DSP::TapeSaturation tracking, mixdown;
+  tracking.setSampleRate(48000.0);
+  mixdown.setSampleRate(48000.0);
+  tracking.setParams(0.8f, DSP::TapeSaturation::Voicing::Tracking);
+  mixdown.setParams(0.8f, DSP::TapeSaturation::Voicing::Mixdown);
+  const std::vector<float> a = runTapeSine(tracking, 0.5f, 60.0f, 20);
+  const std::vector<float> b = runTapeSine(mixdown, 0.5f, 60.0f, 20);
+  double diff = 0.0;
+  for (size_t i = 0; i < a.size(); ++i)
+    diff = std::max(diff, static_cast<double>(std::fabs(a[i] - b[i])));
+  ASSERT_TRUE(diff > 1e-3);
+}
+
+void test_tape_no_nan_inf_hot_input() {
+  DSP::TapeSaturation tape;
+  tape.setSampleRate(96000.0);
+  tape.setParams(1.0f, DSP::TapeSaturation::Voicing::Tracking);
+  const std::vector<float> out = runTapeSine(tape, 4.0f, 100.0f, 20, 333, 96000.0);
+  for (float s : out) {
+    ASSERT_TRUE(std::isfinite(s));
+    ASSERT_TRUE(std::fabs(s) < 8.0f);
+  }
+}
+
+void test_tape_reset_clears_state() {
+  DSP::TapeSaturation tape;
+  tape.setSampleRate(48000.0);
+  tape.setParams(1.0f, DSP::TapeSaturation::Voicing::Tracking);
+  runTapeSine(tape, 0.8f, 50.0f, 10);
+  tape.reset();
+  constexpr int N = 512;
+  std::vector<float> left(N, 0.0f), right(N, 0.0f);
+  tape.process(left.data(), right.data(), N);
+  for (int i = 0; i < N; ++i) {
+    ASSERT_TRUE(std::fabs(left[i]) < 1e-6f);
+    ASSERT_TRUE(std::fabs(right[i]) < 1e-6f);
+  }
+}
+
+void test_tape_keeps_stereo() {
+  DSP::TapeSaturation tape;
+  tape.setSampleRate(48000.0);
+  tape.setParams(0.5f, DSP::TapeSaturation::Voicing::Mixdown);
+  constexpr int N = 512;
+  std::vector<float> left(N), right(N, 0.0f);
+  for (int i = 0; i < N; ++i)
+    left[i] = 0.3f * static_cast<float>(std::sin(2.0 * 3.14159265358979 * 440.0 * i / 48000.0));
+  tape.process(left.data(), right.data(), N);
+  for (int i = 0; i < N; ++i)
+    ASSERT_TRUE(std::fabs(right[i]) < 1e-6f);
+}
+
+// ---------------------------------------------------------------------------
 // 13. Default param values sanity
 // ---------------------------------------------------------------------------
 
@@ -947,6 +1133,18 @@ int main() {
   RUN_TEST(test_namdrive_no_nan_inf);
   RUN_TEST(test_namdrive_auto_compensation_rms);
   RUN_TEST(test_namdrive_coloration_at_zero_drive);
+
+  // Tape stage DSP
+  RUN_TEST(test_tape_macro_slam_range);
+  RUN_TEST(test_tape_macro_bump_monotonic);
+  RUN_TEST(test_tape_head_bump_grows_with_amount);
+  RUN_TEST(test_tape_near_unity_at_zero_amount);
+  RUN_TEST(test_tape_auto_compensation_holds_level);
+  RUN_TEST(test_tape_colors_signal_at_full_amount);
+  RUN_TEST(test_tape_voicings_differ);
+  RUN_TEST(test_tape_no_nan_inf_hot_input);
+  RUN_TEST(test_tape_reset_clears_state);
+  RUN_TEST(test_tape_keeps_stereo);
 
   // Defaults
   RUN_TEST(test_default_values_in_range);
