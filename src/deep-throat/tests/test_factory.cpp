@@ -3,13 +3,16 @@
  * dlopens the built module from dist/ and drives it the way the SDK hosting code
  * does: ModuleEntry, GetPluginFactory (owned reference), class info, createInstance,
  * release of every reference, ModuleExit. Exits 77 (skipped) when the module is absent.
- * The controller is initialized and queried for its 25 automatable parameters plus the hidden display ones (no editor view yet) and
+ * The controller is initialized and queried for its 25 automatable parameters plus the hidden display ones and
  * typed values are parsed back; the processor is set up, activated and run (latency, bus
  * layouts, in-place stereo processing, mono -> mono processing compared with the engine's mono path,
- * mono bypass delay).
+ * mono bypass delay). The editor view is created and released 50 times without attaching it to a window (no display
+ * server needed): size, size constraint, content scale and IPlugView reference counting.
  */
 
 #include "pluginterfaces/base/ipluginbase.h"
+#include "pluginterfaces/gui/iplugview.h"
+#include "pluginterfaces/gui/iplugviewcontentscalesupport.h"
 #include "pluginterfaces/vst/ivsteditcontroller.h"
 #include "pluginterfaces/vst/ivstaudioprocessor.h"
 #include "pluginterfaces/vst/ivstcomponent.h"
@@ -32,6 +35,9 @@ namespace Steinberg::Vst {
 DEF_CLASS_IID(IEditController)
 DEF_CLASS_IID(IComponent)
 DEF_CLASS_IID(IAudioProcessor)
+}
+namespace Steinberg {
+DEF_CLASS_IID(IPlugViewContentScaleSupport)
 }
 
 namespace {
@@ -398,6 +404,47 @@ using EntryFn = bool (*)(void*);
 using ExitFn = bool (*)();
 using FactoryFn = Steinberg::IPluginFactory* (*)();
 
+// createView: the editor for ViewType::kEditor (1000 x 614 logical, scaled by the content scale factor), nullptr for
+// any other name; created and released 50 times, each view freed by the host's release (count back to 0).
+void test_create_view_returns_editor(Steinberg::Vst::IEditController* ctl) {
+  CHECK(ctl->createView("no-such-view") == nullptr);
+  CHECK(ctl->createView(nullptr) == nullptr);
+  for (int i = 0; i < 50; ++i) {
+    Steinberg::IPlugView* view = ctl->createView(Steinberg::Vst::ViewType::kEditor);
+    CHECK(view != nullptr);
+    if (!view) break;
+    Steinberg::ViewRect r{};
+    CHECK(view->getSize(&r) == Steinberg::kResultOk);
+    CHECK(r.getWidth() == 1000 && r.getHeight() == 614);
+    Steinberg::ViewRect asked(0, 0, 900, 300);
+    CHECK(view->checkSizeConstraint(&asked) == Steinberg::kResultTrue);
+    CHECK(asked.getWidth() == 1000 && asked.getHeight() == 614);
+    CHECK(view->canResize() == Steinberg::kResultFalse);
+#if !defined(__APPLE__)
+    CHECK(view->isPlatformTypeSupported(Steinberg::kPlatformTypeX11EmbedWindowID) == Steinberg::kResultTrue);
+    CHECK(view->isPlatformTypeSupported(Steinberg::kPlatformTypeWaylandSurfaceID) != Steinberg::kResultTrue);
+#endif
+    if (i == 0) {  // content scale before attach: getSize and the size constraint follow it
+      Steinberg::IPlugViewContentScaleSupport* scale = nullptr;
+      CHECK(view->queryInterface(Steinberg::IPlugViewContentScaleSupport::iid, (void**)&scale) == Steinberg::kResultOk);
+      if (scale) {
+        CHECK(scale->setContentScaleFactor(2.0f) == Steinberg::kResultTrue);
+        Steinberg::ViewRect s{};
+        CHECK(view->getSize(&s) == Steinberg::kResultOk);
+        CHECK(s.getWidth() == 2000 && s.getHeight() == 1228);
+        Steinberg::ViewRect c(0, 0, 100, 100);
+        CHECK(view->checkSizeConstraint(&c) == Steinberg::kResultTrue);
+        CHECK(c.getWidth() == 2000 && c.getHeight() == 1228);
+        CHECK(scale->setContentScaleFactor(-1.0f) == Steinberg::kResultTrue);  // sanitized to 1
+        CHECK(view->getSize(&s) == Steinberg::kResultOk);
+        CHECK(s.getWidth() == 1000 && s.getHeight() == 614);
+        CHECK(scale->release() == 1);  // the view keeps the host's reference
+      }
+    }
+    CHECK(view->release() == 0);  // the host owned the only reference: the view is gone
+  }
+}
+
 void exerciseFactory(FactoryFn getFactory) {
   Steinberg::IPluginFactory* f = getFactory();
   CHECK(f != nullptr);
@@ -458,7 +505,7 @@ void exerciseFactory(FactoryFn getFactory) {
             CHECK((pi.flags & Steinberg::Vst::ParameterInfo::kIsReadOnly) == 0);
           }
           exerciseController(ctl);
-          CHECK(ctl->createView(Steinberg::Vst::ViewType::kEditor) == nullptr);  // no editor yet
+          test_create_view_returns_editor(ctl);
           CHECK(ctl->terminate() == Steinberg::kResultOk);
           ctl->release();
         }
