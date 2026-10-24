@@ -36,6 +36,8 @@ struct LimiterSettings {
   int releaseTrimIndex = 4;    // 0..8: 4 = as the style wants, 2^((index - 4) / 3) around it
   float ceilingDb = -0.3f;     // OUTPUT CEIL
   bool set = false;            // guided release setting: threshold forced to Tuning::kSetThresholdDb
+
+  bool operator==(const LimiterSettings&) const = default;
 };
 
 class Limiter {

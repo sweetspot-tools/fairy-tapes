@@ -119,3 +119,23 @@ target_include_directories(happy_ending_loudness_macro_tests PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 add_test(NAME happy_ending_loudness_macro_tests COMMAND happy_ending_loudness_macro_tests)
+
+add_executable(happy_ending_engine_tests
+  tests/test_engine.cpp
+  src/engine.cpp
+  src/dsp/fine_eq.cpp
+  src/dsp/vibe_eq.cpp
+  src/dsp/glue.cpp
+  src/dsp/oversampler.cpp
+  src/dsp/limiter.cpp
+  src/dsp/metalhead.cpp
+  src/dsp/loudness_meter.cpp
+)
+target_include_directories(happy_ending_engine_tests PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/src
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../shared/inflator
+  ${VST3_SDK_PATH}
+  ${VST3_SDK_PATH}/pluginterfaces/base
+  ${VST3_SDK_PATH}/pluginterfaces/vst
+)
+add_test(NAME happy_ending_engine_tests COMMAND happy_ending_engine_tests)

@@ -33,6 +33,8 @@ struct GlueSettings {
   float mix = 0.5f;        // 0..1
   float scHpfHz = 60.0f;   // 0 = Off
   bool warm = false;
+
+  bool operator==(const GlueSettings&) const = default;
 };
 
 class Glue {
