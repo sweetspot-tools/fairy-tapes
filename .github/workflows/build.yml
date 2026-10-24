@@ -124,3 +124,24 @@ jobs:
         with:
           name: deep-throat-macos
           path: dist/DeepThroat.vst3
+
+      - name: Upload Hotline (Linux)
+        if: matrix.os == 'ubuntu-24.04' && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hotline-linux
+          path: dist/Hotline.vst3
+
+      - name: Upload Hotline (Windows)
+        if: matrix.os == 'windows-latest' && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hotline-windows
+          path: dist/Hotline.vst3
+
+      - name: Upload Hotline (macOS)
+        if: matrix.os == 'macos-latest' && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hotline-macos
+          path: dist/Hotline.vst3

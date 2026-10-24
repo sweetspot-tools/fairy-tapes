@@ -121,14 +121,14 @@ Source code here is free and open source (GPL-3.0); the optional payment is for 
 Push (or PR) to **master** triggers a build on **Linux**, **Windows**, and **macOS**. The workflow:
 
 - Checks out the repo **with submodules** (so `vendors/vst3sdk` is available).
-- Builds the plugins and uploads The Stripper, Pillow Talk and Deep Throat `.vst3` bundles as **artifacts** per platform.
+- Builds the plugins and uploads The Stripper, Pillow Talk, Deep Throat and Hotline `.vst3` bundles as **artifacts** per platform.
 
 **Rough duration (per run):**  
 With submodules, the SDK is fetched at checkout. Build is typically **2–6 min per OS**; total for all three platforms is usually **under 15 minutes**.
 
 **GitHub free tier:** 2000 minutes/month. Linux counts 1×, Windows 2×, macOS 10× per minute. A full three-OS run is well within the free tier.
 
-**Using the builds:** In the Actions run, open the **Summary** → **Artifacts** and download e.g. `the-stripper-windows` or `pillow-talk-windows` for your Windows DAW, or the `-linux` / `-macos` artifacts for the other systems. Unzip if needed and place the `TheStripper.vst3` folder in your host’s VST3 path.
+**Using the builds:** In the Actions run, open the **Summary** → **Artifacts** and download e.g. `the-stripper-windows`, `pillow-talk-windows` or `hotline-windows` for your Windows DAW, or the `-linux` / `-macos` artifacts for the other systems. Unzip if needed and place the `TheStripper.vst3` folder in your host’s VST3 path.
 
 ## Branch strategy
 
