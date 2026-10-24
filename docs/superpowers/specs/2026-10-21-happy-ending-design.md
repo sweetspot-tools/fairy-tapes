@@ -47,7 +47,7 @@ Gli schermi propri di VIBE, GLUE, CLIP, LIMIT e FINAL sono stati tolti: le loro 
 
 - **DSP:** port senza JUCE del Multi-Q di Dusk Audio (struttura delle bande, Q-coupling); coefficienti **matched** (Vicanek) al posto dell'oversampling: **latenza zero**, curve corrette fino a Nyquist, fase minima, nessuna saturazione.
 - **Bande (tutte a scatti):**
-  - HIGH PASS 12 dB/ottava: Off, 20, 25, 30, 40 Hz; quando lavora sul SIDE la scala diventa Off, 60, 80, 120, 160, 200 Hz (mono-bass);
+  - HIGH PASS 12 dB/ottava: Off, 20, 25, 30, 35, 40 Hz (sei posizioni, come la scala del SIDE); quando lavora sul SIDE la scala diventa Off, 60, 80, 120, 160, 200 Hz (mono-bass);
   - LOW SHELF 30, 50, 70, 100, 150, 200, 300 Hz;
   - LOW MID 100-800 Hz, MID 400 Hz-3,15 kHz, HIGH MID 1,6-12,5 kHz (dieci posizioni a terzi d'ottava ciascuna);
   - HIGH SHELF 3, 5, 8, 10, 12, 16, 20 kHz;

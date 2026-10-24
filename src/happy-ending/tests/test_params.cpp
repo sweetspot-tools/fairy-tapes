@@ -101,7 +101,8 @@ void testFrozenOrder() {
 
 void testHpSideScaleSameIndexRange() {
   ASSERT_TRUE(Tables::kHpSideFreqs.size() == 6);
-  ASSERT_TRUE(Tables::kHpFreqs.size() == 5);
+  ASSERT_TRUE(Tables::kHpFreqs.size() == 6);
+  ASSERT_TRUE(kParams[kHpFreq].steps == 6);
   const int maxIdx = static_cast<int>(Tables::kHpFreqs.size()) - 1;
   for (int idx = 0; idx < kParams[kHpFreq].steps; ++idx) {
     const int side = hpIndexForScale(true, idx);
@@ -114,7 +115,10 @@ void testHpSideScaleSameIndexRange() {
   ASSERT_NEAR(hpFreqHz(false, 1), 20.0);
   ASSERT_NEAR(hpFreqHz(true, 0), 0.0);
   ASSERT_NEAR(hpFreqHz(true, 1), 60.0);
-  ASSERT_NEAR(hpFreqHz(true, 99), 160.0);
+  ASSERT_NEAR(hpFreqHz(true, 99), 200.0);
+  ASSERT_NEAR(hpFreqHz(true, 5), 200.0);  // SIDE scale reaches 200 Hz
+  ASSERT_NEAR(hpFreqHz(false, 4), 35.0);
+  ASSERT_NEAR(hpFreqHz(false, 5), 40.0);
 }
 
 void testDefaultValues() {
@@ -134,7 +138,7 @@ void testDefaultValues() {
   ASSERT_NEAR(valueOf(kLmFreq, kParams[kLmFreq].defaultIndex), 250.0);
   ASSERT_NEAR(valueOf(kMidFreq, kParams[kMidFreq].defaultIndex), 1000.0);
   ASSERT_NEAR(valueOf(kHmFreq, kParams[kHmFreq].defaultIndex), 4000.0);
-  ASSERT_NEAR(valueOf(kHsFreq, kParams[kHsFreq].defaultIndex), 10000.0);
+  ASSERT_NEAR(valueOf(kHsFreq, kParams[kHsFreq].defaultIndex), 12000.0);
   ASSERT_NEAR(valueOf(kMidGain, kParams[kMidGain].defaultIndex), 0.0);
   ASSERT_NEAR(valueOf(kMidQ, kParams[kMidQ].defaultIndex), 1.0);  // Medium
   ASSERT_TRUE(kParams[kMidMs].steps == 3 && kParams[kMidMs].defaultIndex == 0);  // ST
@@ -143,6 +147,8 @@ void testDefaultValues() {
   ASSERT_NEAR(valueOf(kAirFreq, kParams[kAirFreq].defaultIndex), 10000.0);
   ASSERT_NEAR(valueOf(kTilt, kParams[kTilt].defaultIndex), 0.0);
   ASSERT_NEAR(valueOf(kTube, kParams[kTube].defaultIndex), 2.0);
+  ASSERT_NEAR(valueOf(kLow, kParams[kLow].defaultIndex), 0.0);
+  ASSERT_NEAR(valueOf(kAir, kParams[kAir].defaultIndex), 0.0);
 
   ASSERT_NEAR(valueOf(kGlueThresh, kParams[kGlueThresh].defaultIndex), -10.0);
   ASSERT_NEAR(valueOf(kGlueAttack, kParams[kGlueAttack].defaultIndex), 3.0);
@@ -183,6 +189,17 @@ void testTableShapes() {
   ASSERT_TRUE(Tables::kScHpfHz.front() == 0.0);      // Off
 }
 
+void testAmountScale() {
+  ASSERT_TRUE(Tables::kAmounts.size() == 11);
+  ASSERT_NEAR(Tables::kAmounts.front(), 0.0);
+  ASSERT_NEAR(Tables::kAmounts.back(), 10.0);
+  ASSERT_NEAR(Tables::kAmounts[7], 7.0);
+  ASSERT_TRUE(kParams[kLow].steps == 11 && kParams[kAir].steps == 11 && kParams[kTube].steps == 11);
+  ASSERT_TRUE(valueTable(kLow).data == Tables::kAmounts.data());
+  ASSERT_TRUE(valueTable(kLoudness).size == 21);
+  ASSERT_TRUE(valueTable(kLoudness).data != Tables::kAmounts.data());
+}
+
 void testTuningTable() {
   ASSERT_NEAR(Tuning::kLimitReleaseBaseMs[0], 50.0);
   ASSERT_NEAR(Tuning::kLimitReleaseBaseMs[1], 100.0);
@@ -208,6 +225,7 @@ int main() {
   RUN_TEST(testHpSideScaleSameIndexRange);
   RUN_TEST(testDefaultValues);
   RUN_TEST(testTableShapes);
+  RUN_TEST(testAmountScale);
   RUN_TEST(testTuningTable);
   std::printf("%d passed, %d failed\n", g_passed, g_failed);
   return g_failed == 0 ? 0 : 1;

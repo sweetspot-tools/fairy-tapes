@@ -96,7 +96,7 @@ constexpr std::array<double, N> linear(double lo, double step) {
 namespace Tables {
 
 // FINE EQ
-inline constexpr std::array<double, 5> kHpFreqs{0, 20, 25, 30, 40};           // 0 = Off
+inline constexpr std::array<double, 6> kHpFreqs{0, 20, 25, 30, 35, 40};       // 0 = Off
 inline constexpr std::array<double, 6> kHpSideFreqs{0, 60, 80, 120, 160, 200}; // mono-bass scale, 0 = Off
 inline constexpr std::array<double, 7> kLowShelfFreqs{30, 50, 70, 100, 150, 200, 300};
 inline constexpr std::array<double, 10> kLoMidFreqs{100, 125, 160, 200, 250, 315, 400, 500, 630, 800};
@@ -107,6 +107,7 @@ inline constexpr auto kEqGains = detail::linear<17>(-4.0, 0.5);               //
 inline constexpr std::array<double, 4> kQValues{0.5, 1, 2, 5};                // Wide / Medium / Narrow / Surgical
 
 // VIBE EQ
+inline constexpr auto kAmounts = detail::linear<11>(0.0, 1.0);             // 0..10 integers: LOW, AIR, TUBE
 inline constexpr std::array<double, 4> kLowFreqs{20, 30, 60, 100};
 inline constexpr std::array<double, 5> kAirFreqs{5000, 8000, 10000, 12000, 16000};
 inline constexpr auto kTilts = detail::linear<13>(-3.0, 0.5);                 // dB, DARK..BRIGHT
@@ -130,8 +131,7 @@ inline constexpr auto kPush = detail::linear<13>(0.0, 0.5);                   //
 
 // Service row
 inline constexpr std::array<double, 4> kCeilings{-0.1, -0.3, -0.5, -1.0};     // dB
-// 0..10 in half steps: LOUDNESS, and also the amount scale of LOW, AIR and TUBE.
-inline constexpr auto kLoudness = detail::linear<21>(0.0, 0.5);
+inline constexpr auto kLoudness = detail::linear<21>(0.0, 0.5);              // 0..10 in half steps
 inline constexpr std::array<double, 4> kTargets{-14, -11, -9, -7};            // LUFS
 inline constexpr auto kIoGain = detail::linear<49>(-12.0, 0.5);               // dB, INPUT and OUTPUT
 
@@ -155,7 +155,8 @@ constexpr ValueTable valueTable(ParamID id) {
   switch (id) {
     case kInputGain: case kOutputGain: return detail::tableOf(Tables::kIoGain);
     case kCeiling:     return detail::tableOf(Tables::kCeilings);
-    case kLoudness: case kLow: case kAir: case kTube: return detail::tableOf(Tables::kLoudness);
+    case kLoudness:    return detail::tableOf(Tables::kLoudness);
+    case kLow: case kAir: case kTube: return detail::tableOf(Tables::kAmounts);
     case kTarget:      return detail::tableOf(Tables::kTargets);
     case kHpFreq:      return detail::tableOf(Tables::kHpFreqs);
     case kLsFreq:      return detail::tableOf(Tables::kLowShelfFreqs);
@@ -203,18 +204,18 @@ inline constexpr std::array<ParamSpec, kNumParams> kParams = {{
   {"Oversampling", 3, 1},
   // FINE EQ
   detail::sw("Fine EQ", 1),
-  detail::sw("Hi Pass In", 1),   {"Hi Pass M/S", 3, 0},   {"Hi Pass Freq", 5, 0},
+  detail::sw("Hi Pass In", 1),   {"Hi Pass M/S", 3, 0},   {"Hi Pass Freq", 6, 0},
   detail::sw("Low Shelf In", 1), {"Low Shelf M/S", 3, 0}, {"Low Shelf Freq", 7, 3}, {"Low Shelf Gain", 17, 8},
   detail::sw("Lo Mid In", 1),    {"Lo Mid M/S", 3, 0},    {"Lo Mid Freq", 10, 4},   {"Lo Mid Gain", 17, 8},   {"Lo Mid Q", 4, 1},
   detail::sw("Mid In", 1),       {"Mid M/S", 3, 0},       {"Mid Freq", 10, 4},      {"Mid Gain", 17, 8},      {"Mid Q", 4, 1},
   detail::sw("Hi Mid In", 1),    {"Hi Mid M/S", 3, 0},    {"Hi Mid Freq", 10, 4},   {"Hi Mid Gain", 17, 8},   {"Hi Mid Q", 4, 1},
-  detail::sw("Hi Shelf In", 1),  {"Hi Shelf M/S", 3, 0},  {"Hi Shelf Freq", 7, 3},  {"Hi Shelf Gain", 17, 8},
+  detail::sw("Hi Shelf In", 1),  {"Hi Shelf M/S", 3, 0},  {"Hi Shelf Freq", 7, 4},  {"Hi Shelf Gain", 17, 8},
   // VIBE EQ
   detail::sw("Vibe EQ", 1),
-  {"Low Freq", 4, 2}, {"Low", 21, 0},
-  {"Air Freq", 5, 2}, {"Air", 21, 0},
+  {"Low Freq", 4, 2}, {"Low", 11, 0},
+  {"Air Freq", 5, 2}, {"Air", 11, 0},
   {"Tilt", 13, 6},
-  {"Tube", 21, 4},
+  {"Tube", 11, 2},
   detail::sw("Dyn Low", 0), detail::sw("Dyn Air", 0),
   // GLUE
   detail::sw("Glue", 1),
