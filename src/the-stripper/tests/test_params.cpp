@@ -313,6 +313,37 @@ void test_fourkeq_hpf_attenuates_dc() {
   ASSERT_TRUE(std::fabs(left[N - 1]) < 0.2f);
 }
 
+// Level change (dB) of a sine through the 4K EQ with everything flat and only the HPF on.
+double fourkHpfGainDb(float hpfHz, double sineHz) {
+  DSP::FourKEQ eq;
+  eq.prepare(48000.0, 64);
+  DSP::FourKEQParams p;
+  p.hpfEnabled = true;
+  p.hpfFreq = hpfHz;
+  p.eqTypeBlack = true;
+  std::vector<float> l(64), r(64);
+  double peak = 0.0;
+  for (int b = 0; b < 600; ++b) {
+    for (int i = 0; i < 64; ++i) {
+      const double t = static_cast<double>(b * 64 + i) / 48000.0;
+      l[i] = r[i] = 0.3f * static_cast<float>(std::sin(2.0 * 3.14159265358979 * sineHz * t));
+    }
+    eq.process(l.data(), r.data(), 64, p);
+    if (b >= 450) for (float x : l) peak = std::max(peak, static_cast<double>(std::fabs(x)));
+  }
+  return 20.0 * std::log10(peak / 0.3);
+}
+
+void test_fourkeq_hpf_passband_is_flat() {
+  // The HPF is on by default at 20 Hz: it must leave the audio band alone (it cut 1 kHz by 24 dB when the pole of its
+  // first-order stage had the wrong sign) and only roll off below its corner.
+  ASSERT_APPROX_EPS(fourkHpfGainDb(20.0f, 1000.0), 0.0, 0.3);
+  ASSERT_APPROX_EPS(fourkHpfGainDb(20.0f, 200.0), 0.0, 0.3);
+  ASSERT_APPROX_EPS(fourkHpfGainDb(20.0f, 5000.0), 0.0, 0.3);
+  ASSERT_TRUE(fourkHpfGainDb(200.0f, 50.0) < -12.0);   // well below the corner: cut
+  ASSERT_APPROX_EPS(fourkHpfGainDb(200.0f, 2000.0), 0.0, 0.3);
+}
+
 // ---------------------------------------------------------------------------
 // 8. Compression DSP (integration-level)
 // ---------------------------------------------------------------------------
@@ -1080,6 +1111,7 @@ int main() {
   RUN_TEST(test_fourkeq_passthrough_flat);
   RUN_TEST(test_fourkeq_brown_vs_black_differ);
   RUN_TEST(test_fourkeq_hpf_attenuates_dc);
+  RUN_TEST(test_fourkeq_hpf_passband_is_flat);
 
   // Compression
   RUN_TEST(test_compression_passthrough_zero_amount);
