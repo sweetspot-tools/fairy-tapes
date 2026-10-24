@@ -191,9 +191,10 @@ Nota (Task 9 fatto): **INFLATE** = `inflator::Inflator<float>` come nella previe
 **Interfaces:**
 - Produces: `class LoudnessMeter { void prepare(double sr); void process(const float* L, const float* R, int n); double shortTermLufs() const; /*finestra 3 s*/ double integratedLufs() const; /*gating ITU-R BS.1770-4*/ void resetIntegrated(); }`; valore assente = `-INFINITY`.
 
-- [ ] **Step 1: Test** (EBU Tech 3341): `testStereoSine1kAtMinus23` (seno 1 kHz, −23 dBFS di picco su entrambi i canali, 20 s: integrata −23,0 ±0,1 LUFS; short-term idem dopo 3 s), `testStereoSine1kAtMinus33` (−33,0 ±0,1), `testGatingIgnoresSilence` (10 s a −23 poi 10 s di silenzio: integrata −23,0 ±0,1), `testResetIntegrated`, `testWorksAt44kTo192k` (caso −23 a 44,1, 48, 96, 192 kHz).
-- [ ] **Step 2: Esegui** → FAIL. **Step 3: Implementa** pesatura K (due biquad ricalcolati per frequenza), blocchi da 400 ms con 75 % di sovrapposizione, gate assoluto −70 e relativo −10. **Step 4: Esegui** → PASS.
-- [ ] **Step 5: Commit** `feat(happy-ending): BS.1770 loudness meter (short-term, integrated)`.
+- [x] **Step 1: Test** (EBU Tech 3341): `testStereoSine1kAtMinus23` (seno 1 kHz, −23 dBFS di picco su entrambi i canali, 20 s: integrata −23,0 ±0,1 LUFS; short-term idem dopo 3 s), `testStereoSine1kAtMinus33` (−33,0 ±0,1), `testGatingIgnoresSilence` (10 s a −23 poi 10 s di silenzio: integrata −23,0 ±0,1), `testResetIntegrated`, `testWorksAt44kTo192k` (caso −23 a 44,1, 48, 96, 192 kHz).
+- [x] **Step 2: Esegui** → FAIL. **Step 3: Implementa** pesatura K (due biquad ricalcolati per frequenza), blocchi da 400 ms con 75 % di sovrapposizione, gate assoluto −70 e relativo −10. **Step 4: Esegui** → PASS.
+- [x] **Step 5: Commit** `feat(happy-ending): BS.1770 loudness meter (short-term, integrated)`.
+- Note (fatto): short-term vale `-INFINITY` finché non sono entrati 3 s; l'integrata usa un istogramma fisso da 0,1 LU (da −70 a +5 LUFS, con la somma esatta delle energie per bin), quindi nessuna allocazione e memoria costante. Coefficienti K ricavati per ogni frequenza (prototipo analogico + bilineare, uguali alla norma a 48 kHz). `process` e `resetIntegrated` sono del thread audio; i getter sono atomici e leggibili da qualunque thread. Aggiunti test su gate relativo, gate assoluto, somma dei canali, forma della curva K ad altre frequenze, corsa lunga senza allocazioni.
 
 ### Task 11: LOUDNESS e MATCH
 
