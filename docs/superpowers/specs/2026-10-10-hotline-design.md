@@ -55,7 +55,7 @@ Device, Morph, Gain, Mono, Bypass, Drive, Tone, Noise, Room, Mix, IN di CHARACTE
 
 Pannello rack orizzontale 1000 × 470 (altezza di Pillow Talk, così il retro usa il template `kShort` del kit; deciso il 2026-10-24 dopo averla vista in preview, contro i 428 iniziali) nel linguaggio comune. Materiale e texture sono quelli di The Stripper, uguali per tutti i plugin (decisione del 2026-10-10). Tutto il testo è in inglese. Preview di riferimento: `src/hotline/docs/mockups/hotline_rack.html` (derivata da `stripper_rack.html`).
 
-- **Riga 1:** DEVICE (sei pulsanti su due righe con il nome sulla faccia: il dispositivo attivo ha la faccia ambra, nessun LED — regola comune dei tre tipi di pulsante del 2026-10-21; pulsanti un po' più stretti, preview 2026-10-21; nessun nastro), LEVEL (meter IN e OUT stereo e LED di clip IN, DRV, OUT: tenuti, deciso il 2026-10-24), OUTPUT (Gain, Bypass in alto a destra, Mono).
+- **Riga 1:** DEVICE (sei pulsanti su due righe con il nome sulla faccia: il dispositivo attivo ha la faccia ambra, nessun LED — regola comune dei tre tipi di pulsante del 2026-10-21; pulsanti un po' più stretti, preview 2026-10-21; nessun nastro), LEVEL (meter IN e OUT stereo e LED di clip IN, DRV, OUT: tenuti, deciso il 2026-10-24; il LED DRV si accende solo con drive' > 0 quando l'uscita del waveshaper arriva a |y| ≥ 0,9), OUTPUT (Gain, Bypass in alto a destra, Mono).
 - **Riga 2:** MORPH (manopola grande) e un solo blocco CHARACTER con Drive, Tone, Noise, Room e Mix (manopole un po' più ravvicinate e IN del blocco appena più in basso, preview 2026-10-21; editor da allineare).
 - **IN:** un solo pulsante IN per CHARACTER, che attenua tutti e cinque i controlli (Mix compreso). Il Bypass globale attenua tutto e fa passare il segnale identico, bit per bit.
 - Usura, viti e retro (SETTINGS, DEVICES, ROUTING, CREDITS) come da design system. **Viti** ai quattro angoli del pannello 470 (y 18 e y 452) e **usura** scalata al pannello 470; sei posizioni fisse per i nastri di carta (`kTapeSlots` in `ui/layout.h`), mai sopra i controlli. Le viti ci sono anche sul retro e condividono con il fronte le rotazioni salvate (scelta dell'implementatore: in Pillow Talk il retro non ne ha).
@@ -90,17 +90,12 @@ Pannello rack orizzontale 1000 × 470 (altezza di Pillow Talk, così il retro us
 
 ## 8. Decisioni aperte
 
-- Significato del LED di clip DRV: oggi si accende quando il waveshaper è sul fondo scala e, con drive' = 0, quando l'uscita della banda arriva a |x| ≥ 1. Soglia da decidere; proposta: |uscita del waveshaper| ≥ 0,9, solo con drive' > 0.
-- **Posizioni dei sei nastri di carta:** scelte dall'implementatore (intestazione, fascia tra LEVEL e CHARACTER, LEVEL a destra dei LED, due su CHARACTER, fascia sotto i riquadri), verificate solo da test (mai sopra controlli, meter, LED, viti o «BACK →»). **Da confermare con l'utente** guardando il render.
-- **Preview del retro:** aggiornare `hotline_rack.html` al layout 470 con le quattro schede (SETTINGS, DEVICES, ROUTING, CREDITS), oppure lasciare la resa dell'editor come riferimento.
 - **Segno di somma nel kit:** `RoutingBuilder::sum` / `LegendSymbol::Sum` in `shared/ui` (richiesta al proprietario di `shared/`; oggi disegnato in locale). Analogamente un parametro di spostamento del centro per `RackKnob` (oggi `BigRackKnob` locale per la manopola del Morph).
-- **CI:** `.github/workflows/build.yml` compila tutti i target cmake su Ubuntu, Windows e macOS, quindi Hotline è già compilato dalla CI; manca solo il caricamento dell'artefatto di Hotline. La compilazione su Windows e macOS non è ancora verificata. Decisione dell'utente: aggiungere il caricamento dell'artefatto? (`build.yml` non è stato toccato.)
 
 Note tecniche rinviate (una riga ciascuna):
-- LED DRV: vedi la prima decisione aperta qui sopra.
 - `band.h` giudica il neutro dopo il limite `0,45·fs`: sotto circa 43,3 kHz di sample rate la banda non risulta mai neutra; il motore lo aggira con il peso di banda (`engine.cpp`).
 
-Decise: pannello alto 470 (2026-10-24); meter LEVEL tenuti (2026-10-24); valori iniziali dei dispositivi nel piano, da affinare a orecchio durante l'implementazione; crediti e licenze di Hotline scritti nel Task 8 (la preview ha ancora quelli di The Stripper).
+Decise: LED di clip DRV (2026-10-24): si accende solo con drive' > 0 e uscita del waveshaper |y| ≥ 0,9, tenuto 2 s, mai con drive' = 0 (il LED IN copre già il clipping in ingresso); CI (2026-10-24): `build.yml` carica gli artefatti `hotline-linux`, `hotline-windows` e `hotline-macos` (`dist/Hotline.vst3`), la compilazione su Windows e macOS non è ancora verificata fino alla prossima esecuzione su `master`; posizioni dei sei nastri di carta (2026-10-24): accettate come realizzate, dopo il render; preview del retro (2026-10-24): `hotline_rack.html` non viene aggiornata, il suo retro è superato (628 di altezza, crediti derivati da The Stripper, senza DEVICES) e il riferimento del retro è il render offscreen dell'editor (`hotline_render`); pannello alto 470 (2026-10-24); meter LEVEL tenuti (2026-10-24); valori iniziali dei dispositivi nel piano, da affinare a orecchio durante l'implementazione; crediti e licenze di Hotline scritti nel Task 8 (la preview ha ancora quelli di The Stripper).
 
 ## 9. Processo
 
