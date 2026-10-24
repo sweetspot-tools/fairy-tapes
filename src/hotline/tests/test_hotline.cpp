@@ -4,8 +4,12 @@
  */
 
 #include "devices.h"
+#include "dsp/band.h"
+#include "dsp/cone.h"
+#include "dsp/drive.h"
 #include "params.h"
 #include "state.h"
+#include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <cstdint>
@@ -267,6 +271,111 @@ void describeShowsConeQ() {
   ASSERT_TRUE(describeDevice(3).find("Q 0.8") != std::string::npos);
 }
 
+
+// ---- DSP blocks (Task 3) ----
+namespace D = FairyTapes::Hotline::DSP;
+
+// Steady-state peak of a sine through f(x); skips the first 0.5 s.
+template <class F>
+double sinePeak(double fs, double hz, double amp, F f) {
+  constexpr double kPi = 3.14159265358979323846;
+  const int n = (int)(fs * 1.5), skip = (int)(fs * 0.5);
+  double pk = 0;
+  for (int i = 0; i < n; ++i) {
+    const float y = f((float)(amp * std::sin(2 * kPi * hz * i / fs)));
+    if (i >= skip) pk = std::max(pk, (double)std::fabs(y));
+  }
+  return pk;
+}
+double toDb(double r) { return 20.0 * std::log10(r); }
+
+struct Lcg {
+  uint32_t s = 12345;
+  float next() { s = s * 1664525u + 1013904223u; return (float)((s >> 8) / 8388608.0 - 1.0); }
+};
+
+void bandTelephoneAttenuates() {
+  const double fs = 48000;
+  D::Band b; b.prepare(fs); b.set(300, 3400);
+  auto run = [&](double hz) { b.clear(); return toDb(sinePeak(fs, hz, 0.5, [&](float x) { return b.process(x); }) / 0.5); };
+  ASSERT_TRUE(run(100) <= -18.0);
+  ASSERT_TRUE(run(8000) <= -18.0);
+  ASSERT_TRUE(std::fabs(run(1000)) <= 1.5);
+}
+
+void bandNeutralIsExactPassthrough() {
+  D::Band b; b.prepare(48000); b.set(20, 20000);
+  ASSERT_TRUE(b.neutral());
+  Lcg r;
+  for (int i = 0; i < 1000; ++i) { const float x = r.next(); ASSERT_TRUE(b.process(x) == x); }
+  b.set(300, 3400);
+  ASSERT_TRUE(!b.neutral());
+}
+
+void bandClampsBelowNyquist() {
+  D::Band b; b.prepare(8000); b.set(5, 7000);
+  Lcg r;
+  for (int i = 0; i < 8000; ++i) ASSERT_TRUE(std::isfinite(b.process(r.next())));
+}
+
+void bandSetKeepsState() {
+  D::Band b; b.prepare(48000); b.set(300, 3400);
+  for (int i = 0; i < 100; ++i) b.process(1.f);
+  b.set(300, 3400);                  // same params: output must continue smoothly
+  const float a = b.process(1.f);
+  b.set(310, 3300);
+  const float c = b.process(1.f);
+  ASSERT_TRUE(std::fabs(a - c) < 0.05);
+}
+
+void driveZeroIsIdentity() {
+  for (float x : {-3.f, -1.f, -0.25f, 0.f, 0.3f, 1.f, 2.5f}) ASSERT_TRUE(D::shape(x, 0.f) == x);
+}
+
+void driveIsBoundedAndAsymmetric() {
+  for (int i = -400; i <= 400; ++i) ASSERT_TRUE(std::fabs(D::shape(i * 0.01f, 0.5f)) <= 1.05f);
+  double pos = 0, neg = 0;
+  constexpr double kPi = 3.14159265358979323846;
+  for (int i = 0; i < 48; ++i) {
+    const float y = D::shape((float)std::sin(2 * kPi * i / 48.0), 0.5f);
+    pos = std::max(pos, (double)y); neg = std::max(neg, (double)-y);
+  }
+  ASSERT_TRUE(std::fabs(pos - neg) > 0.01);
+  for (float d : {0.f, 0.5f, 1.f}) ASSERT_TRUE(std::isfinite(D::shape(1e6f, d)) && std::isfinite(D::shape(-1e6f, d)));
+}
+
+void coneBoostsAtCenter() {
+  const double fs = 48000;
+  D::Cone c; c.prepare(fs); c.set(1800, 6, 2, 0);
+  ASSERT_TRUE(!c.neutral());
+  const double g = toDb(sinePeak(fs, 1800, 0.1, [&](float x) { return c.process(x); }) / 0.1);
+  ASSERT_TRUE(std::fabs(g - 6.0) <= 1.0);
+}
+
+void coneNeutralIsExactPassthrough() {
+  D::Cone c; c.prepare(48000); c.set(1800, 0, 2, 0);
+  ASSERT_TRUE(c.neutral());
+  Lcg r;
+  for (int i = 0; i < 1000; ++i) { const float x = r.next(); ASSERT_TRUE(c.process(x) == x); }
+}
+
+void blocksStableAtExtremeSampleRates() {
+  for (double fs : {8000.0, 192000.0}) {
+    D::Band b; b.prepare(fs); b.set(10, 20000);
+    D::Band b2; b2.prepare(fs); b2.set(2000, 100);
+    D::Cone c; c.prepare(fs); c.set(20000, 12, 10, 12);
+    D::Cone c2; c2.prepare(fs); c2.set(20, -12, 0.1, -12);
+    Lcg r;
+    for (int i = 0; i < (int)fs; ++i) {
+      const float x = r.next();
+      ASSERT_TRUE(std::isfinite(b.process(x)));
+      ASSERT_TRUE(std::isfinite(b2.process(x)));
+      ASSERT_TRUE(std::isfinite(c.process(D::shape(x, 1.f))));
+      ASSERT_TRUE(std::isfinite(c2.process(x)));
+    }
+  }
+}
+
 }  // namespace
 
 int main() {
@@ -286,6 +395,15 @@ int main() {
   RUN_TEST(describeCoversAllDevices);
   RUN_TEST(describeFrequenciesAreExact);
   RUN_TEST(describeShowsConeQ);
+  RUN_TEST(bandTelephoneAttenuates);
+  RUN_TEST(bandNeutralIsExactPassthrough);
+  RUN_TEST(bandClampsBelowNyquist);
+  RUN_TEST(bandSetKeepsState);
+  RUN_TEST(driveZeroIsIdentity);
+  RUN_TEST(driveIsBoundedAndAsymmetric);
+  RUN_TEST(coneBoostsAtCenter);
+  RUN_TEST(coneNeutralIsExactPassthrough);
+  RUN_TEST(blocksStableAtExtremeSampleRates);
   std::printf("%d tests run, %d failed\n", g_passed + g_failed, g_failed);
   return g_failed ? 1 : 0;
 }
