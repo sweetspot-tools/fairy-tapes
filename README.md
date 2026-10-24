@@ -120,7 +120,7 @@ Source code here is free and open source (GPL-3.0); the optional payment is for 
 Push (or PR) to **master** triggers a build on **Linux**, **Windows**, and **macOS**. The workflow:
 
 - Checks out the repo **with submodules** (so `vendors/vst3sdk` is available).
-- Builds The Stripper and Pillow Talk and uploads each `.vst3` bundle as an **artifact** per platform.
+- Builds the plugins and uploads The Stripper, Pillow Talk and Deep Throat `.vst3` bundles as **artifacts** per platform.
 
 **Rough duration (per run):**  
 With submodules, the SDK is fetched at checkout. Build is typically **2–6 min per OS**; total for all three platforms is usually **under 15 minutes**.

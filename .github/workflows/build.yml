@@ -103,3 +103,24 @@ jobs:
         with:
           name: pillow-talk-macos
           path: dist/PillowTalk.vst3
+
+      - name: Upload Deep Throat (Linux)
+        if: matrix.os == 'ubuntu-24.04' && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deep-throat-linux
+          path: dist/DeepThroat.vst3
+
+      - name: Upload Deep Throat (Windows)
+        if: matrix.os == 'windows-latest' && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deep-throat-windows
+          path: dist/DeepThroat.vst3
+
+      - name: Upload Deep Throat (macOS)
+        if: matrix.os == 'macos-latest' && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deep-throat-macos
+          path: dist/DeepThroat.vst3
