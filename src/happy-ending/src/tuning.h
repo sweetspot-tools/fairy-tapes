@@ -53,8 +53,32 @@ inline constexpr double kGlueRampMs = 10.0;
 // LIMIT: base release of each style (MODERN, PUNCH, DYN); RELEASE trims around it.
 inline constexpr double kLimitReleaseBaseMs[3] = {50.0, 100.0, 250.0};
 
-// LIMIT SET: the forced threshold while the guided release setting is active.
+// LIMIT: look-ahead of each style (MODERN, PUNCH, DYN) and the length of the attack ramp that
+// brings the gain down. The latency stays that of MODERN (the longest look-ahead) for every style.
+// PUNCH ramps down more slowly than it looks ahead, so the first instant of a transient passes
+// before the gain has fully arrived (the sample-peak guard still holds it under the ceiling).
+inline constexpr double kLimitLookAheadMs[3] = {1.5, 0.3, 0.8};
+inline constexpr double kLimitAttackMs[3] = {1.5, 0.45, 0.8};
+
+// LIMIT DYN: soft knee width (the reduction starts this far below the threshold, centred on it) and
+// the program-dependent release. The release time is the RELEASE value times a factor that goes from
+// kLimitDynReleaseFast (brief peaks: the average reduction stays low) to kLimitDynReleaseSlow
+// (sustained heavy reduction), following the reduction averaged over kLimitDynSustainMs; the
+// reduction at which the factor reaches its slow end is kLimitDynGrRefDb.
+inline constexpr double kLimitDynKneeDb = 6.0;
+inline constexpr double kLimitDynReleaseFast = 0.5;
+inline constexpr double kLimitDynReleaseSlow = 1.5;
+inline constexpr double kLimitDynGrRefDb = 3.0;
+inline constexpr double kLimitDynSustainMs = 400.0;
+
+// LIMIT: the on/off crossfade between the delayed input and the limited signal.
+inline constexpr double kLimitOnRampMs = 10.0;
+
+// LIMIT SET: the forced threshold while the guided release setting is active, and the time the
+// threshold takes to travel the whole distance from 0 dB to it (and back). Ordinary THRESH steps
+// glide at the same speed.
 inline constexpr double kSetThresholdDb = -8.0;
+inline constexpr double kSetGlideMs = 150.0;
 
 // LOUDNESS macro: what the last third of the knob adds to each stage, in this order
 // (CLIP first, then LIMIT, then FINAL). The knob travels 0..10; each stage owns one third.

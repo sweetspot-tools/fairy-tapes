@@ -82,3 +82,12 @@ target_include_directories(happy_ending_clip_tests PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 add_test(NAME happy_ending_clip_tests COMMAND happy_ending_clip_tests)
+
+add_executable(happy_ending_limiter_tests
+  tests/test_limiter.cpp
+  src/dsp/limiter.cpp
+)
+target_include_directories(happy_ending_limiter_tests PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+add_test(NAME happy_ending_limiter_tests COMMAND happy_ending_limiter_tests)
