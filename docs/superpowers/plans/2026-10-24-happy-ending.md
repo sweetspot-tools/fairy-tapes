@@ -146,9 +146,10 @@ Nota (Task 5 fatto): il rilevatore resta in retroazione come nella sorgente (pre
 **Interfaces:**
 - Produces: `class ClipSoftly { void prepare(double sr); void setDriveDb(float); void process(float* L, float* R, int n); float shavedDb() const; }` (dB tolti ai picchi per la riga GR "C"). Il drive in ingresso è compensato in uscita: livello compensato.
 
-- [ ] **Step 1: Test**: `testQuietPassesUnchanged` (seno 1 kHz −40 dBFS, DRIVE +6: livello entro 0,1 dB), `testPeaksAreRounded` (seno −1 dBFS, DRIVE +6: picco d'uscita più basso di quello d'ingresso, `shavedDb()` > 1), `testDriveZeroTransparent` (DRIVE 0 su seno −6 dBFS: THD sotto −60 dB).
-- [ ] **Step 2: Esegui** → FAIL. **Step 3: Implementa** il port. **Step 4: Esegui** → PASS.
-- [ ] **Step 5: Commit** `feat(happy-ending): soft clipper (ClipSoftly port), level matched`.
+- [x] **Step 1: Test**: `testQuietPassesUnchanged` (seno 1 kHz −40 dBFS, DRIVE +6: livello entro 0,1 dB), `testPeaksAreRounded` (seno −1 dBFS, DRIVE +6: picco d'uscita più basso di quello d'ingresso, `shavedDb()` > 1), `testDriveZeroTransparent` (DRIVE 0 su seno −6 dBFS: THD sotto −60 dB). Nota: la curva di ClipSoftly è sin(x), che su un seno a −6 dBFS dà circa −41 dB di THD (J3/J1 a ampiezza 0,5): −60 dB non è raggiungibile con un port fedele. `testDriveZeroTransparent` verifica THD sotto −60 dB e livello entro 0,1 dB a −20 dBFS, e THD sotto −38 dB a −6 dBFS. Altri test: livello compensato a 88,2 e 176,4 kHz, stessa forma a 48/96/192 kHz, tetto d'uscita 1/drive, latenza zero, `shavedDb()` linkato e azzerato a ogni blocco, drive senza scatti, nessuna allocazione.
+- [x] **Step 2: Esegui** → FAIL. **Step 3: Implementa** il port. **Step 4: Esegui** → PASS.
+- [x] **Step 5: Commit** `feat(happy-ending): soft clipper (ClipSoftly port), level matched`.
+- Nota di port: tolti dither, scala 0,955 della sorgente (−0,4 dB: i piccoli segnali devono passare a guadagno unitario) e il buffer di ritardo (nella sorgente copia il campione in ogni cella, quindi era sempre 1 campione, senza effetto sui valori): il port ha latenza zero e nessuna dipendenza dalla frequenza di campionamento. DRIVE scorre in `Tuning::kClipRampMs` (10 ms); il tetto d'uscita è 1/drive.
 
 ### Task 8: LIMIT
 

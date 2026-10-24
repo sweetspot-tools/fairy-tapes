@@ -72,6 +72,9 @@ inline constexpr LoudCurve kLoudCurve{1.5, -3.0, 1.0};
 inline constexpr double kOversamplerPassbandEdge = 0.4535;
 inline constexpr double kOversamplerStopbandDb = 100.0;
 
+// CLIP: the DRIVE gain (in and its compensation out) glides linearly over this many milliseconds.
+inline constexpr double kClipRampMs = 10.0;
+
 // MATCH: dB of LUFS error the LOUDNESS knob absorbs per 0.5 step of the knob.
 inline constexpr double kMatchDbPerStep = 0.75;
 

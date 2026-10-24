@@ -74,3 +74,11 @@ target_include_directories(happy_ending_oversampler_tests PRIVATE
   ${VST3_SDK_PATH}/pluginterfaces/vst
 )
 add_test(NAME happy_ending_oversampler_tests COMMAND happy_ending_oversampler_tests)
+
+add_executable(happy_ending_clip_tests
+  tests/test_clip.cpp
+)
+target_include_directories(happy_ending_clip_tests PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+add_test(NAME happy_ending_clip_tests COMMAND happy_ending_clip_tests)
