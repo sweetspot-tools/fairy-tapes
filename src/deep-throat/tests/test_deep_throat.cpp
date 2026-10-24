@@ -15,10 +15,11 @@
 #include "dsp/deesser.h"
 #include "dsp/distressor_comp.h"
 #include "dsp/tone_eq.h"
-#include "mode_presets.h"
+#include "mode_table.h"
 #include "engine.h"
 #include <algorithm>
 #include <atomic>
+#include <string>
 #include <new>
 #include <cmath>
 #include <cstdint>
@@ -1709,24 +1710,38 @@ void test_tone_changes_are_smooth() {
   ASSERT_TRUE(bad == 0);
 }
 
-void test_presets_values() {
-  ASSERT_NEAR(presetFor(Mode::Speak).riderMaxRangeDb, 6.0, 1e-9);
-  ASSERT_NEAR(presetFor(Mode::Speak).riderSlewDbPerSec, 8.0, 1e-9);
-  ASSERT_NEAR(presetFor(Mode::Sing).riderMaxRangeDb, 4.0, 1e-9);
-  ASSERT_NEAR(presetFor(Mode::Sing).riderSlewDbPerSec, 4.0, 1e-9);
-  ASSERT_NEAR(presetFor(Mode::Puke).riderMaxRangeDb, 3.0, 1e-9);
-  ASSERT_NEAR(presetFor(Mode::Puke).riderSlewDbPerSec, 2.0, 1e-9);
-  ASSERT_TRUE(&presetFor(Mode::Sing) == &kModePresets[1]);
+void test_mode_table_values() {
+  struct Exp {
+    const char* name; const char* desc; bool level; double range, slew, hpf, mud, deEss, ratio;
+    int dist; double tMud, tPres, tAir;
+  };
+  const Exp e[3] = {
+      {"SPEAK", "Spoken word: podcast, voice-over", false, 6, 8, 80, -2, 1.0, 2, 1, -2, 3, 2},
+      {"SING", "Sung voice", false, 4, 4, 70, -3, 1.0, 3, 2, -1.5, 2, 4},
+      {"PUKE", "Extreme voices: scream, growl", true, 3, 2, 60, -4, 0.15, 8, 3, -3, 1, 0}};
+  const Mode modes[3] = {Mode::Speak, Mode::Sing, Mode::Puke};
+  for (int i = 0; i < 3; ++i) {
+    const ModeRow& r = modeRow(modes[i]);
+    ASSERT_TRUE(&r == &kModeTable[i]);
+    ASSERT_TRUE(std::string(r.name) == e[i].name);
+    ASSERT_TRUE(std::string(r.description) == e[i].desc);
+    ASSERT_TRUE(r.levelDetector == e[i].level);
+    ASSERT_NEAR(r.riderMaxRangeDb, e[i].range, 1e-9);
+    ASSERT_NEAR(r.riderSlewDbPerSec, e[i].slew, 1e-9);
+    ASSERT_NEAR(r.hpfHz, e[i].hpf, 1e-9);
+    ASSERT_NEAR(r.mudCutDb, e[i].mud, 1e-9);
+    ASSERT_NEAR(r.deEssScale, e[i].deEss, 1e-9);
+    ASSERT_NEAR(r.compRatio, e[i].ratio, 1e-9);
+    ASSERT_TRUE(r.compDist == e[i].dist);
+    ASSERT_NEAR(r.toneMudDb, e[i].tMud, 1e-9);
+    ASSERT_NEAR(r.tonePresenceDb, e[i].tPres, 1e-9);
+    ASSERT_NEAR(r.toneAirDb, e[i].tAir, 1e-9);
+  }
+  ASSERT_TRUE(&modeRow(static_cast<Mode>(7)) == &kModeTable[2]);
+  ASSERT_TRUE(&modeRow(static_cast<Mode>(-1)) == &kModeTable[0]);
 }
 
-
-// ---- Mode presets (ODR fix) ----
-
-void test_presets_out_of_range_mode_is_clamped() {
-  ASSERT_TRUE(&presetFor(static_cast<Mode>(-1)) == &kModePresets[0]);
-  ASSERT_TRUE(&presetFor(static_cast<Mode>(7)) == &kModePresets[2]);
-  ASSERT_NEAR(presetFor(static_cast<Mode>(99)).riderMaxRangeDb, 3.0, 1e-9);
-}
+// ---- Mode table ----
 
 // ---- DistressorComp: huge finite input ----
 
@@ -1823,6 +1838,24 @@ std::vector<float> phraseBreathPhrase(double sr, double breathDb = -35.0) {
 
 int expectedLatency(double sr) {
   return (int)std::lround(0.080 * sr) + DSP::nextPow2((int)std::ceil(0.020 * sr));
+}
+
+void test_mode_table_drives_engine() {
+  const double expRange[3] = {6.0, 4.0, 3.0};
+  const double norm[3] = {0.0, 0.5, 1.0};
+  for (int i = 0; i < 3; ++i) {
+    double v[kNumParams];
+    loadDefaults(v);
+    v[kMode] = norm[i];
+    v[kRiderRange] = 1.0;
+    const Settings s = mapParams(v);
+    ASSERT_NEAR(s.riderRangeDb, expRange[i], 1e-6);
+    Engine e;
+    e.prepare(48000.0);
+    const std::vector<float> x(512, 0.1f);
+    runEngine(e, s, x, x);
+    ASSERT_TRUE(e.usingLevelDetector() == (i == 2));
+  }
 }
 
 void test_engine_defaults_finite_and_mapped() {
@@ -2532,7 +2565,7 @@ void test_engine_chain_order_matches_reference() {
   rider.prepare(sr);
   rider.setTargetDb(s.riderTargetDb);
   rider.setMaxRangeDb(s.riderRangeDb);
-  rider.setSlewDbPerSec(presetFor(s.mode).riderSlewDbPerSec);
+  rider.setSlewDbPerSec(modeRow(s.mode).riderSlewDbPerSec);
   DSP::BreathReducer red;
   red.prepare(sr);
   red.setAmount(s.breathAmount);
@@ -2807,8 +2840,8 @@ int main() {
   RUN_TEST(test_tone_nonfinite_input_and_tone_are_safe);
   RUN_TEST(test_tone_stereo_channels_identical);
   RUN_TEST(test_tone_changes_are_smooth);
-  RUN_TEST(test_presets_values);
-  RUN_TEST(test_presets_out_of_range_mode_is_clamped);
+  RUN_TEST(test_mode_table_values);
+  RUN_TEST(test_mode_table_drives_engine);
   RUN_TEST(test_comp_huge_finite_input_recovers);
   RUN_TEST(test_engine_defaults_finite_and_mapped);
   RUN_TEST(test_engine_silence_stays_silent);

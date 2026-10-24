@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "mode_table.h"
+
 namespace FairyTapes::DeepThroat::DSP {
 
 namespace {
@@ -12,7 +14,6 @@ constexpr double kBandLo = 0.62, kBandHi = 1.38;
 constexpr double kThresholdDb = -30.0;
 constexpr double kRatio = 4.0;
 constexpr double kMaxReductionDb = 12.0;
-constexpr double kPukeAmountScale = 0.15;
 constexpr double kAttackMs = 1.0, kReleaseMs = 40.0;
 constexpr double kPowerMs = 2.0;   // detector power averaging
 constexpr double kFreqMs = 20.0;   // crossover frequency glide
@@ -42,7 +43,7 @@ void DeEsser::reset() {
 
 void DeEsser::setAmount(float amount01) {
   amount_ = std::isfinite(amount01) ? std::clamp(amount01, 0.0f, 1.0f) : 0.0f;
-  effAmount_ = amount_ * (mode_ == Mode::Puke ? kPukeAmountScale : 1.0);
+  effAmount_ = amount_ * modeRow(mode_).deEssScale;
 }
 
 void DeEsser::setFreqHz(float hz) {
@@ -51,7 +52,7 @@ void DeEsser::setFreqHz(float hz) {
 
 void DeEsser::setMode(Mode mode) {
   mode_ = mode;
-  effAmount_ = amount_ * (mode_ == Mode::Puke ? kPukeAmountScale : 1.0);
+  effAmount_ = amount_ * modeRow(mode_).deEssScale;
 }
 
 void DeEsser::applyFreq(double hz) {

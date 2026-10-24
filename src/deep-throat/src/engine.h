@@ -59,7 +59,7 @@ struct Settings {
 };
 
 // Normalized values are clamped to [0,1]; non-finite ones fall back to the defaults.
-// riderRangeDb = presetFor(mode).riderMaxRangeDb x Rider Range.
+// riderRangeDb = modeRow(mode).riderMaxRangeDb x Rider Range.
 Settings mapParams(const double* values);
 
 constexpr double kLookaheadMs = 80.0;

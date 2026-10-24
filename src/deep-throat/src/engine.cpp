@@ -1,5 +1,5 @@
 #include "engine.h"
-#include "mode_presets.h"
+#include "mode_table.h"
 
 #include <algorithm>
 #include <cmath>
@@ -61,7 +61,7 @@ Settings mapParams(const double* raw) {
   s.inputDb = (float)inputDbFromNorm(v[kInput]);
   s.outputDb = (float)outputDbFromNorm(v[kOutput]);
   s.riderTargetDb = (float)riderTargetDbFromNorm(v[kRiderTarget]);
-  s.riderRangeDb = (float)(presetFor(s.mode).riderMaxRangeDb * v[kRiderRange]);
+  s.riderRangeDb = (float)(modeRow(s.mode).riderMaxRangeDb * v[kRiderRange]);
   s.breathAmount = (float)v[kBreathAmount];
   s.deEssAmount = (float)v[kDeEssAmount];
   s.compAmount = (float)v[kCompAmount];
@@ -161,7 +161,7 @@ void Engine::applySettings(const Settings& s, bool force) {
     comp_.setMode(s.mode);
     tone_.setMode(s.mode);
     DSP::BreathDetector* want =
-        s.mode == Mode::Puke ? static_cast<DSP::BreathDetector*>(&level_) : &spectral_;
+        modeRow(s.mode).levelDetector ? static_cast<DSP::BreathDetector*>(&level_) : &spectral_;
     if (want != detector_) {
       detector_ = want;
       // The newly selected detector starts clean: it needs a few hundred ms of phrase context
@@ -172,7 +172,7 @@ void Engine::applySettings(const Settings& s, bool force) {
   // Setters are idempotent and never allocate; every block-level change is smoothed inside.
   rider_.setTargetDb(s.riderTargetDb);
   rider_.setMaxRangeDb(s.riderRangeDb);
-  rider_.setSlewDbPerSec(presetFor(s.mode).riderSlewDbPerSec);
+  rider_.setSlewDbPerSec(modeRow(s.mode).riderSlewDbPerSec);
   spectral_.setSensitivity(s.breathSens);
   level_.setSensitivity(s.breathSens);
   reducer_.setAmount(s.breathAmount);

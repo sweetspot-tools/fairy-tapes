@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "mode_table.h"
+
 namespace FairyTapes::DeepThroat::DSP {
 
 namespace {
@@ -38,8 +40,8 @@ double staticGrDb(double xDb, double thresholdDb, double ratio) {
   return slope * t * t / (2.0 * kKneeDb);
 }
 
-double modeRatio(Mode m) { return m == Mode::Puke ? 8.0 : (m == Mode::Sing ? 3.0 : 2.0); }
-int modeDist(Mode m) { return m == Mode::Puke ? 3 : (m == Mode::Sing ? 2 : 1); }
+double modeRatio(Mode m) { return modeRow(m).compRatio; }
+int modeDist(Mode m) { return modeRow(m).compDist; }
 
 // Identity up to 0 dBFS, then a tanh knee that never exceeds 2 (C1-continuous at 1). Only the
 // onset of a loud transient after silence with high makeup gets here (no lookahead).
