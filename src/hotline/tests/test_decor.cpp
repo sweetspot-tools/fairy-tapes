@@ -14,6 +14,7 @@
 #include "fairy_ui/tape_paper.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -21,10 +22,19 @@
 #include <fstream>
 #include <iterator>
 #include <limits>
+#include <random>
 #include <set>
 #include <string>
 #include <system_error>
 #include <vector>
+
+#ifdef _WIN32
+#include <process.h>
+static unsigned long long processId() { return static_cast<unsigned long long>(_getpid()); }
+#else
+#include <unistd.h>
+static unsigned long long processId() { return static_cast<unsigned long long>(::getpid()); }
+#endif
 
 using namespace FairyTapes::Hotline;
 using namespace FairyTapes::Hotline::Ui;
@@ -289,11 +299,18 @@ void tapeInkStaysOnTheTape() {
 }
 
 // ---- User preferences -----------------------------------------------------------------------------------------------
+// Unique per process and per run: parallel runs and worktrees must not share the folder.
+std::string uniqueSuffix() {
+  return std::to_string(processId()) + "_" +
+         std::to_string(static_cast<unsigned long long>(std::chrono::steady_clock::now().time_since_epoch().count())) + "_" +
+         std::to_string(static_cast<unsigned long long>(std::random_device{}()));
+}
+
 fs::path tempDir() {
   static fs::path dir;
   if (dir.empty()) {
     std::error_code ec;
-    dir = fs::temp_directory_path(ec) / ("hotline_prefs_test_" + std::to_string(std::rand()));
+    dir = fs::temp_directory_path(ec) / ("hotline_prefs_test_" + uniqueSuffix());
     fs::remove_all(dir, ec);
     fs::create_directories(dir, ec);
   }
