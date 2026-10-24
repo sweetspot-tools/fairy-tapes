@@ -180,10 +180,24 @@ void testAirBoost() {
       s.airFreqIndex = static_cast<int>(i);
       eq.set(s);
       ASSERT_TRUE(eq.magnitudeDb(Tables::kAirFreqs[i], true) >= 2.0);
+      ASSERT_NEAR_EPS(eq.magnitudeDb(Tables::kAirFreqs[i], true), 6 * Tuning::kVibeAirDbPerStep, 0.2);  // exact at fc
       ASSERT_TRUE(std::fabs(eq.magnitudeDb(200.0, true)) < 0.5);
-      ASSERT_TRUE(std::fabs(eq.magnitudeDb(1000.0, true)) < 3.5);  // 16 kHz at 44.1 kHz is the widest
+      ASSERT_TRUE(std::fabs(eq.magnitudeDb(1000.0, true)) < 1.0);
     }
   }
+}
+
+void testAirDoesNotLiftMidsNearNyquist() {
+  // AIR 16 kHz, amount 10, at 44.1 kHz: the bell must not widen into the mids.
+  VibeEq eq;
+  eq.prepare(44100.0, 512);
+  VibeSettings s = makeSettings();
+  s.air = 10;
+  s.airFreqIndex = indexOfValue(kAirFreq, 16000.0);
+  eq.set(s);
+  ASSERT_TRUE(eq.magnitudeDb(1000.0, true) < 0.5);
+  ASSERT_TRUE(eq.magnitudeDb(16000.0, true) >= 2.0);  // 16 kHz is below the clamp at 44.1 kHz
+  ASSERT_NEAR_EPS(measuredGainDb(eq, 1000.0, 44100.0, -30.0, 1.0), eq.magnitudeDb(1000.0, true), 0.3);
 }
 
 void testTiltSymmetric() {
@@ -273,12 +287,45 @@ void testTubeZeroIsNearlyLinear() {
 }
 
 void testTubeAddsHarmonics() {
+  // The tube stays faithful to the source: about -44 dB THD at most, and a clear step from the default.
   VibeEq eq;
   eq.prepare(48000.0, 512);
   VibeSettings s = makeSettings();
+  s.tube = 2;
+  eq.set(s);
+  const double thd2 = tubeThdDb(eq, 1000.0, 48000.0, -6.0);
   s.tube = 10;
   eq.set(s);
-  ASSERT_TRUE(tubeThdDb(eq, 1000.0, 48000.0, -6.0) > -40.0);
+  const double thd10 = tubeThdDb(eq, 1000.0, 48000.0, -6.0);
+  ASSERT_TRUE(thd10 > -46.0);
+  ASSERT_TRUE(thd10 >= thd2 + 6.0);
+}
+
+void testPrepareTubeAtOversampledRate() {
+  const double sr = 48000.0;
+  VibeEq eq;
+  eq.prepare(sr, 512);
+  VibeSettings s = makeSettings();
+  s.tube = 8;
+  eq.set(s);
+  eq.prepareTube(2.0 * sr);
+  std::vector<float> l = sine(1000.0, 2.0 * sr, 9600, 0.7), r = l;
+  for (int i = 0; i < 9600; i += 960) eq.processTube(l.data() + i, r.data() + i, 960);
+  bool changed = false;
+  const std::vector<float> in = sine(1000.0, 2.0 * sr, 9600, 0.7);
+  for (std::size_t i = 0; i < l.size(); ++i) {
+    ASSERT_TRUE(std::isfinite(l[i]) && std::isfinite(r[i]));
+    if (l[i] != in[i]) changed = true;
+  }
+  ASSERT_TRUE(changed);
+
+  s.tube = 0;
+  eq.set(s);
+  eq.prepareTube(2.0 * sr);
+  std::vector<float> a = in, b = in;
+  for (int i = 0; i < 9600; i += 960) eq.processTube(a.data() + i, b.data() + i, 960);
+  ASSERT_TRUE(std::memcmp(a.data(), in.data(), a.size() * sizeof(float)) == 0);
+  ASSERT_TRUE(std::memcmp(b.data(), in.data(), b.size() * sizeof(float)) == 0);
 }
 
 void testTubeGrowsWithTheKnob() {
@@ -449,12 +496,14 @@ int main() {
   RUN_TEST(testLowTrickBoostAndDip);
   RUN_TEST(testLowFrequencySteps);
   RUN_TEST(testAirBoost);
+  RUN_TEST(testAirDoesNotLiftMidsNearNyquist);
   RUN_TEST(testTiltSymmetric);
   RUN_TEST(testDynPullsBackOnLoudProgram);
   RUN_TEST(testDynPullsBackAirOnLoudProgram);
   RUN_TEST(testTubeZeroIsNearlyLinear);
   RUN_TEST(testTubeAddsHarmonics);
   RUN_TEST(testTubeGrowsWithTheKnob);
+  RUN_TEST(testPrepareTubeAtOversampledRate);
   RUN_TEST(testStageOffIsIdentity);
   RUN_TEST(testStageGoingOffSettlesToIdentity);
   RUN_TEST(testNeutralSettingsAreTransparent);

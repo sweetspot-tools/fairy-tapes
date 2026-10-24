@@ -161,7 +161,7 @@ double VibeTubeStage::processSample(double input, int ch, double drive) {
   const double xdLf = xdLfRaw / std::sqrt(1.0 + xdLfRaw * xdLfRaw * 0.25);
   distortion += 0.025 * xdLf * xdLf * xdLf;  // transformer H3, low band only
 
-  const double y = input + Tuning::kVibeTubeHarmonics * distortion / driveAmount;
+  const double y = input + distortion / driveAmount;
 
   const double out = y - c.dcX1 + dcCoeff_ * c.dcY1;
   c.dcX1 = y;
@@ -231,8 +231,7 @@ void VibeEq::prepare(double sampleRate, int /*maxBlock*/) {
   const std::uint32_t seed = static_cast<std::uint32_t>(sampleRate * 1000.0);
   for (auto& ind : lowInductor_) ind.prepare(sampleRate, seed);
   for (auto& ind : airInductor_) ind.prepare(sampleRate, seed + 1);
-  tube_.prepare(sampleRate);
-  tubeDrive_ = 0.0;
+  prepareTube(sampleRate);
 
   attackCoeff_ = 1.0 - std::exp(-1.0 / (Tuning::kDynAttackMs * 0.001 * sampleRate));
   releaseCoeff_ = 1.0 - std::exp(-1.0 / (Tuning::kDynReleaseMs * 0.001 * sampleRate));
@@ -245,6 +244,11 @@ void VibeEq::prepare(double sampleRate, int /*maxBlock*/) {
     s.clearState();
   }
   clearForBypass();
+}
+
+void VibeEq::prepareTube(double sampleRate) {
+  tube_.prepare(sampleRate);
+  tubeDrive_ = 0.0;
 }
 
 void VibeEq::clearForBypass() {
@@ -302,7 +306,7 @@ VibeEq::Network VibeEq::designNetwork(double lowPull, double airPull, bool progr
     const double hz = tableValue(kAirFreq, settings_.airFreqIndex);
     double q = Tuning::kVibeAirQ;
     if (program) q *= 1.0 - airInductor_[0].saturationLevel() * kAirSatQ;
-    matched::computePeaking(n.air, hz, sr, airAmount * Tuning::kVibeAirDbPerStep, q);
+    matched::computePeakingMatched(n.air, hz, sr, airAmount * Tuning::kVibeAirDbPerStep, q);
   }
 
   // TILT: opposite shelves around 1 kHz.

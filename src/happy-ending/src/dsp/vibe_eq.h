@@ -13,13 +13,13 @@
  *  - LOW: one knob drives the boost (bell at the chosen frequency) and the cut; the cut is a bell
  *    above the boost (the "Pultec trick"), because the source's low shelf at the same frequency
  *    cuts the whole bottom and cannot make a dip above the boost.
- *  - AIR: fixed broad Q; the source's frequency-dependent Q polynomial is built for the low end and
+ *  - AIR: fixed broad Q, matched peaking (matched::computePeakingMatched) so that a bell high in the
+ *    spectrum keeps its width near Nyquist; the source's frequency-dependent Q polynomial is built for the low end and
  *    would turn a 10 kHz boost into a flat lift of the whole band.
  *  - TILT: pair of opposite shelves around 1 kHz.
  *  - TUBE: the stage at the output of the network, run by processTube() so that the engine can put
- *    it inside an oversampled zone. The harmonics are scaled up (Tuning::kVibeTubeHarmonics): the
- *    source stops at about -44 dB THD, calibrated to a hardware spec, too little for a knob that
- *    has to reach clear colouring.
+ *    it inside an oversampled zone (prepareTube() prepares it at that rate). Faithful to the
+ *    source: about -44 dB THD at most.
  *
  * processLinear() is the network (biquads and the inductor model, whose core saturation only
  * acts on loud boosted program); processTube() is the polynomial tube stage alone.
@@ -96,6 +96,9 @@ private:
 class VibeEq {
 public:
   void prepare(double sampleRate, int maxBlock);
+  // (Re)prepares only the tube stage, for a sample rate other than the one of the network: the
+  // engine runs processTube() at the oversampled rate. prepare() calls it with its own rate.
+  void prepareTube(double sampleRate);
   void set(const VibeSettings& settings);
   // The network: LOW (boost + cut), AIR, TILT. Identity while the stage is off.
   void processLinear(float* left, float* right, int n);

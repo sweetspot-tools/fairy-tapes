@@ -33,11 +33,10 @@ inline constexpr double kVibeLowDipDbPerStep = 1.75;   // cut, per step of the a
 inline constexpr double kVibeLowDipFreqRatio = 2.5;    // the cut sits this many times above the boost frequency
 inline constexpr double kVibeLowDipQ = 0.7;
 inline constexpr double kVibeAirDbPerStep = 1.8;       // AIR boost, per step of the 0-10 knob
-inline constexpr double kVibeAirQ = 0.8;               // broad (a lower Q cannot be built as a bell: its width passes Nyquist)
+inline constexpr double kVibeAirQ = 0.8;               // broad (built with the matched peaking, so it keeps its width near Nyquist)
 inline constexpr double kVibeTiltHz = 1000.0;          // the two opposite shelves of TILT meet here
 inline constexpr double kVibeTiltQ = 0.7071067811865476;
 inline constexpr double kVibeTubeDriveMax = 1.0;       // tube stage drive at TUBE 10 (1.0 = the Multi-Q maximum)
-inline constexpr double kVibeTubeHarmonics = 3.0;      // scale of all tube harmonics (1.0 = Multi-Q: 0.15 % THD hardware, about -44 dB at most)
 inline constexpr int kVibeSubBlock = 32;               // samples between coefficient updates (linear ramp)
 inline constexpr int kVibeTubeRampSamples = 256;       // length of the TUBE drive ramp
 

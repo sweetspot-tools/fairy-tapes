@@ -72,6 +72,58 @@ inline void computePeaking(BiquadCoeffs& c, double fc, double sr, double gainDb,
   detail::store(c, 1.0 + kbw * a, -2.0 * cosW, 1.0 - kbw * a, 1.0 + kbw / a, -2.0 * cosW, 1.0 - kbw / a);
 }
 
+// Peaking boost matched to the analog bell (M. Vicanek, "Matched Second Order Digital Filters",
+// 2016): poles from the analog poles by the matched z-transform, zeros chosen so that the digital
+// magnitude equals the analog one at DC, at fc and at Nyquist. The bell keeps its analog width up
+// to Nyquist: no cramping and, unlike the bandwidth pre-warped peaking above, no widening into the
+// mids for a broad bell high in the spectrum. Boosts only (gainDb > 0); anything else, or a
+// degenerate case, falls back to computePeaking.
+inline void computePeakingMatched(BiquadCoeffs& c, double fc, double sr, double gainDb, double q) {
+  fc = clampFreq(fc, sr);
+  q = std::max(0.01, q);
+  if (gainDb < 0.01) { computePeaking(c, fc, sr, gainDb, q); return; }
+
+  const double kPi = BiquadCoeffs::kPi;
+  const double amp = std::pow(10.0, gainDb / 40.0);  // A: the bell peaks at A^2 = gain
+  const double w0 = 2.0 * kPi * fc / sr;
+
+  // Poles of s^2 + s w0 / (A Q) + w0^2.
+  const double zeta = 1.0 / (2.0 * amp * q);
+  const double decay = std::exp(-zeta * w0);
+  const double a1 = zeta <= 1.0 ? -2.0 * decay * std::cos(std::sqrt(1.0 - zeta * zeta) * w0)
+                                : -2.0 * decay * std::cosh(std::sqrt(zeta * zeta - 1.0) * w0);
+  const double a2 = decay * decay;
+
+  auto analogPower = [&](double x) {  // |H(j w0 x)|^2 of the analog bell
+    const double d = 1.0 - x * x;
+    const double num = d * d + (x * amp / q) * (x * amp / q);
+    const double den = d * d + (x / (amp * q)) * (x / (amp * q));
+    return num / den;
+  };
+
+  const double bigA0 = (1.0 + a1 + a2) * (1.0 + a1 + a2);
+  const double bigA1 = (1.0 - a1 + a2) * (1.0 - a1 + a2);
+  const double bigA2 = -4.0 * a2;
+  const double s2 = std::sin(w0 / 2.0) * std::sin(w0 / 2.0);
+  const double phi0 = 1.0 - s2, phi1 = s2, phi2 = 4.0 * phi0 * phi1;
+
+  const double bigB0 = bigA0;                                        // 0 dB at DC
+  const double bigB1 = bigA1 * analogPower(0.5 * sr / fc);           // analog gain at Nyquist
+  const double bigB2 = (amp * amp * amp * amp * (bigA0 * phi0 + bigA1 * phi1 + bigA2 * phi2) -
+                        bigB0 * phi0 - bigB1 * phi1) / phi2;         // gain A^2 at fc
+
+  const double sqrtB0 = std::sqrt(bigB0), sqrtB1 = std::sqrt(bigB1);
+  const double w = 0.5 * (sqrtB0 + sqrtB1);
+  const double disc = w * w + bigB2;
+  if (!(disc > 0.0) || !std::isfinite(disc)) { computePeaking(c, fc, sr, gainDb, q); return; }
+  const double b0 = 0.5 * (w + std::sqrt(disc));
+  c.b0 = b0;
+  c.b1 = 0.5 * (sqrtB0 - sqrtB1);
+  c.b2 = -bigB2 / (4.0 * b0);
+  c.a1 = a1;
+  c.a2 = a2;
+}
+
 inline void computeLowShelf(BiquadCoeffs& c, double fc, double sr, double gainDb, double q) {
   fc = clampFreq(fc, sr);
   q = std::max(0.01, q);
