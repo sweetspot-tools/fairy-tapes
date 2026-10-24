@@ -607,6 +607,13 @@ void test_drive_defaults_in_range() {
 // 12. NamDrive DSP (unit-level)
 // ---------------------------------------------------------------------------
 
+// A real WaveNet capture from the pinned NAM submodule (48 kHz). wavenet_a2_max.nam, used before, is gone since
+// NAM v0.6.0, and the tests skipped silently.
+std::filesystem::path exampleModelPath() {
+  return std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path() / "vendors" /
+         "NeuralAmpModelerCore" / "example_models" / "wavenet.nam";
+}
+
 void test_namdrive_passthrough_no_model() {
   FairyTapes::Shared::DSP::NamDrive drv;
   drv.setSampleRate(48000.0);
@@ -639,17 +646,12 @@ void test_namdrive_load_example_model() {
   FairyTapes::Shared::DSP::NamDrive drv;
   drv.setSampleRate(48000.0);
 
-  // Use the example WaveNet A2 model from the NAM repo
-  std::filesystem::path model_path =
-      std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path()
-      / "vendors" / "NeuralAmpModelerCore" / "example_models" / "wavenet_a2_max.nam";
+  const std::filesystem::path model_path = exampleModelPath();
 
-  if (!std::filesystem::exists(model_path)) {
-    std::fprintf(stdout, "    [SKIP] example model not found at %s\n", model_path.c_str());
-    return;
-  }
+  ASSERT_TRUE(std::filesystem::exists(model_path));   // ships with the pinned NAM submodule: never skip
 
   bool ok = drv.loadModel(model_path);
+  if (!ok) std::fprintf(stderr, "    load error: %s\n", drv.lastError().c_str());
   ASSERT_TRUE(ok);
   ASSERT_TRUE(drv.isModelLoaded());
 }
@@ -658,14 +660,9 @@ void test_namdrive_process_with_model() {
   FairyTapes::Shared::DSP::NamDrive drv;
   drv.setSampleRate(48000.0);
 
-  std::filesystem::path model_path =
-      std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path()
-      / "vendors" / "NeuralAmpModelerCore" / "example_models" / "wavenet_a2_max.nam";
+  const std::filesystem::path model_path = exampleModelPath();
 
-  if (!std::filesystem::exists(model_path)) {
-    std::fprintf(stdout, "    [SKIP] example model not found\n");
-    return;
-  }
+  ASSERT_TRUE(std::filesystem::exists(model_path));   // ships with the pinned NAM submodule: never skip
 
   bool ok = drv.loadModel(model_path);
   ASSERT_TRUE(ok);
@@ -698,9 +695,7 @@ void test_namdrive_unload_model() {
   FairyTapes::Shared::DSP::NamDrive drv;
   drv.setSampleRate(48000.0);
 
-  std::filesystem::path model_path =
-      std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path()
-      / "vendors" / "NeuralAmpModelerCore" / "example_models" / "wavenet_a2_max.nam";
+  const std::filesystem::path model_path = exampleModelPath();
 
   if (std::filesystem::exists(model_path))
     drv.loadModel(model_path);
@@ -739,9 +734,7 @@ void test_namdrive_no_nan_inf() {
   FairyTapes::Shared::DSP::NamDrive drv;
   drv.setSampleRate(48000.0);
 
-  std::filesystem::path model_path =
-      std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path()
-      / "vendors" / "NeuralAmpModelerCore" / "example_models" / "wavenet_a2_max.nam";
+  const std::filesystem::path model_path = exampleModelPath();
 
   if (std::filesystem::exists(model_path))
     drv.loadModel(model_path);
@@ -771,20 +764,15 @@ void test_namdrive_auto_compensation_rms() {
   FairyTapes::Shared::DSP::NamDrive drv;
   drv.setSampleRate(48000.0);
 
-  std::filesystem::path model_path =
-      std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path()
-      / "vendors" / "NeuralAmpModelerCore" / "example_models" / "wavenet_a2_max.nam";
+  const std::filesystem::path model_path = exampleModelPath();
 
-  if (!std::filesystem::exists(model_path)) {
-    std::fprintf(stdout, "    [SKIP] example model not found\n");
-    return;
-  }
+  ASSERT_TRUE(std::filesystem::exists(model_path));   // ships with the pinned NAM submodule: never skip
 
-  drv.loadModel(model_path);
+  ASSERT_TRUE(drv.loadModel(model_path));   // a passthrough would pass the level check without testing anything
   drv.setDrive(0.5f);
 
   constexpr int N = 512;
-  constexpr int blocks = 10;
+  constexpr int blocks = 60;   // about 0.64 s: the RMS trackers (tau 100 ms) have converged
   std::vector<float> left(N), right(N);
 
   // Feed several blocks to let RMS tracker converge
@@ -804,27 +792,22 @@ void test_namdrive_auto_compensation_rms() {
     out_rms += left[i] * left[i];
   out_rms = std::sqrt(out_rms / N);
 
-  // Input RMS of a 0.3-amplitude sine ~ 0.3 / sqrt(2) ≈ 0.212
-  // Auto-compensation should keep output RMS within a reasonable range of that
-  // (not necessarily exact due to model nonlinearity and convergence time)
-  ASSERT_TRUE(out_rms > 0.05f);
-  ASSERT_TRUE(out_rms < 1.0f);
+  // Input RMS of a 0.3-amplitude sine = 0.3 / sqrt(2). The compensation is referenced to the input *before* the
+  // Drive gain, so the output keeps that loudness (Drive 0.5 pushes the model +10 dB).
+  const double db = 20.0 * std::log10(out_rms / (0.3 / std::sqrt(2.0)));
+  std::fprintf(stdout, "    NAM Drive 0.5: output %+.2f dB vs input\n", db);
+  ASSERT_APPROX_EPS(db, 0.0, 1.0);
 }
 
 void test_namdrive_coloration_at_zero_drive() {
   FairyTapes::Shared::DSP::NamDrive drv;
   drv.setSampleRate(48000.0);
 
-  std::filesystem::path model_path =
-      std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path()
-      / "vendors" / "NeuralAmpModelerCore" / "example_models" / "wavenet_a2_max.nam";
+  const std::filesystem::path model_path = exampleModelPath();
 
-  if (!std::filesystem::exists(model_path)) {
-    std::fprintf(stdout, "    [SKIP] example model not found\n");
-    return;
-  }
+  ASSERT_TRUE(std::filesystem::exists(model_path));   // ships with the pinned NAM submodule: never skip
 
-  drv.loadModel(model_path);
+  ASSERT_TRUE(drv.loadModel(model_path));
   drv.setDrive(0.0f); // zero drive → unity gain, but model still active
 
   constexpr int N = 512;
