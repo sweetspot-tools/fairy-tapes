@@ -33,9 +33,9 @@ Instead of a manual output trim or a "Match level" button, the Drive stage measu
 
 ### Algorithm
 
-1. **Block RMS** of the mono input (after drive gain, before model) and model output (after sanitization) are computed each process block.
+1. **Block RMS** of the mono input **before the drive gain** and of the model output (after sanitization) are computed each process block. Measuring the input before the gain is what keeps the loudness constant across the Drive range (fixed 2026-10-24: before, the reference was taken after the gain and the output stayed up to +20 dB louder at full Drive).
 2. Both values are **smoothed** with a one-pole filter (time constant ≈ 100 ms) to avoid pumping.
-3. **Compensation gain** = `smoothed_input_rms / smoothed_output_rms`, clamped to ±20 dB (linear 0.1 to 10.0).
+3. **Compensation gain** = `smoothed_input_rms / smoothed_output_rms`, clamped to -40..+20 dB (linear 0.01 to 10.0): the drive gain alone needs up to -20 dB, and the model can add its own gain on top.
 4. If either RMS is below a noise floor (1e-6), compensation is held at unity to avoid amplifying silence.
 
 ### Behavior
@@ -55,11 +55,11 @@ Stereo in (L, R)
   │
   ├─ Convert to mono: mid = (L + R) / 2
   │
+  ├─ Measure input RMS (of mid, before the drive gain)
+  │
   ├─ Apply drive gain: mid × 10^(drive_norm)
   │
   ├─ Clamp to safe range (±10.0)
-  │
-  ├─ Measure input RMS
   │
   ├─ NAM model inference (mono in → mono out)
   │

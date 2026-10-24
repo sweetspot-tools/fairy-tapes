@@ -138,6 +138,34 @@ void test_process_during_load_is_finite() {
   CHECK(!bad.load());
   CHECK(d.isModelLoaded());
 }
+
+// Auto-compensation must hold the output at the level of the signal *before* the Drive gain: turning Drive changes
+// the timbre, not the loudness. With the linear unity fixture the model adds nothing, so any level change is the
+// compensation's fault.
+void test_compensation_matches_undriven_input_level() {
+  for (float drive : {0.0f, 0.5f, 1.0f}) {
+    NamDrive d; d.setSampleRate(48000.0); d.setDrive(drive);
+    d.requestLoad(kFixture); waitFor(d, NamDrive::LoadState::Loaded); pump(d);
+    constexpr int N = 512;
+    constexpr float kAmp = 0.25f;
+    std::vector<float> l(N), r(N);
+    double outRms = 0.0;
+    for (int b = 0; b < 60; ++b) {
+      for (int i = 0; i < N; ++i) {
+        const double t = static_cast<double>(b * N + i) / 48000.0;
+        l[i] = r[i] = kAmp * static_cast<float>(std::sin(2.0 * 3.14159265358979 * 440.0 * t));
+      }
+      d.process(l.data(), r.data(), N);
+      if (b == 59) {
+        for (int i = 0; i < N; ++i) outRms += static_cast<double>(l[i]) * l[i];
+        outRms = std::sqrt(outRms / N);
+      }
+    }
+    const double db = 20.0 * std::log10(outRms / (kAmp / std::sqrt(2.0)));
+    if (std::fabs(db) > 0.5) std::fprintf(stderr, "  drive %.1f: output %+.2f dB vs input\n", drive, db);
+    CHECK(std::fabs(db) <= 0.5);
+  }
+}
 } // namespace
 
 int main() {
@@ -149,6 +177,7 @@ int main() {
   test_requestLoad_empty_path_unloads_without_error();
   test_load_callback_fires_when_a_request_completes();
   test_process_during_load_is_finite();
+  test_compensation_matches_undriven_input_level();
   std::printf(g_failed ? "FAILED (%d)\n" : "All nam_drive async tests passed\n", g_failed);
   return g_failed ? 1 : 0;
 }
