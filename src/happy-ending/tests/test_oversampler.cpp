@@ -161,8 +161,8 @@ void testRoundTripIsPureDelay() {
 
 void testPassbandFlat() {
   const int len = 8192;
-  // Up to 0.4 fs (the brief) and beyond, up to the designed passband edge.
-  const int bins[] = {8, 100, 500, 1000, 1500, 2000, 2500, 3000, 3276, 3400};
+  // Up to 0.4 fs (the brief) and on to the designed passband edge (0.4535 fs = 20 kHz at 44.1 kHz).
+  const int bins[] = {8, 100, 500, 1000, 1500, 2000, 2500, 3000, 3276, 3400, 3600, 3700, 3715};
   for (int factor : {2, 4}) {
     for (int bin : bins) {
       ASSERT_TRUE(static_cast<double>(bin) / len <= Tuning::kOversamplerPassbandEdge);

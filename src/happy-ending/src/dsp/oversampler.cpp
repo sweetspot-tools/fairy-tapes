@@ -6,7 +6,7 @@
  * The taps at odd offsets (even indices) are normalised to sum to 0.5, so the DC gain is exactly 1.
  * The tap count follows the Kaiser rule N ~ (A - 7.95) / (14.36 * df) for stopband attenuation A
  * and transition width df (in cycles per sample at the filter's rate), rounded up to 4k + 3.
- * With the tuning values (A = 100 dB, passband edge 0.42 fs) the 2x step has 83 taps and the
+ * With the tuning values (A = 100 dB, passband edge 0.4535 fs = 20 kHz at 44.1 kHz) the 2x step has 139 taps and the
  * second 2x step of the 4x chain 27.
  */
 

@@ -69,7 +69,7 @@ inline constexpr LoudCurve kLoudCurve{1.5, -3.0, 1.0};
 // base sample rate (ripple stays far below 0.1 dB up to here) and the stopband attenuation of the
 // Kaiser design. The transition band sits between the passband edge and its mirror around the
 // stage's own Nyquist, so images of content below the edge are rejected by at least this much.
-inline constexpr double kOversamplerPassbandEdge = 0.42;
+inline constexpr double kOversamplerPassbandEdge = 0.4535;
 inline constexpr double kOversamplerStopbandDb = 100.0;
 
 // MATCH: dB of LUFS error the LOUDNESS knob absorbs per 0.5 step of the knob.

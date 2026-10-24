@@ -134,7 +134,7 @@ Nota (Task 5 fatto): il rilevatore resta in retroazione come nella sorgente (pre
 
 - [x] **Step 1: Test**: `testFactorOneIsPassThrough` (latenza 0, uscita == ingresso), `testRoundTripIsPureDelay` (×2 e ×4: down(up(x)) == x ritardato di `latencySamples()` entro −90 dB su rumore limitato a 18 kHz a 44,1 kHz), `testPassbandFlat` (±0,1 dB fino a 0,4·fs), `testImageRejection` (seno a 15 kHz a 44,1 kHz in ×2: energia dell'immagine a 29,1 kHz nel segnale sovracampionato sotto −90 dB), `testLatencyIsInteger` (per entrambi i fattori).
 - [x] **Step 2: Esegui** → FAIL.
-- [x] **Step 3: Implementa** semibanda FIR simmetrica in polifase (×4 = due stadi ×2), lunghezza scelta perché la latenza sia intera a frequenza base. Nota: stadi da 4k+3 tap (Kaiser, 100 dB, bordo banda passante 0,42·fs): 83 tap in ×2 (latenza 41), +27 tap per il secondo stadio in ×4 (latenza totale 48); in ×4 un campione extra a 2× nella catena di decimazione rende intera la latenza.
+- [x] **Step 3: Implementa** semibanda FIR simmetrica in polifase (×4 = due stadi ×2), lunghezza scelta perché la latenza sia intera a frequenza base. Nota: stadi da 4k+3 tap (Kaiser, 100 dB, bordo banda passante 0,4535·fs = 20 kHz a 44,1 kHz, deciso dal controller: ×2 è il default e la zona copre CLIP→METALHEAD): 139 tap in ×2 (latenza 69), +27 tap per il secondo stadio in ×4 (latenza totale 76); in ×4 un campione extra a 2× nella catena di decimazione rende intera la latenza.
 - [x] **Step 4: Esegui** → PASS.
 - [x] **Step 5: Commit** `feat(happy-ending): linear-phase polyphase oversampler`.
 
