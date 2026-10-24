@@ -241,6 +241,32 @@ void describeCoversAllDevices() {
   ASSERT_TRUE(describeDevice(kNumDevices).empty());
 }
 
+bool hasLine(const std::string& text, const std::string& line) {
+  size_t pos = 0;
+  while (pos <= text.size()) {
+    size_t e = text.find('\n', pos);
+    if (e == std::string::npos) e = text.size();
+    if (text.compare(pos, e - pos, line) == 0 && e - pos == line.size()) return true;
+    pos = e + 1;
+  }
+  return false;
+}
+
+void describeFrequenciesAreExact() {
+  const std::string w = describeDevice(2);  // Walkie-talkie
+  ASSERT_TRUE(w.find("11.025 kHz") != std::string::npos);
+  ASSERT_TRUE(hasLine(w, "CRUSH 11.025 kHz 8 bit"));
+  ASSERT_TRUE(hasLine(w, "COMPANDER 6:1 squelch -50 dB"));
+  ASSERT_TRUE(hasLine(describeDevice(1), "CRUSH 8 kHz 10 bit"));
+  ASSERT_TRUE(hasLine(describeDevice(1), "LOW PASS 3.4 kHz"));
+  ASSERT_TRUE(hasLine(describeDevice(3), "CONE 900 Hz +2 dB Q 0.8"));
+}
+
+void describeShowsConeQ() {
+  ASSERT_TRUE(describeDevice(0).find("CONE 1.8 kHz +6 dB Q 2") != std::string::npos);
+  ASSERT_TRUE(describeDevice(3).find("Q 0.8") != std::string::npos);
+}
+
 }  // namespace
 
 int main() {
@@ -258,6 +284,8 @@ int main() {
   RUN_TEST(deviceTableIsConsistent);
   RUN_TEST(describeTelephone);
   RUN_TEST(describeCoversAllDevices);
+  RUN_TEST(describeFrequenciesAreExact);
+  RUN_TEST(describeShowsConeQ);
   std::printf("%d tests run, %d failed\n", g_passed + g_failed, g_failed);
   return g_failed ? 1 : 0;
 }

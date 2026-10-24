@@ -29,11 +29,22 @@ double logInterp(double a, double b, double t) {
   return std::exp(lin(std::log(a), std::log(b), t));
 }
 
+// Fixed-point with at most `decimals` decimals, trailing zeros trimmed.
+std::string trimmed(double v, int decimals) {
+  char buf[48];
+  std::snprintf(buf, sizeof buf, "%.*f", decimals, v);
+  std::string s = buf;
+  if (s.find('.') != std::string::npos) {
+    while (s.back() == '0') s.pop_back();
+    if (s.back() == '.') s.pop_back();
+  }
+  return s;
+}
+
+// Exact value: kHz (up to 3 decimals) from 1000 Hz, integer Hz below.
 std::string freq(double hz) {
-  char buf[32];
-  if (hz >= 1000.0) std::snprintf(buf, sizeof buf, "%.1f kHz", hz / 1000.0);
-  else std::snprintf(buf, sizeof buf, "%.0f Hz", hz);
-  return buf;
+  if (hz >= 1000.0) return trimmed(hz / 1000.0, 3) + " kHz";
+  return trimmed(hz, 0) + " Hz";
 }
 
 std::string fmt(const char* f, double a, double b = 0.0) {
@@ -76,7 +87,7 @@ std::string describeDevice(int index) {
   if (p.hpHz != n.hpHz) line("HIGH PASS " + freq(p.hpHz));
   if (p.lpHz != n.lpHz) line("LOW PASS " + freq(p.lpHz));
   if (p.drive != n.drive) line("DRIVE " + fmt("%.0f %%", p.drive * 100.0));
-  if (p.coneGainDb != n.coneGainDb) line("CONE " + freq(p.coneHz) + fmt(" %+.0f dB", p.coneGainDb));
+  if (p.coneGainDb != n.coneGainDb) line("CONE " + freq(p.coneHz) + fmt(" %+.0f dB", p.coneGainDb) + " Q " + trimmed(p.coneQ, 2));
   if (p.hornGainDb != n.hornGainDb) line(fmt("HORN %+.0f dB", p.hornGainDb));
   if (p.crushRateHz != n.crushRateHz || p.crushBits != n.crushBits)
     line("CRUSH " + freq(p.crushRateHz) + fmt(" %.0f bit", p.crushBits));
