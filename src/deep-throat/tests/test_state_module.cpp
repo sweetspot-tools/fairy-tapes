@@ -286,6 +286,15 @@ void test_controller_decor(Module& m) {
   }
   CHECK(peer.got.empty());
 
+  // The seed it received counts: a v1 state (no seed) on this controller must not make it generate and send one. A
+  // controller that ignored the notify would still have seed 0 and would message its peer. (The angles and texts the
+  // controller adopts are not observable through the VST3 interfaces; the editor harness covers them later.)
+  double p0[kNumParams];
+  loadDefaults(p0);
+  MemStream v1n = streamOf(v1Bytes(p0));
+  CHECK(ctl->setComponentState(&v1n) == kResultOk);
+  CHECK(peer.got.empty());
+
   // A stored seed is adopted silently; a seedless state keeps the one known.
   double p[kNumParams];
   loadDefaults(p);

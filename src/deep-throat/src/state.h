@@ -111,9 +111,9 @@ inline void sanitizeDecor(Decor& d) {
 }
 
 // A non-zero seed from the OS entropy source mixed with the clock (std::random_device may be deterministic on some
-// platforms). Never on the audio thread.
+// platforms). One generator per thread (no shared state). Never on the audio thread.
 inline uint32_t newRandomSeed() {
-  static std::mt19937 mix = [] {
+  thread_local std::mt19937 mix = [] {
     std::random_device rd;
     const auto t = (uint64_t)std::chrono::high_resolution_clock::now().time_since_epoch().count();
     std::seed_seq seq{rd(), rd(), (uint32_t)t, (uint32_t)(t >> 32)};

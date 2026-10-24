@@ -193,6 +193,19 @@ void test_state_v2_roundtrip() {
   ASSERT_TRUE(got.tapeTexts.size() == 2 && got.tapeTexts[0] == "VOX" && got.tapeTexts[1] == "LEAD 2");
 }
 
+void test_state_v2_exact_size() {
+  double in[kNumParams];
+  loadDefaults(in);
+  std::vector<uint8_t> bytes;
+  serializeState(in, Decor{}, bytes);
+  ASSERT_TRUE(bytes.size() == kStateSizeV1 + 4 + 4 * 4 + 4);   // seed + 4 angles + text count
+  Decor d;
+  d.tapeTexts = {"abc", "", "hello"};
+  serializeState(in, d, bytes);
+  ASSERT_TRUE(bytes.size() == kStateSizeV1 + 4 + 4 * 4 + 4 + (4 + 3) + (4 + 0) + (4 + 5));
+  ASSERT_TRUE(bytes[0] == 2 && bytes[1] == 0 && bytes[2] == 0 && bytes[3] == 0);
+}
+
 void test_state_v1_loads_with_default_decor() {
   double in[kNumParams];
   for (int i = 0; i < (int)kNumParams; ++i) in[i] = (i + 1) / 26.0;
@@ -313,6 +326,7 @@ void test_decor_sanitised() {
   ASSERT_TRUE(std::fabs(got.screwAngles[3] - 80.0) < 1e-3);
   for (float a : got.screwAngles) ASSERT_TRUE(a >= 0.f && a < 360.f);
   ASSERT_TRUE(got.tapeTexts.size() == 6);
+  ASSERT_TRUE(got.tapeTexts[0] == "abz");   // control bytes and the non-ASCII byte are dropped
   for (const auto& t : got.tapeTexts) {
     ASSERT_TRUE((int)t.size() <= kMaxTapeChars);
     for (char c : t) ASSERT_TRUE(c >= 0x20 && c <= 0x7E);
@@ -3243,6 +3257,7 @@ int main() {
   RUN_TEST(test_defaults);
   RUN_TEST(test_state_roundtrip);
   RUN_TEST(test_state_v2_roundtrip);
+  RUN_TEST(test_state_v2_exact_size);
   RUN_TEST(test_state_v1_loads_with_default_decor);
   RUN_TEST(test_state_rejects_corrupt);
   RUN_TEST(test_state_clamps_and_ignores_trailing);
