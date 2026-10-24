@@ -108,6 +108,8 @@ void Engine::prepare(double sampleRate) {
   latency_ = lookahead_ + spectral_.latencySamples();
   delayL_.assign((size_t)latency_ + 1, 0.0f);
   delayR_.assign((size_t)latency_ + 1, 0.0f);
+  gainedL_.assign((size_t)latency_ + 1, 0.0f);
+  gainedR_.assign((size_t)latency_ + 1, 0.0f);
   window_ = latency_;
   maxVal_.assign((size_t)window_ + 1, 0.0f);
   maxIdx_.assign((size_t)window_ + 1, 0);
@@ -135,6 +137,8 @@ void Engine::reset() {
   resetBlocks();
   std::fill(delayL_.begin(), delayL_.end(), 0.0f);
   std::fill(delayR_.begin(), delayR_.end(), 0.0f);
+  std::fill(gainedL_.begin(), gainedL_.end(), 0.0f);
+  std::fill(gainedR_.begin(), gainedR_.end(), 0.0f);
   writePos_ = 0;
   maxHead_ = maxCount_ = 0;
   sampleIndex_ = 0;
@@ -262,9 +266,11 @@ void Engine::process(const float* inL, const float* inR, float* outL, float* out
     // Audio delay.
     delayL_[(size_t)writePos_] = xl;
     delayR_[(size_t)writePos_] = xr;
+    gainedL_[(size_t)writePos_] = ll;
+    gainedR_[(size_t)writePos_] = lr;
     writePos_ = writePos_ + 1 == len ? 0 : writePos_ + 1;
     const float dl = delayL_[(size_t)writePos_], dr = delayR_[(size_t)writePos_];
-    const float al = dl * gIn, ar = dr * gIn;
+    const float al = gainedL_[(size_t)writePos_], ar = gainedR_[(size_t)writePos_];
 
     // Rider and breath reducer gains (they always run; IN crossfades the gain to 1).
     const float gRider = rider_.processFrame(levelDb, prob > 0.5f);
