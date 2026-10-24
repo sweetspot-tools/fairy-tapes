@@ -45,7 +45,7 @@ Device, Morph, Gain, Mono, Bypass, Drive, Tone, Noise, Room, Mix, IN di CHARACTE
 
 ## 4. Interfaccia
 
-Pannello rack orizzontale 1000 × 428 nel linguaggio comune. Materiale e texture sono quelli di The Stripper, uguali per tutti i plugin (decisione del 2026-10-10). Tutto il testo è in inglese. Preview di riferimento: `src/hotline/docs/mockups/hotline_rack.html` (derivata da `stripper_rack.html`).
+Pannello rack orizzontale 1000 × 470 (altezza di Pillow Talk, così il retro usa il template `kShort` del kit; deciso il 2026-10-24 dopo averla vista in preview, contro i 428 iniziali) nel linguaggio comune. Materiale e texture sono quelli di The Stripper, uguali per tutti i plugin (decisione del 2026-10-10). Tutto il testo è in inglese. Preview di riferimento: `src/hotline/docs/mockups/hotline_rack.html` (derivata da `stripper_rack.html`).
 
 - **Riga 1:** DEVICE (sei pulsanti su due righe con il nome sulla faccia: il dispositivo attivo ha la faccia ambra, nessun LED — regola comune dei tre tipi di pulsante del 2026-10-21; pulsanti un po' più stretti, preview 2026-10-21; nessun nastro), LEVEL (meter IN e OUT stereo e LED di clip IN, DRV, OUT: tenuti, deciso il 2026-10-24), OUTPUT (Gain, Bypass in alto a destra, Mono).
 - **Riga 2:** MORPH (manopola grande) e un solo blocco CHARACTER con Drive, Tone, Noise, Room e Mix (manopole un po' più ravvicinate e IN del blocco appena più in basso, preview 2026-10-21; editor da allineare).
@@ -80,10 +80,9 @@ Pannello rack orizzontale 1000 × 428 nel linguaggio comune. Materiale e texture
 
 ## 8. Decisioni aperte
 
-- **Altezza del pannello e retro:** il pannello è 1000 × 428, ma i template del retro in `shared/ui/include/fairy_ui/back_panel.h` esistono solo per 628 (`kTall`) e 470 (`kShort`). Con 428 serve un terzo template (modifica comune, in `shared/`) oppure si porta Hotline a 470 come Pillow Talk. Da decidere prima del Task 8.
 - Punto da cui si preleva il dry del MIX (assunto dopo la somma mono, prima della BAND): si conferma nel Task 5 e, se cambia, si aggiorna lo schema ROUTING.
 
-Decise: meter LEVEL tenuti (2026-10-24); valori iniziali dei dispositivi nel piano, da affinare a orecchio durante l'implementazione; crediti e licenze di Hotline scritti nel Task 8 (la preview ha ancora quelli di The Stripper).
+Decise: pannello alto 470 (2026-10-24); meter LEVEL tenuti (2026-10-24); valori iniziali dei dispositivi nel piano, da affinare a orecchio durante l'implementazione; crediti e licenze di Hotline scritti nel Task 8 (la preview ha ancora quelli di The Stripper).
 
 ## 9. Processo
 
