@@ -188,4 +188,17 @@ if(NOT WIN32)
   add_dependencies(hotline_state_module_test hotline)   # it dlopens the built bundle
   add_test(NAME hotline_state_module_test COMMAND hotline_state_module_test)
   set_tests_properties(hotline_state_module_test PROPERTIES SKIP_RETURN_CODE 77)
+
+  # process() through the real module (mock host queues): clean line, bypass, clip clear ack, display values, degenerate
+  # blocks, mono bus, tail/latency, silence when not prepared, no allocation. Exports operator new so the module binds to
+  # the test's allocation counter. Skipped when the module is absent.
+  add_executable(hotline_processor_test tests/test_processor.cpp
+    ${VST3_SDK_PATH}/public.sdk/source/vst/vstinitiids.cpp)
+  target_include_directories(hotline_processor_test PRIVATE ${VST3_SDK_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_compile_definitions(hotline_processor_test PRIVATE HOTLINE_MODULE="${HOTLINE_MODULE_PATH}")
+  target_link_libraries(hotline_processor_test PRIVATE pluginterfaces ${CMAKE_DL_LIBS})
+  set_target_properties(hotline_processor_test PROPERTIES ENABLE_EXPORTS ON)
+  add_dependencies(hotline_processor_test hotline)   # it dlopens the built bundle
+  add_test(NAME hotline_processor_test COMMAND hotline_processor_test)
+  set_tests_properties(hotline_processor_test PROPERTIES SKIP_RETURN_CODE 77)
 endif()

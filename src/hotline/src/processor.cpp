@@ -8,6 +8,7 @@
 #include "state_stream.h"
 #include "pluginterfaces/base/ibstream.h"
 #include "pluginterfaces/vst/ivstparameterchanges.h"
+#include <algorithm>
 #include <vector>
 
 namespace FairyTapes::Hotline {
@@ -107,15 +108,32 @@ void Processor::publishDisplay(Steinberg::Vst::ProcessData& data) {
 Steinberg::tresult PLUGIN_API Processor::process(Steinberg::Vst::ProcessData& data) {
   updateParamsFromChanges(data.inputParameterChanges);
 
+  // Anything that stops us from processing must still leave silence in the outputs we can reach (no stale buffers).
+  const auto silence = [&data]() {
+    if (data.numSamples <= 0 || !data.outputs || data.numOutputs < 1)
+      return;
+    Steinberg::Vst::AudioBusBuffers& o = data.outputs[0];
+    if (!o.channelBuffers32)
+      return;
+    for (Steinberg::int32 c = 0; c < o.numChannels; ++c)
+      if (o.channelBuffers32[c])
+        std::fill_n(o.channelBuffers32[c], static_cast<std::size_t>(data.numSamples), 0.f);
+    o.silenceFlags = ~static_cast<Steinberg::uint64>(0);
+  };
+
   if (!prepared_ || data.numInputs < 1 || data.numOutputs < 1 || data.numSamples <= 0 ||
-      !data.inputs || !data.outputs)
+      !data.inputs || !data.outputs) {
+    silence();
     return Steinberg::kResultOk;
+  }
 
   Steinberg::Vst::AudioBusBuffers& in = data.inputs[0];
   Steinberg::Vst::AudioBusBuffers& out = data.outputs[0];
   if (!in.channelBuffers32 || !out.channelBuffers32 || in.numChannels < 1 ||
-      out.numChannels < 1 || !in.channelBuffers32[0] || !out.channelBuffers32[0])
+      out.numChannels < 1 || !in.channelBuffers32[0] || !out.channelBuffers32[0]) {
+    silence();
     return Steinberg::kResultOk;
+  }
 
   engine_.setSettings(mapParams(param_value_));
 
