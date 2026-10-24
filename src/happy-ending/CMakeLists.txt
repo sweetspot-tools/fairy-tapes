@@ -91,3 +91,14 @@ target_include_directories(happy_ending_limiter_tests PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 add_test(NAME happy_ending_limiter_tests COMMAND happy_ending_limiter_tests)
+
+add_executable(happy_ending_final_tests
+  tests/test_final.cpp
+  src/dsp/metalhead.cpp
+  src/dsp/limiter.cpp
+)
+target_include_directories(happy_ending_final_tests PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/src
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../shared/inflator
+)
+add_test(NAME happy_ending_final_tests COMMAND happy_ending_final_tests)

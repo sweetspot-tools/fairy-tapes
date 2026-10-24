@@ -50,15 +50,21 @@ inline constexpr int kVibeTubeRampSamples = 256;       // length of the TUBE dri
 inline constexpr double kGlueWarmAttackFactor = 3.0;
 inline constexpr double kGlueRampMs = 10.0;
 
-// LIMIT: base release of each style (MODERN, PUNCH, DYN); RELEASE trims around it.
-inline constexpr double kLimitReleaseBaseMs[3] = {50.0, 100.0, 250.0};
+// METALHEAD (brickwall after FINAL) is built on the LIMIT engine as a fourth, fixed style that the
+// LIMIT control does not offer: its look-ahead and release are fixed here, its attack ramp is as long
+// as its look-ahead (so the ceiling holds by construction).
+inline constexpr double kMetalLookAheadMs = 1.0;
+inline constexpr double kMetalReleaseMs = 30.0;
+
+// LIMIT: base release of each style (MODERN, PUNCH, DYN, then METAL); RELEASE trims around it.
+inline constexpr double kLimitReleaseBaseMs[4] = {50.0, 100.0, 250.0, kMetalReleaseMs};
 
 // LIMIT: look-ahead of each style (MODERN, PUNCH, DYN) and the length of the attack ramp that
 // brings the gain down. The latency stays that of MODERN (the longest look-ahead) for every style.
 // PUNCH ramps down more slowly than it looks ahead, so the first instant of a transient passes
 // before the gain has fully arrived (the sample-peak guard still holds it under the ceiling).
-inline constexpr double kLimitLookAheadMs[3] = {1.5, 0.3, 0.8};
-inline constexpr double kLimitAttackMs[3] = {1.5, 0.45, 0.8};
+inline constexpr double kLimitLookAheadMs[4] = {1.5, 0.3, 0.8, kMetalLookAheadMs};
+inline constexpr double kLimitAttackMs[4] = {1.5, 0.45, 0.8, kMetalLookAheadMs};
 
 // LIMIT DYN: soft knee width (the reduction starts this far below the threshold, centred on it) and
 // the program-dependent release. The release time is the RELEASE value times a factor that goes from
@@ -79,6 +85,10 @@ inline constexpr double kLimitOnRampMs = 10.0;
 // glide at the same speed.
 inline constexpr double kSetThresholdDb = -8.0;
 inline constexpr double kSetGlideMs = 150.0;
+
+// FINAL: the INFLATE EFFECT and the CLIP DRIVE glide linearly over this many milliseconds, and so
+// do the crossfades on switching the stage on or off and between its two modes.
+inline constexpr double kFinalRampMs = 10.0;
 
 // LOUDNESS macro: what the last third of the knob adds to each stage, in this order
 // (CLIP first, then LIMIT, then FINAL). The knob travels 0..10; each stage owns one third.

@@ -32,7 +32,7 @@ namespace FairyTapes::HappyEnding::DSP {
 struct LimiterSettings {
   bool on = true;
   float threshDb = 0.0f;       // 0 .. -4 (the THRESH control)
-  int style = 0;               // 0 MODERN, 1 PUNCH, 2 DYN
+  int style = 0;               // 0 MODERN, 1 PUNCH, 2 DYN (3 METAL: fixed 1 ms / 30 ms, used by METALHEAD only)
   int releaseTrimIndex = 4;    // 0..8: 4 = as the style wants, 2^((index - 4) / 3) around it
   float ceilingDb = -0.3f;     // OUTPUT CEIL
   bool set = false;            // guided release setting: threshold forced to Tuning::kSetThresholdDb

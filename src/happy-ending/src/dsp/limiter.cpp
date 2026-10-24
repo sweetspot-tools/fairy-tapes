@@ -48,7 +48,7 @@ void Limiter::set(const LimiterSettings& settings) {
 }
 
 void Limiter::apply(bool snap) {
-  const int style = std::clamp(s_.style, 0, 2);
+  const int style = std::clamp(s_.style, 0, 3);
   const int trim = std::clamp(s_.releaseTrimIndex, 0, 8);
 
   window_ = std::clamp(static_cast<int>(std::lround(Tuning::kLimitLookAheadMs[style] * 0.001 * sampleRate_)), 1, delay_);
