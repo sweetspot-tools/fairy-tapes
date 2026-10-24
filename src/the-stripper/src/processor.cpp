@@ -1,6 +1,7 @@
 /**
  * Fairy Tapes · The Stripper — VST3 Audio Processor implementation.
- * Chain: Gain staging (not implemented) → EQ → Compression → Drive → Limiter → Gate.
+ * Chain: Input → [Drive, Channel] → EQ (with the 4K saturation) → Compression → [Drive, Mix bus] → Limiter → Gate → Output.
+ * The Drive block (NAM then TAPE) moves with Strip Mode: right after the input in Channel, before the limiter in Mix bus.
  * EQ: 4K-EQ in both modes. Channel = Black (G-series, tight). Mix bus = Brown (E-series, wide/glue).
  * LP/HP active in both modes. Compression: Multi-Comp DSP (Dusk Audio port); Channel = Voice/Drums/Classic, Mix bus = Bus only.
  */
@@ -146,6 +147,10 @@ void Processor::processChain(float* const* out, const float* const* in,
 
   clip_[0].process(L, R, numSamples);   // Input: output of the input gain stage
 
+  // Drive block, Channel position: preamp / capture (NAM) and multitrack tape (TAPE, Tracking voicing) before the console.
+  if (driveBlockAtStart(param_value_[kStripMode]))
+    processDriveBlock(L, R, numSamples, sampleRate, channel_mode);
+
   // Gain staging (Channel only): not implemented (design). Params kBypassGainStaging and kGainStagingTrim
   // are kept for future use; no processing applied here.
 
@@ -178,6 +183,20 @@ void Processor::processChain(float* const* out, const float* const* in,
     eqp.hfBell = param_value_[kEqHFBell] >= 0.5;
     eqp.eqTypeBlack = channel_mode; // Channel = Black (G), Mix bus = Brown (E)
     fourkEq_.process(L, R, numSamples, eqp);
+    // The 4K console saturation: last step of the EQ (G series in Channel, E series in Mix bus), out with the EQ's IN.
+    if (sampleRate != saturationRate_) {
+      eqSaturation_.setSampleRate(sampleRate);
+      eqSaturation_.reset();
+      saturationRate_ = sampleRate;
+    }
+    eqSaturation_.setConsoleType(channel_mode ? DSP::SSLSaturation::ConsoleType::GSeries : DSP::SSLSaturation::ConsoleType::ESeries);
+    const float satAmount = static_cast<float>(std::clamp(param_value_[kEqSaturation], 0.0, 1.0));
+    if (satAmount > 0.001f) {
+      for (int i = 0; i < numSamples; ++i) {
+        L[i] = eqSaturation_.processSample(L[i], satAmount, true);
+        R[i] = eqSaturation_.processSample(R[i], satAmount, false);
+      }
+    }
     clip_[1].process(L, R, numSamples);
   } else {
     clip_[1].clear();
@@ -203,32 +222,9 @@ void Processor::processChain(float* const* out, const float* const* in,
     clip_[2].clear();
   }
 
-  // Drive: NAM (CPU inference; GPU path planned). Auto-compensated output; always 100% wet.
-  const bool bypass_drive = isBypassStage(param_value_[kBypassDrive]);
-  if (!bypass_drive) {
-    if (param_value_[kDriveNamOn] >= 0.5) {
-      namDrive_.setSampleRate(sampleRate);
-      namDrive_.setDrive(static_cast<float>(param_value_[kDriveAmount]));
-      namDrive_.process(L, R, numSamples);   // no model loaded: passes the signal through
-    } else {
-      // The 4K saturation as the Drive engine; its amount is kEqSaturation (shown on the same knob).
-      if (sampleRate != saturationRate_) {
-        driveSaturation_.setSampleRate(sampleRate);
-        driveSaturation_.reset();
-        saturationRate_ = sampleRate;
-      }
-      driveSaturation_.setConsoleType(isChannelMode(param_value_[kStripMode]) ? DSP::SSLSaturation::ConsoleType::GSeries
-                                                                              : DSP::SSLSaturation::ConsoleType::ESeries);
-      const float amount = static_cast<float>(std::clamp(param_value_[kEqSaturation], 0.0, 1.0));
-      for (int i = 0; i < numSamples; ++i) {
-        L[i] = driveSaturation_.processSample(L[i], amount, true);
-        R[i] = driveSaturation_.processSample(R[i], amount, false);
-      }
-    }
-    clip_[3].process(L, R, numSamples);
-  } else {
-    clip_[3].clear();
-  }
+  // Drive block, Mix bus position: outboard (NAM) and the 2-track mixdown machine (TAPE, Mixdown voicing) before the limiter.
+  if (!driveBlockAtStart(param_value_[kStripMode]))
+    processDriveBlock(L, R, numSamples, sampleRate, channel_mode);
 
   // Limiter: BlockParty (Airwindows)
   const bool bypass_limiter = isBypassStage(param_value_[kBypassLimiter]);
@@ -264,6 +260,27 @@ void Processor::processChain(float* const* out, const float* const* in,
   clip_[5].process(L, R, numSamples);   // Output
   if (out[0] != L) std::memcpy(out[0], L, static_cast<size_t>(numSamples) * sizeof(float));
   if (out[1] != R) std::memcpy(out[1], R, static_cast<size_t>(numSamples) * sizeof(float));
+}
+
+void Processor::processDriveBlock(float* L, float* R, Steinberg::int32 numSamples, double sampleRate, bool channelMode) {
+  if (isBypassStage(param_value_[kBypassDrive])) {
+    clip_[3].clear();
+    return;
+  }
+  // NAM (GPU or CPU inference): auto-compensated output, always 100% wet; no model loaded: passes the signal through.
+  if (param_value_[kDriveNamOn] >= 0.5) {
+    namDrive_.setSampleRate(sampleRate);
+    namDrive_.setDrive(static_cast<float>(param_value_[kDriveAmount]));
+    namDrive_.process(L, R, numSamples);
+  }
+  // TAPE: one knob over slam and head bump; the voicing follows Strip Mode (Channel = Tracking, Mix bus = Mixdown).
+  if (param_value_[kDriveTapeOn] >= 0.5) {
+    tape_.setSampleRate(sampleRate);
+    tape_.setParams(static_cast<float>(param_value_[kDriveTapeAmount]),
+                    channelMode ? DSP::TapeSaturation::Voicing::Tracking : DSP::TapeSaturation::Voicing::Mixdown);
+    tape_.process(L, R, numSamples);
+  }
+  clip_[3].process(L, R, numSamples);
 }
 
 Steinberg::tresult PLUGIN_API Processor::process(Steinberg::Vst::ProcessData& data) {

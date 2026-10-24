@@ -43,4 +43,6 @@
   X(kDriveAmount, 32, 0.0) \
   X(kLimiterPound, 33, 0.5) \
   X(kGateThreshold, 34, 0.0) \
-  X(kDriveNamOn, 35, 1.0)
+  X(kDriveNamOn, 35, 1.0) \
+  X(kDriveTapeOn, 36, 1.0) \
+  X(kDriveTapeAmount, 37, 0.0)

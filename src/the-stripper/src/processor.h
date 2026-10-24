@@ -16,6 +16,7 @@
 #include "dsp/denoise.h"
 #include "dsp/meter.h"
 #include "dsp/ssl_saturation.h"
+#include "dsp/tape_saturation.h"
 #include "nam_drive.h"
 #include <mutex>
 #include <string>
@@ -43,6 +44,8 @@ public:
 
 private:
   void updateParamsFromChanges(Steinberg::Vst::IParameterChanges* changes);
+  // The Drive block: NAM then TAPE, each when its switch is on; the clip LED measures the block's output.
+  void processDriveBlock(float* L, float* R, Steinberg::int32 numSamples, double sampleRate, bool channelMode);
   void processChain(float* const* out, const float* const* in, Steinberg::int32 numChannels,
                     Steinberg::int32 numSamples, double sampleRate,
                     const float* sidechainL = nullptr, const float* sidechainR = nullptr);
@@ -53,7 +56,8 @@ private:
   DSP::CompressionStub compressionStub_;
   DSP::FourKEQ fourkEq_;
   Shared::DSP::NamDrive namDrive_;
-  DSP::SSLSaturation driveSaturation_;   // the Drive engine when the NAM switch is off (moved here from the EQ)
+  DSP::TapeSaturation tape_;             // the TAPE engine of the Drive, after the NAM
+  DSP::SSLSaturation eqSaturation_;      // the 4K console saturation, last step of the EQ (back from the Drive, 2026-10-24)
   double saturationRate_ = 0.0;
   DSP::BlockParty limiter_;
   DSP::DeNoise gate_;

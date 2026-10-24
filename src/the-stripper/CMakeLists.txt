@@ -57,6 +57,7 @@ add_library(the_stripper MODULE
   src/dsp/multicomp_engines.cpp
   src/dsp/fourk_eq.cpp
   src/dsp/blockparty.cpp
+  src/dsp/tape_saturation.cpp
   src/dsp/denoise.cpp
 )
 
@@ -142,6 +143,7 @@ add_executable(the_stripper_tests
   src/dsp/compression_stub.cpp
   src/dsp/multicomp_engines.cpp
   src/dsp/blockparty.cpp
+  src/dsp/tape_saturation.cpp
   src/dsp/denoise.cpp
 )
 target_include_directories(the_stripper_tests PRIVATE

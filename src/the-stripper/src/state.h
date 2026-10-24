@@ -20,7 +20,7 @@
 
 namespace FairyTapes::TheStripper {
 
-constexpr int kStateVersion = 11;
+constexpr int kStateVersion = 12;
 constexpr std::int32_t kMaxModelPathBytes = 4096;
 constexpr int kMaxTapePieces = 4;            // pieces of tape whose writing is saved
 constexpr std::int32_t kMaxTapeTextBytes = 64;   // 14 characters, UTF-8, with room to spare
@@ -86,6 +86,8 @@ inline void fillDefaultParams(double* p) {
   p[kLimiterPound] = kDefaultLimiterPound;
   p[kGateThreshold] = kDefaultGateThreshold;
   p[kDriveNamOn] = kDefaultDriveNamOn;
+  p[kDriveTapeOn] = kDefaultDriveTapeOn;
+  p[kDriveTapeAmount] = kDefaultDriveTapeAmount;
 }
 
 namespace state_detail {
@@ -108,7 +110,7 @@ bool readDoubles(S& s, double* buf, int n) {
 }
 } // namespace state_detail
 
-/// Reads any state version (1..9). Returns false for an unknown version or a truncated stream; `out` is then unspecified.
+/// Reads any state version (1..12). Returns false for an unknown version or a truncated stream; `out` is then unspecified.
 template <class S>
 bool readState(S& s, PluginState& out) {
   using namespace state_detail;
@@ -152,8 +154,9 @@ bool readState(S& s, PluginState& out) {
   } else if (version == 7) {
     if (!readDoubles(s, P, kNumParamsV7))
       return false;
-  } else if (version >= 8) {   // 8, 9, 10: parameters, then the model path (10: then seed and tape)
-    if (!readDoubles(s, P, version == 8 ? kNumParamsV8 : kNumParams))
+  } else if (version >= 8) {   // 8..12: parameters, then the model path (10: then seed and tape; 11: screws and recall)
+    const int nParams = version == 8 ? kNumParamsV8 : version <= 11 ? kNumParamsV11 : kNumParams;
+    if (!readDoubles(s, P, nParams))
       return false;
     std::int32_t len = 0;
     if (!s.readInt32(len) || len < 0 || len > kMaxModelPathBytes)
@@ -203,12 +206,14 @@ bool readState(S& s, PluginState& out) {
         return false;
       if (recallFlag == 1) {
         out.recallValid = true;
-        for (int i = 0; i < kNumParams; ++i) {
+        for (int i = 0; i < nParams; ++i) {
           double v = 0;
           if (!s.readDouble(v))
             return false;
           out.recall[i] = std::isfinite(v) ? std::min(1.0, std::max(0.0, v)) : 0.0;
         }
+        for (int i = nParams; i < kNumParams; ++i)
+          out.recall[i] = P[i];   // a parameter the state did not know: no mark away from its loaded value
       }
       std::int32_t mode = 0;
       if (!s.readInt32(mode) || (mode != 0 && mode != 1))
@@ -278,10 +283,14 @@ bool readState(S& s, PluginState& out) {
   }
   if (version < 9)
     P[kDriveNamOn] = kDefaultDriveNamOn;
+  if (version < 12) {
+    P[kDriveTapeOn] = 0.0;   // TAPE did not exist: off, so the project keeps its sound
+    P[kDriveTapeAmount] = kDefaultDriveTapeAmount;
+  }
   return true;
 }
 
-/// Writes the current version (11).
+/// Writes the current version (12).
 template <class S>
 bool writeState(S& s, const PluginState& in) {
   if (!s.writeInt32(kStateVersion))

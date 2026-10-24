@@ -62,7 +62,6 @@ void test_controls_do_not_overlap() {
   const int n = static_cast<int>(sizeof(kControls) / sizeof(kControls[0]));
   for (int i = 0; i < n; ++i)
     for (int j = i + 1; j < n; ++j) {
-      if (kControls[i].sharesView || kControls[j].sharesView) continue;   // the Saturate knob is the Drive knob
       CHECK(!overlaps(kControls[i].rect, kControls[j].rect));
     }
 }
@@ -140,54 +139,78 @@ void test_meter_band_fits_level_box() {
   }
 }
 
-void test_drive_knob_is_shared_by_the_two_engines() {
-  const ControlSpec* nam = nullptr; const ControlSpec* sat = nullptr; const ControlSpec* sw = nullptr;
+void test_drive_has_two_engines_in_series() {
+  // NAM then TAPE, each with its own knob and its own on/off switch (type 2: label above, red LED), left of the module IN
+  const ControlSpec* drive = nullptr; const ControlSpec* tape = nullptr; const ControlSpec* namSw = nullptr;
+  const ControlSpec* tapeSw = nullptr; const ControlSpec* in = inButtonOf(Module::Drive);
   for (const auto& c : kControls) {
-    if (c.id == kDriveAmount) nam = &c;
-    if (c.id == kEqSaturation) sat = &c;
-    if (c.id == kDriveNamOn) sw = &c;
+    if (c.id == kDriveAmount) drive = &c;
+    if (c.id == kDriveTapeAmount) tape = &c;
+    if (c.id == kDriveNamOn) namSw = &c;
+    if (c.id == kDriveTapeOn) tapeSw = &c;
   }
-  CHECK(nam && sat && sw);
-  if (!(nam && sat && sw)) return;
-  CHECK(!nam->sharesView && sat->sharesView);           // one view, two parameters
-  CHECK(nam->rect.x == sat->rect.x && nam->rect.y == sat->rect.y);
-  CHECK(std::string(nam->label) == std::string(sat->label));   // same label: the swap is not visible
-  // two exclusive buttons NAM / 4K, like Voice/Drums/Classic; the parameter is 1 for the NAM, so the choice is inverted
-  CHECK(sw->kind == Kind::Choice && sw->module == Module::Drive && !sw->isIn && sw->inverted);
-  CHECK(std::string(sw->choices[0]) == "NAM" && std::string(sw->choices[1]) == "4K" && sw->choices[2] == nullptr);
-  CHECK(uiValue(sw->inverted, 1.0) == 0.0 && uiValue(sw->inverted, 0.0) == 1.0);   // NAM = first button = index 0
-  CHECK(driveEngineParam(true) == kDriveAmount && driveEngineParam(false) == kEqSaturation);
-  CHECK(driveKnobDimmed(true, false) && !driveKnobDimmed(true, true));   // NAM without a model: dimmed
-  CHECK(!driveKnobDimmed(false, false) && !driveKnobDimmed(false, true)); // Saturate never needs a model
-  CHECK(stripShowsSaturate(false) && !stripShowsSaturate(true));
+  CHECK(drive && tape && namSw && tapeSw && in);
+  if (!(drive && tape && namSw && tapeSw && in)) return;
+  CHECK(drive->kind == Kind::Knob && tape->kind == Kind::Knob && drive->module == Module::Drive && tape->module == Module::Drive);
+  CHECK(std::string(drive->label) == "DRIVE" && std::string(tape->label) == "TAPE");
+  CHECK(drive->rect.x < tape->rect.x);   // NAM first, as in the signal path
+  for (const ControlSpec* sw : {namSw, tapeSw}) {
+    CHECK(sw->kind == Kind::Toggle && sw->module == Module::Drive && !sw->isIn && !sw->inverted);   // 1 = engine on = lit
+    CHECK(sw->rect.y == in->rect.y && sw->rect.x < in->rect.x);                                   // same row, left of the IN
+  }
+  CHECK(std::string(namSw->label) == "NAM" && std::string(tapeSw->label) == "TAPE" && namSw->rect.x < tapeSw->rect.x);
+  CHECK(choiceLookOf(kDriveNamOn) == nullptr);   // no longer an exclusive choice
+  // no knob shares a view any more: the 4K saturation is back in the EQ
+  for (const auto& c : kControls) CHECK(!c.sharesView);
+  // an engine's knob dims when its switch is off; the NAM's also without a model (it passes the signal through)
+  CHECK(!engineKnobDimmed(kDriveAmount, true, true, true));
+  CHECK(engineKnobDimmed(kDriveAmount, false, true, true) && engineKnobDimmed(kDriveAmount, true, true, false));
+  CHECK(!engineKnobDimmed(kDriveTapeAmount, false, true, false) && engineKnobDimmed(kDriveTapeAmount, true, false, true));
+  CHECK(!engineKnobDimmed(kEqSaturation, false, false, false) && !engineKnobDimmed(kLimiterPound, false, false, false));
+  CHECK(stripDimmed(false) && !stripDimmed(true));
+  // the model strip sits right of the TAPE knob, inside the Drive box
+  CHECK(!overlaps(kModelStrip, tape->rect) && !overlaps(kModelStrip, tapeSw->rect) && inside(kModelStrip, boxOf(Module::Drive)->rect));
+}
+
+void test_saturate_is_the_last_eq_knob() {
+  const ControlSpec* sat = nullptr;
+  double lastBand = 0;
+  for (const auto& c : kControls) {
+    if (c.id == kEqSaturation) sat = &c;
+    else if (c.module == Module::Eq && c.kind == Kind::Knob) lastBand = std::max(lastBand, c.rect.x);
+  }
+  CHECK(sat && sat->module == Module::Eq && sat->kind == Kind::Knob && std::string(sat->label) == "SATURATE");
+  if (sat) CHECK(sat->rect.x > lastBand && sat->rect.x < inButtonOf(Module::Eq)->rect.x);
+  CHECK(knobLookOf(kEqSaturation) && knobLookOf(kEqSaturation)->radius == 22);
 }
 
 void test_block_tags() {
   using std::string;
-  CHECK(string(blockTag(Module::Eq, true, 0, true)) == "4K-G");
-  CHECK(string(blockTag(Module::Eq, false, 0, true)) == "4K-E");
-  CHECK(string(blockTag(Module::Filters, true, 0, true)) == "4K-G" && string(blockTag(Module::Filters, false, 0, true)) == "4K-E");
-  CHECK(string(blockTag(Module::Comp, true, 0.0, true)) == "OPTO-2A");
-  CHECK(string(blockTag(Module::Comp, true, 0.5, true)) == "FET-76");
-  CHECK(string(blockTag(Module::Comp, true, 1.0, true)) == "VCA-160");
-  CHECK(string(blockTag(Module::Comp, false, 0.5, true)) == "4K-G");     // Mix bus: the Bus compressor
-  CHECK(string(blockTag(Module::Drive, true, 0, true)) == "NAM");
-  CHECK(string(blockTag(Module::Drive, true, 0, false)) == "4K-G");      // the saturation follows Chan/Bus
-  CHECK(string(blockTag(Module::Drive, false, 0, false)) == "4K-E");
-  CHECK(string(blockTag(Module::Limiter, true, 0, true)) == "B-PARTY");
-  CHECK(string(blockTag(Module::Gate, true, 0, true)) == "D-NOISE");
-  CHECK(string(blockTag(Module::Input, true, 0, true)).empty() && string(blockTag(Module::Output, true, 0, true)).empty());
+  CHECK(string(blockTag(Module::Eq, true, 0, true, true)) == "4K-G");
+  CHECK(string(blockTag(Module::Eq, false, 0, true, true)) == "4K-E");
+  CHECK(string(blockTag(Module::Filters, true, 0, true, true)) == "4K-G" && string(blockTag(Module::Filters, false, 0, true, true)) == "4K-E");
+  CHECK(string(blockTag(Module::Comp, true, 0.0, true, true)) == "OPTO-2A");
+  CHECK(string(blockTag(Module::Comp, true, 0.5, true, true)) == "FET-76");
+  CHECK(string(blockTag(Module::Comp, true, 1.0, true, true)) == "VCA-160");
+  CHECK(string(blockTag(Module::Comp, false, 0.5, true, true)) == "4K-G");     // Mix bus: the Bus compressor
+  // the Drive tag names the engines that are on
+  CHECK(string(blockTag(Module::Drive, true, 0, true, true)) == "NAM \xC2\xB7 TAPE");
+  CHECK(string(blockTag(Module::Drive, false, 0, true, false)) == "NAM");
+  CHECK(string(blockTag(Module::Drive, true, 0, false, true)) == "TAPE");
+  CHECK(string(blockTag(Module::Drive, true, 0, false, false)).empty());
+  CHECK(string(blockTag(Module::Limiter, true, 0, true, true)) == "B-PARTY");
+  CHECK(string(blockTag(Module::Gate, true, 0, true, true)) == "D-NOISE");
+  CHECK(string(blockTag(Module::Input, true, 0, true, true)).empty() && string(blockTag(Module::Output, true, 0, true, true)).empty());
 }
 
 void test_look_tables() {
-  // every knob has an end-value look; the shared Drive knob uses the same cap radius for both engines
+  // every knob has an end-value look
   for (const auto& c : kControls) {
     if (c.kind != Kind::Knob) continue;
     const KnobLook* look = knobLookOf(c.id);
     CHECK(look != nullptr);
     if (look) CHECK(look->radius >= 15 && look->radius <= 26 && look->lo && look->hi);
   }
-  CHECK(knobLookOf(kDriveAmount)->radius == knobLookOf(kEqSaturation)->radius);
   // exclusive choices have the name on the face (design system, 2026-10-21): a look for each, faces where the preview puts them
   for (const auto& c : kControls)
     if (c.kind == Kind::Choice) CHECK(choiceLookOf(c.id) != nullptr);
@@ -203,7 +226,6 @@ void test_look_tables() {
   };
   CHECK(centre(kStripMode, 0) == std::make_pair(940.0, 198.0) && centre(kStripMode, 1) == std::make_pair(940.0, 224.0));
   CHECK(centre(kCompressorMode, 0) == std::make_pair(262.0, 498.0) && centre(kCompressorMode, 2) == std::make_pair(262.0, 550.0));
-  CHECK(centre(kDriveNamOn, 0) == std::make_pair(526.0, 490.0) && centre(kDriveNamOn, 1) == std::make_pair(566.0, 490.0));
   CHECK(choiceLookOf(kCompressorMode)->faceWidth == 44 && choiceLookOf(kStripMode)->faceWidth == 34);
   CHECK(isBellButton(kEqLFBell) && isBellButton(kEqHFBell) && !isBellButton(kBypass));
   // the Bell filter exists only in the Black (Channel) EQ: in Bus mode the buttons are dimmed and inert, every other control stays in use
@@ -258,7 +280,8 @@ int main() {
   test_module_dimming();
   test_mode_visibility();
   test_meter_band_fits_level_box();
-  test_drive_knob_is_shared_by_the_two_engines();
+  test_drive_has_two_engines_in_series();
+  test_saturate_is_the_last_eq_knob();
   test_block_tags();
   test_look_tables();
   test_meter_dimming();

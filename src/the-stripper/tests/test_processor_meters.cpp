@@ -18,6 +18,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <initializer_list>
 #include <map>
 #include <memory>
 #include <vector>
@@ -96,6 +97,17 @@ struct Host {
   /// One 64-sample block with the given constant amplitude (alternating sign) and optional parameter changes.
   void block(float amp, MockChanges* inChanges = nullptr) {
     for (int i = 0; i < 64; ++i) { inL[i] = inR[i] = (i & 1) ? -amp : amp; }
+    run(inChanges);
+  }
+  /// One 64-sample block of a sine (phase continues across blocks).
+  void sine(float amp, double hz, MockChanges* inChanges = nullptr) {
+    for (int i = 0; i < 64; ++i) {
+      const double t = (blocks * 64.0 + i) / 48000.0;
+      inL[i] = inR[i] = amp * static_cast<float>(std::sin(2.0 * 3.14159265358979 * hz * t));
+    }
+    run(inChanges);
+  }
+  void run(MockChanges* inChanges) {
     float* ib[2] = {inL.data(), inR.data()};
     float* ob[2] = {outL.data(), outR.data()};
     AudioBusBuffers in{}, out{};
@@ -154,22 +166,22 @@ void test_global_bypass_is_transparent_and_only_input_output_clip() {
 void test_compressor_gain_reduction_uses_the_ssl_encoding() {
   Host h; CHECK(h.open());
   MockChanges c; c.set(kCompressAmount, 1.0);
-  h.block(0.7f, &c);
-  for (int i = 0; i < 200; ++i) h.block(0.7f);
+  h.sine(0.7f, 1000.0, &c);
+  for (int i = 0; i < 200; ++i) h.sine(0.7f, 1000.0);
   const double v = h.last(kMeterGrComp);
   CHECK(v > 0.0 && v < 1.0);                     // compressing: some reduction, never the full-scale 1.0
   const double db = -20.0 * std::log10(1.0 - v); // what SSL 360 Link shows
-  CHECK(db > 0.05 && db < 40.0);                 // this steady square wave is only lightly compressed
+  CHECK(db > 0.05 && db < 40.0);                 // this steady sine is only lightly compressed
   CHECK(std::fabs(v - (1.0 - std::pow(10.0, -db / 20.0))) < 1e-9);
   h.close();
 }
 
 // Output of a fresh plug-in after a few blocks, with the given parameter values set once.
-std::vector<float> outputWith(double namOn, double saturation) {
+std::vector<float> outputWith(std::initializer_list<std::pair<PID, double>> params) {
   Host h; CHECK(h.open());
-  MockChanges c; c.set(kDriveNamOn, namOn); c.set(kEqSaturation, saturation);
-  h.block(0.5f, &c);
-  for (int i = 0; i < 30; ++i) h.block(0.5f);
+  MockChanges c; for (const auto& p : params) c.set(p.first, p.second);
+  h.sine(0.5f, 1000.0, &c);   // a musical signal: the saturations hardly touch a square wave at Nyquist
+  for (int i = 0; i < 30; ++i) h.sine(0.5f, 1000.0);
   std::vector<float> out(h.outL.begin(), h.outL.end());
   h.close();
   return out;
@@ -181,13 +193,47 @@ double maxDiff(const std::vector<float>& a, const std::vector<float>& b) {
   return d;
 }
 
-void test_saturation_belongs_to_the_drive_not_the_eq() {
-  // NAM on (no model: passthrough): the saturation amount must not change the sound any more
-  CHECK(maxDiff(outputWith(1.0, 0.0), outputWith(1.0, 1.0)) < 1e-6);
-  // NAM off: the 4K saturation is the Drive engine and its amount is audible
-  CHECK(maxDiff(outputWith(0.0, 0.0), outputWith(0.0, 1.0)) > 1e-3);
-  // NAM off with amount 0 is transparent, like the NAM without a model
-  CHECK(maxDiff(outputWith(0.0, 0.0), outputWith(1.0, 0.0)) < 1e-6);
+void test_saturation_belongs_to_the_eq_again() {
+  // the 4K saturation is the last step of the EQ (back from the Drive, 2026-10-24): audible with the EQ in ...
+  CHECK(maxDiff(outputWith({{kEqSaturation, 0.0}}), outputWith({{kEqSaturation, 1.0}})) > 1e-3);
+  // ... and gone with the EQ's IN off, whatever the old NAM / 4K switch says
+  CHECK(maxDiff(outputWith({{kBypassEQ, 1.0}, {kEqSaturation, 0.0}}), outputWith({{kBypassEQ, 1.0}, {kEqSaturation, 1.0}})) < 1e-6);
+  CHECK(maxDiff(outputWith({{kBypassEQ, 1.0}, {kDriveNamOn, 0.0}, {kEqSaturation, 1.0}}),
+                outputWith({{kBypassEQ, 1.0}, {kDriveNamOn, 1.0}, {kEqSaturation, 1.0}})) < 1e-6);
+}
+
+void test_tape_engine_switch_and_drive_in() {
+  // TAPE on colours the signal; its switch off skips it; the Drive's IN off skips it too
+  const auto on = outputWith({{kDriveTapeOn, 1.0}, {kDriveTapeAmount, 1.0}});
+  const auto off = outputWith({{kDriveTapeOn, 0.0}, {kDriveTapeAmount, 1.0}});
+  CHECK(maxDiff(on, off) > 1e-3);
+  CHECK(maxDiff(off, outputWith({{kDriveTapeOn, 1.0}, {kDriveTapeAmount, 1.0}, {kBypassDrive, 1.0}})) < 1e-6);
+  // the NAM without a model passes the signal through: its switch does not change the sound
+  CHECK(maxDiff(outputWith({{kDriveNamOn, 1.0}, {kDriveTapeOn, 0.0}}), outputWith({{kDriveNamOn, 0.0}, {kDriveTapeOn, 0.0}})) < 1e-6);
+}
+
+// Drive clip LED after a hot EQ: a 40 Hz sine at -10 dBFS with the LF shelf at +20 dB (40 Hz is under its 100 Hz corner, so it
+// gets the whole boost) drives the EQ far over 0 dBFS.
+// In BUS the Drive comes after the EQ, so TAPE gets the hot signal and its compensated output goes over 0 dBFS too;
+// in CHAN the Drive comes right after the input and sees the clean -10 dBFS sine.
+double driveClipAfterHotEq(bool channel) {
+  Host h; CHECK(h.open());
+  MockChanges c;
+  c.set(kStripMode, channel ? kStripModeChannel : kStripModeMixBus);
+  c.set(kEqLFGain, 1.0); c.set(kDriveTapeOn, 1.0); c.set(kDriveTapeAmount, 0.0);
+  c.set(kBypassLimiter, 1.0);
+  h.sine(0.3f, 40.0, &c);
+  for (int i = 0; i < 150; ++i) h.sine(0.3f, 40.0);
+  CHECK(h.last(kClipEq) == 1.0);   // the setup works: the EQ clips in both modes
+  const double v = h.last(kClipDrive);
+  h.close();
+  return v;
+}
+
+
+void test_drive_block_moves_with_strip_mode() {
+  CHECK(driveClipAfterHotEq(false) == 1.0);   // BUS: Drive after the EQ
+  CHECK(driveClipAfterHotEq(true) == 0.0);    // CHAN: Drive before the EQ
 }
 
 // Last gate gain-reduction value (SSL encoding) after a few quiet blocks with the given settings.
@@ -228,7 +274,9 @@ int main() {
   test_meters_are_published_at_most_every_16ms();
   test_global_bypass_is_transparent_and_only_input_output_clip();
   test_compressor_gain_reduction_uses_the_ssl_encoding();
-  test_saturation_belongs_to_the_drive_not_the_eq();
+  test_saturation_belongs_to_the_eq_again();
+  test_tape_engine_switch_and_drive_in();
+  test_drive_block_moves_with_strip_mode();
   test_gate_gain_reduction_meter();
   test_clear_clips_request();
   std::printf(g_failed ? "Processor meter tests FAILED\n" : "Processor meter tests OK\n");

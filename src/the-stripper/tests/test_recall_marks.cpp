@@ -56,7 +56,8 @@ void test_marks_are_hand_made_but_stable() {
 void test_only_knobs_get_marks() {
   CHECK(hasRecallMark(kInputGain) && hasRecallMark(kEqLFFreq) && hasRecallMark(kDriveAmount) && hasRecallMark(kGateThreshold));
   CHECK(!hasRecallMark(kBypass) && !hasRecallMark(kStripMode) && !hasRecallMark(kEqLFBell) && !hasRecallMark(kCompressorMode) && !hasRecallMark(kDriveNamOn));
-  CHECK(!hasRecallMark(kEqSaturation));   // the shared Drive knob has one mark, for the engine in use (kDriveAmount's view)
+  CHECK(hasRecallMark(kEqSaturation) && hasRecallMark(kDriveTapeAmount));   // SATURATE (EQ) and TAPE are knobs of their own
+  CHECK(!hasRecallMark(kDriveTapeOn));
 }
 } // namespace
 
