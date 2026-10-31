@@ -64,11 +64,11 @@
 - Produces in `Meters` (`engine.h`): `float stageInDb[4]` (picco all'ingresso di GLUE, LIMIT, CLIP, FINAL: GLUE alla frequenza base, gli altri alla sovracampionata; −120 a stadio spento), `float glueGrDb` (riduzione del compressore prima del MIX, `Glue::grDb()`), `float limitThreshDb` (soglia effettiva del LIMIT in questo momento: THRESH più la spinta della LOUDNESS e la discesa di SET).
 - Produces in `display.h`: `constexpr double kStageDisplayMinDb = -60.0, kStageDisplayMaxDb = 12.0;` `normFromStageDb`/`stageDbFromNorm`; `normFromThreshDb`/`threshDbFromNorm` su −12…0 dB; `DisplayFrame` e `MeterHold` estesi (ingressi degli stadi e GR della colla: massimo dalla scrittura precedente; soglia: ultimo valore).
 
-- [ ] **Step 1: Scrivere i test:** in `test_engine.cpp` `test_stage_input_peaks` (seno a −6 dBFS, tutti gli stadi accesi con valori neutri: i quattro `stageInDb` ≈ −6 ± 0.5; con CLIP spento il suo ingresso è −120), `test_glue_gr_before_mix` (MIX 50 % e segnale forte: `glueGrDb > grDb[kGrGlue]`), `test_limit_thresh_follows_loudness_and_set` (THRESH −2: `limitThreshDb` = −2; con LOUDNESS 5 scende della spinta di `kLoudCurve`; con SET va verso −8 entro 150 ms). In `test_display.cpp`: conversioni avanti e indietro, estremi e NaN. In `test_factory.cpp`: i sei nuovi ID esistono, `kIsReadOnly | kIsHidden`, conteggio dei parametri automatizzabili invariato. In `test_processor_levels.cpp`: i nuovi parametri arrivano in uscita con il limitatore di 33 ms; nessuna allocazione in `process`.
-- [ ] **Step 2: Eseguire e vedere fallire.**
-- [ ] **Step 3: Implementare** misure nel motore (senza allocare), `MeterHold`, scrittura nel processor, registrazione nel controller.
-- [ ] **Step 4: Eseguire** `ctest -R happy_ending` → tutto verde (i test esistenti invariati).
-- [ ] **Step 5: Commit:** `feat(happy-ending): stage input, glue and limiter threshold display values for the screen`.
+- [x] **Step 1: Scrivere i test:** in `test_engine.cpp` `test_stage_input_peaks` (seno a −6 dBFS, tutti gli stadi accesi con valori neutri: i quattro `stageInDb` ≈ −6 ± 0.5; con CLIP spento il suo ingresso è −120), `test_glue_gr_before_mix` (MIX 50 % e segnale forte: `glueGrDb > grDb[kGrGlue]`), `test_limit_thresh_follows_loudness_and_set` (THRESH −2: `limitThreshDb` = −2; con LOUDNESS 5 scende della spinta di `kLoudCurve`; con SET va verso −8 entro 150 ms). In `test_display.cpp`: conversioni avanti e indietro, estremi e NaN. In `test_factory.cpp`: i sei nuovi ID esistono, `kIsReadOnly | kIsHidden`, conteggio dei parametri automatizzabili invariato. In `test_processor_levels.cpp`: i nuovi parametri arrivano in uscita con il limitatore di 33 ms; nessuna allocazione in `process`.
+- [x] **Step 2: Eseguire e vedere fallire.**
+- [x] **Step 3: Implementare** misure nel motore (senza allocare), `MeterHold`, scrittura nel processor, registrazione nel controller.
+- [x] **Step 4: Eseguire** `ctest -R happy_ending` → tutto verde (i test esistenti invariati).
+- [x] **Step 5: Commit:** `feat(happy-ending): stage input, glue and limiter threshold display values for the screen`.
 
 ---
 
