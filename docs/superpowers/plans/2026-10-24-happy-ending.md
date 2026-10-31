@@ -255,3 +255,20 @@ Decisioni prese nell'implementazione (Task 13): **conversione indice**: `indexFr
 - [x] **Step 3 (parte documenti):** la spec (§2, §3, §5.1-§5.7, §6, §8, §9, §11) è allineata a quanto costruito e deciso nei Task 1-13, con riga "Avanzamento"; i valori tarati in §9 si riportano dopo l'ascolto (in attesa dell'ascolto dell'utente); i compiti 1-13 sono tutti `[x]`.
 - [x] **Documenti:** `src/happy-ending/README.md` (catena, build, test, licenze con percorsi e commit dei submodule), puntatore in `CLAUDE.md` §8, crediti libebur128 in `loudness_meter.{h,cpp}`, passi della CI per `HappyEnding.vst3` in `.github/workflows/build.yml` (trigger invariati).
 - [x] **Step 4: Commit** della parte documenti: `docs(happy-ending): spec aligned, README and licences`. Il commit dei valori tarati resta da fare dopo l'ascolto.
+
+### Task 15: Limiter di sicurezza alla frequenza base (deciso dall'utente il 2026-10-31)
+
+Motivo: con OVERSAMPLING 2×/4× il filtro di decimazione della zona B fa risalire i picchi sopra il CEIL (circa +0,4-0,6 dB a tutto spinto, fino a +2 dB con INPUT +12) e il guardiano a clip duro li taglia di netto (circa 1 % dei campioni, 35-40 % con INPUT +12). Si sostituisce il taglio netto con un limiter trasparente; il clip duro resta come ultima rete.
+
+**Files:**
+- Modify: `src/happy-ending/src/engine.{h,cpp}`, `src/happy-ending/src/dsp/limiter.{h,cpp}` (stile interno SAFETY), `src/happy-ending/src/tuning.h`, `src/happy-ending/tests/test_engine.cpp`, `src/happy-ending/tests/test_limiter.cpp`, spec §2/§9
+
+**Interfaces:**
+- Consumes: `Limiter` (Task 8, con lo stile interno METAL del Task 9), `Engine` (Task 12).
+- Produces: stile interno `SAFETY` del limiter (look-ahead `kSafetyLookAheadMs = 1.0`, release `kSafetyReleaseMs = 50`, soglia = CEIL, nessun recupero di guadagno), un'istanza alla frequenza base nell'engine dopo il guadagno OUTPUT e prima del guardiano; `Engine::latencySamples()` cresce del suo look-ahead (costante, anche da spento); il BYPASS resta esatto al campione.
+
+- [ ] **Step 1: Test**: `testSafetyLimiterCatchesDecimationOvershoot` (tutto al massimo, INPUT +12, 1×/2×/4× a 44,1/48/192 kHz: picco d'uscita ≤ CEIL e campioni tagliati dal guardiano = 0), `testSafetyLimiterIsTransparentBelowCeiling` (rumore rosa a −6 dBFS con CEIL −0,3: uscita uguale all'ingresso ritardato, a meno della latenza, entro 1e-6), `testOutputGainKeepsCeiling` resta verde e ora senza tagli del guardiano, `testLatencyPerOversampling` aggiornato con il look-ahead del limiter di sicurezza (l'impulso esce dopo `latencySamples()`), `testBypassIsDelayedInput` invariato.
+- [ ] **Step 2: Esegui** → FAIL.
+- [ ] **Step 3: Implementa** (stile SAFETY nel limiter riusando il codice di METAL, latenza costante; attivo quando LIMIT, FINAL o METALHEAD è acceso, con dissolvenza di 64 campioni all'accensione e allo spegnimento come il guardiano); aggiorna spec §2/§9 se cambiano i numeri.
+- [ ] **Step 4: Esegui** tutti i test `happy_ending*` → PASS.
+- [ ] **Step 5: Commit** `feat(happy-ending): base-rate safety limiter before the ceiling guard`.
