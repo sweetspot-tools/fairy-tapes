@@ -2,7 +2,8 @@
  * Fairy Tapes · Deep Throat — editor behaviour without a window (build target: deep_throat_editor_tests).
  * A real Controller is the host; EditorTest (a friend of Editor) builds the views in a container instead of a frame,
  * runs the UI timer's work by hand and reaches the views. Drawing goes to an offscreen context: the pixels checked here
- * are the panel colour, the white box borders and the gap of the box titles; the exact colours, the fonts as the host
+ * are the panel colour, the white box borders, the gap of the box titles, the LED / lamp colour families and the SCOPE
+ * breath band; the exact colours, the fonts as the host
  * renders them and the 3D flip stay a manual check.
  */
 #include "controller.h"
@@ -12,9 +13,12 @@
 #include "ui/dynamic_text.h"
 #include "ui/panel_view.h"
 #include "ui/readout_view.h"
+#include "ui/scope_view.h"
 #include "ui/value_text.h"
 
 #include "fairy_ui/controls.h"
+#include "fairy_ui/meter_math.h"
+#include "fairy_ui/meters.h"
 #include "fairy_ui/rack_controls.h"
 #include "fairy_ui/silkscreen.h"
 #include "fairy_ui/silkscreen_view.h"
@@ -40,6 +44,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <iterator>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -100,6 +105,11 @@ struct EditorTest {
   static VSTGUI::CTextEdit* valueEdit(const Editor& ed) { return ed.valueEdit_; }
   static void closeValueEdit(Editor& ed, bool confirm) { ed.closeValueEdit(confirm); }
   static bool handwritten(const Editor& ed) { return ed.valuesHandwritten_; }
+  // The LEVEL rows (kMeterRows order), the clip LEDs (kClips order) and the SCOPE.
+  static FairyTapes::Ui::MeterBar* bar(const Editor& ed, int i) { return ed.bars_[static_cast<std::size_t>(i)]; }
+  static FairyTapes::Ui::ClipLed* clip(const Editor& ed, int i) { return ed.clips_[static_cast<std::size_t>(i)]; }
+  static ScopeView* scope(const Editor& ed) { return ed.scope_; }
+  static bool timerRunning(const Editor& ed) { return ed.timer_ != nullptr; }
   static void setHandwritten(Editor& ed, bool on) { ed.valuesHandwritten_ = on; }
 };
 
@@ -172,7 +182,9 @@ class CountingHandler : public Steinberg::Vst::IComponentHandler {
 public:
   int begins[kNumParams] = {}, performs[kNumParams] = {}, ends[kNumParams] = {};
   double last[kNumParams] = {};
-  int others = 0;   // calls for ids outside the 25 parameters
+  int others = 0;   // calls for ids outside the 25 parameters (kClearClips included)
+  int clearBegins = 0, clearPerforms = 0, clearEnds = 0;   // the clip-clear trigger
+  double clearLast = -1;
 
   void clear() { *this = CountingHandler(); }
   int total() const {
@@ -181,6 +193,7 @@ public:
     return n;
   }
   Steinberg::tresult PLUGIN_API beginEdit(Steinberg::Vst::ParamID id) override {
+    if (id == kClearClips) ++clearBegins;
     (id < kNumParams ? begins[id] : others) += 1;
     return Steinberg::kResultOk;
   }
@@ -189,11 +202,16 @@ public:
       ++performs[id];
       last[id] = v;
     } else {
+      if (id == kClearClips) {
+        ++clearPerforms;
+        clearLast = v;
+      }
       ++others;
     }
     return Steinberg::kResultOk;
   }
   Steinberg::tresult PLUGIN_API endEdit(Steinberg::Vst::ParamID id) override {
+    if (id == kClearClips) ++clearEnds;
     (id < kNumParams ? ends[id] : others) += 1;
     return Steinberg::kResultOk;
   }
@@ -897,6 +915,347 @@ void test_stepped_controls_show_the_dsp_step() {
   EditorTest::destroy(ed, root);
 }
 
+
+// ---- LEVEL meters, clip LEDs, SCOPE (Task 9) ------------------------------------------------------------------------
+
+void resetDisplay(Steinberg::Vst::EditController* ctl) {
+  for (Steinberg::Vst::ParamID id = kMeterBase; id < kNumDisplayIDs; ++id) ctl->setParamNormalized(id, defaultOf(ctl, id));
+  ctl->setParamNormalized(kClearClips, 0.0);
+}
+int litLeds(const FairyTapes::Ui::MeterBar* b) { return b ? FairyTapes::Ui::ledsLit(b->level(), kMeterLeds) : -1; }
+// Centre pixel of LED `i` of a LEVEL row.
+VSTGUI::CColor ledPixel(const Pixels& px, const MeterRow& row, int i) {
+  return px.at(static_cast<int>(kMeterFirstX + kMeterPitch * static_cast<float>(i)), static_cast<int>(row.cy));
+}
+bool isAmber(const VSTGUI::CColor& c) { return c.red > 0xc0 && c.green > 0x90 && c.green < 0xd0 && c.blue < 0x60; }   // #f0b429
+bool isRed(const VSTGUI::CColor& c) { return c.red > 0xc0 && c.green < 0x60 && c.blue < 0x60; }                      // #e8392b
+bool isGreen(const VSTGUI::CColor& c) { return c.green > 0xb0 && c.red < 0x60; }                                      // #37d04a
+bool isOff(const VSTGUI::CColor& c) { return brightness(c) < 0x40; }                                                   // #2a2a2c
+// The processor's side of the clip-clear trigger (processor.cpp): clears the clip flags and answers with 0.
+void processorAcknowledgesClear() {
+  if (g_ctl->getParamNormalized(kClearClips) < 0.5) return;
+  g_ctl->setParamNormalized(kDispClipIn, 0.0);
+  g_ctl->setParamNormalized(kDispClipOut, 0.0);
+  g_ctl->setParamNormalized(kClearClips, 0.0);
+}
+
+// Each LEVEL row reads its own display parameter on the timer: distinct values per row, every value (0, 1, in between,
+// NaN, out of range) lights the nearest number of the 15 LEDs, nothing moves before the tick.
+void test_meters_follow_display_params() {
+  Editor ed(g_ctl);
+  auto root = EditorTest::build(ed);
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+  const double values[] = {0.0, 1.0, 0.5, 0.27, nan, 2.0, -1.0, 0.93};
+  const int want[] = {0, 15, 8, 4, 0, 15, 0, 14};   // round(v * 15); NaN -> 0, out of range clamped by the parameter
+  constexpr int kN = static_cast<int>(std::size(values));
+  for (int j = 0; j < kN; ++j) {
+    for (int r = 0; r < kMeterRowCount; ++r) g_ctl->setParamNormalized(kMeterRows[r].id, values[(j + r) % kN]);
+    if (j == 1) ASSERT_TRUE(litLeds(EditorTest::bar(ed, 0)) == want[0]);   // only flagged values: the timer applies them
+    EditorTest::tick(ed);
+    for (int r = 0; r < kMeterRowCount; ++r) {
+      const int got = litLeds(EditorTest::bar(ed, r));
+      if (got != want[(j + r) % kN]) std::fprintf(stderr, "  row %d step %d: %d lit (expected %d)\n", r, j, got, want[(j + r) % kN]);
+      ASSERT_TRUE(got == want[(j + r) % kN]);
+    }
+  }
+  resetDisplay(g_ctl);
+  EditorTest::tick(ed);
+  for (int r = 0; r < kMeterRowCount; ++r) ASSERT_TRUE(litLeds(EditorTest::bar(ed, r)) == 0);
+  EditorTest::destroy(ed, root);
+}
+
+// The GR row is amber with the last four LEDs red (preview: i > 10 red); the level rows go green to red. Pixels.
+void test_gr_row_amber_with_red_tail() {
+  setResourcePath(false);
+  Editor ed(g_ctl);
+  auto root = EditorTest::build(ed);
+  const MeterRow& gr = kMeterRows[4];
+  ASSERT_TRUE(gr.id == kDispGr && gr.gainReduction);
+  g_ctl->setParamNormalized(kDispGr, 1.0);
+  g_ctl->setParamNormalized(kDispInL, 1.0);
+  EditorTest::tick(ed);
+  {
+    auto bmp = drawOffscreen(root);
+    ASSERT_TRUE(bmp != nullptr);
+    const Pixels px = pixelsOf(bmp);
+    for (int i = 0; i < kMeterLeds; ++i) {
+      const VSTGUI::CColor c = ledPixel(px, gr, i);
+      if (i <= 10) ASSERT_TRUE(isAmber(c));
+      else ASSERT_TRUE(isRed(c));
+    }
+    ASSERT_TRUE(isGreen(ledPixel(px, kMeterRows[0], 0)) && isRed(ledPixel(px, kMeterRows[0], 14)));
+    ASSERT_TRUE(isOff(ledPixel(px, kMeterRows[1], 0)));   // In R stays at 0
+  }
+  g_ctl->setParamNormalized(kDispGr, 0.5);   // 10.5 dB: 8 LEDs
+  EditorTest::tick(ed);
+  {
+    auto bmp = drawOffscreen(root);
+    const Pixels px = pixelsOf(bmp);
+    for (int i = 0; i < kMeterLeds; ++i) {
+      const VSTGUI::CColor c = ledPixel(px, gr, i);
+      if (i < 8) ASSERT_TRUE(isAmber(c));
+      else ASSERT_TRUE(isOff(c));
+    }
+  }
+  resetDisplay(g_ctl);
+  EditorTest::destroy(ed, root);
+}
+
+// The held peak of a level row stays for the hold time after the level falls, then falls (the timer passes its period).
+void test_meter_peak_hold_falls_after_hold() {
+  Editor ed(g_ctl);
+  auto root = EditorTest::build(ed);
+  FairyTapes::Ui::MeterBar* bar = EditorTest::bar(ed, 2);   // Out L
+  ASSERT_TRUE(bar != nullptr && kMeterRows[2].id == kDispOutL);
+  g_ctl->setParamNormalized(kDispOutL, 0.9);
+  EditorTest::tick(ed);
+  g_ctl->setParamNormalized(kDispOutL, 0.1);
+  for (int t = 0; t < 40; ++t) EditorTest::tick(ed);   // 1.2 s < 1.5 s hold
+  ASSERT_TRUE(near(bar->level(), 0.1) && near(bar->hold(), 0.9));
+  for (int t = 0; t < 40; ++t) EditorTest::tick(ed);   // 2.4 s: falling at 20 dB/s
+  ASSERT_TRUE(bar->hold() < 0.85 && bar->hold() > 0.1);
+  for (int t = 0; t < 200; ++t) EditorTest::tick(ed);
+  ASSERT_TRUE(near(bar->hold(), 0.1));
+  resetDisplay(g_ctl);
+  EditorTest::destroy(ed, root);
+}
+
+// Each clip LED follows its own parameter; a left click on either writes kClearClips = 1 through the host handler
+// exactly once (begin, perform, end); the processor's answer (flags and trigger back to 0) turns both off.
+void test_clip_led_follows_param_and_click_clears_via_trigger() {
+  Editor ed(g_ctl);
+  auto root = EditorTest::build(ed);
+  FairyTapes::Ui::ClipLed* in = EditorTest::clip(ed, 0);
+  FairyTapes::Ui::ClipLed* out = EditorTest::clip(ed, 1);
+  ASSERT_TRUE(in && out && kClips[0].id == kDispClipIn && kClips[1].id == kDispClipOut);
+  g_ctl->setParamNormalized(kDispClipIn, 1.0);
+  EditorTest::tick(ed);
+  ASSERT_TRUE(in->isLit() && !out->isLit());
+  g_ctl->setParamNormalized(kDispClipIn, 0.0);
+  g_ctl->setParamNormalized(kDispClipOut, 1.0);
+  EditorTest::tick(ed);
+  ASSERT_TRUE(!in->isLit() && out->isLit());
+  g_ctl->setParamNormalized(kDispClipIn, 1.0);
+  EditorTest::tick(ed);
+  ASSERT_TRUE(in->isLit() && out->isLit());
+
+  g_ctl->setComponentHandler(&g_host);
+  for (int k = 0; k < 2; ++k) {
+    g_host.clear();
+    VSTGUI::CPoint where(kClips[k].cx, kClipRowY);
+    FairyTapes::Ui::ClipLed* led = k == 0 ? in : out;
+    ASSERT_TRUE(led->onMouseDown(where, VSTGUI::CButtonState(VSTGUI::kLButton)) == VSTGUI::kMouseEventHandled);
+    ASSERT_TRUE(g_host.clearBegins == 1 && g_host.clearPerforms == 1 && g_host.clearEnds == 1);
+    ASSERT_TRUE(g_host.clearLast == 1.0 && g_host.total() == 3);   // nothing else is sent
+    ASSERT_TRUE(g_ctl->getParamNormalized(kClearClips) == 1.0);
+    ASSERT_TRUE(in->isLit() && out->isLit());   // until the processor answers
+    processorAcknowledgesClear();
+    EditorTest::tick(ed);
+    ASSERT_TRUE(!in->isLit() && !out->isLit());
+    ASSERT_TRUE(g_ctl->getParamNormalized(kClearClips) == 0.0);
+    ASSERT_TRUE(g_host.total() == 3);   // the answer is not echoed
+    g_ctl->setParamNormalized(kDispClipIn, 1.0);
+    g_ctl->setParamNormalized(kDispClipOut, 1.0);
+    EditorTest::tick(ed);
+  }
+  g_host.clear();
+  VSTGUI::CPoint where(kClips[0].cx, kClipRowY);
+  ASSERT_TRUE(in->onMouseDown(where, VSTGUI::CButtonState(VSTGUI::kRButton)) == VSTGUI::kMouseEventNotHandled);
+  ASSERT_TRUE(g_host.total() == 0);   // a right click clears nothing
+  g_ctl->setComponentHandler(nullptr);
+  resetDisplay(g_ctl);
+  EditorTest::destroy(ed, root);
+}
+
+// One SCOPE point per timer run: the history grows to 292 points, then the oldest goes first (after 400 runs the oldest
+// is run 108, the newest run 399).
+void test_scope_history_grows_to_292() {
+  Editor ed(g_ctl);
+  auto root = EditorTest::build(ed);
+  ScopeView* scope = EditorTest::scope(ed);
+  ASSERT_TRUE(scope != nullptr && ScopeView::kPoints == 292);
+  const int start = scope->history().size();   // the runs of build(): none
+  ASSERT_TRUE(start == 0);
+  auto voiceOf = [](int k) { return static_cast<float>(k / 1000.0); };
+  auto riderOf = [](int k) { return static_cast<float>((k % 97) / 100.0); };
+  for (int k = 0; k < 400; ++k) {
+    g_ctl->setParamNormalized(kDispVoice, k / 1000.0);
+    g_ctl->setParamNormalized(kDispRider, (k % 97) / 100.0);
+    EditorTest::tick(ed);
+    if (k == 99) {
+      ASSERT_TRUE(scope->history().size() == 100);
+      ASSERT_TRUE(scope->history().at(0).voice == voiceOf(0) && scope->history().at(99).voice == voiceOf(99));
+    }
+  }
+  const auto& h = scope->history();
+  ASSERT_TRUE(h.size() == 292);
+  ASSERT_TRUE(h.at(0).voice == voiceOf(108) && h.at(0).rider == riderOf(108));
+  ASSERT_TRUE(h.at(291).voice == voiceOf(399) && h.at(291).rider == riderOf(399));
+  for (int i = 0; i < 292; ++i) ASSERT_TRUE(h.at(i).voice == voiceOf(108 + i));
+  resetDisplay(g_ctl);
+  EditorTest::destroy(ed, root);
+}
+
+// Voice, Rider gain and breath of each run land in their own trace (the newest column, at the right edge); a breath
+// above 0.5 paints the red band over the full height of its columns, nothing elsewhere.
+void test_scope_columns_follow_display_params() {
+  setResourcePath(false);
+  Editor ed(g_ctl);
+  auto root = EditorTest::build(ed);
+  ScopeView* scope = EditorTest::scope(ed);
+  ASSERT_TRUE(scope != nullptr);
+  const ScopePoint a{0.7f, 0.25f, 0.9f}, b{0.1f, 0.8f, 0.2f};
+  for (const ScopePoint& p : {a, b}) {
+    g_ctl->setParamNormalized(kDispVoice, p.voice);
+    g_ctl->setParamNormalized(kDispRider, p.rider);
+    g_ctl->setParamNormalized(kDispBreath, p.breath);
+    EditorTest::tick(ed);
+  }
+  auto cols = scope->columns();
+  ASSERT_TRUE(cols.size() == 2);
+  const ScopeColumn ca = scopeColumnOf(a, kScopeRect), cb = scopeColumnOf(b, kScopeRect);
+  ASSERT_TRUE(cols[0].voiceTop == ca.voiceTop && cols[0].riderY == ca.riderY && cols[0].breath);
+  ASSERT_TRUE(cols[1].voiceTop == cb.voiceTop && cols[1].riderY == cb.riderY && !cols[1].breath);
+  ASSERT_TRUE(ca.voiceTop != cb.voiceTop && ca.riderY != cb.riderY);
+  ASSERT_TRUE(near(scope->columnX(1), kScopeRect.x + kScopeRect.w) && scope->columnX(0) < scope->columnX(1));
+
+  // A full history, breath only in runs 100..149: the band shows there (red over the black), not at run 250.
+  for (int k = 0; k < ScopeView::kPoints; ++k) {
+    g_ctl->setParamNormalized(kDispVoice, 0.3);
+    g_ctl->setParamNormalized(kDispRider, 0.5);
+    g_ctl->setParamNormalized(kDispBreath, (k >= 100 && k < 150) ? 0.9 : 0.1);
+    EditorTest::tick(ed);
+  }
+  cols = scope->columns();
+  ASSERT_TRUE(static_cast<int>(cols.size()) == ScopeView::kPoints && cols[125].breath && !cols[250].breath && !cols[99].breath);
+  auto bmp = drawOffscreen(root);
+  ASSERT_TRUE(bmp != nullptr);
+  const Pixels px = pixelsOf(bmp);
+  const int y = static_cast<int>(kScopeRect.y + 6);   // above the traces (voice -40 dB, gain 0 dB in the middle)
+  const VSTGUI::CColor inBand = px.at(static_cast<int>(scope->columnX(125)), y);
+  const VSTGUI::CColor outBand = px.at(static_cast<int>(scope->columnX(250)), y);
+  ASSERT_TRUE(inBand.red > 0x30 && inBand.red > 2 * inBand.green);
+  ASSERT_TRUE(brightness(outBand) < 0x18);
+  resetDisplay(g_ctl);
+  EditorTest::destroy(ed, root);
+}
+
+// The BREATH lamp lights while the latest breath probability is above 0.5 (0.5 itself and NaN: off), and draws red.
+void test_breath_lamp_lights_above_half() {
+  setResourcePath(false);
+  Editor ed(g_ctl);
+  auto root = EditorTest::build(ed);
+  ReadoutView* r = EditorTest::readouts(ed);
+  ASSERT_TRUE(r != nullptr && !r->lampLit());
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+  const struct { double p; bool lit; } cases[] = {{0.4, false}, {0.6, true}, {0.5, false}, {1.0, true}, {nan, false}, {0.51, true}, {0.0, false}};
+  for (const auto& c : cases) {
+    g_ctl->setParamNormalized(kDispBreath, c.p);
+    EditorTest::tick(ed);
+    ASSERT_TRUE(r->lampLit() == c.lit);
+  }
+  g_ctl->setParamNormalized(kDispBreath, 0.9);
+  EditorTest::tick(ed);
+  auto lampColour = [&]() {
+    auto bmp = drawOffscreen(root);
+    return pixelsOf(bmp).at(static_cast<int>(kBreathLamp.cx), static_cast<int>(kBreathLamp.cy));
+  };
+  ASSERT_TRUE(isRed(lampColour()));
+  g_ctl->setParamNormalized(kDispBreath, 0.1);
+  EditorTest::tick(ed);
+  const VSTGUI::CColor off = lampColour();
+  ASSERT_TRUE(off.red < 0x50 && off.green < 0x20);   // #3a1010
+  resetDisplay(g_ctl);
+  EditorTest::destroy(ed, root);
+}
+
+// SCOPE and LEVEL dim only with the global Bypass: the module INs off leave them lit; Bypass dims the scope, the GR row
+// and its texts but not the IN / OUT rows nor the clip LEDs.
+void test_scope_and_level_dim_only_on_bypass() {
+  setResourcePath(false);
+  Editor ed(g_ctl);
+  auto root = EditorTest::build(ed);
+  ScopeView* scope = EditorTest::scope(ed);
+  PanelView* panel = EditorTest::panel(ed);
+  ASSERT_TRUE(scope && panel);
+  for (Steinberg::Vst::ParamID id = kMeterBase; id < kNumDisplayIDs; ++id) g_ctl->setParamNormalized(id, 1.0);
+  const ParamID ins[] = {kRiderIn, kBreathIn, kEqIn, kDeEssIn, kCompIn, kToneIn};
+  auto check = [&](bool bypass) {
+    EditorTest::tick(ed);
+    if (scope->dimmed() != bypass) return false;
+    auto bmp = drawOffscreen(root);
+    if (!bmp) return false;
+    const Pixels px = pixelsOf(bmp);
+    for (int r = 0; r < kMeterRowCount; ++r) {
+      const bool dim = bypass && !kMeterRows[r].alwaysLit;
+      const int lit = brightness(ledPixel(px, kMeterRows[r], 0));
+      if (dim ? lit > 0x80 : lit < 0xc0) {
+        std::fprintf(stderr, "  row %d brightness %d (bypass %d)\n", r, lit, (int)bypass);
+        return false;
+      }
+    }
+    for (const ClipSpec& c : kClips)
+      if (!isRed(px.at(static_cast<int>(c.cx), static_cast<int>(kClipRowY)))) return false;
+    for (std::size_t i = 0; i < kNumPanelTexts; ++i)
+      if (!std::strcmp(kPanelTexts[i].text, "GR") && panel->textDimmed(i) != bypass) return false;
+    return true;
+  };
+  ASSERT_TRUE(kMeterRows[4].id == kDispGr && !kMeterRows[4].alwaysLit);
+  ASSERT_TRUE(check(false));
+  for (ParamID id : ins) g_ctl->setParamNormalized(id, 0.0);
+  ASSERT_TRUE(check(false));   // every IN off: no dimming here
+  g_ctl->setParamNormalized(kBypass, 1.0);
+  ASSERT_TRUE(check(true));
+  for (ParamID id : ins) g_ctl->setParamNormalized(id, 1.0);
+  ASSERT_TRUE(check(true));
+  g_ctl->setParamNormalized(kBypass, 0.0);
+  ASSERT_TRUE(check(false));
+  resetParams(g_ctl);
+  resetDisplay(g_ctl);
+  EditorTest::destroy(ed, root);
+}
+
+// Open / close 50 times (the editor from createView) with timer runs in between: after close() no timer is left and a
+// timer run touches none of the old views (meters, clips, scope keep their state while the display values move on).
+void test_editor_timer_stops_on_close() {
+  for (int i = 0; i < 50; ++i) {
+    Steinberg::IPlugView* view = g_ctl->createView(Steinberg::Vst::ViewType::kEditor);
+    ASSERT_TRUE(view != nullptr);
+    auto* ed = dynamic_cast<Editor*>(view);
+    ASSERT_TRUE(ed != nullptr);
+    auto root = EditorTest::build(*ed);
+    auto* bar = EditorTest::bar(*ed, 0);
+    auto* clip = EditorTest::clip(*ed, 0);
+    ScopeView* scope = EditorTest::scope(*ed);
+    ASSERT_TRUE(bar && clip && scope);
+    bar->remember();
+    clip->remember();
+    scope->remember();
+    g_ctl->setParamNormalized(kDispInL, (i % 10) / 10.0 + 0.05);
+    g_ctl->setParamNormalized(kDispClipIn, (i & 1) ? 1.0 : 0.0);
+    EditorTest::tick(*ed);
+    EditorTest::tick(*ed);
+    const double level = bar->level();
+    const bool lit = clip->isLit();
+    const int points = scope->history().size();
+    ASSERT_TRUE(points == 2 && lit == ((i & 1) != 0));
+    EditorTest::destroy(*ed, root);
+    ed->close();   // no frame: the timer and the view pointers
+    ASSERT_TRUE(!EditorTest::timerRunning(*ed) && !EditorTest::bar(*ed, 0) && !EditorTest::clip(*ed, 0) && !EditorTest::scope(*ed));
+    g_ctl->setParamNormalized(kDispInL, 0.99);
+    g_ctl->setParamNormalized(kDispClipIn, (i & 1) ? 0.0 : 1.0);
+    EditorTest::tick(*ed);
+    EditorTest::tick(*ed);
+    ASSERT_TRUE(bar->level() == level && clip->isLit() == lit && scope->history().size() == points);
+    ASSERT_TRUE(bar->getNbReference() == 1 && clip->getNbReference() == 1 && scope->getNbReference() == 1);
+    bar->forget();
+    clip->forget();
+    scope->forget();
+    ASSERT_TRUE(view->release() == 0);
+  }
+  resetDisplay(g_ctl);
+}
+
 } // namespace
 
 int main() {
@@ -925,6 +1284,15 @@ int main() {
   RUN_TEST(test_typed_value_goes_through_the_controller);
   RUN_TEST(test_values_handwritten_by_default);
   RUN_TEST(test_stepped_controls_show_the_dsp_step);
+  RUN_TEST(test_meters_follow_display_params);
+  RUN_TEST(test_gr_row_amber_with_red_tail);
+  RUN_TEST(test_meter_peak_hold_falls_after_hold);
+  RUN_TEST(test_clip_led_follows_param_and_click_clears_via_trigger);
+  RUN_TEST(test_scope_history_grows_to_292);
+  RUN_TEST(test_scope_columns_follow_display_params);
+  RUN_TEST(test_breath_lamp_lights_above_half);
+  RUN_TEST(test_scope_and_level_dim_only_on_bypass);
+  RUN_TEST(test_editor_timer_stops_on_close);
   ctl.terminate();
   g_ctl = nullptr;
   VSTGUI::exit();

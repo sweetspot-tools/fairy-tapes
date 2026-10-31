@@ -14,6 +14,7 @@ using namespace VSTGUI;
 
 namespace {
 constexpr CColor kLampOff(0x3a, 0x10, 0x10);   // preview OFFL2
+constexpr CColor kLampOn(0xe8, 0x39, 0x2b);     // preview RED
 
 constexpr bool readoutsInEnumOrder() {
   for (int i = 0; i < ReadoutView::kCount; ++i)
@@ -57,6 +58,12 @@ void ReadoutView::setLampDimmed(bool dimmed) {
   invalid();
 }
 
+void ReadoutView::setLampLit(bool lit) {
+  if (lampLit_ == lit) return;
+  lampLit_ = lit;
+  invalid();
+}
+
 void ReadoutView::setHandwriting(bool on, FairyTapes::Ui::TapeFontId font, uint32_t seed) {
   handwritten_ = on;
   font_ = font;
@@ -87,12 +94,12 @@ void ReadoutView::draw(CDrawContext* ctx) {
     const CCoord w = ctx->getStringWidth(t.c_str());
     ctx->drawString(t.c_str(), CPoint(o.x + FairyTapes::Ui::alignedLeft(r.x, w, r.align), o.y + r.y));
   }
-  // BREATH lamp, unlit
+  // BREATH lamp
   ctx->setGlobalAlpha(base * (lampDimmed_ ? FairyTapes::Ui::kSilkDimmedAlpha : 1.f));
   if (auto path = owned(ctx->createGraphicsPath())) {
     const Lamp& l = kBreathLamp;
     path->addEllipse(CRect(o.x + l.cx - l.r, o.y + l.cy - l.r, o.x + l.cx + l.r, o.y + l.cy + l.r));
-    ctx->setFillColor(kLampOff);
+    ctx->setFillColor(lampLit_ ? kLampOn : kLampOff);
     ctx->drawGraphicsPath(path, CDrawContext::kPathFilled);
     ctx->setFrameColor(CColor(0, 0, 0));
     ctx->setLineWidth(0.6);

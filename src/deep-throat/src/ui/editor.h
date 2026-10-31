@@ -1,8 +1,11 @@
 // Deep Throat GUI: the plugin editor (1000 x 614 rack panel, views built in code, no .uidesc).
 // Layers from the bottom (docs/DESIGN_SYSTEM.md): panel (PanelView: body, grain, boxes, printed texts) / silkscreen
 // (SilkscreenView: knob scales, names, values, button labels, Comp selector values, block tags; ReadoutView: the
-// read-only values and the BREATH lamp) / controls. Wear, tapes, screws, meters, scope and the back of the panel come
-// with the next tasks of docs/superpowers/plans/2026-10-24-deep-throat-gui.md.
+// read-only values and the BREATH lamp) / SCOPE / controls / LEVEL rows and clip LEDs. Wear, tapes, screws and the back of
+// the panel come with the next tasks of docs/superpowers/plans/2026-10-24-deep-throat-gui.md.
+// The display values (meters, clips, scope, BREATH lamp) are the hidden read-only kDisp* parameters the processor writes;
+// the UI timer reads them on every run. SCOPE and the GR row dim with the global Bypass only; the IN / OUT rows and the
+// clip LEDs never dim. A click on a clip LED writes the kClearClips trigger (the processor clears and answers 0).
 // Every one of the 25 parameters is bound to one control (ui/layout.h kControls). User gestures go to the controller as
 // beginEdit / performEdit / endEdit; a double click on a knob is its default (one edit); a click on a knob's printed
 // value opens a text field (Enter or leaving it confirms, Escape cancels) whose text the controller reads
@@ -38,12 +41,15 @@ class CTextEdit;
 namespace FairyTapes::Ui {
 class NormalizedControl;
 class SilkscreenView;
+class MeterBar;
+class ClipLed;
 }
 
 namespace FairyTapes::DeepThroat::Ui {
 
 class PanelView;
 class ReadoutView;
+class ScopeView;
 struct EditorPreview;   // offscreen render tool (tools/render_editor.cpp)
 struct EditorTest;      // headless editor tests (tests/test_editor.cpp)
 
@@ -106,6 +112,10 @@ private:
   // dim_ -> controls, silkscreen, read-outs, tags and panel texts.
   void refreshDimming();
   void resetViewPointers();
+  // A click on a clip LED: writes the clear trigger (kClearClips = 1) as one edit.
+  void clearClips();
+  // The timer's display work: scope point, meter rows, clip LEDs, BREATH lamp from the kDisp* parameters.
+  void updateDisplays();
   // A click on a knob's printed value: a text field there with the number.
   void editValue(Steinberg::Vst::ParamID id);
   // What was typed, read by the controller, applied as one edit; ignored when the controller refuses it.
@@ -120,6 +130,9 @@ private:
   FairyTapes::Ui::SilkscreenView* silk_ = nullptr;
   ReadoutView* readouts_ = nullptr;
   std::array<FairyTapes::Ui::NormalizedControl*, kNumParams> controls_{};
+  ScopeView* scope_ = nullptr;
+  std::array<FairyTapes::Ui::MeterBar*, kMeterRowCount> bars_{};   // kMeterRows order
+  std::array<FairyTapes::Ui::ClipLed*, kClipCount> clips_{};       // kClips order
   DimState dim_{};
 
   // The yellow values (under the knobs, the Comp selectors, the amber read-outs) in the tape font or in plain text: the

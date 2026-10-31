@@ -42,6 +42,7 @@ set(DEEP_THROAT_EDITOR_SOURCES
   src/ui/editor.cpp
   src/ui/panel_view.cpp
   src/ui/readout_view.cpp
+  src/ui/scope_view.cpp
 )
 
 # The shared assets (panel grain tile), for the tools and tests that run outside the bundle.

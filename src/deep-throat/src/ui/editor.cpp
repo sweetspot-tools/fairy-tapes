@@ -6,11 +6,13 @@
 #include "ui/dynamic_text.h"
 #include "ui/panel_view.h"
 #include "ui/readout_view.h"
+#include "ui/scope_view.h"
 #include "ui/value_text.h"
 
 #include "fairy_ui/controls.h"
 #include "fairy_ui/draw_util.h"
 #include "fairy_ui/knob_math.h"
+#include "fairy_ui/meters.h"
 #include "fairy_ui/rack_controls.h"
 #include "fairy_ui/sanitize.h"
 #include "fairy_ui/silkscreen_view.h"
@@ -37,6 +39,9 @@
 namespace FairyTapes::DeepThroat::Ui {
 
 using namespace VSTGUI;
+using FairyTapes::Ui::ClipLed;
+using FairyTapes::Ui::MeterBar;
+using FairyTapes::Ui::MeterKind;
 using FairyTapes::Ui::NormalizedControl;
 using FairyTapes::Ui::RackCycle;
 using FairyTapes::Ui::RackKnob;
@@ -52,6 +57,7 @@ namespace {
 static_assert(kNumParams <= 32, "pending_ holds one bit per persistent parameter");
 
 constexpr uint32_t kTimerMs = 30;
+constexpr double kTimerSeconds = kTimerMs / 1000.0;   // the step of the meters' peak hold
 constexpr CColor kFrameBackground(0x16, 0x16, 0x17);
 constexpr int32_t kValueEditTag = 9100;   // outside the parameter ids
 
@@ -86,6 +92,11 @@ double defaultNorm(Steinberg::Vst::EditController* ctl, ParamID id) {
 
 double controllerNorm(Steinberg::Vst::EditController* ctl, ParamID id) {
   return FairyTapes::Ui::sanitizeNorm(ctl->getParamNormalized(id), defaultNorm(ctl, id));
+}
+
+// A display parameter (hidden, read-only, written by the processor): its normalized value, `fallback` when not finite.
+double displayNorm(Steinberg::Vst::EditController* ctl, ParamID id, double fallback) {
+  return FairyTapes::Ui::sanitizeNorm(ctl->getParamNormalized(id), fallback);
 }
 
 // What a host string holds, ASCII (the parsers read numbers and units only; anything else becomes '?').
@@ -204,6 +215,9 @@ void Editor::resetViewPointers() {
   silk_ = nullptr;
   readouts_ = nullptr;
   controls_.fill(nullptr);
+  scope_ = nullptr;
+  bars_.fill(nullptr);
+  clips_.fill(nullptr);
   valueEdit_ = nullptr;
   valueEditId_ = kNumParams;
 }
@@ -239,6 +253,10 @@ void Editor::createViews(CViewContainer* parent) {
   readouts_->setHandwriting(valuesHandwritten_, valuesFont_, valuesSeed_);
   parent->addView(readouts_);
 
+  // SCOPE: under the controls (it never overlaps one).
+  scope_ = new ScopeView(toCRect(kScopeRect));
+  parent->addView(scope_);
+
   // The controls, one per parameter.
   for (const ControlSpec& spec : kControls) {
     const CRect rect = toCRect(viewRect(spec));
@@ -267,7 +285,47 @@ void Editor::createViews(CViewContainer* parent) {
     controls_[spec.id] = control;
   }
 
+  // LEVEL: the LED rows and the clip LEDs; a click on a clip LED clears both.
+  for (int i = 0; i < kMeterRowCount; ++i) {
+    const MeterRow& row = kMeterRows[i];
+    bars_[static_cast<std::size_t>(i)] =
+        new MeterBar(toCRect(meterBarRect(row)), row.gainReduction ? MeterKind::GainReduction : MeterKind::Level, kMeterLeds);
+    parent->addView(bars_[static_cast<std::size_t>(i)]);
+  }
+  for (int i = 0; i < kClipCount; ++i) {
+    auto* clip = new ClipLed(toCRect(clipRect(kClips[i])), kClips[i].label);
+    clip->onClick = [this] { clearClips(); };
+    clips_[static_cast<std::size_t>(i)] = clip;
+    parent->addView(clip);
+  }
+
   watchParameters();   // every control, value, text and dimming from the controller
+}
+
+// One click clears both clip LEDs: the hidden writable trigger goes to the processor, which clears the flags and answers
+// with 0 (as Pillow Talk).
+void Editor::clearClips() {
+  auto* ctl = getController();
+  ctl->setParamNormalized(kClearClips, 1.0);
+  ctl->beginEdit(kClearClips);
+  ctl->performEdit(kClearClips, 1.0);
+  ctl->endEdit(kClearClips);
+}
+
+// The display values (neutral until the host forwards the processor's output): one SCOPE point, the LEVEL rows with their
+// peak hold, the clip LEDs and the BREATH lamp. Read on every timer run: the processor writes them every 16 ms.
+void Editor::updateDisplays() {
+  auto* ctl = getController();
+  ScopePoint p;
+  p.voice = static_cast<float>(displayNorm(ctl, kDispVoice, 0.0));
+  p.rider = static_cast<float>(displayNorm(ctl, kDispRider, 0.5));
+  p.breath = static_cast<float>(displayNorm(ctl, kDispBreath, 0.0));
+  if (scope_) scope_->push(p);
+  for (int i = 0; i < kMeterRowCount; ++i)
+    if (MeterBar* bar = bars_[static_cast<std::size_t>(i)]) bar->setLevel(displayNorm(ctl, kMeterRows[i].id, 0.0), kTimerSeconds);
+  for (int i = 0; i < kClipCount; ++i)
+    if (ClipLed* clip = clips_[static_cast<std::size_t>(i)]) clip->setLit(displayNorm(ctl, kClips[i].id, 0.0) >= 0.5);
+  if (readouts_) readouts_->setLampLit(p.breath > 0.5f);
 }
 
 void Editor::watchParameters() {
@@ -309,6 +367,7 @@ void Editor::onTimer() {
     if (changed & bit(id)) syncFromController(id);
   // The field reported what was typed when it lost the focus (Enter, a click elsewhere): it is done.
   if (valueEdit_ && frame && frame->getFocusView() != valueEdit_) closeValueEdit(false);
+  updateDisplays();
 }
 
 // The step count of a stepped parameter (0 for the others).
@@ -391,6 +450,10 @@ void Editor::refreshDimming() {
   if (silk_)
     for (const TagSpec& t : kTags) silk_->setTagDimmed(t.tag.key, t.module != Module::None && partDimmed(t.module));   // MODE tags never
   if (panel_) panel_->setDimState(dim_);
+  // SCOPE and LEVEL: only the global bypass, and not the input / output rows nor the clip LEDs.
+  if (scope_) scope_->setDimmed(dim_.bypass);
+  for (int i = 0; i < kMeterRowCount; ++i)
+    if (MeterBar* bar = bars_[static_cast<std::size_t>(i)]) bar->setDimmed(dim_.bypass && !kMeterRows[i].alwaysLit);
 }
 
 // ---- Typed values ---------------------------------------------------------------------------------------------------
