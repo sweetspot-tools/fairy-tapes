@@ -799,6 +799,8 @@ void testSafetyLimiterCatchesDecimationOvershoot() {
         ASSERT_TRUE(peak <= ceiling);
         ASSERT_TRUE(peak > 0.5);
         ASSERT_TRUE(e.guardClippedSamples() == 0);
+        // with oversampling the decimation really does leave samples over the CEIL for it to catch
+        if (factor > 1) ASSERT_TRUE(e.safetyCaughtSamples() > 0);
       }
   }
 }

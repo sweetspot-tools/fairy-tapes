@@ -10,7 +10,7 @@ VST3 **mastering chain** for the master bus, for the final stage of a project: a
 
 INPUT → FINE EQ → VIBE EQ → GLUE → CLIP → LIMIT → FINAL → METALHEAD → OUTPUT, with a global BYPASS and a LUFS meter at the output.
 
-- **INPUT / OUTPUT:** ±12 dB in 0.5 dB steps. OUTPUT is followed by a ceiling guard: whenever LIMIT, FINAL or METALHEAD is on, no output sample exceeds CEIL (−0.1 / −0.3 / −0.5 / −1.0 dB), OUTPUT gain included.
+- **INPUT / OUTPUT:** ±12 dB in 0.5 dB steps. OUTPUT is followed by a transparent base-rate safety limiter (threshold = CEIL, no gain recovery so it never raises the level, 1 ms look-ahead, 50 ms release) and, behind it, a hard ceiling guard as the last net: whenever LIMIT, FINAL or METALHEAD is on, no output sample exceeds CEIL (−0.1 / −0.3 / −0.5 / −1.0 dB), OUTPUT gain included.
 - **FINE EQ:** six stepped bands (HI PASS, LOW SHELF, LO MID, MID, HI MID, HI SHELF), each with IN and M/S (ST, MID, SIDE), LISTEN on the three bells. Analog-matched biquads (Vicanek designs for bells and high shelf): zero latency, correct up to Nyquist, minimum phase.
 - **VIBE EQ:** Pultec-style passive network: LOW (boost plus the cut above it), AIR, TILT, with DYN that pulls the boost back on loud program, and a TUBE stage.
 - **GLUE:** SSL-style bus compressor in parallel (MIX), stereo linked, SC HPF, WARM.
@@ -19,7 +19,7 @@ INPUT → FINE EQ → VIBE EQ → GLUE → CLIP → LIMIT → FINAL → METALHEA
 - **FINAL:** INFLATE or CLIP (ClipOnly2), under the ceiling.
 - **METALHEAD:** optional brickwall after FINAL (off by default), PUSH 0…+6 dB.
 - **LOUDNESS** (0-10) pushes CLIP, then LIMIT, then FINAL on top of the stage settings; **TARGET** (−14 / −11 / −9 / −7 LUFS) and **MATCH** set LOUDNESS once to hit the target.
-- **Oversampling** (Off / 2× / 4×, default 2×, a setting stored in the project): linear-phase half-band stages for the non-linear parts (TUBE, then CLIP → LIMIT → FINAL → METALHEAD). Flat to 20 kHz at 44.1 kHz. The oversampler latency is 69 samples at 2× and 76 at 4× (base rate) and adds to the look-aheads; the total is reported to the host and changes only when the setting changes.
+- **Oversampling** (Off / 2× / 4×, default 2×, a setting stored in the project): linear-phase half-band stages for the non-linear parts (TUBE, then CLIP → LIMIT → FINAL → METALHEAD). Flat to 20 kHz at 44.1 kHz. The oversampler latency is 69 samples at 2× and 76 at 4× (base rate) and adds to the look-aheads (including the 1 ms look-ahead of the safety limiter, constant whether it is active or not); the total is reported to the host and changes only when the setting changes.
 
 There is no true-peak detection (design choice): the limiters work on the sample peak, and CEIL −1.0 dB is the margin for streaming.
 

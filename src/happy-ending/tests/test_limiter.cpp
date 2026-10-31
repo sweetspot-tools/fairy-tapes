@@ -255,6 +255,24 @@ void testSafetyStyleNeverRaisesAndKeepsCeiling() {
   }
 }
 
+// Prepared as SAFETY, the limiter is SAFETY from the start: before any set() a hot signal is held at
+// the default ceiling and a signal under it is not raised (MODERN would have recovered the gain).
+void testSafetyPreparedIsSafetyBeforeFirstSet() {
+  Limiter lim;
+  lim.prepare(kSr, 128, 1, DSP::kLimiterStyleSafety);
+  const int d = lim.latencySamples();
+  ASSERT_TRUE(d == static_cast<int>(std::ceil(Tuning::kSafetyLookAheadMs * 0.001 * kSr)));
+  std::vector<float> l = sineVec(4800, 1000.0, 0.25), r = l;
+  const std::vector<float> in = l;
+  run(lim, l, r);
+  for (std::size_t i = static_cast<std::size_t>(d); i < l.size(); ++i) ASSERT_TRUE(l[i] == in[i - static_cast<std::size_t>(d)]);
+  l = sineVec(4800, 1000.0, 2.0);
+  r = l;
+  run(lim, l, r);
+  ASSERT_TRUE(peakOf(l) <= ceilLin(-0.3));
+  ASSERT_TRUE(peakOf(l, 200) > 0.5);
+}
+
 void testLatencyMultipleOfOversampling() {
   for (double sr : {44100.0, 48000.0, 88200.0, 96000.0, 176400.0, 192000.0})
     for (int mult : {1, 2, 4}) {
@@ -588,6 +606,7 @@ int main() {
   RUN_TEST(testLatencyConstantAcrossStyles);
   RUN_TEST(testLatencyMultipleOfOversampling);
   RUN_TEST(testSafetyStyleNeverRaisesAndKeepsCeiling);
+  RUN_TEST(testSafetyPreparedIsSafetyBeforeFirstSet);
   RUN_TEST(testReleaseTrim);
   RUN_TEST(testDynReleaseFollowsProgram);
   RUN_TEST(testPunchLetsTransientThrough);

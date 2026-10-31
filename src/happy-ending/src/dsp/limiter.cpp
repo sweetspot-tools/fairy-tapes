@@ -38,6 +38,7 @@ void Limiter::prepare(double sampleRate, int /*maxBlock*/, int latencyMultiple, 
 
   primed_ = false;
   s_ = LimiterSettings{};
+  if (fixedStyle == kLimiterStyleSafety) s_.style = kLimiterStyleSafety;  // never MODERN, even before the first set()
   attack_ = 1;
   apply(true);
   grDb_ = 0.0f;

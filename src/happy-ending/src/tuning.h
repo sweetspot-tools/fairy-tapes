@@ -69,8 +69,9 @@ inline constexpr int kSafetyRampSamples = 64;  // on/off crossfade, like the cei
 // LIMIT: base release of each style (MODERN, PUNCH, DYN, METAL, then SAFETY); RELEASE trims around it.
 inline constexpr double kLimitReleaseBaseMs[5] = {50.0, 100.0, 250.0, kMetalReleaseMs, kSafetyReleaseMs};
 
-// LIMIT: look-ahead of each style (MODERN, PUNCH, DYN) and the length of the attack ramp that
-// brings the gain down. The latency stays that of MODERN (the longest look-ahead) for every style.
+// LIMIT: look-ahead of each style (MODERN, PUNCH, DYN, METAL, SAFETY) and the length of the attack ramp
+// that brings the gain down. The latency stays that of MODERN (the longest look-ahead) for every style
+// except SAFETY, whose limiter instance is prepared on its own and has its own latency (its look-ahead).
 // PUNCH ramps down more slowly than it looks ahead, so the first instant of a transient passes
 // before the gain has fully arrived (the sample-peak guard still holds it under the ceiling).
 inline constexpr double kLimitLookAheadMs[5] = {1.5, 0.3, 0.8, kMetalLookAheadMs, kSafetyLookAheadMs};
