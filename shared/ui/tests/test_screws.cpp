@@ -50,6 +50,20 @@ void test_screws_pinned_to_the_stripper() {
   }
 }
 
+void test_screw_positions_any_panel() {
+  const ScrewPositions a = screwPositions(1280, 890);
+  CHECK(a[0].x == 18 && a[0].y == 18 && a[1].x == 1262 && a[1].y == 18);
+  CHECK(a[2].x == 18 && a[2].y == 872 && a[3].x == 1262 && a[3].y == 872);
+  const ScrewPositions b = screwPositions(1000, 628);   // the panel of today: the old constant
+  for (int i = 0; i < kScrewCount; ++i) CHECK(b[i].x == kRackScrewPositions[i].x && b[i].y == kRackScrewPositions[i].y);
+  CHECK(b[3].x == 982 && b[3].y == 610);
+  // the look from the seed does not depend on the panel size
+  const auto wide = generateScrews(555, a), classic = generateScrews(555);
+  for (int i = 0; i < kScrewCount; ++i)
+    CHECK(wide[i].cross == classic[i].cross && wide[i].missing == classic[i].missing && wide[i].initialAngle == classic[i].initialAngle);
+  CHECK(wide[3].x == 1262 && wide[3].y == 872);
+}
+
 void test_slot_and_cross_both_occur_and_at_most_one_screw_goes_missing() {
   int slots = 0, crosses = 0, instancesWithMissing = 0, moreThanOne = 0;
   const int N = 5000;
@@ -102,6 +116,7 @@ void test_hit_radius() {
 int main() {
   test_screws_are_deterministic_and_at_the_given_positions();
   test_screws_pinned_to_the_stripper();
+  test_screw_positions_any_panel();
   test_slot_and_cross_both_occur_and_at_most_one_screw_goes_missing();
   test_dragging_turns_the_screw_like_a_knob();
   test_angles_are_normalised();

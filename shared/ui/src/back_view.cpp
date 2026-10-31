@@ -23,8 +23,11 @@ constexpr CColor kPanelInk(0x16, 0x16, 0x17);   // the back of the panel, under 
 }  // namespace
 
 BackView::BackView(const CRect& size, const Skin* skin, BackContent content, Callbacks callbacks, int tab)
-: CViewContainer(size), skin_(skin), layout_(&backLayoutFor(size.getHeight())), content_(std::move(content)),
-  cb_(std::move(callbacks)) {
+: BackView(size, skin, std::move(content), std::move(callbacks), tab, backLayoutFor(size.getHeight())) {}
+
+BackView::BackView(const CRect& size, const Skin* skin, BackContent content, Callbacks callbacks, int tab,
+                   const BackLayout& layout)
+: CViewContainer(size), skin_(skin), layout_(layout), content_(std::move(content)), cb_(std::move(callbacks)) {
   setBackgroundColor(kTransparentCColor);
   titleFont_ = bold(Back::kTitleSize, kItalicFace);
   f10_ = bold(10);
@@ -47,7 +50,7 @@ void BackView::build() {
   // tab links and the way back
   const int n = static_cast<int>(content_.tabs.size());
   for (int i = 0; i < n; ++i) {
-    auto* link = new TextLink(toCRect(tabLinkBox(i, n)), content_.tabs[static_cast<std::size_t>(i)].label);
+    auto* link = new TextLink(toCRect(tabLinkBox(i, n, layout_)), content_.tabs[static_cast<std::size_t>(i)].label);
     link->onClick = [this, i] {
       setTab(i);
       if (cb_.tabChanged) cb_.tabChanged(i);
@@ -55,7 +58,7 @@ void BackView::build() {
     addView(link);
     tabLinks_.push_back(link);
   }
-  auto* back = new TextLink(toCRect(backLinkBox()), kBackText);
+  auto* back = new TextLink(toCRect(backLinkBox(layout_)), kBackText);
   back->onClick = [this] {
     if (cb_.back) cb_.back();
   };
@@ -64,7 +67,7 @@ void BackView::build() {
   // SETTINGS: one widget per item, in its row
   for (std::size_t i = 0; i < content_.items.size(); ++i) {
     BackItem& it = content_.items[i];
-    const CRect r = toCRect(itemControlBox(it, itemRow(content_.items, i), *layout_));
+    const CRect r = toCRect(itemControlBox(it, itemRow(content_.items, i), layout_));
     CView* view = nullptr;
     switch (it.kind) {
     case BackItemKind::Choice: {
@@ -178,7 +181,7 @@ void BackView::drawBackgroundRect(CDrawContext* ctx, const CRect&) {
       tab_ >= 0 && tab_ < static_cast<int>(content_.tabs.size()) ? content_.tabs[static_cast<std::size_t>(tab_)].label : std::string();
   text(ctx, title, o.x + Back::kTitleX, o.y + Back::kTitleBaseline, titleFont_, kWhite);
   text(ctx, kBrand, o.x + Back::kBrandX, o.y + Back::kBrandBaseline, f11_, kDimWhite);
-  text(ctx, content_.headerLine, o.x + Back::kHeaderRight, o.y + Back::kHeaderBaseline, f13_, kWhite, 2);
+  text(ctx, content_.headerLine, o.x + layout_.headerRight, o.y + Back::kHeaderBaseline, f13_, kWhite, 2);
 
   switch (tabKind()) {
   case BackTabKind::Settings: drawSettings(ctx, o); break;
@@ -188,7 +191,7 @@ void BackView::drawBackgroundRect(CDrawContext* ctx, const CRect&) {
     auto it = customDrawers_.find(tab_);
     if (it != customDrawers_.end() && it->second) {
       ctx->saveGlobalState();
-      CRect area = toCRect(layout_->custom);
+      CRect area = toCRect(layout_.custom);
       area.offset(o.x, o.y);
       it->second(ctx, area);
       ctx->restoreGlobalState();
@@ -201,7 +204,7 @@ void BackView::drawBackgroundRect(CDrawContext* ctx, const CRect&) {
 
 void BackView::drawSettings(CDrawContext* ctx, const CPoint& o) {
   auto box = [&](const BackBox& b) { CRect r = toCRect(b); r.offset(o.x, o.y); return r; };
-  const BackLayout& L = *layout_;
+  const BackLayout& L = layout_;
   drawTitledBox(ctx, box(L.appearance), "APPEARANCE", true);
   drawTitledBox(ctx, box(L.behaviour), "BEHAVIOUR", true);
   const BackBox& a = L.appearance;
@@ -213,7 +216,7 @@ void BackView::drawSettings(CDrawContext* ctx, const CPoint& o) {
     const BackItem& it = content_.items[i];
     const int row = itemRow(content_.items, i);
     const double y = itemRowY(row, L);
-    const double x0 = labelX(it.column);
+    const double x0 = labelX(it.column, L);
     text(ctx, it.label, o.x + x0, o.y + y + 16, f13_, kWhite);
     text(ctx, it.hint, o.x + x0, o.y + y + 32, f10_, kDimWhite);
     if (!it.note.empty()) {
@@ -230,9 +233,9 @@ void BackView::drawSettings(CDrawContext* ctx, const CPoint& o) {
 
 void BackView::drawCredits(CDrawContext* ctx, const CPoint& o) {
   auto box = [&](const BackBox& b) { CRect r = toCRect(b); r.offset(o.x, o.y); return r; };
-  const BackLayout& L = *layout_;
+  const BackLayout& L = layout_;
   const BackCredits& c = content_.credits;
-  const double x = o.x + Back::kCreditNameX;
+  const double x = o.x + L.creditNameX;
   drawTitledBox(ctx, box(L.creditsTitle), c.title.c_str(), true);
   text(ctx, c.versionLine, x, o.y + L.versionBaseline, f14_, kWhite);
   for (std::size_t i = 0; i < c.licenseLines.size() && static_cast<int>(i) < Back::kMaxLicenseLines; ++i)
@@ -246,12 +249,12 @@ void BackView::drawCredits(CDrawContext* ctx, const CPoint& o) {
     const CreditEntry& e = c.entries[static_cast<std::size_t>(i)];
     const double y = o.y + creditBaseline(i, n, L);
     text(ctx, e.name, x, y, compact ? f13_ : f14_, kWhite);
-    text(ctx, e.author, o.x + Back::kCreditAuthorX, y, compact ? f12_ : f13_, kDimWhite);
-    text(ctx, e.license, o.x + Back::kCreditLicenseRight, y, compact ? f12_ : f13_, kAmber, 2);
+    text(ctx, e.author, o.x + L.creditAuthorX, y, compact ? f12_ : f13_, kDimWhite);
+    text(ctx, e.license, o.x + L.creditLicenseRight, y, compact ? f12_ : f13_, kAmber, 2);
     if (i < n - 1) {
       const double ly = y + creditRowStep(n, L) * 0.4;
       ctx->setFrameColor(CColor(kDimWhite.red, kDimWhite.green, kDimWhite.blue, 64));
-      ctx->drawLine(CPoint(x, ly), CPoint(o.x + Back::kCreditLicenseRight, ly));
+      ctx->drawLine(CPoint(x, ly), CPoint(o.x + L.creditLicenseRight, ly));
     }
   }
 
@@ -263,7 +266,7 @@ void BackView::drawCredits(CDrawContext* ctx, const CPoint& o) {
 // ROUTING: the plug-in's diagram in SIGNAL FLOW, the common symbols and its notes in LEGEND (docs/DESIGN_SYSTEM.md).
 void BackView::drawRouting(CDrawContext* ctx, const CPoint& o) {
   auto box = [&](const BackBox& b) { CRect r = toCRect(b); r.offset(o.x, o.y); return r; };
-  const BackLayout& L = *layout_;
+  const BackLayout& L = layout_;
   drawTitledBox(ctx, box(L.flow), "SIGNAL FLOW", true);
   drawRoutingPrims(ctx, o, content_.routing.flow);
   drawTitledBox(ctx, box(L.legend), "LEGEND", true);

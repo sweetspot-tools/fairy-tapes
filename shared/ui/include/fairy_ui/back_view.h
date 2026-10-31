@@ -31,7 +31,12 @@ public:
   // Draws a custom tab inside `area` (the custom box of the layout, editor px): the context is already in anti-aliased mode.
   using CustomDrawer = std::function<void(VSTGUI::CDrawContext* context, const VSTGUI::CRect& area)>;
 
+  // The layout is picked from the height of the view (tall 628 or short 470, 1000 px wide).
   BackView(const VSTGUI::CRect& size, const Skin* skin, BackContent content, Callbacks callbacks, int tab = 0);
+  // A plug-in with its own panel size passes its layout: header links, columns, boxes and credit columns come from it
+  // (the view keeps a copy).
+  BackView(const VSTGUI::CRect& size, const Skin* skin, BackContent content, Callbacks callbacks, int tab,
+           const BackLayout& layout);
 
   // Refreshes an item from outside (the value changed elsewhere); no callback is called. Unknown keys are ignored.
   void setSelected(int key, int index);
@@ -42,7 +47,7 @@ public:
   void setWear(std::vector<WearMark> marks);
   void setCustomDrawer(int tab, CustomDrawer drawer);
   const BackContent& content() const { return content_; }
-  const BackLayout& layout() const { return *layout_; }   // tall (628) or short (470), from the height of the view
+  const BackLayout& layout() const { return layout_; }   // the one given, or tall / short from the height of the view
 
   void drawBackgroundRect(VSTGUI::CDrawContext* context, const VSTGUI::CRect& updateRect) override;
   VSTGUI::CMouseEventResult onMouseDown(VSTGUI::CPoint& where, const VSTGUI::CButtonState& buttons) override;
@@ -61,7 +66,7 @@ private:
   BackTabKind tabKind() const;
 
   const Skin* skin_;
-  const BackLayout* layout_;
+  BackLayout layout_;
   BackContent content_;
   Callbacks cb_;
   int tab_ = 0;
