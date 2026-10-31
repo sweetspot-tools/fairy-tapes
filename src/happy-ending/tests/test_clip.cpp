@@ -134,7 +134,7 @@ void testPeaksAreRounded() {
 }
 
 // The plan asks for THD below -60 dB at DRIVE 0 on a -6 dBFS sine. The ClipSoftly curve is
-// sin(x): its third harmonic on a 0.5 amplitude sine is about -41 dB (J3(0.5)/J1(0.5)), so that
+// sin(x): its third harmonic on a 0.5 amplitude sine is about -39.5 dB (J3(0.5)/J1(0.5)), so that
 // figure cannot hold for a faithful port. Transparent means: clean at moderate level, and only
 // the curve's own gentle third harmonic near the top.
 void testDriveZeroTransparent() {

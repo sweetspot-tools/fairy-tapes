@@ -89,7 +89,7 @@ Gli schermi propri di VIBE, GLUE, CLIP, LIMIT e FINAL sono stati tolti: le loro 
 
 - **DSP:** `ClipSoftly` di Airwindows (MIT), port **fedele** della curva: sin(x) con l'ingresso limitato a ±π/2 e la miscela "soft speed" sopra il fondo scala. Tolti dither di uscita, scala 0,955 della sorgente (−0,4 dB: i piccoli segnali devono passare a guadagno unitario) e il buffer di ritardo (nella sorgente il ciclo di scorrimento copia il campione in ogni cella, quindi dava sempre un campione, senza effetto sui valori): latenza zero, nessuna dipendenza dalla frequenza di campionamento.
 - **DRIVE** 0…+6 dB a passi di 0,5, a **livello compensato** (guadagno in ingresso e reciproco in uscita: le parti piano passano invariate, i picchi si arrotondano; l'uscita massima è 1/drive); scorre in 10 ms; IN. CLIP non ha uno stato spento proprio: l'engine lo dissolve con il segnale secco in 10 ms.
-- La curva sin(x) a DRIVE 0 dà circa −41 dB di THD su un seno a −6 dBFS: è la curva fedele; a −20 dBFS la distorsione è sotto −60 dB e il livello resta entro 0,1 dB.
+- La curva sin(x) a DRIVE 0 dà circa −39,5 dB di THD su un seno a −6 dBFS: è la curva fedele; a −20 dBFS la distorsione è sotto −60 dB e il livello resta entro 0,1 dB.
 
 ### 5.5 LIMIT
 

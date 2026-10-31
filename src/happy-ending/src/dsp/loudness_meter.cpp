@@ -1,12 +1,13 @@
 #include "dsp/loudness_meter.h"
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace FairyTapes::HappyEnding::DSP {
 
 namespace {
 constexpr double kPi = 3.14159265358979323846;
-constexpr double kNegInf = -INFINITY;
+constexpr double kNegInf = -std::numeric_limits<double>::infinity();
 
 // BS.1770 offset: the K-weighted mean square of a full-scale 997 Hz sine pair reads 0 LUFS.
 constexpr double kLoudnessOffset = -0.691;
@@ -25,7 +26,6 @@ constexpr double kHighPassHz = 38.13547087602444;
 constexpr double kHighPassQ = 0.5003270373238773;
 
 inline double lufsOf(double energy) { return kLoudnessOffset + 10.0 * std::log10(energy); }
-inline double energyOf(double lufs) { return std::pow(10.0, (lufs - kLoudnessOffset) / 10.0); }
 
 inline double runBiquad(const KBiquad& c, double& s1, double& s2, double x) {
   const double y = c.b0 * x + s1;
