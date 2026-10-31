@@ -65,7 +65,7 @@ void testCurveFollowsTuning() {
   const LoudPush c = loudPush(10.0f);
   ASSERT_NEAR_EPS(c.clipDb, Tuning::kLoudCurve.clipDb, 1e-6);
   ASSERT_NEAR_EPS(c.limitDb, -Tuning::kLoudCurve.limitDb, 1e-6);
-  ASSERT_NEAR_EPS(c.final01, Tuning::kLoudCurve.finalAmount, 1e-6);
+  ASSERT_NEAR_EPS(c.final01, 1.0, 1e-6);   // 0..1 of the stage ramp; the amounts live in kLoudCurve
 }
 
 void testMonotonic() {

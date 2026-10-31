@@ -97,9 +97,10 @@ inline constexpr double kFinalRampMs = 10.0;
 struct LoudCurve {
   double clipDb;       // extra CLIP drive once its third is complete
   double limitDb;      // extra LIMIT threshold (negative = lower) once its third is complete
-  double finalAmount;  // extra FINAL EFFECT / DRIVE, 0..1 of its range, once its third is complete
+  double finalEffectMax;  // extra FINAL EFFECT (0..1 of its range) once its third is complete
+  double finalDriveDb;    // extra FINAL DRIVE in dB once its third is complete
 };
-inline constexpr LoudCurve kLoudCurve{1.5, -3.0, 1.0};
+inline constexpr LoudCurve kLoudCurve{1.5, -3.0, 0.6, 2.0};
 
 // OVERSAMPLER (linear-phase half-band stages, spec §9): the flat passband edge as a fraction of the
 // base sample rate (ripple stays far below 0.1 dB up to here) and the stopband attenuation of the

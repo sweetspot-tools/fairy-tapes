@@ -151,6 +151,9 @@ void Engine::prepare(double sampleRate, int maxBlock, int oversampling) {
     osB_[c].prepare(factor_, maxBlock_);
   }
 
+  preGuardPeak_ = 0.0;
+  guardClipped_ = 0;
+
   latency_ = osA_[0].latencySamples() + osB_[0].latencySamples() +
              (limiter_.latencySamples() + final_.latencySamples() + metal_.latencySamples()) / factor_;
 
@@ -217,9 +220,9 @@ void Engine::apply(const EngineSettings& s, bool force) {
 
   const FinalArgs fa{s.finalOn,
                      s.finalMode,
-                     std::min(1.0f, s.finalEffect + 0.6f * push.final01),
+                     std::min(1.0f, s.finalEffect + finalEffectPush(push)),
                      s.finalCurve,
-                     std::min(2.0f, s.finalDriveDb + 2.0f * push.final01),
+                     std::min(2.0f, s.finalDriveDb + finalDrivePush(push)),
                      s.ceilingDb};
   if (force || !(fa == finalApplied_)) {
     final_.set(fa.on, fa.mode, fa.effect, fa.curve, fa.driveDb, fa.ceilingDb);
@@ -398,6 +401,9 @@ void Engine::processChunk(float* l, float* r, int n, double* inPeak, double* out
   if (guardOn_) {
     const float c = ceilLin_;
     for (int i = 0; i < n; ++i) {
+      const float pk = std::max(std::fabs(l[i]), std::fabs(r[i]));
+      preGuardPeak_ = std::max(preGuardPeak_, static_cast<double>(pk));
+      if (pk > c) ++guardClipped_;
       l[i] = std::clamp(l[i], -c, c);
       r[i] = std::clamp(r[i], -c, c);
     }

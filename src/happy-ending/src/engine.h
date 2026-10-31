@@ -9,7 +9,7 @@
  *    Tuning::kClipRampMs (zero latency, so the two are aligned).
  *
  *  - LOUDNESS is applied here, on top of the stage values (loudPush): CLIP drive + clipDb, LIMIT
- *    threshold - limitDb, FINAL EFFECT + 0.6 * final01 (capped at 100 %) or DRIVE + 2 dB * final01
+ *    threshold - limitDb, FINAL EFFECT + finalEffectMax * final01 (capped at 100 %) or DRIVE + finalDriveDb * final01
  *    (capped at +2 dB). The stage values in EngineSettings never change.
  *  - Latency (base rate) = zone A oversampler + zone B oversampler + (LIMIT + FINAL + METALHEAD
  *    latencies at the zone-B rate) / factor; it depends only on the oversampling factor given to
@@ -173,6 +173,10 @@ public:
   const Meters& meters() const { return meters_; }
   const EngineSettings& settings() const { return applied_; }
   void clearClips();
+  // Test hooks on the ceiling guard (only counted while the guard is on, reset by prepare): the
+  // peak seen BEFORE the guard clamps, and how many samples the guard actually had to clip.
+  double preGuardPeak() const { return preGuardPeak_; }
+  std::uint64_t guardClippedSamples() const { return guardClipped_; }
   void resetIntegrated();
 
 private:
@@ -232,6 +236,8 @@ private:
   double clipMix_ = 1.0, clipMixTarget_ = 1.0, clipMixStep_ = 1.0;
   bool guardOn_ = true;
   float ceilLin_ = 1.0f;
+  double preGuardPeak_ = 0.0;
+  std::uint64_t guardClipped_ = 0;
 
   // buffers (allocated in prepare)
   std::vector<float> bypassRingL_, bypassRingR_;

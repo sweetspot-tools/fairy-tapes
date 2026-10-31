@@ -339,11 +339,12 @@ void testBypassIsDelayedInput() {
 }
 
 void testLatencyPerOversampling() {
+ for (double sr : {44100.0, kSr, 192000.0}) {
   int lat[3];
   int k = 0;
   for (int factor : {1, 2, 4}) {
     Engine e;
-    e.prepare(kSr, 512, factor);
+    e.prepare(sr, 512, factor);
     ASSERT_TRUE(e.oversampling() == factor);
     lat[k] = e.latencySamples();
     // constant across styles, modes and on / off
@@ -364,7 +365,7 @@ void testLatencyPerOversampling() {
     // the reported latency is the real one: an impulse through the chain with every stage off
     // comes out (peak of the oversamplers' symmetric response) exactly latency samples later
     Engine z;
-    z.prepare(kSr, 512, factor);
+    z.prepare(sr, 512, factor);
     z.set(allOff());
     std::vector<float> l(8192, 0.0f), r(8192, 0.0f);
     l[1000] = 0.5f;
@@ -379,13 +380,15 @@ void testLatencyPerOversampling() {
   }
   ASSERT_TRUE(lat[0] < lat[1]);
   ASSERT_TRUE(lat[1] < lat[2]);
+ }
 }
 
 // Review Focus: LOUDNESS 10, PUSH +6, EFFECT 100 %, CEIL -0.1, pink noise at 0 dBFS, OVERSAMPLING 1x / 2x / 4x.
 void testAllMaxNeverAboveCeiling() {
   const double ceiling = std::pow(10.0, -0.1 / 20.0);
+  for (double sr : {44100.0, kSr, 192000.0}) {
   std::vector<float> srcL, srcR;
-  pinkPair(srcL, srcR, static_cast<int>(2 * kSr), 1.0, 2026u);
+  pinkPair(srcL, srcR, static_cast<int>(2 * sr), 1.0, 2026u);
   for (int factor : {1, 2, 4})
     for (int mode = 0; mode < 2; ++mode)
       for (int inIdx : {24, 48}) {  // INPUT 0 dB, then +12 dB
@@ -398,7 +401,7 @@ void testAllMaxNeverAboveCeiling() {
         setIdx(norm, kFinalMode, mode);
         setIdx(norm, kInputGain, inIdx);
         Engine e;
-        e.prepare(kSr, 512, factor);
+        e.prepare(sr, 512, factor);
         e.set(mapParams(norm.data(), -1, false));
         std::vector<float> l = srcL, r = srcR;
         run(e, l, r, 512);
@@ -406,13 +409,16 @@ void testAllMaxNeverAboveCeiling() {
         for (std::size_t i = 0; i < l.size(); ++i)
           peak = std::max(peak, static_cast<double>(std::max(std::fabs(l[i]), std::fabs(r[i]))));
         if (!(peak <= ceiling))
-          std::fprintf(stderr, "  factor %d mode %d input %d: peak %.9f > %.9f\n", factor, mode, inIdx, peak, ceiling);
+          std::fprintf(stderr, "  sr %.0f factor %d mode %d input %d: peak %.9f > %.9f\n", sr, factor, mode, inIdx, peak, ceiling);
         ASSERT_TRUE(peak <= ceiling);
         ASSERT_TRUE(peak > 0.5);
         ASSERT_TRUE(!e.meters().clip[kLedOut]);
       }
+  }
 
   // LIMIT, FINAL and METALHEAD in any combination (one of them on): still under the ceiling.
+  std::vector<float> srcL, srcR;
+  pinkPair(srcL, srcR, static_cast<int>(2 * kSr), 1.0, 2026u);
   for (int combo = 1; combo < 8; ++combo) {
     EngineSettings s = defaults();
     s.ceilingDb = -0.1f;
@@ -445,7 +451,8 @@ void testLoudnessZeroEqualsSettings() {
 }
 
 // LOUDNESS adds the push of loudPush on top of the stage values: CLIP drive + clipDb, LIMIT threshold
-// - limitDb, FINAL EFFECT + 0.6 * final01 (capped at 100 %) or DRIVE + 2 dB * final01 (capped at +2 dB).
+// - limitDb, FINAL EFFECT + kLoudCurve.finalEffectMax * final01 (capped at 100 %) or DRIVE +
+// kLoudCurve.finalDriveDb * final01 (capped at +2 dB).
 void testLoudnessPushesStages() {
   EngineSettings s = defaults();
   s.metalOn = true;
@@ -454,14 +461,14 @@ void testLoudnessPushesStages() {
   const LoudPush p = loudPush(10.0f);
   ASSERT_TRUE(p.clipDb > 0.0f && p.limitDb > 0.0f && p.final01 > 0.0f);
   ASSERT_TRUE(matchesReference(s, 2, s.clipDriveDb + p.clipDb, s.limitThreshDb - p.limitDb,
-                               std::min(1.0f, s.finalEffect + 0.6f * p.final01), std::min(2.0f, s.finalDriveDb + 2.0f * p.final01)));
+                               std::min(1.0f, s.finalEffect + finalEffectPush(p)), std::min(2.0f, s.finalDriveDb + finalDrivePush(p))));
   // FINAL in CLIP mode with room under +2 dB, half-way up the knob (only CLIP and LIMIT pushed so far)
   s.finalMode = 1;
   s.finalDriveDb = 0.5f;
   s.loudness = 9.0f;
   const LoudPush q = loudPush(9.0f);
   ASSERT_TRUE(matchesReference(s, 1, s.clipDriveDb + q.clipDb, s.limitThreshDb - q.limitDb,
-                               std::min(1.0f, s.finalEffect + 0.6f * q.final01), std::min(2.0f, s.finalDriveDb + 2.0f * q.final01)));
+                               std::min(1.0f, s.finalEffect + finalEffectPush(q)), std::min(2.0f, s.finalDriveDb + finalDrivePush(q))));
 }
 
 // The stage controls never move: LOUDNESS only changes its own field, and the engine keeps them.
@@ -734,6 +741,50 @@ void testOutputGainKeepsCeiling() {
   }
 }
 
+// The guard is the last resort, not the limiter: with OUTPUT at 0 dB and pink noise at 0 dBFS the
+// chain itself (zone B and its decimation) must already stay near the CEIL, so a regression in
+// zone B cannot hide behind the guard. LIMIT, FINAL and METALHEAD alone never reach the CEIL before
+// the guard (bound: 0.5 dB, under 0.1 % of the samples); with everything at full push the decimation
+// filter rings on the flat-topped signal (about +0.4..0.55 dB, around 1 % of the samples measured):
+// bound 0.75 dB and 3 %. The hotter case (INPUT +12 dB on top) is deliberately not bounded here.
+void testOvershootBeforeGuardIsSmall() {
+  const double ceilDb = -0.3;
+  const double ceiling = std::pow(10.0, ceilDb / 20.0);
+  for (double sr : {44100.0, kSr, 192000.0}) {
+    std::vector<float> srcL, srcR;
+    pinkPair(srcL, srcR, static_cast<int>(2 * sr), 1.0, 4242u);
+    for (int factor : {1, 2, 4})
+      for (int stage = 0; stage < 5; ++stage) {  // LIMIT, FINAL, METALHEAD alone; then all on at full push, INFLATE / CLIP
+        EngineSettings s = defaults();
+        s.ceilingDb = static_cast<float>(ceilDb);
+        s.outputGainDb = 0.0f;
+        s.limitOn = stage == 0 || stage >= 3;
+        s.finalOn = stage == 1 || stage >= 3;
+        s.metalOn = stage == 2 || stage >= 3;
+        if (stage >= 3) {
+          s.loudness = 10.0f;
+          s.pushDb = 6.0f;
+          s.finalEffect = 1.0f;
+          s.finalMode = stage - 3;
+        }
+        const double maxOverDb = stage >= 3 ? 0.75 : 0.5;
+        const double maxFraction = stage >= 3 ? 0.03 : 1e-3;
+        Engine e;
+        e.prepare(sr, 512, factor);
+        e.set(s);
+        std::vector<float> l = srcL, r = srcR;
+        run(e, l, r, 512);
+        const double overDb = 20.0 * std::log10(e.preGuardPeak() / ceiling);
+        const double fraction = static_cast<double>(e.guardClippedSamples()) / static_cast<double>(l.size());
+        if (!(overDb <= maxOverDb && fraction < maxFraction))
+          std::fprintf(stderr, "  sr %.0f factor %d stage %d: pre-guard peak %+.3f dB over CEIL, %.5f clipped\n", sr, factor, stage, overDb, fraction);
+        ASSERT_TRUE(overDb <= maxOverDb);
+        ASSERT_TRUE(fraction < maxFraction);
+        ASSERT_TRUE(e.preGuardPeak() > 0.5);   // the guard was really on and the signal really there
+      }
+  }
+}
+
 } // namespace
 
 int main() {
@@ -753,6 +804,7 @@ int main() {
   RUN_TEST(testStageSwitchesNoClick);
   RUN_TEST(testMetersReadStages);
   RUN_TEST(testOutputGainKeepsCeiling);
+  RUN_TEST(testOvershootBeforeGuardIsSmall);
   std::printf("\n%d passed, %d failed\n", g_passed, g_failed);
   return g_failed == 0 ? 0 : 1;
 }
