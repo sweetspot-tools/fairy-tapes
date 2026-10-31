@@ -2,7 +2,7 @@
 
 **Data:** 2026-10-21
 **Stato:** decisioni chiuse il 2026-10-24 (brainstorming dal 2026-10-15); motore audio e plugin VST3 realizzati
-**Avanzamento:** motore audio e plugin VST3 fatti (Task 1-13 del piano `docs/superpowers/plans/2026-10-24-happy-ending.md`); taratura a orecchio in attesa dell'utente (Task 14); editor con piano a parte.
+**Avanzamento:** motore audio e plugin VST3 fatti (Task 1-13 del piano `docs/superpowers/plans/2026-10-24-happy-ending.md`); taratura a orecchio in attesa dell'utente (Task 14); editor: piano `docs/superpowers/plans/2026-10-31-happy-ending-editor.md` scritto il 2026-10-31, da eseguire.
 **Suite:** Fairy Tapes (catena di mastering "tutto dentro")
 **Nome:** Happy Ending (deciso il 2026-10-21); cartella `src/happy-ending/`, bundle `HappyEnding.vst3`
 **Preview:** `src/happy-ending/docs/mockups/happy_ending_rack.html` (anche nella pagina `docs/mockups/index.html`)
@@ -179,8 +179,22 @@ Nessuna decisione di progetto aperta (chiuse il 2026-10-24: LOUDNESS sopra i com
 - **Taratura a orecchio** (§9, Task 14 del piano): soglia e tempi del DYN, basi di release degli stili, soglia di SET, curva della LOUDNESS, passo di MATCH, ascolto finale di FINE EQ e GLUE con tutta la catena, in un host. Tocca all'utente; i valori di `tuning.h` sono quelli di partenza.
 - **Verifica della latenza in un host reale** (REAPER, Bitwig): che la compensazione di ritardo dichiarata (69/76 campioni di oversampler più i look-ahead) allinei davvero la traccia, anche cambiando OVERSAMPLING; finora provata solo con i test del motore e del processor.
 - **Licenze:** controllo sui file `LICENSE` dei componenti prima del rilascio (§8); l'elenco va ripreso nei CREDITS dell'editor (piano a parte).
-- **Editor grafico:** piano a parte, da scrivere.
+- **Editor grafico:** piano `docs/superpowers/plans/2026-10-31-happy-ending-editor.md` (Task 1-16), scelte tecniche nel §13; da eseguire.
 
 ## 12. Storia del brainstorming
 
 Punto 0 (2026-10-15) e riepilogo: `.superpowers/brainstorm/mastering/` (fuori da git). Le scelte successive sono in questa spec.
+
+## 13. Editor: scelte tecniche (2026-10-31)
+
+Proposte con il piano dell'editor; l'utente può rivederle prima dell'esecuzione.
+
+- **SIZE comune alla suite:** una sola preferenza per tutti i plugin, nel file `<cartella preferenze>/FairyTapes/Suite.prefs` (`size=75|90|100|125`, default 100), letta e scritta da `shared/ui`. La finestra è 1280 × 890 × fattore dell'host × SIZE. Cambiata dal retro si applica subito chiedendo all'host di ridimensionare; se l'host rifiuta, vale alla prossima apertura. Gli altri plugin la adottano nelle loro chat.
+- **Retro largo:** il template comune del retro (`shared/ui`, oggi largo 1000) riceve la geometria per 1280 × 890 presa dalla preview; i layout esistenti non cambiano.
+- **Dati dello schermo:** il motore pubblica altri sei valori di visualizzazione, dopo quelli esistenti: picco all'ingresso di GLUE, LIMIT, CLIP e FINAL (−60…+12 dB), riduzione del compressore della colla prima del MIX e soglia effettiva del LIMIT (con la spinta della LOUDNESS e SET).
+- **Curve EQ:** le calcola l'editor con copie proprie di FINE EQ e VIBE EQ a 48 kHz, impostate dai parametri come il motore (mai sull'audio); la curva del VIBE con il ritiro del DYN usa il valore pubblicato.
+- **Vista dello schermo** (EQ, GLUE, CLIP, LIMIT, FINAL): stato dell'editor, ricordato finché vive l'istanza, non salvato nel progetto; all'apertura di un progetto è EQ.
+- **Stato v2:** come Deep Throat, i parametri più il decor (seme, angoli delle quattro viti, fino a sei scritte sul nastro); un progetto v1 si apre con il decor di default.
+- **Preferenze del plugin:** `HappyEnding.prefs` con le chiavi degli altri plugin (wear, notes, tapeFont, valuesFont).
+- **LISTEN e SET alla chiusura dell'editor:** l'editor li spegne con una modifica unica ciascuno (sono parametri di sessione nascosti; il motore non li salva già oggi).
+- **Parametri a scelta per l'host:** restano parametri a passi con i testi dati da `getParamStringByValue` (niente `StringListParameter`): l'editor mostra comunque i valori, e gli host leggono già i testi.
