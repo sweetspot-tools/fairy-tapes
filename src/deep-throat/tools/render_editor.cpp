@@ -1,9 +1,10 @@
 // Developer tool: draws the Deep Throat editor offscreen into PNG files, no host or window needed.
 //   deep_throat_render <out-dir> [bypass] [no-grain] [module-off=rider|breath|eq|deess|comp|tone] [meters] [scope]
 //                     [wear=off|light|heavy] [seed=<n>] [text=<s>] [text1..text6=<s>] [font=zeyada|rocksalt|homemade]
-//                     [values=standard|tape] [screw1..screw4=<deg>] [cycles=<n>]
-// Writes <out-dir>/front.png (1000 x 614). The back of the panel (SETTINGS, MODES, ROUTING, CREDITS) is drawn here too
-// once it exists (Task 11). bypass sets the global Bypass, module-off= turns a module's IN off (both through the
+//                     [values=standard|tape] [screw1..screw4=<deg>] [back=settings|modes|routing|credits|all] [cycles=<n>]
+// Writes <out-dir>/front.png (1000 x 614); back= also writes the back of the panel on that tab (or on every tab with
+// all) as <out-dir>/back_<tab>.png, with the editor's own BackView (MODES, ROUTING and CREDITS are empty until Task 12).
+// bypass sets the global Bypass, module-off= turns a module's IN off (both through the
 // controller, picked up by the editor's timer work); no-grain draws the panel without the grain tile. meters sets proof
 // values of the display parameters (LEVEL rows, GR, IN clip lit, BREATH lamp lit); scope fills the SCOPE history with a
 // simulated voice (phrases, a breath, a pause, the Rider gain following), one timer run per point. The seed, the tape
@@ -15,6 +16,7 @@
 // docs/mockups/deep_throat_rack.html on a machine without a host.
 #include "controller.h"
 #include "params.h"
+#include "ui/back_settings.h"
 #include "ui/editor.h"
 #include "ui/layout.h"
 #include "ui/panel_view.h"
@@ -22,6 +24,7 @@
 #include "ui/tape_view.h"
 #include "ui/tapes.h"
 
+#include "fairy_ui/back_view.h"
 #include "fairy_ui/screw_view.h"
 #include "fairy_ui/wear_view.h"
 
@@ -56,15 +59,18 @@ struct EditorPreview {
     int wear = -1;     // -1: from the preferences, else WearLevel
     int font = -1;     // -1: from the preferences, else TapeFont
     int values = -1;   // -1: from the preferences, 0 standard, 1 tape font
+    int back = -1;     // -1: front only, 0..3 one tab of the back, 4 every tab
   };
+  static constexpr const char* kTabNames[] = {"settings", "modes", "routing", "credits"};
 
   // Builds and removes the editor's views as open()/close() do, without a window.
   static void cycle(Steinberg::Vst::EditController& ctl, int n) {
     for (int i = 0; i < n; ++i) {
       Editor ed(&ctl);
       auto root = VSTGUI::makeOwned<VSTGUI::CViewContainer>(VSTGUI::CRect(0, 0, Editor::kWidth, Editor::kHeight));
-      ed.createViews(root);
+      ed.createSides(root);
       ed.onTimer();
+      ed.flip_.reset();
       root->removeAll(true);
       ed.resetViewPointers();
     }
@@ -113,7 +119,7 @@ struct EditorPreview {
     }
     ed.loadAppearance(prefsFile);   // what open() does
     auto root = VSTGUI::makeOwned<VSTGUI::CViewContainer>(VSTGUI::CRect(0, 0, Editor::kWidth, Editor::kHeight));
-    ed.createViews(root);
+    ed.createSides(root);   // front shown, back hidden: root->draw() shows the front only
     if (opt.wear >= 0) ed.setWearLevel(static_cast<WearLevel>(opt.wear));
     if (opt.font >= 0) ed.setTapeFont(static_cast<TapeFont>(opt.font));
     if (opt.values >= 0) ed.setValuesFont(opt.values == 1);
@@ -152,6 +158,28 @@ struct EditorPreview {
                   Editor::kHeight, ed.panel_ ? ed.panel_->drawnTexts().size() : 0u, dimmed,
                   ed.scope_ ? ed.scope_->history().size() : 0);
     }
+    if (opt.back >= 0 && ed.back_) {
+      ed.back_->setVisible(true);
+      for (int tab = 0; tab < 4; ++tab) {
+        if (opt.back != 4 && opt.back != tab) continue;
+        ed.back_->setTab(tab);
+        auto bctx = VSTGUI::COffscreenContext::create(VSTGUI::CPoint(Editor::kWidth, Editor::kHeight), 1.0);
+        if (!bctx) {
+          ok = false;
+          continue;
+        }
+        bctx->beginDraw();
+        ed.back_->draw(bctx);
+        bctx->endDraw();
+        const std::string path = dir + "/back_" + kTabNames[tab] + ".png";
+        const bool written = writePng(*bctx, path);
+        if (!written) std::fprintf(stderr, "cannot write %s\n", path.c_str());
+        ok = ok && written;
+        std::printf("%s: tab %s\n", path.c_str(), ed.back_->content().tabs[static_cast<std::size_t>(tab)].label.c_str());
+      }
+      ed.back_->setVisible(false);
+    }
+    ed.flip_.reset();
     root->removeAll(true);
     ed.resetViewPointers();
     return ok;
@@ -166,7 +194,7 @@ int main(int argc, char** argv) {
     std::fprintf(stderr,
                  "usage: %s <out-dir> [bypass] [no-grain] [module-off=rider|breath|eq|deess|comp|tone] [meters] [scope]\n"
                  "       [wear=off|light|heavy] [seed=<n>] [text=<s>] [text1..text6=<s>] [font=zeyada|rocksalt|homemade]\n"
-                 "       [values=standard|tape] [screw1..screw4=<deg>] [cycles=<n>]\n",
+                 "       [values=standard|tape] [screw1..screw4=<deg>] [back=settings|modes|routing|credits|all] [cycles=<n>]\n",
                  argv[0]);
     return 2;
   }
@@ -234,6 +262,11 @@ int main(int argc, char** argv) {
     } else if (!std::strncmp(argv[i], "screw", 5) && argv[i][5] >= '1' && argv[i][5] <= '4' && argv[i][6] == '=') {
       decor.screwAngles[argv[i][5] - '1'] = static_cast<float>(std::atof(argv[i] + 7));
       customDecor = true;
+    } else if (!std::strncmp(argv[i], "back=", 5)) {
+      const char* b = argv[i] + 5;
+      opt.back = !std::strcmp(b, "all") ? 4 : 0;
+      for (int t = 0; t < 4; ++t)
+        if (!std::strcmp(b, Ui::EditorPreview::kTabNames[t])) opt.back = t;
     } else if (!std::strncmp(argv[i], "cycles=", 7)) {
       cycles = std::atoi(argv[i] + 7);
     }

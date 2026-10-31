@@ -2,8 +2,13 @@
 // Layers from the bottom (docs/DESIGN_SYSTEM.md): panel (PanelView: body, grain, boxes, printed texts) / silkscreen
 // (SilkscreenView: knob scales, names, values, button labels, Comp selector values, block tags; ReadoutView: the
 // read-only values) / wear (FairyTapes::Ui::WearView) / paper tapes (TapeView) / screws (FairyTapes::Ui::ScrewView) /
-// SCOPE / controls / LEVEL rows and clip LEDs / BREATH lamp (an LED: a second ReadoutView, lamp only). The back of the
-// panel comes with Task 11 of docs/superpowers/plans/2026-10-24-deep-throat-gui.md.
+// SCOPE / controls / LEVEL rows and clip LEDs / BREATH lamp (an LED: a second ReadoutView, lamp only), all inside the
+// front side (a container); "BACK ->" at the right of the header is on top.
+// Back of the panel (shared FairyTapes::Ui::BackView, contents from ui/back_settings.h: SETTINGS, MODES, ROUTING,
+// CREDITS): "BACK ->" turns the panel (FairyTapes::Ui::PanelFlip, about 0.8 s, run by the UI timer), "<- BACK" turns it
+// again; a text field open on a tape or a value is confirmed first. The editor remembers the tab while it lives. The
+// SETTINGS choices change the preferences: applied at once and saved in the file read at open (a failed write is
+// ignored, the choice stays for the session); RE-ROLL gives the instance a new seed.
 // Wear: the seed comes from the instance decor (Controller::decor, saved with the project), the level from the user
 // preferences (ui/prefs.h, read when the editor opens; a missing or bad file gives Light / Zeyada / values in the tape
 // font). The marks change in place when the seed or the level changes (no rebuild); the UI timer polls
@@ -31,6 +36,7 @@
 #include "ui/layout.h"
 #include "ui/prefs.h"
 
+#include "fairy_ui/flip_view.h"
 #include "fairy_ui/skin.h"
 #include "fairy_ui/tape_font.h"
 #include "fairy_ui/wear.h"
@@ -60,6 +66,8 @@ class MeterBar;
 class ClipLed;
 class WearView;
 class ScrewView;
+class BackView;
+class TextLink;
 }
 
 namespace FairyTapes::DeepThroat {
@@ -135,6 +143,9 @@ private:
   friend struct EditorPreview;
   friend struct EditorTest;
 
+  // Both sides of the panel in `host` (the frame in open(); a plain container in the render tool and the tests): the
+  // front (a container holding the views of createViews), the hidden back and the turn between them.
+  void createSides(VSTGUI::CViewContainer* host);
   // Builds the layers in `parent` (the frame in open(); a plain container in the render tool and the tests) and starts
   // watching the parameters.
   void createViews(VSTGUI::CViewContainer* parent);
@@ -180,6 +191,14 @@ private:
   void commitTapeText(int slot, const std::string& typed);
   // Removes the tape's text field; without `confirm` what was typed is dropped (Escape).
   void closeTapeEdit(bool confirm);
+  // The back of the panel, hidden, in `host`, on the current preferences and tab.
+  void buildBack(VSTGUI::CViewContainer* host);
+  // The back's wear: another pattern from the same seed, at the Wear level of the front.
+  void applyBackWear();
+  // Turns the panel to the back (true) or to the front; open text fields are confirmed first.
+  void startFlip(bool toBack);
+  // A SETTINGS choice on the back: applied to the preferences, saved (a failed write is ignored) and shown at once.
+  void changeSetting(int key, int index);
   // Screw views for the current seed and the decor's rotations (created once, then updated in place).
   void placeScrews();
   // The end of a drag on screw `index`, which now shows `shownDeg`.
@@ -201,7 +220,10 @@ private:
   std::array<FairyTapes::Ui::ClipLed*, kClipCount> clips_{};       // kClips order
   DimState dim_{};
 
-  // Appearance from the user preferences (defaults until open() reads them).
+  // Appearance from the user preferences (defaults until open() reads them). prefs_ always holds what is applied;
+  // prefsFile_ is where a SETTINGS choice is saved (empty: nowhere, e.g. in the tests and the render tool).
+  Prefs prefs_;
+  std::filesystem::path prefsFile_;
   Controller* owner_ = nullptr;   // the same object as getController(), when it is Deep Throat's controller
   WearLevel wearLevel_ = WearLevel::Light;
   TapeFont tapeFont_ = TapeFont::Zeyada;
@@ -220,8 +242,16 @@ private:
   WearLevel marksLevel_ = WearLevel::Off;
   bool marksValid_ = false;
 
+  // The two sides of the panel and the turn.
+  VSTGUI::CViewContainer* front_ = nullptr;   // owned by the frame (or the host container)
+  FairyTapes::Ui::BackView* back_ = nullptr;
+  FairyTapes::Ui::TextLink* backLink_ = nullptr;   // "BACK ->" in the header
+  FairyTapes::Ui::PanelFlip flip_;
+  int backTab_ = 0;   // the back's tab, kept while the editor lives
+
   VSTGUI::CTextEdit* tapeEdit_ = nullptr;   // the tape's text field, while open
   int tapeEditSlot_ = -1;
+  bool tapeEditReported_ = false;   // the field already sent its text (Enter or focus lost)
 
   VSTGUI::CTextEdit* valueEdit_ = nullptr;   // the typed-value field, while open
   Steinberg::Vst::ParamID valueEditId_ = kNumParams;

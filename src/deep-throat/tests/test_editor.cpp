@@ -8,6 +8,7 @@
  */
 #include "controller.h"
 #include "params.h"
+#include "ui/back_settings.h"
 #include "ui/editor.h"
 #include "ui/layout.h"
 #include "ui/dynamic_text.h"
@@ -21,7 +22,10 @@
 #include "ui/tapes.h"
 #include "ui/value_text.h"
 
+#include "fairy_ui/back_view.h"
+#include "fairy_ui/back_widgets.h"
 #include "fairy_ui/controls.h"
+#include "fairy_ui/flip_view.h"
 #include "fairy_ui/meter_math.h"
 #include "fairy_ui/meters.h"
 #include "fairy_ui/rack_controls.h"
@@ -56,6 +60,9 @@
 #include <iterator>
 #include <limits>
 #include <string>
+#include <thread>
+#include <chrono>
+#include <ctime>
 #include <vector>
 
 // The SDK's VSTGUI init hook asks the module for its factory; there is none in this test.
@@ -77,9 +84,22 @@ struct EditorTest {
     ed.unwatchParameters();
     ed.closeValueEdit(false);
     ed.closeTapeEdit(false);
+    ed.flip_.reset();
     root->removeAll(true);
     ed.resetViewPointers();
   }
+  // Both sides of the panel in a container, as open() does in the frame: the front (a container with the views of
+  // build()), the hidden back and the turn between them.
+  static VSTGUI::SharedPointer<VSTGUI::CViewContainer> buildSides(Editor& ed) {
+    auto root = VSTGUI::makeOwned<VSTGUI::CViewContainer>(VSTGUI::CRect(0, 0, Editor::kWidth, Editor::kHeight));
+    ed.createSides(root);
+    return root;
+  }
+  static VSTGUI::CViewContainer* front(const Editor& ed) { return ed.front_; }
+  static FairyTapes::Ui::BackView* back(const Editor& ed) { return ed.back_; }
+  static FairyTapes::Ui::TextLink* backLink(const Editor& ed) { return ed.backLink_; }
+  static FairyTapes::Ui::PanelFlip& flip(Editor& ed) { return ed.flip_; }
+  static const Prefs& prefs(const Editor& ed) { return ed.prefs_; }
   // One run of the UI timer's work.
   static void tick(Editor& ed) { ed.onTimer(); }
   static PanelView* panel(const Editor& ed) { return ed.panel_; }
@@ -1612,6 +1632,224 @@ void test_missing_grain_asset_draws_plain_panel() {
   EditorTest::destroy(ed, root);
 }
 
+
+// ---- Back of the panel (Task 11) ------------------------------------------------------------------------------------
+VSTGUI::CRect boxRect(const FairyTapes::Ui::BackBox& b) { return VSTGUI::CRect(b.x, b.y, b.x + b.w, b.y + b.h); }
+
+// The child of `c` of type T whose rectangle is `r` (nullptr when there is none).
+template <class T>
+T* childAt(VSTGUI::CViewContainer* c, const VSTGUI::CRect& r) {
+  T* found = nullptr;
+  c->forEachChild([&](VSTGUI::CView* v) {
+    if (auto* t = dynamic_cast<T*>(v); t && !found && v->getViewSize() == r) found = t;
+  });
+  return found;
+}
+
+bool leftClick(VSTGUI::CView* v, VSTGUI::CPoint p) {
+  return v && v->onMouseDown(p, VSTGUI::CButtonState(VSTGUI::kLButton)) == VSTGUI::kMouseEventHandled;
+}
+
+// The widget of SETTINGS item `key` on the back (nullptr when there is none).
+template <class T>
+T* settingWidget(FairyTapes::Ui::BackView* back, int key) {
+  const auto& items = back->content().items;
+  const int i = FairyTapes::Ui::findItem(back->content(), key);
+  if (i < 0) return nullptr;
+  const auto box = FairyTapes::Ui::itemControlBox(items[static_cast<std::size_t>(i)],
+                                                  FairyTapes::Ui::itemRow(items, static_cast<std::size_t>(i)), back->layout());
+  return childAt<T>(back, boxRect(box));
+}
+
+// A click on option `index` of a SETTINGS choice row.
+bool chooseOption(FairyTapes::Ui::BackView* back, int key, int index) {
+  auto* row = settingWidget<FairyTapes::Ui::SegmentRow>(back, key);
+  if (!row) return false;
+  const VSTGUI::CRect r = row->getViewSize();
+  const int n = static_cast<int>(back->content().items[static_cast<std::size_t>(FairyTapes::Ui::findItem(back->content(), key))].options.size());
+  return leftClick(row, VSTGUI::CPoint(r.left + r.getWidth() * (index + 0.5) / n, r.getCenter().y));
+}
+
+std::filesystem::path scratchPrefsDir(const char* name) {
+  return std::filesystem::temp_directory_path() /
+         (std::string(name) + "_" + std::to_string(static_cast<unsigned>(std::rand())) + "_" + std::to_string(static_cast<long long>(std::time(nullptr))));
+}
+
+// "BACK ->" in the header turns the panel (the timer runs the turn, about 0.8 s); a text field open on a tape is
+// confirmed first; "<- BACK" turns it again.
+void test_flip_roundtrip_and_text_edit_confirmed_first() {
+  clearDecor();
+  Editor ed(g_ctl);
+  auto root = EditorTest::buildSides(ed);
+  ed.setWearLevel(WearLevel::Heavy);
+  VSTGUI::CViewContainer* front = EditorTest::front(ed);
+  FairyTapes::Ui::BackView* back = EditorTest::back(ed);
+  ASSERT_TRUE(front != nullptr && back != nullptr && root->isChild(front) && root->isChild(back));
+  ASSERT_TRUE(front->isVisible() && !back->isVisible());
+  ASSERT_TRUE(EditorTest::panel(ed) != nullptr && front->isChild(EditorTest::panel(ed)));   // the front views are in the front side
+  ASSERT_TRUE(back->getViewSize() == VSTGUI::CRect(0, 0, Editor::kWidth, Editor::kHeight));
+  FairyTapes::Ui::TextLink* link = EditorTest::backLink(ed);
+  ASSERT_TRUE(link != nullptr && front->isChild(link) && link->getViewSize() == boxRect(FairyTapes::Ui::frontBackLinkBox()));
+  // a tape field left open with a text typed in
+  ASSERT_TRUE(!EditorTest::tapes(ed).empty());
+  TapeView* tape = EditorTest::tapes(ed)[0];
+  const int slot = tape->slot();
+  const uint32_t rev0 = g_ctl->decorRevision();
+  ASSERT_TRUE(leftClick(tape, tape->tapeRect().getCenter()));
+  VSTGUI::CTextEdit* field = EditorTest::tapeEdit(ed);
+  ASSERT_TRUE(field != nullptr);
+  field->setText("TAKE 2");
+  ASSERT_TRUE(leftClick(link, link->getViewSize().getCenter()));
+  ASSERT_TRUE(EditorTest::tapeEdit(ed) == nullptr && !front->isChild(field) && !root->isChild(field));
+  ASSERT_TRUE(g_ctl->decorRevision() == rev0 + 1 && tapeTextFor(g_ctl->decor(), slot) == "TAKE 2" && tape->text() == "TAKE 2");
+  // the turn runs on the timer and ends with the back shown
+  ASSERT_TRUE(EditorTest::flip(ed).running() && EditorTest::flip(ed).showingBack());
+  ASSERT_TRUE(!front->isVisible() && !back->isVisible());
+  EditorTest::tick(ed);
+  ASSERT_TRUE(EditorTest::flip(ed).running());   // not over after one timer run
+  std::this_thread::sleep_for(std::chrono::milliseconds(900));
+  EditorTest::tick(ed);
+  ASSERT_TRUE(!EditorTest::flip(ed).running() && back->isVisible() && !front->isVisible());
+  // "<- BACK" at the top right of the back
+  auto* home = childAt<FairyTapes::Ui::TextLink>(back, boxRect(FairyTapes::Ui::backLinkBox()));
+  ASSERT_TRUE(home != nullptr && leftClick(home, home->getViewSize().getCenter()));
+  ASSERT_TRUE(EditorTest::flip(ed).running() && !EditorTest::flip(ed).showingBack());
+  EditorTest::flip(ed).finish();
+  ASSERT_TRUE(front->isVisible() && !back->isVisible());
+  ASSERT_TRUE(g_ctl->decorRevision() == rev0 + 1);   // nothing else written
+  ed.setWearLevel(WearLevel::Light);
+  EditorTest::destroy(ed, root);
+  clearDecor();
+}
+
+// WEAR on the back: the front changes at once (marks and tapes for the level, no rebuild), the choice is saved in the
+// preferences file without touching the other fields, and the back shows it.
+void test_settings_apply_wear_at_once() {
+  namespace fs = std::filesystem;
+  const fs::path dir = scratchPrefsDir("dt_settings_wear");
+  const fs::path file = dir / "FairyTapes" / "DeepThroat.prefs";
+  Prefs start;
+  start.tapeFont = TapeFont::HomemadeApple;
+  start.notes = false;
+  ASSERT_TRUE(savePrefs(file, start));
+  Editor ed(g_ctl);
+  EditorTest::loadAppearance(ed, file);   // as open() does, before the views
+  auto root = EditorTest::buildSides(ed);
+  FairyTapes::Ui::BackView* back = EditorTest::back(ed);
+  ASSERT_TRUE(back != nullptr && back->tab() == kTabSettings);
+  ASSERT_TRUE(back->selected(kSetWear) == 1 && back->selected(kSetTapeFont) == 2 && back->selected(kSetValuesFont) == 1);
+  auto* wear = EditorTest::wear(ed);
+  const uint32_t seed = ed.wearSeed();
+  for (int level : {2, 0, 1}) {
+    ASSERT_TRUE(chooseOption(back, kSetWear, level));
+    const auto w = static_cast<WearLevel>(level);
+    ASSERT_TRUE(ed.wearLevel() == w && EditorTest::wear(ed) == wear);
+    ASSERT_TRUE(wear->marks().size() == FairyTapes::Ui::generateWear(seed, w, kEditorWidth, kEditorHeight).size());
+    ASSERT_TRUE(EditorTest::tapes(ed).size() == layoutFromSeed(seed, w, kPanelRect).tapes.size());
+    ASSERT_TRUE(back->selected(kSetWear) == level);
+    const Prefs saved = loadPrefs(file);
+    ASSERT_TRUE(saved.wear == w && saved.tapeFont == TapeFont::HomemadeApple && saved.handwrittenValues && !saved.notes);
+  }
+  ASSERT_TRUE(ed.wearSeed() == seed);   // the seed belongs to the instance: not touched by WEAR
+  EditorTest::destroy(ed, root);
+  std::error_code ec;
+  fs::remove_all(dir, ec);
+}
+
+// TAPE FONT, VALUES FONT and RE-ROLL on the back: applied at once, the fonts saved, RE-ROLL a new seed for the instance.
+void test_settings_fonts_and_reroll_apply() {
+  namespace fs = std::filesystem;
+  const fs::path dir = scratchPrefsDir("dt_settings_fonts");
+  const fs::path file = dir / "FairyTapes" / "DeepThroat.prefs";
+  Editor ed(g_ctl);
+  EditorTest::loadAppearance(ed, file);   // no file yet: the defaults
+  auto root = EditorTest::buildSides(ed);
+  FairyTapes::Ui::BackView* back = EditorTest::back(ed);
+  ASSERT_TRUE(back != nullptr);
+  auto* stepper = settingWidget<FairyTapes::Ui::OptionStepper>(back, kSetTapeFont);
+  ASSERT_TRUE(stepper != nullptr);
+  const VSTGUI::CRect r = stepper->getViewSize();
+  ASSERT_TRUE(leftClick(stepper, VSTGUI::CPoint(r.right - 4, r.getCenter().y)));   // ">"
+  ASSERT_TRUE(ed.tapeFont() == TapeFont::RockSalt && EditorTest::valuesFont(ed) == FairyTapes::Ui::TapeFontId::RockSalt);
+  ASSERT_TRUE(loadPrefs(file).tapeFont == TapeFont::RockSalt && back->selected(kSetTapeFont) == 1);
+  ASSERT_TRUE(leftClick(stepper, VSTGUI::CPoint(r.left + 4, r.getCenter().y)));    // "<"
+  ASSERT_TRUE(leftClick(stepper, VSTGUI::CPoint(r.left + 4, r.getCenter().y)));    // "<" wraps around
+  ASSERT_TRUE(ed.tapeFont() == TapeFont::HomemadeApple && loadPrefs(file).tapeFont == TapeFont::HomemadeApple);
+  ASSERT_TRUE(chooseOption(back, kSetValuesFont, 0));
+  ASSERT_TRUE(!ed.valuesHandwritten() && !loadPrefs(file).handwrittenValues && loadPrefs(file).tapeFont == TapeFont::HomemadeApple);
+  ASSERT_TRUE(chooseOption(back, kSetValuesFont, 1));
+  ASSERT_TRUE(ed.valuesHandwritten() && loadPrefs(file).handwrittenValues);
+  const uint32_t seed0 = ed.wearSeed();
+  auto* reroll = settingWidget<FairyTapes::Ui::PushButton>(back, kSetLook);
+  ASSERT_TRUE(reroll != nullptr && leftClick(reroll, reroll->getViewSize().getCenter()));
+  ASSERT_TRUE(ed.wearSeed() != seed0 && ed.wearSeed() == g_ctl->decor().seed);
+  ASSERT_TRUE(loadPrefs(file).tapeFont == TapeFont::HomemadeApple);   // RE-ROLL is not a preference
+  EditorTest::destroy(ed, root);
+  ed.setTapeFont(TapeFont::Zeyada);
+  std::error_code ec;
+  fs::remove_all(dir, ec);
+}
+
+// The preferences folder cannot be written (a file where a folder should be): the editor goes on, the choice applies
+// for the session and the back shows it.
+void test_settings_failed_write_is_ignored() {
+  namespace fs = std::filesystem;
+  const fs::path dir = scratchPrefsDir("dt_settings_ro");
+  fs::create_directories(dir);
+  { std::ofstream(dir / "blocker") << "x"; }
+  const fs::path file = dir / "blocker" / "FairyTapes" / "DeepThroat.prefs";
+  ASSERT_TRUE(!savePrefs(file, Prefs{}));   // the write really fails
+  Editor ed(g_ctl);
+  EditorTest::loadAppearance(ed, file);
+  auto root = EditorTest::buildSides(ed);
+  FairyTapes::Ui::BackView* back = EditorTest::back(ed);
+  ASSERT_TRUE(back != nullptr && ed.wearLevel() == WearLevel::Light);
+  ASSERT_TRUE(chooseOption(back, kSetWear, 2));
+  ASSERT_TRUE(ed.wearLevel() == WearLevel::Heavy && back->selected(kSetWear) == 2 && EditorTest::prefs(ed).wear == WearLevel::Heavy);
+  ASSERT_TRUE(EditorTest::wear(ed)->marks().size() ==
+              FairyTapes::Ui::generateWear(ed.wearSeed(), WearLevel::Heavy, kEditorWidth, kEditorHeight).size());
+  ASSERT_TRUE(chooseOption(back, kSetValuesFont, 0));
+  ASSERT_TRUE(!ed.valuesHandwritten() && ed.wearLevel() == WearLevel::Heavy);   // the earlier choice stays
+  ASSERT_TRUE(!fs::exists(file) && fs::is_regular_file(dir / "blocker"));
+  EditorTest::tick(ed);
+  ASSERT_TRUE(ed.wearLevel() == WearLevel::Heavy && !ed.valuesHandwritten());
+  EditorTest::destroy(ed, root);
+  ed.setWearLevel(WearLevel::Light);
+  ed.setValuesFont(true);
+  std::error_code ec;
+  fs::remove_all(dir, ec);
+}
+
+// The tab links, left to right: SETTINGS, MODES, ROUTING, CREDITS; a click shows the tab (its name is the big title)
+// and the editor remembers it while it lives; the SETTINGS widgets show only on SETTINGS.
+void test_tab_links_order() {
+  Editor ed(g_ctl);
+  auto root = EditorTest::buildSides(ed);
+  FairyTapes::Ui::BackView* back = EditorTest::back(ed);
+  ASSERT_TRUE(back != nullptr);
+  const auto& c = back->content();
+  ASSERT_TRUE(c.headerLine == "DEEP THROAT  \xC2\xB7  VOCAL CHANNEL STRIP VST3");
+  const char* labels[] = {"SETTINGS", "MODES", "ROUTING", "CREDITS"};
+  const FairyTapes::Ui::BackTabKind kinds[] = {FairyTapes::Ui::BackTabKind::Settings, FairyTapes::Ui::BackTabKind::Custom,
+                                               FairyTapes::Ui::BackTabKind::Routing, FairyTapes::Ui::BackTabKind::Credits};
+  ASSERT_TRUE(c.tabs.size() == 4);
+  double lastX = -1;
+  auto* wearRow = settingWidget<FairyTapes::Ui::SegmentRow>(back, kSetWear);
+  ASSERT_TRUE(wearRow != nullptr);
+  for (int i = 0; i < 4; ++i) {
+    ASSERT_TRUE(c.tabs[static_cast<std::size_t>(i)].label == labels[i] && c.tabs[static_cast<std::size_t>(i)].kind == kinds[i]);
+    const auto box = FairyTapes::Ui::tabLinkBox(i, 4);
+    ASSERT_TRUE(box.x > lastX);
+    lastX = box.x;
+    auto* link = childAt<FairyTapes::Ui::TextLink>(back, boxRect(box));
+    ASSERT_TRUE(link != nullptr && leftClick(link, link->getViewSize().getCenter()));
+    ASSERT_TRUE(back->tab() == i && link->active() && wearRow->isVisible() == (i == kTabSettings));
+  }
+  EditorTest::destroy(ed, root);
+  root = EditorTest::buildSides(ed);   // the same editor opened again: the last tab
+  ASSERT_TRUE(EditorTest::back(ed) != nullptr && EditorTest::back(ed)->tab() == kTabCredits);
+  EditorTest::destroy(ed, root);
+}
 } // namespace
 
 int main() {
@@ -1663,6 +1901,11 @@ int main() {
   RUN_TEST(test_decor_change_applied_on_tick);
   RUN_TEST(test_prefs_missing_file_opens_with_defaults);
   RUN_TEST(test_missing_grain_asset_draws_plain_panel);
+  RUN_TEST(test_flip_roundtrip_and_text_edit_confirmed_first);
+  RUN_TEST(test_settings_apply_wear_at_once);
+  RUN_TEST(test_settings_fonts_and_reroll_apply);
+  RUN_TEST(test_settings_failed_write_is_ignored);
+  RUN_TEST(test_tab_links_order);
   ctl.terminate();
   g_ctl = nullptr;
   VSTGUI::exit();

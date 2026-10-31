@@ -2,6 +2,7 @@
  * Fairy Tapes · Deep Throat — tests for the pure editor layout (ui/editor_size.h, ui/layout.h): no VSTGUI.
  * Build target: deep_throat_ui_tests.
  */
+#include "ui/back_settings.h"
 #include "ui/decor.h"
 #include "ui/dynamic_text.h"
 #include "ui/editor_size.h"
@@ -1012,6 +1013,87 @@ void test_scope_traces_stay_inside_the_border() {
   ASSERT_TRUE(minVoice >= r.y + 3 && maxVoice <= r.y + r.h - 2);
 }
 
+
+// ---- Back of the panel: SETTINGS (Task 11) -------------------------------------------------------------------------
+// Every combination of the preference fields: the items are WEAR, TAPE FONT, VALUES FONT, LOOK in the APPEARANCE column,
+// and each one shows the option of its field.
+void test_settings_items_reflect_prefs() {
+  using FairyTapes::Ui::BackColumn;
+  using FairyTapes::Ui::BackItemKind;
+  for (int w = 0; w < 3; ++w)
+    for (int f = 0; f < 3; ++f)
+      for (int v = 0; v < 2; ++v)
+        for (int n = 0; n < 2; ++n) {
+          Prefs p;
+          p.wear = static_cast<WearLevel>(w);
+          p.tapeFont = static_cast<TapeFont>(f);
+          p.handwrittenValues = v == 1;
+          p.notes = n == 1;
+          const auto items = settingsItems(p);
+          ASSERT_TRUE(items.size() == 4);
+          const int keys[] = {kSetWear, kSetTapeFont, kSetValuesFont, kSetLook};
+          const char* labels[] = {"WEAR", "TAPE FONT", "VALUES FONT", "LOOK"};
+          const BackItemKind kinds[] = {BackItemKind::Choice, BackItemKind::Stepper, BackItemKind::Choice, BackItemKind::Button};
+          for (std::size_t i = 0; i < 4; ++i) {
+            ASSERT_TRUE(items[i].key == keys[i] && items[i].label == labels[i] && items[i].kind == kinds[i]);
+            ASSERT_TRUE(items[i].column == BackColumn::Appearance);
+          }
+          ASSERT_TRUE(items[0].selected == w);
+          ASSERT_TRUE((items[0].options == std::vector<std::string>{"OFF", "LIGHT", "HEAVY"}));
+          ASSERT_TRUE(items[1].selected == f && items[1].tapeFontOptions);
+          ASSERT_TRUE((items[1].options == std::vector<std::string>{"Zeyada", "Rock Salt", "Homemade Apple"}));
+          ASSERT_TRUE(items[2].selected == v);
+          ASSERT_TRUE((items[2].options == std::vector<std::string>{"STANDARD", "TAPE FONT"}));
+          ASSERT_TRUE(items[3].options == std::vector<std::string>{"RE-ROLL"} && items[3].note == "new wear, dirt and screws");
+          for (int key : {kSetWear, kSetTapeFont, kSetValuesFont})
+            ASSERT_TRUE(items[static_cast<std::size_t>(key - 1)].selected == selectedFor(key, p));
+          // The template accepts the SETTINGS part (rows and controls inside APPEARANCE, keys unique); the empty
+          // ROUTING and CREDITS tabs are filled by Task 12.
+          const auto content = backContent(p);
+          for (const std::string& problem : FairyTapes::Ui::backContentProblems(content, FairyTapes::Ui::backLayoutFor(kEditorHeight)))
+            ASSERT_TRUE(problem.rfind("routing:", 0) == 0 || problem.rfind("credits:", 0) == 0);
+          ASSERT_TRUE(content.notes.size() == 4 && content.notes == settingsNotes());
+        }
+  for (const std::string& line : settingsNotes()) ASSERT_TRUE(!line.empty() && line.size() <= 125);   // one line of the box each
+}
+
+// Each click gives the expected preferences and leaves the other fields alone; RE-ROLL, an unknown key or an index out
+// of range change nothing.
+void test_settings_item_to_prefs() {
+  auto same = [](const Prefs& a, const Prefs& b) {
+    return a.wear == b.wear && a.tapeFont == b.tapeFont && a.handwrittenValues == b.handwrittenValues && a.notes == b.notes;
+  };
+  for (int w = 0; w < 3; ++w)
+    for (int f = 0; f < 3; ++f)
+      for (int v = 0; v < 2; ++v)
+        for (int n = 0; n < 2; ++n) {
+          Prefs base;
+          base.wear = static_cast<WearLevel>(w);
+          base.tapeFont = static_cast<TapeFont>(f);
+          base.handwrittenValues = v == 1;
+          base.notes = n == 1;
+          for (int i = 0; i < 3; ++i) {
+            Prefs p = base, want = base;
+            want.wear = static_cast<WearLevel>(i);
+            ASSERT_TRUE(applySetting(kSetWear, i, p) && same(p, want));
+            p = base;
+            want = base;
+            want.tapeFont = static_cast<TapeFont>(i);
+            ASSERT_TRUE(applySetting(kSetTapeFont, i, p) && same(p, want));
+          }
+          for (int i = 0; i < 2; ++i) {
+            Prefs p = base, want = base;
+            want.handwrittenValues = i == 1;
+            ASSERT_TRUE(applySetting(kSetValuesFont, i, p) && same(p, want));
+            ASSERT_TRUE(selectedFor(kSetValuesFont, p) == i);
+          }
+          for (const auto& bad : {std::pair<int, int>{kSetWear, -1}, {kSetWear, 3}, {kSetTapeFont, 3}, {kSetTapeFont, -1},
+                                  {kSetValuesFont, 2}, {kSetValuesFont, -1}, {kSetLook, 0}, {0, 0}, {99, 1}}) {
+            Prefs p = base;
+            ASSERT_TRUE(!applySetting(bad.first, bad.second, p) && same(p, base));
+          }
+        }
+}
 } // namespace
 
 int main() {
@@ -1055,6 +1137,8 @@ int main() {
   RUN_TEST(test_tape_texts_and_ink);
   RUN_TEST(test_history_ring_and_columns);
   RUN_TEST(test_scope_traces_stay_inside_the_border);
+  RUN_TEST(test_settings_items_reflect_prefs);
+  RUN_TEST(test_settings_item_to_prefs);
   { std::error_code ec; fs::remove_all(scratchDir(), ec); }
   std::printf("deep_throat_ui_tests: %d passed, %d failed\n", g_passed, g_failed);
   return g_failed ? 1 : 0;
