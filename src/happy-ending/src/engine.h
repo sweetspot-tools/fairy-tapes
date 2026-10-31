@@ -2,7 +2,7 @@
  * Fairy Tapes · Happy Ending — The whole mastering chain used by the VST3 Processor (pure, no SDK libs).
  *
  * INPUT gain -> FINE EQ -> VIBE EQ network -> [zone A, oversampled: VIBE TUBE] -> GLUE ->
- * [zone B, oversampled: CLIP -> LIMIT -> FINAL -> METALHEAD] -> ceiling guard -> OUTPUT gain ->
+ * [zone B, oversampled: CLIP -> LIMIT -> FINAL -> METALHEAD] -> OUTPUT gain -> ceiling guard ->
  * BYPASS crossfade -> OUT peak meter and LUFS (both read the plug-in output).
  *
  *  - CLIP (ClipSoftly) has no off state of its own: the engine crossfades it with its dry signal over
@@ -15,9 +15,10 @@
  *    latencies at the zone-B rate) / factor; it depends only on the oversampling factor given to
  *    prepare() (constant across styles, modes and on/off).
  *  - Ceiling guard: the decimation filter of zone B can rebuild base-rate samples slightly above
- *    the ceiling the stages held at the oversampled rate, so whenever LIMIT, FINAL or METALHEAD is
- *    on, every sample is clamped at the CEILING after zone B (global constraint: no output sample
- *    above the CEIL with one of them on). OUTPUT gain comes after it, as in the preview.
+ *    the ceiling the stages held at the oversampled rate, and OUTPUT gain can raise them, so
+ *    whenever LIMIT, FINAL or METALHEAD is on every sample is clamped at the CEILING after the
+ *    OUTPUT gain (global constraint: no output sample above the CEIL with one of them on, OUTPUT
+ *    included). Off when all three are off; BYPASS (after it) stays the exact delayed input.
  *  - BYPASS: the output crossfades (kGainRampSamples) to the sanitized input delayed by
  *    latencySamples() through one delay line, sample-exact once settled. The chain keeps running,
  *    so meters, LUFS and stage LEDs stay live.

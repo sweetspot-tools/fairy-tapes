@@ -592,10 +592,12 @@ void testNoAllocationInProcess() {
 }
 
 // OUTPUT gain steps glide: no difference between consecutive samples above 0.05 on a sine at -6 dBFS.
+// The step (-6 -> 0 dB) stays under the ceiling, so the guard after OUTPUT does not touch it.
 void testOutputGainStepNoZipper() {
   Engine e;
   e.prepare(kSr, 512, 2);
   EngineSettings s = defaults();
+  s.outputGainDb = -6.0f;
   e.set(s);
   const int settle = static_cast<int>(kSr);
   std::vector<float> l = sineVec(settle, 100.0, 0.5), r = l;
@@ -604,7 +606,7 @@ void testOutputGainStepNoZipper() {
   double rmsBefore = 0.0;
   for (int i = settle - 4800; i < settle; ++i) rmsBefore += static_cast<double>(l[static_cast<std::size_t>(i)]) * l[static_cast<std::size_t>(i)];
 
-  s.outputGainDb = 6.0f;
+  s.outputGainDb = 0.0f;
   e.set(s);
   const int after = static_cast<int>(0.5 * kSr);
   std::vector<float> l2 = sineVec(after, 100.0, 0.5, settle), r2 = l2;
@@ -709,6 +711,29 @@ void testMetersReadStages() {
   ASSERT_TRUE(e.meters().grDb[kGrLimit] == 0.0f && e.meters().grDb[kGrMetal] == 0.0f && e.meters().grDb[kGrClip] == 0.0f);
 }
 
+// The ceiling holds after the OUTPUT gain too: LIMIT on, OUTPUT +6 dB, pink noise at 0 dBFS, every
+// oversampling factor.
+void testOutputGainKeepsCeiling() {
+  const double ceiling = std::pow(10.0, -0.3 / 20.0);
+  std::vector<float> srcL, srcR;
+  pinkPair(srcL, srcR, static_cast<int>(kSr), 1.0, 606u);
+  for (int factor : {1, 2, 4}) {
+    EngineSettings s = defaults();
+    s.limitOn = true;
+    s.outputGainDb = 6.0f;
+    Engine e;
+    e.prepare(kSr, 512, factor);
+    e.set(s);
+    std::vector<float> l = srcL, r = srcR;
+    run(e, l, r, 512);
+    double peak = 0.0;
+    for (std::size_t i = 0; i < l.size(); ++i)
+      peak = std::max(peak, static_cast<double>(std::max(std::fabs(l[i]), std::fabs(r[i]))));
+    if (!(peak <= ceiling)) std::fprintf(stderr, "  factor %d: peak %.9f > %.9f\n", factor, peak, ceiling);
+    ASSERT_TRUE(peak <= ceiling);
+  }
+}
+
 } // namespace
 
 int main() {
@@ -727,6 +752,7 @@ int main() {
   RUN_TEST(testNonFiniteInputDoesNotPoison);
   RUN_TEST(testStageSwitchesNoClick);
   RUN_TEST(testMetersReadStages);
+  RUN_TEST(testOutputGainKeepsCeiling);
   std::printf("\n%d passed, %d failed\n", g_passed, g_failed);
   return g_failed == 0 ? 0 : 1;
 }

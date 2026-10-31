@@ -388,20 +388,19 @@ void Engine::processChunk(float* l, float* r, int n, double* inPeak, double* out
     osB_[1].down(osR_.data(), nOs, r);
   }
 
-  // ceiling guard (the decimation can rebuild samples a little above what the stages held)
+  // OUTPUT, then the ceiling guard (the decimation can rebuild samples a little above what the
+  // stages held, and OUTPUT can raise them: nothing leaves above the CEIL), then BYPASS
+  for (int i = 0; i < n; ++i) {
+    const auto g = static_cast<float>(outGain_.next());
+    l[i] *= g;
+    r[i] *= g;
+  }
   if (guardOn_) {
     const float c = ceilLin_;
     for (int i = 0; i < n; ++i) {
       l[i] = std::clamp(l[i], -c, c);
       r[i] = std::clamp(r[i], -c, c);
     }
-  }
-
-  // OUTPUT, then BYPASS
-  for (int i = 0; i < n; ++i) {
-    const auto g = static_cast<float>(outGain_.next());
-    l[i] *= g;
-    r[i] *= g;
   }
   if (bypassMix_.settled() && bypassMix_.cur >= 1.0) {
     std::memcpy(l, delayedL_.data(), sizeof(float) * static_cast<std::size_t>(n));
