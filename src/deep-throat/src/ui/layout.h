@@ -245,7 +245,7 @@ constexpr int kMeterLeds = 15;
 constexpr float kMeterFirstX = 528, kMeterPitch = 18, kMeterBarHeight = 8;   // centre of the first LED, LED pitch
 
 struct MeterRow {
-  Steinberg::Vst::ParamID id;   // display parameter (meter norm over -60..+6 dB; kDispGr: gain reduction over 0..-18 dB)
+  Steinberg::Vst::ParamID id;   // display parameter (meter norm over -60..+6 dB; kDispGr: gain reduction over 0..21 dB)
   float cy;
   bool gainReduction;   // the GR row: amber then red
   bool alwaysLit;       // input and output stay lit under the global bypass

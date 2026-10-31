@@ -59,9 +59,9 @@ Livelli (dal fondo): pannello, bordi e titoli, serigrafia, usura, nastri, viti, 
 
 ## 5. Dati dal motore alla UI
 
-Parametri nascosti, sola lettura, fuori dallo stato e dall'automazione (`kMeterBase = 1000`): ingresso L e R (picco in dB, scala −60..0), uscita L e R, riduzione del compressore (0..21 dB), inviluppo della voce (dB, livello RMS del segnale lineare mono d'ingresso, quello del Rider), guadagno del Rider (dB, ±range), probabilità del respiro (0..1, uscita del rilevatore), clip ingresso e clip uscita (booleani), più `kClearClips` (trigger dalla UI, riconosciuto dal processor).
+Parametri nascosti, sola lettura, fuori dallo stato e dall'automazione (`kMeterBase = 1000`): ingresso L e R (picco in dB, scala −60..+6), uscita L e R, riduzione del compressore (0..21 dB), inviluppo della voce (dB, livello RMS del segnale lineare mono d'ingresso, quello del Rider), guadagno del Rider (dB, ±range), probabilità del respiro (0..1, uscita del rilevatore), clip ingresso e clip uscita (booleani), più `kClearClips` (trigger dalla UI, riconosciuto dal processor).
 
-L'engine accumula questi valori senza allocare (massimo del periodo per i picchi, ultimo valore per gli altri) e un limitatore di velocità ne consente la scrittura ogni circa 16 ms di audio (`DisplayRateLimiter` di Pillow Talk come modello). Il processor li scrive come punti di parametro in uscita; il controller li registra con i flag `kIsReadOnly | kIsHidden`.
+L'engine accumula questi valori senza allocare (massimo del periodo per i picchi, la voce, il respiro e la riduzione del compressore; minimo per il guadagno del Rider; ultimo valore per gli altri) e un limitatore di velocità ne consente la scrittura ogni circa 16 ms di audio (`DisplayRateLimiter` di Pillow Talk come modello). Il processor li scrive come punti di parametro in uscita; il controller li registra con i flag `kIsReadOnly | kIsHidden`.
 
 Lo SCOPE sta sulla linea temporale dell'**ingresso**: il buffer circolare dell'editor tiene 292 punti (una colonna di pixel ciascuno, un punto per ogni giro del timer dell'editor da 30 ms, quindi circa 8,8 s; il processor scrive ogni 16 ms e l'editor legge l'ultimo valore); la linea del guadagno del Rider è quella calcolata per l'audio ritardato, quindi appare circa D (85 ms) prima rispetto alla voce disegnata: è solo estetico, scritto nei limiti noti del README.
 
@@ -75,7 +75,7 @@ Preferenze: Wear (Off, Light, Heavy), notes, tapeFont, valuesFont; lette all'ape
 
 ## 7. Tabella unica per modalità
 
-`src/mode_table.h`, header-only: per ognuna delle tre modalità (Speak, Sing, Puke), in `constexpr`: tipo di rilevatore, range massimo e pendenza del Rider (oggi `mode_presets.h`, che resta come involucro di `presetFor`), HPF e taglio del fango dell'EQ, scala del de-esser (1, 1, 0.15), rapporto e Dist in AUTO del compressore, guadagni del Tone a +100% (mud, presenza, aria). I blocchi DSP e l'engine leggono da qui al posto delle costanti locali. I test dei blocchi restano invariati e verdi; nuovi test fissano i valori della tabella ai numeri della spec del plugin.
+`src/mode_table.h`, header-only: per ognuna delle tre modalità (Speak, Sing, Puke), in `constexpr`: tipo di rilevatore, range massimo e pendenza del Rider (`mode_presets.h` è stato rimosso: i blocchi DSP e l'engine leggono direttamente `modeRow`), HPF e taglio del fango dell'EQ, scala del de-esser (1, 1, 0.15), rapporto e Dist in AUTO del compressore, guadagni del Tone a +100% (mud, presenza, aria). I blocchi DSP e l'engine leggono da qui al posto delle costanti locali. I test dei blocchi restano invariati e verdi; nuovi test fissano i valori della tabella ai numeri della spec del plugin.
 
 Dalla stessa tabella una funzione pura (`back_modes.h`) produce le righe della scheda MODES.
 
