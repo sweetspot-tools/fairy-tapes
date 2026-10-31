@@ -4,9 +4,11 @@
 [submodule "vendors/airwindows"]
 	path = vendors/airwindows
 	url = https://github.com/airwindows/airwindows
+	update = none
 [submodule "vendors/dusk-audio-plugins"]
 	path = vendors/dusk-audio-plugins
 	url = https://github.com/dusk-audio/dusk-audio-plugins.git
+	update = none
 [submodule "vendors/NeuralAmpModelerCore"]
 	path = vendors/NeuralAmpModelerCore
 	url = https://github.com/sdatkinson/NeuralAmpModelerCore.git
