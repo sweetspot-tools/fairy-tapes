@@ -306,10 +306,10 @@ void Engine::process(const float* inL, const float* inR, float* outL, float* out
     voiceMaxDb_ = std::max(voiceMaxDb_, levelDb);
     breathMax_ = std::max(breathMax_, rawProb);
     {  // input peaks and clip: before the Input gain
-      const float al_ = std::fabs(xl), ar_ = std::fabs(xr);
-      inPeakL_ = std::max(inPeakL_, al_);
-      inPeakR_ = std::max(inPeakR_, ar_);
-      if (al_ >= 1.0f || ar_ >= 1.0f) clipInLeft_ = clipHoldSamples_;
+      const float absInL = std::fabs(xl), absInR = std::fabs(xr);
+      inPeakL_ = std::max(inPeakL_, absInL);
+      inPeakR_ = std::max(inPeakR_, absInR);
+      if (absInL >= 1.0f || absInR >= 1.0f) clipInLeft_ = clipHoldSamples_;
       else if (clipInLeft_ > 0) --clipInLeft_;
     }
 
@@ -345,7 +345,7 @@ void Engine::process(const float* inL, const float* inR, float* outL, float* out
     f[0] = l;
     f[1] = r;
     comp_.processFrame(f);
-    grMaxDb_ = std::max(grMaxDb_, comp_.lastGainReductionDb());
+    grMaxDb_ = std::max(grMaxDb_, comp_.lastGainReductionDb() * rComp);   // the GR heard: none with Comp IN off
     l = xfade(l, f[0], rComp);
     r = xfade(r, f[1], rComp);
     // Tone.
@@ -369,10 +369,10 @@ void Engine::process(const float* inL, const float* inR, float* outL, float* out
     r = xfade(r, dr, rBypass);
 
     {  // output peaks and clip: after the Output gain and Bypass
-      const float ol_ = std::fabs(l), or_ = std::fabs(r);
-      outPeakL_ = std::max(outPeakL_, ol_);
-      outPeakR_ = std::max(outPeakR_, or_);
-      if (ol_ >= 1.0f || or_ >= 1.0f) clipOutLeft_ = clipHoldSamples_;
+      const float absOutL = std::fabs(l), absOutR = std::fabs(r);
+      outPeakL_ = std::max(outPeakL_, absOutL);
+      outPeakR_ = std::max(outPeakR_, absOutR);
+      if (absOutL >= 1.0f || absOutR >= 1.0f) clipOutLeft_ = clipHoldSamples_;
       else if (clipOutLeft_ > 0) --clipOutLeft_;
     }
 

@@ -3014,6 +3014,25 @@ void test_display_gr_and_rider() {
   ASSERT_NEAR(dv.riderGainDb, 0.0, 1e-3);
 }
 
+// The reported GR follows the Comp IN ramp: with Comp IN off the compressor still runs (for the crossfade) but the GR
+// meter must not move.
+void test_display_gr_scaled_by_comp_in() {
+  const double sr = 48000.0;
+  const auto loud = sineVec(sr, 220.0, 0.8, 1.5);
+  auto maxGr = [&](bool compOn) {
+    Settings s = engineDefaults();
+    s.compAmount = 1.0f;
+    s.compOn = compOn;
+    Engine e;
+    e.prepare(sr);
+    float grMax = 0.f;
+    runBlocks(e, s, loud, loud, 256, [&](size_t) { grMax = std::max(grMax, e.takeDisplay().grDb); });
+    return grMax;
+  };
+  ASSERT_TRUE(maxGr(false) < 0.01f);
+  ASSERT_TRUE(maxGr(true) > 3.0f);
+}
+
 void test_display_breath_prob_raw() {
   const double sr = 48000.0;
   const auto x = phraseBreathPhrase(sr);  // phrase 0-1 s, breath 1-1.3 s, phrase 1.3-2.3 s
@@ -3088,17 +3107,14 @@ void test_display_rate_limiter_16ms() {
   for (double sr : {44100.0, 48000.0, 96000.0}) {
     DisplayRateLimiter lim;
     lim.prepare(sr);
-    const int period = (int)(sr * 0.016);
+    const int period = sr == 44100.0 ? 705 : sr == 48000.0 ? 768 : 1536;   // floor(16 ms of samples)
     ASSERT_TRUE(lim.advance(1));  // the first call writes
-    int calls = 1;
-    int since = 0;
     for (int k = 0; k < 5; ++k) {
-      since = 0;
+      int since = 0;
       bool fired = false;
       while (!fired && since < 4 * period) {
         fired = lim.advance(1);
         ++since;
-        ++calls;
       }
       ASSERT_TRUE(fired);
       ASSERT_TRUE(since == period);  // exactly one write per 16 ms of audio
@@ -3374,6 +3390,7 @@ int main() {
   RUN_TEST(test_engine_no_alloc_in_process);
   RUN_TEST(test_display_peaks_and_clip);
   RUN_TEST(test_display_gr_and_rider);
+  RUN_TEST(test_display_gr_scaled_by_comp_in);
   RUN_TEST(test_display_breath_prob_raw);
   RUN_TEST(test_display_norms_mapping);
   RUN_TEST(test_display_rate_limiter_16ms);

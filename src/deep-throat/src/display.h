@@ -1,5 +1,6 @@
 /**
- * Fairy Tapes · Deep Throat — values shown by the editor (pure, no SDK).
+ * Fairy Tapes · Deep Throat — values shown by the editor (no VSTGUI, no processing; only the SDK parameter types
+ * through params.h, for the DisplayID values).
  * LEVEL meters, clip LEDs and SCOPE are fed by hidden read-only parameters: the engine measures,
  * the processor accumulates between two writes (one per 16 ms of audio) and maps to 0..1.
  */
