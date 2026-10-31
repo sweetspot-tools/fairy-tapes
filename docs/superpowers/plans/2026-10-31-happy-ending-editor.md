@@ -174,11 +174,11 @@
 - Consumes: `layout.h` (Task 4), `Decor` (Task 3), `prefs.h` (Task 7), `scaledSize` con `EditorSize` (Task 1).
 - Produces: `class Editor : public Steinberg::Vst::VSTGUIEditor, public Steinberg::IPlugViewContentScaleSupport, public VSTGUI::IControlListener` come Deep Throat, con la finestra = 1280 × 890 × fattore dell'host × SIZE letto da `loadPrefs()` (file `HappyEnding.prefs`) all'apertura (`checkSizeConstraint` accetta solo quella dimensione); `PanelView` (sfondo e grana, bordi con il titolo in basso, lo schermo come riquadro senza titolo, `kPanelTexts`, sigle dei motori); `Controller::createView`; `struct EditorPreview`; banco `happy_ending_editor_tests` con `struct EditorTest` amica dell'`Editor` (viste senza finestra, tick del timer a comando, accesso al controllo di un `ParamID`, alla serigrafia e alle richieste di ridimensionamento a un `IPlugFrame` finto); il tool di render scrive `front.png` e le schede del retro in una cartella data, con valori di prova per i parametri di visualizzazione.
 
-- [ ] **Step 1: Scrivere i test:** in `test_factory.cpp` `test_create_view_returns_editor` (per `kEditor` una vista 1280 × 890 a SIZE 100 e host 1; altro nome → `nullptr`), `test_editor_open_close_repeatedly` (50 volte, riferimenti a zero alla fine), `test_editor_size_from_prefs` (con `XDG_CONFIG_HOME` scratch e `size=75` in `HappyEnding.prefs`: 960 × 668); `happy_ending_render_smoke` (il tool scrive `front.png` 1280 × 890: intestazione PNG, larghezza e altezza).
-- [ ] **Step 2: Eseguire e vedere fallire.**
-- [ ] **Step 3: Implementare** banco di prova, editor (solo livello pannello), `createView`, tool di render; VSTGUI compila con `-j2`, un target alla volta.
-- [ ] **Step 4: Eseguire** build di `happy_ending happy_ending_factory_test happy_ending_render happy_ending_editor_tests` e `ctest -R happy_ending` → PASS; aprire `front.png` e controllare a occhio titoli in basso, bordi, sigle e testi contro la preview (dichiararlo nel rapporto).
-- [ ] **Step 5: Commit:** `feat(happy-ending): editor skeleton with the panel layer, createView and the offscreen render tool`.
+- [x] **Step 1: Scrivere i test:** in `test_factory.cpp` `test_create_view_returns_editor` (per `kEditor` una vista 1280 × 890 a SIZE 100 e host 1; altro nome → `nullptr`), `test_editor_open_close_repeatedly` (50 volte, riferimenti a zero alla fine), `test_editor_size_from_prefs` (con `XDG_CONFIG_HOME` scratch e `size=75` in `HappyEnding.prefs`: 960 × 668); `happy_ending_render_smoke` (il tool scrive `front.png` 1280 × 890: intestazione PNG, larghezza e altezza).
+- [x] **Step 2: Eseguire e vedere fallire.**
+- [x] **Step 3: Implementare** banco di prova, editor (solo livello pannello), `createView`, tool di render; VSTGUI compila con `-j2`, un target alla volta.
+- [x] **Step 4: Eseguire** build di `happy_ending happy_ending_factory_test happy_ending_render happy_ending_editor_tests` e `ctest -R happy_ending` → PASS; aprire `front.png` e controllare a occhio titoli in basso, bordi, sigle e testi contro la preview (dichiararlo nel rapporto).
+- [x] **Step 5: Commit:** `feat(happy-ending): editor skeleton with the panel layer, createView and the offscreen render tool`.
 
 ---
 

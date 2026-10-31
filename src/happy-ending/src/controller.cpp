@@ -11,6 +11,10 @@
 #include "ui/value_text.h"
 #include "pluginterfaces/base/ibstream.h"
 #include "public.sdk/source/vst/vstparameters.h"
+#if HAPPY_ENDING_WITH_EDITOR
+#include "ui/editor.h"
+#endif
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -91,6 +95,18 @@ Steinberg::tresult PLUGIN_API Controller::initialize(Steinberg::FUnknown* contex
   addDisplay("Display Final In", 0, kDispFinalIn);
 
   return Steinberg::kResultOk;
+}
+
+// The editor for ViewType::kEditor; nullptr for any other name. Built without the editor (the controller tests, which
+// link no VSTGUI) there is none either: the host then shows its generic UI.
+Steinberg::IPlugView* PLUGIN_API Controller::createView(Steinberg::FIDString name) {
+#if HAPPY_ENDING_WITH_EDITOR
+  if (name && std::strcmp(name, Steinberg::Vst::ViewType::kEditor) == 0)
+    return new Ui::Editor(this);
+#else
+  (void)name;
+#endif
+  return nullptr;
 }
 
 Steinberg::tresult PLUGIN_API Controller::setComponentState(Steinberg::IBStream* state) {

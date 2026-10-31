@@ -1,8 +1,10 @@
 /**
- * Fairy Tapes · Happy Ending — VST3 Edit Controller (parameters; no custom editor yet, the host shows
- * its generic UI).
+ * Fairy Tapes · Happy Ending — VST3 Edit Controller (parameters and the editor, ui/editor.h).
  *
- * Keeps a copy of the instance decor (wear seed, screw angles, tape texts) for the future editor; the processor saves
+ * createView gives the editor (Ui::Editor, 1280 x 890 times the host factor times the SIZE of HappyEnding.prefs) for
+ * ViewType::kEditor. Built without HAPPY_ENDING_WITH_EDITOR (the controller tests, no VSTGUI) it gives none.
+ *
+ * Keeps a copy of the instance decor (wear seed, screw angles, tape texts) for the editor; the processor saves
  * it. The two copies meet through "Decor" messages (messages.h), never on the audio thread.
  *
  * Registers the stored table (params.h, ParamID order, every control stepped), the two hidden session
@@ -28,6 +30,7 @@ namespace FairyTapes::HappyEnding {
 class Controller : public Steinberg::Vst::EditController {
 public:
   Steinberg::tresult PLUGIN_API initialize(Steinberg::FUnknown* context) override;
+  Steinberg::IPlugView* PLUGIN_API createView(Steinberg::FIDString name) override;
   Steinberg::tresult PLUGIN_API setComponentState(Steinberg::IBStream* state) override;
   Steinberg::tresult PLUGIN_API setParamNormalized(Steinberg::Vst::ParamID tag,
                                                    Steinberg::Vst::ParamValue value) override;
@@ -36,7 +39,7 @@ public:
   Steinberg::tresult PLUGIN_API getParamValueByString(Steinberg::Vst::ParamID tag,
       Steinberg::Vst::TChar* string, Steinberg::Vst::ParamValue& valueNormalized) override;
 
-  // The MATCH button of the future editor (UI thread): reads the short-term LUFS the processor
+  // The MATCH button of the editor (UI thread): reads the short-term LUFS the processor
   // publishes, moves LOUDNESS once to the value that centres the TARGET (matchLoudnessIndex), as one
   // host edit (beginEdit / performEdit / endEdit). No measurement yet or no change: does nothing.
   void doMatch();

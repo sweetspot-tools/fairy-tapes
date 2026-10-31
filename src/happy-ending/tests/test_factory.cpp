@@ -4,19 +4,28 @@
  * GetPluginFactory (owned reference), class info, createInstance, release of every reference, ModuleExit.
  * Checks the registered classes (a processor and a controller, "Fx|Mastering"), the parameter table the
  * controller registers (ids, steps, defaults, automation, hidden session and display parameters), the
- * bus layouts the processor accepts, and that there is no custom editor (the host shows its own UI).
+ * bus layouts the processor accepts, and the editor view: created for ViewType::kEditor only, 1280 x 890 times the host
+ * factor times the SIZE of HappyEnding.prefs, created, attached without a window and released 50 times (no display
+ * server needed: without a host run loop the editor does not open). The preferences folder is a scratch one
+ * ($XDG_CONFIG_HOME, $HOME on macOS), never the user's.
  * Exits 77 (skipped) when the module is absent.
  */
 
 #include "params.h"
 #include "pluginterfaces/base/ipluginbase.h"
+#include "pluginterfaces/gui/iplugview.h"
+#include "pluginterfaces/gui/iplugviewcontentscalesupport.h"
 #include "pluginterfaces/vst/ivstaudioprocessor.h"
 #include "pluginterfaces/vst/ivstcomponent.h"
 #include "pluginterfaces/vst/ivsteditcontroller.h"
 #include "pluginterfaces/vst/vstspeaker.h"
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <string>
 #include <sys/stat.h>
 #include <dlfcn.h>
 
@@ -26,6 +35,12 @@
 
 using namespace FairyTapes::HappyEnding;
 using Steinberg::Vst::ParameterInfo;
+
+// The pluginterfaces library does not define these interface IIDs (commoniids.cpp lives in sdk_common).
+namespace Steinberg {
+DEF_CLASS_IID(IPlugFrame)
+DEF_CLASS_IID(IPlugViewContentScaleSupport)
+}
 
 namespace {
 constexpr int kSkip = 77;
@@ -39,14 +54,126 @@ using EntryFn = bool (*)(void*);
 using ExitFn = bool (*)();
 using FactoryFn = Steinberg::IPluginFactory* (*)();
 
+// The scratch preferences folder (main() points the environment at it) and the plug-in's file inside it.
+std::filesystem::path g_prefsHome;
+std::filesystem::path prefsFile() { return g_prefsHome / "FairyTapes" / "HappyEnding.prefs"; }
+void writePrefs(const std::string& text) {
+  std::filesystem::create_directories(prefsFile().parent_path());
+  std::ofstream(prefsFile(), std::ios::binary | std::ios::trunc) << text;
+}
+
+// The host side of a view without a window: counts its references and the resize requests; no IRunLoop, so on Linux
+// the editor cannot open (VSTGUI's X11 frame needs one) and attached() leaves it closed.
+class FakePlugFrame : public Steinberg::IPlugFrame {
+public:
+  int refs = 0, resizes = 0;
+  Steinberg::tresult PLUGIN_API resizeView(Steinberg::IPlugView*, Steinberg::ViewRect*) override {
+    ++resizes;
+    return Steinberg::kResultTrue;
+  }
+  Steinberg::tresult PLUGIN_API queryInterface(const Steinberg::TUID iid, void** obj) override {
+    QUERY_INTERFACE(iid, obj, Steinberg::FUnknown::iid, Steinberg::IPlugFrame)
+    QUERY_INTERFACE(iid, obj, Steinberg::IPlugFrame::iid, Steinberg::IPlugFrame)
+    *obj = nullptr;
+    return Steinberg::kNoInterface;
+  }
+  Steinberg::uint32 PLUGIN_API addRef() override { return static_cast<Steinberg::uint32>(++refs); }
+  Steinberg::uint32 PLUGIN_API release() override { return static_cast<Steinberg::uint32>(--refs); }
+};
+
+// createView: the editor for ViewType::kEditor, 1280 x 890 at SIZE 100 (no preferences file) and host factor 1, the
+// size constraint answering only that size, a fixed size; any other name gives nullptr.
+void test_create_view_returns_editor(Steinberg::Vst::IEditController* ctl) {
+  std::filesystem::remove(prefsFile());
+  CHECK(ctl->createView("no-such-view") == nullptr);
+  CHECK(ctl->createView(nullptr) == nullptr);
+  Steinberg::IPlugView* view = ctl->createView(Steinberg::Vst::ViewType::kEditor);
+  CHECK(view != nullptr);
+  if (!view) return;
+  Steinberg::ViewRect r{};
+  CHECK(view->getSize(&r) == Steinberg::kResultOk);
+  CHECK(r.getWidth() == 1280 && r.getHeight() == 890);
+  Steinberg::ViewRect asked(0, 0, 900, 300);
+  CHECK(view->checkSizeConstraint(&asked) == Steinberg::kResultTrue);
+  CHECK(asked.getWidth() == 1280 && asked.getHeight() == 890);
+  CHECK(view->canResize() == Steinberg::kResultFalse);
+#if !defined(__APPLE__)
+  CHECK(view->isPlatformTypeSupported(Steinberg::kPlatformTypeX11EmbedWindowID) == Steinberg::kResultTrue);
+  CHECK(view->isPlatformTypeSupported(Steinberg::kPlatformTypeWaylandSurfaceID) != Steinberg::kResultTrue);
+  // Content scale before attach (macOS scales natively and answers kResultFalse): getSize and the constraint follow it.
+  Steinberg::IPlugViewContentScaleSupport* scale = nullptr;
+  CHECK(view->queryInterface(Steinberg::IPlugViewContentScaleSupport::iid, (void**)&scale) == Steinberg::kResultOk);
+  if (scale) {
+    CHECK(scale->setContentScaleFactor(2.0f) == Steinberg::kResultTrue);
+    Steinberg::ViewRect s{};
+    CHECK(view->getSize(&s) == Steinberg::kResultOk);
+    CHECK(s.getWidth() == 2560 && s.getHeight() == 1780);
+    Steinberg::ViewRect c(0, 0, 100, 100);
+    CHECK(view->checkSizeConstraint(&c) == Steinberg::kResultTrue);
+    CHECK(c.getWidth() == 2560 && c.getHeight() == 1780);
+    CHECK(scale->setContentScaleFactor(-1.0f) == Steinberg::kResultTrue);   // sanitized to 1
+    CHECK(view->getSize(&s) == Steinberg::kResultOk);
+    CHECK(s.getWidth() == 1280 && s.getHeight() == 890);
+    CHECK(scale->release() == 1);   // the view keeps the host's reference
+  }
+#endif
+  CHECK(view->release() == 0);   // the host owned the only reference: the view is gone
+}
+
+// Created, given a plug frame, attached without a window, removed and released 50 times: every view goes away with the
+// host's release and the plug frame gets back every reference the views took.
+void test_editor_open_close_repeatedly(Steinberg::Vst::IEditController* ctl) {
+  std::filesystem::remove(prefsFile());
+  FakePlugFrame host;
+  for (int i = 0; i < 50; ++i) {
+    Steinberg::IPlugView* view = ctl->createView(Steinberg::Vst::ViewType::kEditor);
+    CHECK(view != nullptr);
+    if (!view) break;
+    CHECK(view->setFrame(&host) == Steinberg::kResultTrue);
+#if defined(__linux__)
+    view->attached(nullptr, Steinberg::kPlatformTypeX11EmbedWindowID);   // no run loop: stays closed, no crash
+    view->removed();
+#endif
+    CHECK(view->setFrame(nullptr) == Steinberg::kResultTrue);
+    CHECK(view->release() == 0);
+  }
+  CHECK(host.refs == 0);
+}
+
+// The SIZE of HappyEnding.prefs read when the view is made: size=75 gives 960 x 668 (890 x 0.75 = 667.5, rounded), and the
+// size constraint answers that size; with the file gone the next view is 1280 x 890 again.
+void test_editor_size_from_prefs(Steinberg::Vst::IEditController* ctl) {
+  writePrefs("size=75\n");
+  Steinberg::IPlugView* view = ctl->createView(Steinberg::Vst::ViewType::kEditor);
+  CHECK(view != nullptr);
+  if (view) {
+    Steinberg::ViewRect r{};
+    CHECK(view->getSize(&r) == Steinberg::kResultOk);
+    CHECK(r.getWidth() == 960 && r.getHeight() == 668);
+    Steinberg::ViewRect asked(0, 0, 1280, 890);
+    CHECK(view->checkSizeConstraint(&asked) == Steinberg::kResultTrue);
+    CHECK(asked.getWidth() == 960 && asked.getHeight() == 668);
+    CHECK(view->release() == 0);
+  }
+  std::filesystem::remove(prefsFile());
+  view = ctl->createView(Steinberg::Vst::ViewType::kEditor);
+  CHECK(view != nullptr);
+  if (view) {
+    Steinberg::ViewRect r{};
+    CHECK(view->getSize(&r) == Steinberg::kResultOk);
+    CHECK(r.getWidth() == 1280 && r.getHeight() == 890);
+    CHECK(view->release() == 0);
+  }
+}
+
 void exerciseController(Steinberg::FUnknown* obj) {
   Steinberg::Vst::IEditController* ctl = nullptr;
   CHECK(obj->queryInterface(Steinberg::Vst::IEditController::iid, (void**)&ctl) == Steinberg::kResultOk);
   if (!ctl) return;
   CHECK(ctl->initialize(nullptr) == Steinberg::kResultOk);
-  // no custom editor yet: the host builds its generic UI from the parameters
-  CHECK(ctl->createView(Steinberg::Vst::ViewType::kEditor) == nullptr);
-  CHECK(ctl->createView("no-such-view") == nullptr);
+  test_create_view_returns_editor(ctl);
+  test_editor_open_close_repeatedly(ctl);
+  test_editor_size_from_prefs(ctl);
 
   const int expected = static_cast<int>(kNumParams) + 2 + static_cast<int>(kNumDisplayIDs - kDisplayBase);
   CHECK(ctl->getParameterCount() == expected);
@@ -186,6 +313,19 @@ int main() {
     std::printf("SKIP: module not built: %s\n", HAPPY_ENDING_MODULE);
     return kSkip;
   }
+  // The editor reads its SIZE from the user's preferences: a scratch folder instead of the real one.
+  char scratch[] = "/tmp/happy_ending_factory_XXXXXX";
+  if (!mkdtemp(scratch)) {
+    std::fprintf(stderr, "mkdtemp failed\n");
+    return 1;
+  }
+  g_prefsHome = scratch;
+#if defined(__APPLE__)
+  setenv("HOME", scratch, 1);
+  g_prefsHome /= "Library/Application Support";
+#else
+  setenv("XDG_CONFIG_HOME", scratch, 1);
+#endif
   void* h = dlopen(HAPPY_ENDING_MODULE, RTLD_NOW | RTLD_LOCAL);
   if (!h) {
     std::fprintf(stderr, "dlopen failed: %s\n", dlerror());
@@ -202,6 +342,8 @@ int main() {
     CHECK(exitFn());
   }
   dlclose(h);
+  std::error_code ec;
+  std::filesystem::remove_all(scratch, ec);
   std::printf("%s\n", g_failed ? "Factory lifecycle FAILED" : "Factory lifecycle OK");
   return g_failed ? 1 : 0;
 }
