@@ -73,14 +73,22 @@ inline std::string toneGainText(const ModeRow& r, int band, double tone) {
   if (std::fabs(g) < 0.05) return "0.0 dB";
   return detail::signedTenths(g, false) + " dB";
 }
+namespace detail {
+inline const char* distName(int dist) {
+  const char* names[3] = {"OFF", "DIST 2", "DIST 3"};
+  return names[std::clamp(dist, 1, 3) - 1];
+}
+}  // namespace detail
+// The mode's own Ratio and Dist (what AUTO uses): "2:1", "DIST 2".
+inline std::string compRatioText(const ModeRow& r) { return detail::intText(r.compRatio) + ":1"; }
+inline std::string distName(const ModeRow& r) { return detail::distName(r.compDist); }
 inline std::string ratioText(int choice, const ModeRow& r) {
-  if (choice <= 0) return "AUTO " + detail::intText(r.compRatio) + ":1";
+  if (choice <= 0) return "AUTO " + compRatioText(r);
   return detail::intText(compRatioFromChoice(choice)) + ":1";
 }
 inline std::string distText(int choice, const ModeRow& r) {
-  const char* names[3] = {"OFF", "DIST 2", "DIST 3"};
-  if (choice <= 0) return std::string("AUTO ") + names[std::clamp(r.compDist, 1, 3) - 1];
-  return names[std::clamp(choice, 1, 3) - 1];
+  if (choice <= 0) return "AUTO " + distName(r);
+  return detail::distName(choice);
 }
 inline std::string modeTagLine1(const ModeRow& r) {
   const std::string d = r.description;
@@ -92,9 +100,19 @@ inline std::string modeTagLine2(const ModeRow& r) {
   return p == std::string::npos ? std::string() : detail::upper(detail::trim(d.substr(p + 1)));
 }
 inline const char* detectorTag(const ModeRow& r) { return r.levelDetector ? "LEVEL" : "SPECTRAL"; }
-inline std::string riderMaxText(const ModeRow& r) {
-  return "MAX \xC2\xB1" + detail::intText(r.riderMaxRangeDb) + " dB \xC2\xB7 " + detail::intText(r.riderSlewDbPerSec) +
-         " dB/s";
+// The Rider's full travel and speed of the mode: "\xC2\xB16 dB", "8 dB/s".
+inline std::string riderRangeText(const ModeRow& r) { return "\xC2\xB1" + detail::intText(r.riderMaxRangeDb) + " dB"; }
+inline std::string riderSpeedText(const ModeRow& r) { return detail::intText(r.riderSlewDbPerSec) + " dB/s"; }
+inline std::string riderMaxText(const ModeRow& r) { return "MAX " + riderRangeText(r) + " \xC2\xB7 " + riderSpeedText(r); }
+// The De-ess multiplier of the mode: "normal" at 1 (or more), else "x0.15" (shortest form, as the preview).
+inline std::string deEssScaleText(const ModeRow& r) {
+  if (r.deEssScale >= 1.0) return "normal";
+  return "x" + detail::fmt("%g", r.deEssScale);
+}
+// The Tone curve of the mode at Tone = +100 %: "-2 / +3 / +2 dB" (the preview's fs(): no ".0", "0" without sign).
+inline std::string toneCurveText(const ModeRow& r) {
+  return detail::signedShort(r.toneMudDb) + " / " + detail::signedShort(r.tonePresenceDb) + " / " +
+         detail::signedShort(r.toneAirDb) + " dB";
 }
 inline std::string deEssNote(const ModeRow& r) {
   if (r.deEssScale >= 1.0) return {};

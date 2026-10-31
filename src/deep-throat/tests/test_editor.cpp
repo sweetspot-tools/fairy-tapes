@@ -8,6 +8,7 @@
  */
 #include "controller.h"
 #include "params.h"
+#include "ui/back_modes.h"
 #include "ui/back_settings.h"
 #include "ui/editor.h"
 #include "ui/layout.h"
@@ -1850,6 +1851,49 @@ void test_tab_links_order() {
   ASSERT_TRUE(EditorTest::back(ed) != nullptr && EditorTest::back(ed)->tab() == kTabCredits);
   EditorTest::destroy(ed, root);
 }
+
+// Yellow text pixels (the MODES active column, #f2c21b) in the band of column `j` of the table (heads and rows).
+int modesYellowPixels(const VSTGUI::CBitmap* bmp, int j) {
+  const Pixels p = pixelsOf(const_cast<VSTGUI::CBitmap*>(bmp));
+  const int cx = static_cast<int>(ModesTab::kColumnX[j]);
+  int n = 0;
+  for (int y = 180; y < 492; ++y)
+    for (int x = cx - 70; x <= cx + 70; ++x) {
+      const VSTGUI::CColor c = p.at(x, y);
+      n += c.red > 190 && c.green > 140 && c.green < 215 && c.blue < 90 && c.red - c.blue > 120 ? 1 : 0;
+    }
+  return n;
+}
+
+// The MODES tab draws the table with the column of the current Mode in yellow, and follows the parameter while the
+// back is open; ROUTING and CREDITS come filled (backContent).
+void test_modes_tab_follows_mode() {
+  Editor ed(g_ctl);
+  ed.setWearLevel(WearLevel::Off);
+  auto root = EditorTest::buildSides(ed);
+  FairyTapes::Ui::BackView* back = EditorTest::back(ed);
+  ASSERT_TRUE(back != nullptr);
+  ASSERT_TRUE(back->content().credits.entries.size() == 5 && !back->content().routing.flow.empty());
+  back->setVisible(true);
+  back->setTab(kTabModes);
+  for (int i : {1, 2, 0}) {
+    g_ctl->setParamNormalized(kMode, i / 2.0);
+    EditorTest::tick(ed);
+    auto bmp = drawOffscreen(back);
+    ASSERT_TRUE(bmp != nullptr);
+    int counts[3];
+    for (int j = 0; j < 3; ++j) counts[j] = modesYellowPixels(bmp, j);
+    if (counts[i] < 200 || counts[(i + 1) % 3] != 0 || counts[(i + 2) % 3] != 0)
+      std::fprintf(stderr, "  mode %d: yellow pixels %d %d %d\n", i, counts[0], counts[1], counts[2]);
+    ASSERT_TRUE(counts[i] >= 200 && counts[(i + 1) % 3] == 0 && counts[(i + 2) % 3] == 0);
+  }
+  // the other tabs have no yellow there
+  back->setTab(kTabCredits);
+  auto credits = drawOffscreen(back);
+  ASSERT_TRUE(credits != nullptr && modesYellowPixels(credits, 0) == 0);
+  back->setVisible(false);
+  EditorTest::destroy(ed, root);
+}
 } // namespace
 
 int main() {
@@ -1906,6 +1950,7 @@ int main() {
   RUN_TEST(test_settings_fonts_and_reroll_apply);
   RUN_TEST(test_settings_failed_write_is_ignored);
   RUN_TEST(test_tab_links_order);
+  RUN_TEST(test_modes_tab_follows_mode);
   ctl.terminate();
   g_ctl = nullptr;
   VSTGUI::exit();

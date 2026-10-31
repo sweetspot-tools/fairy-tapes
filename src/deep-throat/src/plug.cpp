@@ -7,13 +7,14 @@
 #include "controller.h"
 #include "processor.h"
 #include "cids.h"
+#include "version.h"
 #include "public.sdk/source/main/pluginfactory.h"
 #include "pluginterfaces/vst/ivstaudioprocessor.h"
 #include "pluginterfaces/vst/ivstcomponent.h"
 #include "pluginterfaces/vst/ivsteditcontroller.h"
 
 #define stringPluginName "Deep Throat"
-#define stringVersion "1.0.0"
+#define stringVersion DEEP_THROAT_VERSION
 
 namespace {
 Steinberg::FUnknown* createProcessor(void*) {

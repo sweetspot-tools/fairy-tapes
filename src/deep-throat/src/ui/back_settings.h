@@ -9,11 +9,14 @@
  * NOTES LAYER, METER HOLD and METER RELEASE rows are placeholders that change nothing there: they are not offered (spec
  * §8: Wear, Tape font, Values font). BEHAVIOUR (saved with the project) has no item yet, so its box stays empty. The
  * preview's notes go in the template's NOTES box (at most four lines).
- * MODES, ROUTING and CREDITS are selectable but still empty (Task 12 of docs/superpowers/plans/2026-10-24-deep-throat-gui.md).
+ * ROUTING (ui/routing_diagram.h) and CREDITS (ui/credits.h) are filled here; MODES is a custom tab the editor draws from
+ * ui/back_modes.h.
  */
 #pragma once
 
+#include "ui/credits.h"
 #include "ui/prefs.h"
+#include "ui/routing_diagram.h"
 
 #include "fairy_ui/back_panel.h"
 
@@ -99,6 +102,8 @@ inline FairyTapes::Ui::BackContent backContent(const Prefs& p) {
             {"CREDITS", BackTabKind::Credits}};
   c.items = settingsItems(p);
   c.notes = settingsNotes();
+  c.credits = backCredits();
+  c.routing = deepThroatRouting();
   return c;
 }
 

@@ -1,9 +1,9 @@
 // Developer tool: draws the Deep Throat editor offscreen into PNG files, no host or window needed.
-//   deep_throat_render <out-dir> [bypass] [no-grain] [module-off=rider|breath|eq|deess|comp|tone] [meters] [scope]
+//   deep_throat_render <out-dir> [bypass] [mode=speak|sing|puke] [no-grain] [module-off=rider|breath|eq|deess|comp|tone] [meters] [scope]
 //                     [wear=off|light|heavy] [seed=<n>] [text=<s>] [text1..text6=<s>] [font=zeyada|rocksalt|homemade]
 //                     [values=standard|tape] [screw1..screw4=<deg>] [back=settings|modes|routing|credits|all] [cycles=<n>]
 // Writes <out-dir>/front.png (1000 x 614); back= also writes the back of the panel on that tab (or on every tab with
-// all) as <out-dir>/back_<tab>.png, with the editor's own BackView (MODES, ROUTING and CREDITS are empty until Task 12).
+// all) as <out-dir>/back_<tab>.png, with the editor's own BackView (mode= picks the yellow column of MODES).
 // bypass sets the global Bypass, module-off= turns a module's IN off (both through the
 // controller, picked up by the editor's timer work); no-grain draws the panel without the grain tile. meters sets proof
 // values of the display parameters (LEVEL rows, GR, IN clip lit, BREATH lamp lit); scope fills the SCOPE history with a
@@ -192,7 +192,7 @@ int main(int argc, char** argv) {
   using namespace FairyTapes::DeepThroat;
   if (argc < 2) {
     std::fprintf(stderr,
-                 "usage: %s <out-dir> [bypass] [no-grain] [module-off=rider|breath|eq|deess|comp|tone] [meters] [scope]\n"
+                 "usage: %s <out-dir> [bypass] [mode=speak|sing|puke] [no-grain] [module-off=rider|breath|eq|deess|comp|tone] [meters] [scope]\n"
                  "       [wear=off|light|heavy] [seed=<n>] [text=<s>] [text1..text6=<s>] [font=zeyada|rocksalt|homemade]\n"
                  "       [values=standard|tape] [screw1..screw4=<deg>] [back=settings|modes|routing|credits|all] [cycles=<n>]\n",
                  argv[0]);
@@ -224,6 +224,9 @@ int main(int argc, char** argv) {
   for (int i = 2; i < argc; ++i) {
     if (!std::strcmp(argv[i], "bypass")) {
       ctl.setParamNormalized(kBypass, 1.0);
+    } else if (!std::strncmp(argv[i], "mode=", 5)) {
+      const char* m = argv[i] + 5;
+      ctl.setParamNormalized(kMode, !std::strcmp(m, "puke") ? 1.0 : !std::strcmp(m, "sing") ? 0.5 : 0.0);
     } else if (!std::strncmp(argv[i], "module-off=", 11)) {
       const char* m = argv[i] + 11;
       const Ui::Module mod = !std::strcmp(m, "rider")    ? Ui::Module::Rider

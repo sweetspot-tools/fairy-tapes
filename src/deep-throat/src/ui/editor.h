@@ -248,6 +248,7 @@ private:
   FairyTapes::Ui::TextLink* backLink_ = nullptr;   // "BACK ->" in the header
   FairyTapes::Ui::PanelFlip flip_;
   int backTab_ = 0;   // the back's tab, kept while the editor lives
+  int modesColumn_ = 0;   // the MODES tab's yellow column: activeModeColumn(Mode), refreshed with the dynamic texts
 
   VSTGUI::CTextEdit* tapeEdit_ = nullptr;   // the tape's text field, while open
   int tapeEditSlot_ = -1;

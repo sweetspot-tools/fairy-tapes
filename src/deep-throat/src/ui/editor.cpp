@@ -5,6 +5,7 @@
 
 #include "controller.h"
 #include "state.h"
+#include "ui/back_modes.h"
 #include "ui/back_settings.h"
 #include "ui/decor.h"
 #include "ui/dynamic_text.h"
@@ -144,6 +145,62 @@ Decor rerolledDecor(Decor d, uint32_t newSeed) {
   for (float& a : d.screwAngles) a = 0.f;
   d.tapeTexts.clear();
   return d;
+}
+
+// ---- The MODES tab of the back (ui/back_modes.h), drawn in the template's custom area ----
+constexpr CColor kModesYellow(0xf2, 0xc2, 0x1b);   // the active mode column (the preview's YEL)
+
+void modesText(CDrawContext* ctx, const std::string& s, double x, double baseline, double size, const CColor& colour,
+               bool centred = false) {
+  if (s.empty()) return;
+  ctx->setFont(makeOwned<CFontDesc>("Arial", size, kBoldFace));
+  ctx->setFontColor(colour);
+  const double w = centred ? ctx->getStringWidth(s.c_str()) : 0.0;
+  ctx->drawString(s.c_str(), CPoint(x - w / 2, baseline));
+}
+
+void modesRule(CDrawContext* ctx, double x0, double x1, double y, double width, const CColor& colour) {
+  ctx->setFrameColor(colour);
+  ctx->setLineWidth(width);
+  ctx->setLineStyle(kLineSolid);
+  ctx->drawLine(CPoint(x0, y), CPoint(x1, y));
+}
+
+// `area` is the template's custom box (Back::kCustomBox) in view coordinates; the table is placed at the preview's
+// editor px relative to it. The column of `activeColumn` (activeModeColumn) is yellow, the others white.
+void drawModesTab(CDrawContext* ctx, const CRect& area, int activeColumn) {
+  using FairyTapes::Ui::kDimWhite;
+  using FairyTapes::Ui::kWhite;
+  namespace M = ModesTab;
+  const double ox = area.left - FairyTapes::Ui::Back::kCustomBox.x, oy = area.top - FairyTapes::Ui::Back::kCustomBox.y;
+  FairyTapes::Ui::drawTitledBox(ctx, CRect(ox + M::kBox.x, oy + M::kBox.y, ox + M::kBox.x + M::kBox.w, oy + M::kBox.y + M::kBox.h),
+                                M::kTitle, true);
+  const auto intro = modesIntro();
+  if (intro.size() >= 2) {
+    modesText(ctx, intro[0], ox + M::kLabelX, oy + M::kIntroBaseline[0], 12, kWhite);
+    modesText(ctx, intro[1], ox + M::kLabelX, oy + M::kIntroBaseline[1], 11, kDimWhite);
+  }
+  auto colourOf = [activeColumn](int j) { return j == activeColumn ? kModesYellow : kWhite; };
+  const auto head = modesHeader();
+  for (int j = 0; j < 3; ++j)
+    modesText(ctx, head[static_cast<std::size_t>(j)], ox + M::kColumnX[j], oy + M::kHeadBaseline, M::kHeadSize, colourOf(j), true);
+  CColor rule = kWhite;
+  rule.alpha = 153;   // opacity .6
+  modesRule(ctx, ox + M::kLabelX, ox + M::kRight, oy + M::kRuleY, 1.5, rule);
+  CColor sep = kDimWhite;
+  sep.alpha = 64;   // opacity .25
+  const auto rows = modesRows();
+  for (std::size_t i = 0; i < rows.size(); ++i) {
+    const double y = oy + M::kFirstRowBaseline + M::kRowStep * static_cast<double>(i);
+    modesText(ctx, rows[i].label, ox + M::kLabelX, y, M::kRowSize, kWhite);
+    for (int j = 0; j < 3; ++j)
+      modesText(ctx, rows[i].cells[static_cast<std::size_t>(j)], ox + M::kColumnX[j], y, M::kRowSize, colourOf(j), true);
+    if (i + 1 < rows.size()) modesRule(ctx, ox + M::kLabelX, ox + M::kRight, y + M::kSeparatorBelow, 1, sep);
+  }
+  const auto notes = modesNotes();
+  for (std::size_t i = 0; i < notes.size(); ++i)
+    modesText(ctx, notes[i], ox + M::kLabelX, oy + M::kNoteFirstBaseline + M::kNoteStep * static_cast<double>(i), M::kNoteSize,
+              kDimWhite);
 }
 
 bool dynamicTextInput(ParamID id) {
@@ -503,6 +560,11 @@ void Editor::refreshDynamicTexts() {
   auto* ctl = getController();
   const Mode m = modeFromNorm(controllerNorm(ctl, kMode));
   const double eq = controllerNorm(ctl, kEqAmount), tone = controllerNorm(ctl, kTone);
+  const int column = activeModeColumn(m);   // the MODES tab of the back follows the Mode parameter
+  if (column != modesColumn_) {
+    modesColumn_ = column;
+    if (back_) back_->invalid();
+  }
   if (silk_) {
     silk_->setTag(kTagModeName, modeTagLine1(m));
     silk_->setTag(kTagModeInfo, modeTagLine2(m));
@@ -830,6 +892,8 @@ void Editor::buildBack(CViewContainer* host) {
   cb.back = [this] { startFlip(false); };
   cb.tabChanged = [this](int tab) { backTab_ = tab; };
   back_ = new BackView(CRect(0, 0, kWidth, kHeight), &skin_, std::move(content), std::move(cb), backTab_);
+  modesColumn_ = activeModeColumn(modeFromNorm(controllerNorm(getController(), kMode)));
+  back_->setCustomDrawer(kTabModes, [this](CDrawContext* ctx, const CRect& area) { drawModesTab(ctx, area, modesColumn_); });
   back_->setVisible(false);
   host->addView(back_);
   applyBackWear();

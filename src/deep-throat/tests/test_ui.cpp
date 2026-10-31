@@ -2,13 +2,16 @@
  * Fairy Tapes · Deep Throat — tests for the pure editor layout (ui/editor_size.h, ui/layout.h): no VSTGUI.
  * Build target: deep_throat_ui_tests.
  */
+#include "ui/back_modes.h"
 #include "ui/back_settings.h"
+#include "ui/credits.h"
 #include "ui/decor.h"
 #include "ui/dynamic_text.h"
 #include "ui/editor_size.h"
 #include "ui/history.h"
 #include "ui/layout.h"
 #include "ui/prefs.h"
+#include "ui/routing_diagram.h"
 #include "ui/screw_angles.h"
 #include "ui/tapes.h"
 #include "ui/value_text.h"
@@ -1047,11 +1050,12 @@ void test_settings_items_reflect_prefs() {
           ASSERT_TRUE(items[3].options == std::vector<std::string>{"RE-ROLL"} && items[3].note == "new wear, dirt and screws");
           for (int key : {kSetWear, kSetTapeFont, kSetValuesFont})
             ASSERT_TRUE(items[static_cast<std::size_t>(key - 1)].selected == selectedFor(key, p));
-          // The template accepts the SETTINGS part (rows and controls inside APPEARANCE, keys unique); the empty
-          // ROUTING and CREDITS tabs are filled by Task 12.
+          // The template accepts the whole back (rows and controls inside APPEARANCE, keys unique, ROUTING and CREDITS
+          // complete).
           const auto content = backContent(p);
-          for (const std::string& problem : FairyTapes::Ui::backContentProblems(content, FairyTapes::Ui::backLayoutFor(kEditorHeight)))
-            ASSERT_TRUE(problem.rfind("routing:", 0) == 0 || problem.rfind("credits:", 0) == 0);
+          const auto problems = FairyTapes::Ui::backContentProblems(content, FairyTapes::Ui::backLayoutFor(kEditorHeight));
+          for (const std::string& problem : problems) std::fprintf(stderr, "  back content: %s\n", problem.c_str());
+          ASSERT_TRUE(problems.empty());
           ASSERT_TRUE(content.notes.size() == 4 && content.notes == settingsNotes());
         }
   for (const std::string& line : settingsNotes()) ASSERT_TRUE(!line.empty() && line.size() <= 125);   // one line of the box each
@@ -1093,6 +1097,303 @@ void test_settings_item_to_prefs() {
             ASSERT_TRUE(!applySetting(bad.first, bad.second, p) && same(p, base));
           }
         }
+}
+
+// ---- Back of the panel: MODES, ROUTING, CREDITS (Task 12) -----------------------------------------------------------
+// The nine rows of the preview's MODES table, every cell equal to the preview's value and to the dynamic_text.h string of
+// the table row of its mode (the strings the front shows come from the same functions).
+void test_modes_rows_from_table() {
+  const auto rows = modesRows();
+  ASSERT_TRUE(rows.size() == 9);
+  const char* labels[9] = {"Breath detector", "Rider max range", "Rider speed", "HPF", "Mud cut (at 300 Hz)", "De-ess",
+                           "Comp ratio", "Dist", "Tone curve (mud / presence / air, dB at +100%)"};
+  const char* want[9][3] = {
+      {"SPECTRAL", "SPECTRAL", "LEVEL"},
+      {"\xC2\xB1" "6 dB", "\xC2\xB1" "4 dB", "\xC2\xB1" "3 dB"},
+      {"8 dB/s", "4 dB/s", "2 dB/s"},
+      {"80 Hz", "70 Hz", "60 Hz"},
+      {"-2 dB", "-3 dB", "-4 dB"},
+      {"normal", "normal", "x0.15"},
+      {"2:1", "3:1", "8:1"},
+      {"OFF", "DIST 2", "DIST 3"},
+      {"-2 / +3 / +2 dB", "-1.5 / +2 / +4 dB", "-3 / +1 / 0 dB"},
+  };
+  for (std::size_t i = 0; i < 9; ++i) {
+    ASSERT_TRUE(rows[i].label == labels[i]);
+    for (int j = 0; j < 3; ++j) {
+      if (rows[i].cells[static_cast<std::size_t>(j)] != want[i][j])
+        std::fprintf(stderr, "  row %zu mode %d: \"%s\" (want \"%s\")\n", i, j, rows[i].cells[static_cast<std::size_t>(j)].c_str(), want[i][j]);
+      ASSERT_TRUE(rows[i].cells[static_cast<std::size_t>(j)] == want[i][j]);
+    }
+  }
+  for (int j = 0; j < 3; ++j) {
+    const ModeRow& r = modeRow(static_cast<Mode>(j));
+    const std::size_t c = static_cast<std::size_t>(j);
+    ASSERT_TRUE(rows[0].cells[c] == detectorTag(r) && rows[1].cells[c] == riderRangeText(r) && rows[2].cells[c] == riderSpeedText(r));
+    ASSERT_TRUE(rows[3].cells[c] == eqHpfText(r, 0.5) && rows[4].cells[c] == eqMudText(r, 0.5));
+    ASSERT_TRUE(rows[5].cells[c] == deEssScaleText(r) && rows[6].cells[c] == compRatioText(r) && rows[7].cells[c] == distName(r));
+    ASSERT_TRUE(rows[8].cells[c] == toneCurveText(r));
+    // the front's strings are built from the same pieces
+    ASSERT_TRUE(riderMaxText(r) == "MAX " + riderRangeText(r) + " \xC2\xB7 " + riderSpeedText(r));
+    ASSERT_TRUE(ratioText(0, r) == "AUTO " + compRatioText(r) && distText(0, r) == "AUTO " + distName(r));
+  }
+  ASSERT_TRUE((modesHeader() == std::array<std::string, 3>{"SPEAK", "SING", "PUKE"}));
+  const auto notes = modesNotes();
+  ASSERT_TRUE(notes.size() == 4);
+  ASSERT_TRUE(notes[1] == "De-ess x0.15: the DE-ESS amount is multiplied by 0.15 in PUKE, so the stage is almost off.");
+  ASSERT_TRUE(notes[2].find("LEVEL (PUKE)") != std::string::npos);
+  ASSERT_TRUE(modesIntro().size() == 2);
+}
+
+// Rows, header and notes are generated: a local copy of the table with other values gives other cells.
+void test_modes_follow_table_edit() {
+  ModeRow t[3] = {kModeTable[0], kModeTable[1], kModeTable[2]};
+  t[0].name = "TALK";
+  t[0].levelDetector = true;
+  t[1].riderMaxRangeDb = 9;
+  t[1].riderSlewDbPerSec = 12;
+  t[2].hpfHz = 95;
+  t[2].mudCutDb = -1.5;
+  t[0].deEssScale = 0.5;
+  t[2].deEssScale = 1.0;
+  t[1].compRatio = 5;
+  t[2].compDist = 1;
+  t[0].toneMudDb = 0;
+  t[0].tonePresenceDb = -2.5;
+  t[0].toneAirDb = 6;
+  const auto rows = modesRows(t);
+  ASSERT_TRUE(rows.size() == 9);
+  ASSERT_TRUE(rows[0].cells[0] == "LEVEL" && rows[0].cells[1] == "SPECTRAL");
+  ASSERT_TRUE(rows[1].cells[1] == "\xC2\xB1" "9 dB" && rows[2].cells[1] == "12 dB/s");
+  ASSERT_TRUE(rows[3].cells[2] == "95 Hz" && rows[4].cells[2] == "-1.5 dB");
+  ASSERT_TRUE(rows[5].cells[0] == "x0.5" && rows[5].cells[2] == "normal");
+  ASSERT_TRUE(rows[6].cells[1] == "5:1" && rows[7].cells[2] == "OFF");
+  ASSERT_TRUE(rows[8].cells[0] == "0 / -2.5 / +6 dB");
+  ASSERT_TRUE((modesHeader(t) == std::array<std::string, 3>{"TALK", "SING", "PUKE"}));
+  const auto notes = modesNotes(t);
+  ASSERT_TRUE(notes.size() == 4);
+  ASSERT_TRUE(notes[1] == "De-ess x0.5: the DE-ESS amount is multiplied by 0.5 in TALK.");
+  ASSERT_TRUE(notes[2].find("LEVEL (TALK, PUKE)") != std::string::npos);
+  // no mode scales the de-esser: the note goes away
+  t[0].deEssScale = 1.0;
+  ASSERT_TRUE(modesNotes(t).size() == 3);
+  // the real table is untouched
+  ASSERT_TRUE(modesRows()[3].cells[2] == "60 Hz");
+}
+
+void test_active_mode_column() {
+  ASSERT_TRUE(activeModeColumn(Mode::Speak) == 0 && activeModeColumn(Mode::Sing) == 1 && activeModeColumn(Mode::Puke) == 2);
+  ASSERT_TRUE(activeModeColumn(static_cast<Mode>(-3)) == 0 && activeModeColumn(static_cast<Mode>(9)) == 2);
+  for (int i = -2; i < 6; ++i) {
+    const Mode m = static_cast<Mode>(i);
+    ASSERT_TRUE(&kModeTable[activeModeColumn(m)] == &modeRow(m));   // the yellow column is the row the engine reads
+  }
+  // the table's geometry: columns left to right inside the box, rows above the notes, notes inside the box
+  const auto& L = FairyTapes::Ui::backLayoutFor(kEditorHeight);
+  ASSERT_TRUE(ModesTab::kBox.x >= L.custom.x && ModesTab::kBox.y >= L.custom.y &&
+              ModesTab::kBox.x + ModesTab::kBox.w <= L.custom.x + L.custom.w && ModesTab::kBox.y + ModesTab::kBox.h <= L.custom.y + L.custom.h);
+  ASSERT_TRUE(ModesTab::kColumnX[0] < ModesTab::kColumnX[1] && ModesTab::kColumnX[1] < ModesTab::kColumnX[2] &&
+              ModesTab::kColumnX[2] < ModesTab::kRight);
+  const double lastRow = ModesTab::kFirstRowBaseline + ModesTab::kRowStep * 8;
+  ASSERT_TRUE(lastRow < ModesTab::kNoteFirstBaseline - 11);
+  ASSERT_TRUE(ModesTab::kNoteFirstBaseline + ModesTab::kNoteStep * 3 < ModesTab::kBox.y + ModesTab::kBox.h - 6);
+}
+
+namespace {
+using FairyTapes::Ui::RoutingPrim;
+const RoutingPrim* findText(const FairyTapes::Ui::RoutingDiagram& d, const std::string& s, double size = 0) {
+  for (const RoutingPrim& p : d)
+    if (p.kind == RoutingPrim::Kind::Text && p.text == s && (size == 0 || p.size == size)) return &p;
+  return nullptr;
+}
+int countText(const FairyTapes::Ui::RoutingDiagram& d, const std::string& s) {
+  int n = 0;
+  for (const RoutingPrim& p : d) n += p.kind == RoutingPrim::Kind::Text && p.text == s ? 1 : 0;
+  return n;
+}
+// The module box whose outline contains the point.
+const RoutingPrim* boxAround(const FairyTapes::Ui::RoutingDiagram& d, double x, double y) {
+  for (const RoutingPrim& p : d)
+    if (p.kind == RoutingPrim::Kind::Rect && x > p.x && x < p.x + p.w && y > p.y && y < p.y + p.h) return &p;
+  return nullptr;
+}
+}  // namespace
+
+// The six modules in the order of the engine: Rider, Breath, EQ, De-ess on the first line, Comp and Tone on the second,
+// each in its box with an IN switch over it; one global BYPASS from the input side to the output switch; the detection
+// paths dashed.
+void test_routing_diagram_blocks_in_engine_order() {
+  const auto r = deepThroatRouting();
+  const auto& d = r.flow;
+  const char* names[6] = {"RIDER", "BREATH", "EQ", "DE-ESS", "COMP", "TONE"};
+  const RoutingPrim* boxes[6] = {};
+  for (int i = 0; i < 6; ++i) {
+    ASSERT_TRUE(countText(d, names[i]) == 1);
+    const RoutingPrim* t = findText(d, names[i], 11);
+    ASSERT_TRUE(t != nullptr);
+    boxes[i] = boxAround(d, t->x, t->y - 4);
+    ASSERT_TRUE(boxes[i] != nullptr);
+  }
+  // reading order: line by line, left to right
+  for (int i = 1; i < 6; ++i) {
+    const RoutingPrim& a = *boxes[i - 1];
+    const RoutingPrim& b = *boxes[i];
+    const bool sameLine = std::fabs((a.y + a.h / 2) - (b.y + b.h / 2)) < 1;
+    ASSERT_TRUE((sameLine && b.x >= a.x + a.w) || (!sameLine && b.y >= a.y + a.h));
+  }
+  ASSERT_TRUE(boxes[3]->y + boxes[3]->h <= boxes[4]->y);   // the line break is between De-ess and Comp
+  // six IN switches, one over each module
+  ASSERT_TRUE(countText(d, "IN") == 6);
+  for (const RoutingPrim* b : boxes) {
+    int over = 0;
+    for (const RoutingPrim& p : d)
+      if (p.kind == RoutingPrim::Kind::Text && p.text == "IN" && p.x > b->x && p.x < b->x + b->w && p.y < b->y && p.y > b->y - 40) ++over;
+    ASSERT_TRUE(over == 1);
+  }
+  // BYPASS: one label, one line from the input side (left of the INPUT gain stage) to the output switch
+  ASSERT_TRUE(countText(d, "BYPASS") == 1);
+  const RoutingPrim* outJack = findText(d, "OUT L \xC2\xB7 R");
+  const RoutingPrim* inJack = findText(d, "IN L \xC2\xB7 R");
+  ASSERT_TRUE(outJack != nullptr && inJack != nullptr && inJack->x < outJack->x);
+  int bypassLines = 0;
+  for (const RoutingPrim& p : d) {
+    if (p.kind != RoutingPrim::Kind::Line || p.dashed || p.pts.size() < 3) continue;
+    const auto& a = p.pts.front();
+    const auto& z = p.pts.back();
+    if (a.x >= boxes[0]->x || a.y > boxes[0]->y + boxes[0]->h) continue;   // starts on the first line, before the Rider
+    bool toSwitch = false;   // ends on a switch contact of the output, after Tone
+    for (const RoutingPrim& c : d)
+      if (c.kind == RoutingPrim::Kind::Circle && c.panelFill && std::hypot(c.x - z.x, c.y - z.y) <= c.r + 0.5 &&
+          c.x > boxes[5]->x + boxes[5]->w)
+        toSwitch = true;
+    bypassLines += toSwitch ? 1 : 0;
+  }
+  ASSERT_TRUE(bypassLines == 1);
+  int dashed = 0;
+  for (const RoutingPrim& p : d) dashed += p.kind == RoutingPrim::Kind::Line && p.dashed ? 1 : 0;
+  ASSERT_TRUE(dashed >= 3);
+  // the detection and meter blocks of the preview are there
+  for (const char* s : {"BREATH DETECTOR", "LEVEL", "LISTEN", "DELAY", "IN METER", "OUT METER", "GR"}) ASSERT_TRUE(findText(d, s) != nullptr);
+  // legend: the symbols the diagram uses, one note line
+  ASSERT_TRUE(r.legend.symbols.size() == 7 && r.legend.notes.size() == 1);
+}
+
+void test_routing_diagram_inside_panel() {
+  const auto& L = FairyTapes::Ui::backLayoutFor(kEditorHeight);
+  const auto r = deepThroatRouting();
+  ASSERT_TRUE(!r.flow.empty());
+  for (const RoutingPrim& p : r.flow) {
+    double x0, y0, x1, y1;
+    FairyTapes::Ui::routingExtent(p, x0, y0, x1, y1);
+    ASSERT_TRUE(x0 >= L.flow.x + 4 && x1 <= L.flow.x + L.flow.w - 4 && y0 >= L.flow.y - 8 && y1 <= L.flow.y + L.flow.h - 4);
+  }
+  for (const RoutingPrim& p : FairyTapes::Ui::legendDiagram(r.legend, L.legendSymbolY, L.legendNoteBaseline)) {
+    double x0, y0, x1, y1;
+    FairyTapes::Ui::routingExtent(p, x0, y0, x1, y1);
+    ASSERT_TRUE(x0 >= L.legend.x && x1 <= L.legend.x + L.legend.w && y0 >= L.legend.y && y1 <= L.legend.y + L.legend.h);
+  }
+  for (const std::string& problem : FairyTapes::Ui::backContentProblems(backContent(Prefs{}), L))
+    ASSERT_TRUE(problem.rfind("routing:", 0) != 0);
+}
+
+// Exactly the five components shipped in the bundle (the DSP is ours), with author and license; version and notices.
+void test_credits_entries() {
+  const auto c = credits();
+  ASSERT_TRUE(c.size() == 5);
+  const char* want[5][3] = {
+      {"VST 3 SDK", "Steinberg Media Technologies", "MIT"},
+      {"VSTGUI", "Steinberg Media Technologies", "BSD-3-Clause"},
+      {"Zeyada (tape font)", "Kimberly Geswein", "OFL-1.1"},
+      {"Rock Salt (tape font)", "Font Diner", "Apache-2.0"},
+      {"Homemade Apple (tape font)", "Font Diner", "Apache-2.0"},
+  };
+  for (std::size_t i = 0; i < 5; ++i) ASSERT_TRUE(c[i].name == want[i][0] && c[i].author == want[i][1] && c[i].license == want[i][2]);
+  const auto b = backCredits();
+  ASSERT_TRUE(b.title == "DEEP THROAT");
+  ASSERT_TRUE(b.versionLine.find(std::string("Version ") + kPluginVersion) == 0);
+  ASSERT_TRUE(std::string(kPluginVersion) == "1.0.0");
+  ASSERT_TRUE(b.entries.size() == 5 && b.entries[4].name == c[4].name);
+  ASSERT_TRUE(!b.licenseLines.empty() && b.licenseLines[0].find("GPL-3.0") != std::string::npos);
+  ASSERT_TRUE(b.notices.size() == 2);
+  ASSERT_TRUE(b.notices[0] == "VST is a trademark of Steinberg Media Technologies GmbH, registered in Europe and other countries.");
+  for (const char* other : {"Airwindows", "NeuralAmpModeler", "NAM", "RTNeural", "dusk"})
+    for (const auto& e : b.entries) ASSERT_TRUE(e.name.find(other) == std::string::npos);
+  const auto content = backContent(Prefs{});
+  ASSERT_TRUE(content.credits.entries.size() == 5 && content.credits.title == b.title);
+}
+
+// No user-facing string of the back or the front names the devices that inspired the plug-in.
+void test_no_brand_in_user_facing_strings() {
+  std::vector<std::string> all;
+  auto add = [&all](const std::string& s) { all.push_back(s); };
+  for (const auto& row : modesRows()) {
+    add(row.label);
+    for (const auto& c : row.cells) add(c);
+  }
+  for (const auto& s : modesNotes()) add(s);
+  for (const auto& s : modesIntro()) add(s);
+  for (const auto& s : modesHeader()) add(s);
+  add(ModesTab::kTitle);
+  const auto content = backContent(Prefs{});
+  add(content.headerLine);
+  for (const auto& t : content.tabs) add(t.label);
+  for (const auto& it : content.items) {
+    add(it.label);
+    add(it.hint);
+    add(it.note);
+    for (const auto& o : it.options) add(o);
+  }
+  for (const auto& s : content.notes) add(s);
+  add(content.credits.title);
+  add(content.credits.versionLine);
+  for (const auto& s : content.credits.licenseLines) add(s);
+  for (const auto& s : content.credits.notices) add(s);
+  for (const auto& e : content.credits.entries) {
+    add(e.name);
+    add(e.author);
+    add(e.license);
+  }
+  for (const auto& p : content.routing.flow) add(p.text);
+  for (const auto& s : content.routing.legend.notes) add(s);
+  add(content.routing.legend.meterLabel);
+  for (const PanelText& t : kPanelTexts) add(t.text);
+  for (const BoxSpec& b : kBoxes) add(b.title ? b.title : "");
+  for (const ControlSpec& c : kControls) {
+    add(c.name ? c.name : "");
+    add(c.lo ? c.lo : "");
+    add(c.hi ? c.hi : "");
+    for (const char* ch : c.choices) add(ch ? ch : "");
+  }
+  add(kTagEqText);
+  add(kTagCompText);
+  for (Mode m : {Mode::Speak, Mode::Sing, Mode::Puke}) {
+    add(modeRow(m).name);
+    add(modeRow(m).description);
+    add(modeTagLine1(m));
+    add(modeTagLine2(m));
+    add(detectorTag(m));
+    add(riderMaxText(m));
+    add(deEssNote(m));
+  }
+  const char* brands[] = {"distressor", "thistressor", "empirical", "waves", "vocal rider", "debreath", "de-breath",
+                          "1176", "la-2a", "teletronix", "urei", "fairchild", "neve", "izotope", "fabfilter", "valentine"};
+  ASSERT_TRUE(all.size() > 200);
+  for (const std::string& s : all) {
+    std::string low = s;
+    for (char& ch : low) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+    for (const char* b : brands) {
+      // as a word: "neve" must not match "never"
+      bool found = false;
+      const std::size_t n = std::strlen(b);
+      for (std::size_t at = low.find(b); at != std::string::npos; at = low.find(b, at + 1)) {
+        const bool before = at > 0 && std::isalnum(static_cast<unsigned char>(low[at - 1]));
+        const bool after = at + n < low.size() && std::isalnum(static_cast<unsigned char>(low[at + n]));
+        found = found || (!before && !after);
+      }
+      if (found) std::fprintf(stderr, "  brand \"%s\" in \"%s\"\n", b, s.c_str());
+      ASSERT_TRUE(!found);
+    }
+  }
 }
 } // namespace
 
@@ -1139,6 +1440,13 @@ int main() {
   RUN_TEST(test_scope_traces_stay_inside_the_border);
   RUN_TEST(test_settings_items_reflect_prefs);
   RUN_TEST(test_settings_item_to_prefs);
+  RUN_TEST(test_modes_rows_from_table);
+  RUN_TEST(test_modes_follow_table_edit);
+  RUN_TEST(test_active_mode_column);
+  RUN_TEST(test_routing_diagram_blocks_in_engine_order);
+  RUN_TEST(test_routing_diagram_inside_panel);
+  RUN_TEST(test_credits_entries);
+  RUN_TEST(test_no_brand_in_user_facing_strings);
   { std::error_code ec; fs::remove_all(scratchDir(), ec); }
   std::printf("deep_throat_ui_tests: %d passed, %d failed\n", g_passed, g_failed);
   return g_failed ? 1 : 0;
