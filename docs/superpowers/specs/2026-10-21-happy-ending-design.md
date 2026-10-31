@@ -187,10 +187,10 @@ Punto 0 (2026-10-15) e riepilogo: `.superpowers/brainstorm/mastering/` (fuori da
 
 ## 13. Editor: scelte tecniche (2026-10-31)
 
-Proposte con il piano dell'editor; l'utente può rivederle prima dell'esecuzione.
+Approvate dall'utente il 2026-10-31 con il piano dell'editor (SIZE e retro corretti da lui: ogni plugin ha la sua dimensione).
 
-- **SIZE comune alla suite:** una sola preferenza per tutti i plugin, nel file `<cartella preferenze>/FairyTapes/Suite.prefs` (`size=75|90|100|125`, default 100), letta e scritta da `shared/ui`. La finestra è 1280 × 890 × fattore dell'host × SIZE. Cambiata dal retro si applica subito chiedendo all'host di ridimensionare; se l'host rifiuta, vale alla prossima apertura. Gli altri plugin la adottano nelle loro chat.
-- **Retro largo:** il template comune del retro (`shared/ui`, oggi largo 1000) riceve la geometria per 1280 × 890 presa dalla preview; i layout esistenti non cambiano.
+- **SIZE di ciascun plugin (decisione dell'utente, 2026-10-31):** ogni plugin ha la sua dimensione: SIZE si salva nel file di preferenze del plugin (`HappyEnding.prefs`, chiave `size=75|90|100|125`, default 100), non in un file comune. La finestra è 1280 × 890 × fattore dell'host × SIZE. Cambiata dal retro si applica subito chiedendo all'host di ridimensionare; se l'host rifiuta, vale alla prossima apertura. `shared/ui` dà solo la matematica (fattori, dimensione in pixel, zoom).
+- **Retro con la dimensione del plugin:** anche il retro ha la dimensione di ciascun plugin. Il template comune (`shared/ui`) prende la geometria orizzontale e verticale dal layout che il plugin gli passa; quello di Happy Ending (1280 × 890, numeri della preview) sta nel plugin. I layout degli altri plugin non cambiano.
 - **Dati dello schermo:** il motore pubblica altri sei valori di visualizzazione, dopo quelli esistenti: picco all'ingresso di GLUE, LIMIT, CLIP e FINAL (−60…+12 dB), riduzione del compressore della colla prima del MIX e soglia effettiva del LIMIT (con la spinta della LOUDNESS e SET).
 - **Curve EQ:** le calcola l'editor con copie proprie di FINE EQ e VIBE EQ a 48 kHz, impostate dai parametri come il motore (mai sull'audio); la curva del VIBE con il ritiro del DYN usa il valore pubblicato.
 - **Vista dello schermo** (EQ, GLUE, CLIP, LIMIT, FINAL): stato dell'editor, ricordato finché vive l'istanza, non salvato nel progetto; all'apertura di un progetto è EQ.
