@@ -2,7 +2,8 @@
  * Fairy Tapes · Happy Ending — VST3 Edit Controller (parameters and the editor, ui/editor.h).
  *
  * createView gives the editor (Ui::Editor, 1280 x 890 times the host factor times the SIZE of HappyEnding.prefs) for
- * ViewType::kEditor. Built without HAPPY_ENDING_WITH_EDITOR (the controller tests, no VSTGUI) it gives none.
+ * ViewType::kEditor. Built without HAPPY_ENDING_WITH_EDITOR (the controller tests, no VSTGUI) it gives none. The editor's
+ * screen view lives here while the instance does (screenView), never in the state.
  *
  * Keeps a copy of the instance decor (wear seed, screw angles, tape texts) for the editor; the processor saves
  * it. The two copies meet through "Decor" messages (messages.h), never on the audio thread.
@@ -26,6 +27,10 @@
 #include <mutex>
 
 namespace FairyTapes::HappyEnding {
+
+namespace Ui {
+enum class ScreenView;   // ui/screen_model.h (Eq, Glue, Clip, Limit, Final)
+}
 
 class Controller : public Steinberg::Vst::EditController {
 public:
@@ -55,6 +60,11 @@ public:
   // Seed 0 keeps the current seed (and generates one if there is none yet).
   void editDecor(Decor d);
 
+  // The view of the editor's screen (EQ, GLUE, CLIP, LIMIT, FINAL): remembered while the instance lives, so a reopened
+  // editor shows the last one; never in the state or the project. EQ at first.
+  Ui::ScreenView screenView() const { return screenView_; }
+  void setScreenView(Ui::ScreenView v) { screenView_ = v; }
+
 private:
   void oversamplingChanged(int index);
   void sendDecor(const Decor& d);
@@ -64,6 +74,8 @@ private:
   mutable std::mutex decorMutex_;   // notify() may arrive on another thread
   Decor decor_;                     // seed 0 until the processor or a state provides one
   std::atomic<std::uint32_t> decorRevision_{0};
+
+  Ui::ScreenView screenView_ = static_cast<Ui::ScreenView>(0);   // ScreenView::Eq; UI thread only
 };
 
 } // namespace FairyTapes::HappyEnding

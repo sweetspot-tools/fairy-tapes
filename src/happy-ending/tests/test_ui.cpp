@@ -388,7 +388,7 @@ void test_silkscreen_items_cover_controls() {
     ++expected;
     int found = 0;
     for (const PrintedItem& it : items) {
-      if (it.id != static_cast<int>(c.id)) continue;
+      if (it.id != printId(c)) continue;
       const Point p = c.kind == Kind::Knob ? knobCentre(c) : faceCentre(c);
       if (std::fabs(it.cx - p.x) > 0.01 || std::fabs(it.cy - p.y) > 0.01) continue;
       ++found;
@@ -410,7 +410,23 @@ void test_silkscreen_items_cover_controls() {
   for (const PrintedItem& it : items)
     if (it.id == actionPrintId(Action::Match) && it.kind == PrintKind::Button && it.name == "MATCH") ++match;
   ASSERT_TRUE(match == 1);
-  ASSERT_TRUE(items.size() == expected + 1);
+  // HI PASS FREQ is printed a second time with the SIDE scale (the editor shows one of the two, as the M/S says)
+  const ControlSpec* hp = controlOf(kHpFreq);
+  int side = 0;
+  for (const PrintedItem& it : items)
+    if (it.id == kHpSidePrintId) {
+      ++side;
+      ASSERT_TRUE(it.kind == PrintKind::Knob && it.cx == knobCentre(*hp).x && it.cy == knobCentre(*hp).y);
+      ASSERT_TRUE(it.name == hp->name && it.lo == hp->lo && it.hi == kHpSideScaleHi && it.capRadius == hp->capRadius);
+    }
+  ASSERT_TRUE(side == 1 && std::string(kHpSideScaleHi) == "200");
+  ASSERT_TRUE(items.size() == expected + 2);
+  // every bell's LISTEN has its own key, so each one dims alone; no key is shared with another printed item
+  std::set<int> keys;
+  for (int k = 0; k < 3; ++k) keys.insert(printId(*controlOf(kListenBand, k)));
+  ASSERT_TRUE(keys.size() == 3 && !keys.count(static_cast<int>(kListenBand)));
+  std::set<int> all;
+  for (const PrintedItem& it : items) ASSERT_TRUE(all.insert(it.id).second);
 
   // no source names anywhere in the front panel text (only the block tags)
   for (const PrintedItem& it : items) ASSERT_TRUE(!hasSourceName(it.name) && !hasSourceName(it.lo) && !hasSourceName(it.hi));

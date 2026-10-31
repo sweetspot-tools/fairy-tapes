@@ -1,15 +1,25 @@
 // Happy Ending GUI: the plugin editor (1280 x 890 rack panel, views built in code, no .uidesc).
 // Layers from the bottom (docs/DESIGN_SYSTEM.md): panel (PanelView: body, grain, boxes with their titles on the bottom
-// border, the screen's untitled box, header lines, printed texts, engine tags); the silkscreen, wear, paper tapes, screws,
-// screen, meters and controls come with the later tasks of the editor plan (docs/superpowers/plans/
-// 2026-10-31-happy-ending-editor.md, Tasks 9-14).
+// border, the screen's untitled box, header lines, printed texts, engine tags), the silkscreen, the controls; wear, paper
+// tapes, screws, screen and meters come with the later tasks of the editor plan (docs/superpowers/plans/
+// 2026-10-31-happy-ending-editor.md, Tasks 10-14).
 // Window: 1280 x 890 logical px times the host's content scale factor (IPlugViewContentScaleSupport) times the SIZE of
 // this plug-in's preferences (ui/prefs.h, HappyEnding.prefs, key size=75|90|100|125), read when the view is made and
 // again when it opens; the frame is zoomed by the same factor, so the views keep their logical coordinates.
 // checkSizeConstraint accepts only that size (no free resizing). A new host factor while the views are shown asks the
 // host for the new window (IPlugFrame::resizeView).
-// The UI timer reads the controller's parameters (BYPASS, the stage and band INs, LISTEN, SET, FINAL mode) and gives the
-// panel its UiState (ui/layout.h): the dimming of the printed parts and the FINAL tag.
+// Controls (Task 9): one view per ControlSpec of kControls (RackKnob; RackToggle for IN, BYPASS, WARM, SET and the three
+// LISTEN; RackLitChoice for LIMIT STYLE and FINAL MODE; RackCycle for M/S, RATIO, SC HPF, CEIL, TARGET; DYN a small
+// header button with its name on a face that lights amber), MATCH (momentary, Controller::doMatch) and the five screen
+// view buttons (one face-lit choice; the view is kept by the controller while the instance lives, never in the state).
+// Above the panel the silkscreen prints their names, scales and values (formatValue; LIMIT RELEASE in real ms,
+// releaseText; HI PASS FREQ with the scale of its M/S). Parameter dependents: update() only raises a flag, the UI timer
+// then reads the controller and applies the values, the printed texts and the UiState (ui/layout.h): dimming and locking
+// (controlDimmed / controlLocked), FINAL's controls (controlVisible), the LISTEN LEDs of the bell really heard
+// (listenedBand) and the panel layer. User gestures go to the host as beginEdit / performEdit / endEdit (one edit, on the
+// grid of the parameter's steps); a double click on a knob is its default; a click on the value under a knob opens a text
+// field (Enter or leaving it confirms through parseValue, Escape cancels). The three LISTEN buttons write kListenBand (a
+// click on the lit one switches it off). close() switches LISTEN and SET off (one edit each) when they are on.
 // Controller::decor() has seed 0 until the processor, a state or an edit gives one: the seeded parts (wear, tapes,
 // screws, Task 12) wait for a decor revision with a seed; the panel layer does not depend on it.
 #pragma once
@@ -22,20 +32,28 @@
 #include "fairy_ui/skin.h"
 
 #include "public.sdk/source/vst/vstguieditor.h"
+#include "public.sdk/source/vst/vstparameters.h"
 #include "pluginterfaces/gui/iplugviewcontentscalesupport.h"
 #include "vstgui/lib/controls/icontrollistener.h"
 #include "vstgui/lib/cvstguitimer.h"
 
 #include <array>
+#include <atomic>
 #include <filesystem>
+#include <string>
 
 namespace VSTGUI {
+class CTextEdit;
 class CViewContainer;
 }
 
 namespace FairyTapes::Ui {
 class NormalizedControl;
 class SilkscreenView;
+}
+
+namespace FairyTapes::HappyEnding {
+class Controller;
 }
 
 namespace FairyTapes::HappyEnding::Ui {
@@ -76,8 +94,13 @@ public:
   END_DEFINE_INTERFACES(VSTGUIEditor)
   REFCOUNT_METHODS(VSTGUIEditor)
 
-  // IControlListener (the controls come with Task 9).
+  // IControlListener: the controls' gestures to the host (controlBeginEdit / valueChanged / controlEndEdit).
   void valueChanged(VSTGUI::CControl* control) override;
+  void controlBeginEdit(VSTGUI::CControl* control) override;
+  void controlEndEdit(VSTGUI::CControl* control) override;
+
+  // IDependent (the controller's Parameter objects): may arrive on any thread, only flags a change for the UI timer.
+  void PLUGIN_API update(Steinberg::FUnknown* changedUnknown, Steinberg::int32 message) override;
 
 private:
   friend struct EditorPreview;
@@ -86,10 +109,25 @@ private:
   // Builds the layers in `parent` (the frame in open(); a plain container in the render tool and the tests).
   void createViews(VSTGUI::CViewContainer* parent);
   void resetViewPointers();
-  // The UI timer's work: the controller's state to the views; also safe with no views.
+  // The UI timer's work: a flagged change of the controller's parameters to the views; the typed value field that lost
+  // the focus is done. Also safe with no views.
   void onTimer();
-  // The UiState of the controller's parameters (ui/layout.h uiStateFrom) to the panel.
-  void refreshUiState();
+  // Every view from the controller's parameters: the controls' values (stepped values on the step the DSP uses), the
+  // printed values, and the UiState (dimming, locking, FINAL's controls, the LISTEN LEDs, the HI PASS scale, the panel).
+  void refreshFromController();
+  // The stored parameters, LISTEN and SET as dependents of this editor (update() raises pending_).
+  void watchParameters();
+  void unwatchParameters();
+
+  // One user edit of a parameter outside a control gesture (begin, set, perform, end).
+  void editParameter(Steinberg::Vst::ParamID id, double norm);
+  // close(): LISTEN and SET back to off, one edit each, only when they are on.
+  void switchSessionParametersOff();
+
+  // Typed values: a text field over the value of the knob of `id`; closing it (confirm: what was typed is read).
+  void editValue(Steinberg::Vst::ParamID id);
+  void closeValueEdit(bool confirm);
+  void commitTypedValue(Steinberg::Vst::ParamID id, const std::string& typed);
 
   // Reads the preferences in `file` (any problem: the defaults) and applies them: for now SIZE (the window).
   void loadAppearance(const std::filesystem::path& file);
@@ -98,13 +136,24 @@ private:
   void applyWindowSize();
   PixelSize windowSize() const { return scaledEditorSize(scale_, prefs_.size); }
 
+  Controller* owner_ = nullptr;   // the plug-in's controller (MATCH, the screen view); nullptr for any other
   double scale_ = 1.0;   // sanitized content scale factor of the host
   Prefs prefs_;          // the user preferences as last read (SIZE in prefs_.size)
   FairyTapes::Ui::Skin skin_;
   VSTGUI::CViewContainer* root_ = nullptr;   // the container the views were created in (shown while not null)
   PanelView* panel_ = nullptr;               // the views are owned by the frame (or that container)
-  FairyTapes::Ui::SilkscreenView* silk_ = nullptr;                          // Task 9
-  std::array<FairyTapes::Ui::NormalizedControl*, kNumControls> controls_{};   // kControls order; Task 9
+  FairyTapes::Ui::SilkscreenView* silk_ = nullptr;
+  std::array<FairyTapes::Ui::NormalizedControl*, kNumControls> controls_{};   // kControls order
+  FairyTapes::Ui::NormalizedControl* match_ = nullptr;   // MATCH (momentary)
+  FairyTapes::Ui::NormalizedControl* views_ = nullptr;   // the five screen view buttons, one exclusive choice
+  VSTGUI::CTextEdit* valueEdit_ = nullptr;               // the open typed value field, if any
+  Steinberg::Vst::ParamID valueEditId_ = kNumParams;
+  bool valueEditReported_ = false;                       // the field already reported what was typed
+
+  // The watched parameters: the stored table, then LISTEN and SET.
+  static constexpr int kNumWatched = static_cast<int>(kNumParams) + 2;
+  std::array<Steinberg::IPtr<Steinberg::Vst::Parameter>, kNumWatched> watched_{};
+  std::atomic<bool> pending_{false};   // a watched parameter changed since the last timer run
   VSTGUI::SharedPointer<VSTGUI::CVSTGUITimer> timer_;
 };
 

@@ -165,6 +165,10 @@ constexpr float kLedZone = 14;
 constexpr float kCycleViewW = 32;
 constexpr float kCycleViewH = kFaceH / 2 + static_cast<float>(FairyTapes::Ui::Rack::kCycleValueOffsetY) + 3;
 
+// The value under a knob: its baseline this far under the cap centre plus the radius, as the preview (knob(): R + 36).
+// The shared silkscreen prints it at R + 39.5 (fairy_ui/rack_geometry.h valueBaseline), where the values of the lower
+// FINE EQ knobs run into the labels of the band buttons; the editor draws the knob values here instead.
+constexpr float kKnobValueBaselineBelowCap = 36;
 // Cap radii (preview: knob() default 17; the service knobs, CLIP DRIVE and PUSH 22; LOUDNESS, TILT and MIX 24).
 constexpr float kKnobRadius = 17, kMidRadius = 22, kLargeRadius = 24;
 
@@ -218,7 +222,7 @@ constexpr ControlSpec kControls[] = {
     detail::buttonSpec(kTarget, Kind::Cycle, Box::Loudness, face(1001, 230), "TARGET"),
     // ---- FINE EQ: stage IN at the top right
     detail::buttonSpec(kFineOn, Kind::Toggle, Box::FineEq, face(747, 340), "IN"),
-    // HI PASS (band centre 78): one knob on the upper tier. End labels of the normal scale (SIDE: the editor prints 200).
+    // HI PASS (band centre 78): one knob on the upper tier. End labels of the normal scale (SIDE: kHpSideScaleHi).
     detail::buttonSpec(kHpOn, Kind::Toggle, Box::FineEq, face(61, detail::kBandButtonY), "IN"),
     detail::buttonSpec(kHpMs, Kind::Cycle, Box::FineEq, face(95, detail::kBandButtonY), "M/S"),
     detail::knobSpec(kHpFreq, Box::FineEq, knobUpper(78, 358), "FREQ", "Off", "40", kKnobRadius),
@@ -353,6 +357,15 @@ constexpr Rect viewRect(const ActionSpec& a) {
 // Key of an action's printed label in the silkscreen (outside every parameter and display ID).
 constexpr int kActionPrintIdBase = 2000;
 constexpr int actionPrintId(Action a) { return kActionPrintIdBase + static_cast<int>(a); }
+// Keys of printed items that are not a parameter's own: each LISTEN button has its own (the three share one parameter,
+// but each bell dims on its own), and HI PASS FREQ has a second print with the SIDE scale (mono bass, up to 200 Hz): the
+// editor shows the one of the current HI PASS M/S.
+constexpr int kListenPrintIdBase = 2100;
+constexpr int kHpSidePrintId = 2200;
+constexpr const char* kHpSideScaleHi = "200";
+constexpr int printId(const ControlSpec& c) {
+  return c.id == kListenBand ? kListenPrintIdBase + c.choiceIndex : static_cast<int>(c.id);
+}
 
 // ---- FINE EQ bands --------------------------------------------------------------------------------------------------
 // 0 HI PASS, 1 LOW SHELF, 2 LO MID, 3 MID, 4 HI MID, 5 HI SHELF (UiState::bandOn order). LISTEN bell k is band k + 2.
@@ -627,8 +640,8 @@ constexpr bool headerLineDimmed(const HeaderLine& l, const UiState& s) { return 
 constexpr bool tagDimmed(Box b, const UiState& s) { return printedDimmed(stageOf(b), -1, true, s); }
 
 // ---- Silkscreen: the printed parts of every control (fairy_ui/silkscreen.h); ids are ParamIDs ----------------------
-// Knobs, on/off buttons, cycling selectors and MATCH. The face-lit choices and the DYN buttons carry their names on the
-// faces. The three LISTEN buttons share their key (kListenBand).
+// Knobs, on/off buttons, cycling selectors and MATCH, keyed by printId (each LISTEN button its own key); HI PASS FREQ once
+// more with the SIDE scale (kHpSidePrintId). The face-lit choices and the DYN buttons carry their names on the faces.
 inline std::vector<FairyTapes::Ui::PrintedItem> silkscreenItems() {
   using FairyTapes::Ui::PrintedItem;
   using FairyTapes::Ui::PrintKind;
@@ -636,7 +649,7 @@ inline std::vector<FairyTapes::Ui::PrintedItem> silkscreenItems() {
   for (const ControlSpec& c : kControls) {
     if (c.kind == Kind::LitChoice || c.kind == Kind::HeadToggle) continue;
     PrintedItem it;
-    it.id = static_cast<int>(c.id);
+    it.id = printId(c);
     if (c.kind == Kind::Knob) {
       const Point p = knobCentre(c);
       it.kind = PrintKind::Knob;
@@ -652,6 +665,14 @@ inline std::vector<FairyTapes::Ui::PrintedItem> silkscreenItems() {
       it.cy = p.y;
     }
     it.name = c.name;
+    if (c.id == kHpFreq) {
+      PrintedItem side = it;
+      side.id = kHpSidePrintId;
+      side.hi = kHpSideScaleHi;
+      out.push_back(std::move(it));
+      out.push_back(std::move(side));
+      continue;
+    }
     out.push_back(std::move(it));
   }
   const ActionSpec& m = actionOf(Action::Match);
