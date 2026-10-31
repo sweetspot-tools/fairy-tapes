@@ -4,6 +4,10 @@
  */
 #include "ui/editor_size.h"
 #include "ui/layout.h"
+#include "ui/readouts.h"
+#include "ui/value_text.h"
+
+#include "tuning.h"
 
 #include "fairy_ui/screws.h"
 
@@ -429,6 +433,132 @@ void test_tape_slots_clear() {
   }
 }
 
+// ---- Value texts (ui/value_text.h) ------------------------------------------------------------------------------------
+// A full table of normalized values with HI PASS M/S at `hpMsIndex` (every other parameter at its default).
+void norms(double* all, int hpMsIndex) {
+  loadDefaults(all);
+  all[kHpMs] = normFromIndex(kHpMs, hpMsIndex);
+}
+
+void test_value_text_golden() {
+  // The texts under the controls: units, signs and the named positions (the controller prints exactly these).
+  double all[kNumParams];
+  norms(all, 0);
+  const auto t = [&](ParamID id, int index) { return formatValue(id, normFromIndex(id, index), all); };
+  ASSERT_TRUE(t(kInputGain, 0) == "-12.0 dB" && t(kInputGain, 24) == "+0.0 dB");
+  ASSERT_TRUE(t(kCeiling, 1) == "-0.3 dB" && t(kTarget, 3) == "-7 LUFS");
+  ASSERT_TRUE(t(kBypass, 1) == "On" && t(kHmOn, 0) == "Off");
+  ASSERT_TRUE(t(kLmMs, 1) == "Mid" && t(kLmMs, 2) == "Side" && t(kLmQ, 3) == "Surgical");
+  ASSERT_TRUE(t(kMidFreq, 4) == "1 kHz" && t(kLmFreq, 4) == "250 Hz" && t(kHsFreq, 6) == "20 kHz");
+  ASSERT_TRUE(t(kGlueRelease, 4) == "Auto" && t(kGlueRelease, 1) == "0.3 s" && t(kGlueRatio, 2) == "4:1");
+  ASSERT_TRUE(t(kGlueMix, 10) == "50 %" && t(kGlueThresh, 0) == "-20 dB" && t(kGlueAttack, 0) == "0.1 ms");
+  ASSERT_TRUE(t(kFinalMode, 0) == "Inflate" && t(kFinalMode, 1) == "Clip");
+  ASSERT_TRUE(t(kLimitStyle, 2) == "Dyn" && t(kLimitRelease, 4) == "Style" && t(kLimitRelease, 6) == "+2" &&
+              t(kLimitRelease, 0) == "-4");
+  ASSERT_TRUE(t(kLoudness, 7) == "3.5" && t(kTilt, 0) == "-3.0 dB" && t(kTube, 2) == "2");
+  ASSERT_TRUE(t(kOversampling, 0) == "Off" && t(kOversampling, 2) == "4x");
+  ASSERT_TRUE(t(kGlueScHpf, 0) == "Off" && t(kGlueScHpf, 3) == "150 Hz");
+  // an out-of-range norm is clamped, an unknown id gives nothing
+  ASSERT_TRUE(formatValue(kInputGain, 7.0, all) == "+12.0 dB" && formatValue(kInputGain, -1.0, all) == "-12.0 dB");
+  ASSERT_TRUE(formatValue(kNumParams, 0.0, all).empty());
+}
+
+void test_value_text_hp_side_scale() {
+  // HI PASS FREQ reads the scale of its own M/S: SIDE has the mono-bass scale (the ledger item of engine Task 13).
+  double st[kNumParams], side[kNumParams];
+  norms(st, 0);
+  norms(side, 2);
+  ASSERT_TRUE(formatValue(kHpFreq, 1.0, st) == "40 Hz");
+  ASSERT_TRUE(formatValue(kHpFreq, 1.0, side) == "200 Hz");
+  ASSERT_TRUE(formatValue(kHpFreq, 0.0, side) == "Off" && formatValue(kHpFreq, normFromIndex(kHpFreq, 1), side) == "60 Hz");
+  // no table of norms: the normal scale
+  ASSERT_TRUE(formatValue(kHpFreq, 1.0, nullptr) == "40 Hz");
+  // typing "60" on SIDE picks the 60 Hz step (index 1); on ST the nearest of 20..40 is the last step
+  double v = -1.0;
+  ASSERT_TRUE(parseValue(kHpFreq, "60", side, v) && indexFromNorm(kHpFreq, v) == 1);
+  ASSERT_TRUE(parseValue(kHpFreq, "60", st, v) && indexFromNorm(kHpFreq, v) == 5);
+  ASSERT_TRUE(parseValue(kHpFreq, "160", side, v) && indexFromNorm(kHpFreq, v) == 4);
+  ASSERT_TRUE(parseValue(kHpFreq, "80 Hz", side, v) && indexFromNorm(kHpFreq, v) == 2);
+  ASSERT_TRUE(parseValue(kHpFreq, "35", st, v) && indexFromNorm(kHpFreq, v) == 4);
+  // the named text is read on the scale in use too: "200 hz" exists only on SIDE
+  ASSERT_TRUE(parseValue(kHpFreq, "200 hz", side, v) && indexFromNorm(kHpFreq, v) == 5);
+  ASSERT_TRUE(parseValue(kHpFreq, "Off", side, v) && indexFromNorm(kHpFreq, v) == 0);
+}
+
+void test_value_text_parse_roundtrip() {
+  // parse(format(v)) == v for every step of every parameter (HI PASS on both its scales)
+  for (int ms = 0; ms < 3; ++ms) {
+    double all[kNumParams];
+    norms(all, ms);
+    for (int i = 0; i < static_cast<int>(kNumParams); ++i) {
+      const auto id = static_cast<ParamID>(i);
+      for (int s = 0; s < kParams[id].steps; ++s) {
+        const double v = normFromIndex(id, s);
+        const std::string text = formatValue(id, v, all);
+        ASSERT_TRUE(!text.empty());
+        double back = -1.0;
+        ASSERT_TRUE(parseValue(id, text, all, back));
+        ASSERT_TRUE(back == v);
+      }
+    }
+  }
+  double all[kNumParams];
+  norms(all, 0);
+  double v = -1.0;
+  // case and spaces are ignored; a bare number picks the nearest step
+  ASSERT_TRUE(parseValue(kLmQ, "  SURGICAL ", all, v) && indexFromNorm(kLmQ, v) == 3);
+  ASSERT_TRUE(parseValue(kInputGain, "-3", all, v) && indexFromNorm(kInputGain, v) == 18);
+  ASSERT_TRUE(parseValue(kInputGain, "+3.0 dB", all, v) && indexFromNorm(kInputGain, v) == 30);
+  ASSERT_TRUE(parseValue(kInputGain, "99", all, v) && indexFromNorm(kInputGain, v) == 48);
+  // text that is no value gives false and leaves the result alone
+  v = 0.25;
+  ASSERT_TRUE(!parseValue(kLmQ, "bogus", all, v) && v == 0.25);
+  ASSERT_TRUE(!parseValue(kInputGain, "", all, v) && !parseValue(kInputGain, "dB", all, v));
+  ASSERT_TRUE(!parseValue(kInputGain, "nan", all, v) && !parseValue(kInputGain, "inf", all, v));
+  ASSERT_TRUE(!parseValue(kBypass, "3", all, v) && !parseValue(kLmMs, "7", all, v));   // no value table: names only
+  ASSERT_TRUE(!parseValue(kNumParams, "1", all, v) && v == 0.25);
+}
+
+// ---- Readouts (ui/readouts.h) -----------------------------------------------------------------------------------------
+void test_lufs_readouts() {
+  const std::string MINUS = "\xE2\x88\x92", DASH = "\xE2\x80\x94";
+  ASSERT_TRUE(MINUS == kMinusSign && DASH == kEmDash && MINUS.size() == 3 && DASH.size() == 3);
+  const double none = -std::numeric_limits<double>::infinity();
+  ASSERT_TRUE(lufsText(none) == DASH && lufsText(std::nan("")) == DASH);
+  ASSERT_TRUE(lufsText(-14.04) == MINUS+"14.0" && lufsText(-14.2) == MINUS+"14.2");
+  ASSERT_TRUE(lufsText(-9.96) == MINUS+"10.0" && lufsText(-0.04) == "0.0" && lufsText(0.0) == "0.0");
+  // TO TARGET: signed gap, one digit; the target is the TARGET choice (-14, -11, -9, -7)
+  ASSERT_TRUE(toTargetText(none, 0) == DASH && toTargetText(std::nan(""), 0) == DASH);
+  ASSERT_TRUE(toTargetText(-13.6, 0) == "+0.4" && toTargetText(-14.3, 0) == MINUS+"0.3");
+  ASSERT_TRUE(toTargetText(-14.0, 0) == "0.0" && toTargetText(-14.02, 0) == "0.0");
+  ASSERT_TRUE(toTargetText(-11.0, 1) == "0.0" && toTargetText(-12.0, 2) == MINUS+"3.0" && toTargetText(-6.0, 3) == "+1.0");
+  // the LED is green within 0.5 LU of the target (the limit included), dark without a measurement
+  ASSERT_TRUE(targetLedOn(-13.6, 0) && !targetLedOn(-13.4, 0));
+  ASSERT_TRUE(targetLedOn(-14.4, 0) && !targetLedOn(-14.6, 0));
+  ASSERT_TRUE(targetLedOn(-13.5, 0) && targetLedOn(-14.5, 0));
+  ASSERT_TRUE(targetLedOn(-9.1, 2) && !targetLedOn(-9.6, 2) && targetLedOn(-7.0, 3));
+  ASSERT_TRUE(!targetLedOn(none, 0) && !targetLedOn(std::nan(""), 0));
+  // an index outside the choices is clamped, never read out of the table
+  ASSERT_TRUE(toTargetText(-14.0, -3) == "0.0" && toTargetText(-7.0, 99) == "0.0");
+}
+
+void test_release_text_follows_tuning() {
+  // real milliseconds: the base of the style times 2^((index - 4) / 3), as the limiter computes it
+  ASSERT_TRUE(releaseText(0, 4) == "50 ms" && releaseText(1, 4) == "100 ms" && releaseText(2, 4) == "250 ms");
+  ASSERT_TRUE(releaseText(0, 7) == "100 ms" && releaseText(0, 1) == "25 ms" && releaseText(1, 7) == "200 ms" && releaseText(2, 1) == "125 ms");
+  // the bases come from tuning.h: a copy with another base gives another text, the other styles stay
+  double bases[5];
+  for (int i = 0; i < 5; ++i) bases[i] = Tuning::kLimitReleaseBaseMs[i];
+  ASSERT_TRUE(Ui::detail::releaseTextFrom(bases, 5, 0, 4) == releaseText(0, 4));
+  bases[0] = 80.0;
+  ASSERT_TRUE(Ui::detail::releaseTextFrom(bases, 5, 0, 4) == "80 ms");
+  ASSERT_TRUE(Ui::detail::releaseTextFrom(bases, 5, 0, 4) != releaseText(0, 4));
+  ASSERT_TRUE(Ui::detail::releaseTextFrom(bases, 5, 1, 4) == releaseText(1, 4));
+  // style and index out of range are clamped
+  ASSERT_TRUE(releaseText(-1, 4) == releaseText(0, 4) && releaseText(99, 4) == releaseText(4, 4));
+  ASSERT_TRUE(releaseText(0, -5) == releaseText(0, 0) && releaseText(0, 50) == releaseText(0, 8));
+}
+
 } // namespace
 
 int main() {
@@ -442,6 +572,11 @@ int main() {
   RUN_TEST(test_final_mode_visibility);
   RUN_TEST(test_silkscreen_items_cover_controls);
   RUN_TEST(test_tape_slots_clear);
+  RUN_TEST(test_value_text_golden);
+  RUN_TEST(test_value_text_hp_side_scale);
+  RUN_TEST(test_value_text_parse_roundtrip);
+  RUN_TEST(test_lufs_readouts);
+  RUN_TEST(test_release_text_follows_tuning);
   std::printf("%d passed, %d failed\n", g_passed, g_failed);
   return g_failed == 0 ? 0 : 1;
 }

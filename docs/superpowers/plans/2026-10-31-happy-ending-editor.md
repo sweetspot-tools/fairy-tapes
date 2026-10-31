@@ -120,11 +120,11 @@
 - Produces in `value_text.h`: `std::string formatValue(ParamID, double norm, const double* allNorms)` (il valore stampato sotto ogni comando; `allNorms` serve al HI PASS, la cui scala dipende dal suo M/S) e `bool parseValue(ParamID, const std::string&, const double* allNorms, double& norm)` (il valore digitato: si sceglie lo scatto più vicino nella scala in uso). Testi identici a `Controller::getParamStringByValue`: se il controller ha già formattatori puri, si spostano qui e il controller li chiama.
 - Produces in `readouts.h`: `std::string lufsText(double lufs)` ("−14.2", "—" senza misura), `std::string toTargetText(double lufsShort, int targetIndex)` (scarto con segno e una cifra, "—" senza misura), `bool targetLedOn(double lufsShort, int targetIndex)` (verde entro ±0,5 LU), `std::string latencyText(int samples, double sampleRate)` se la preview la mostra, `std::string releaseText(int style, int releaseIndex)` (ms reali da `tuning.h`).
 
-- [ ] **Step 1: Scrivere i test:** `test_value_text_matches_controller` (per ogni parametro e ogni scatto la stringa coincide con `getParamStringByValue`), `test_value_text_hp_side_scale` (HI PASS su SIDE: "200 Hz" all'ultimo scatto; digitando "60" su SIDE si ottiene lo scatto di 60 Hz, il caso del registro del Task 13), `test_value_text_parse_roundtrip` (`parse(format(v)) == v` per ogni scatto; testo non valido → `false`), `test_lufs_readouts` (−inf → "—"; −14.04 → "−14.0"; scarto +0,4 → LED acceso, +0,6 → spento), `test_release_text_follows_tuning` (il testo cambia se cambia `kLimitReleaseBaseMs` in una copia: funzione interna che prende le basi).
-- [ ] **Step 2: Eseguire e vedere fallire.**
-- [ ] **Step 3: Implementare.**
-- [ ] **Step 4: Eseguire** `ctest -R "happy_ending_(ui|controller)"` → PASS.
-- [ ] **Step 5: Commit:** `feat(happy-ending): value texts and LUFS readouts (pure)`.
+- [x] **Step 1: Scrivere i test:** `test_value_text_matches_controller` (per ogni parametro e ogni scatto la stringa coincide con `getParamStringByValue`), `test_value_text_hp_side_scale` (HI PASS su SIDE: "200 Hz" all'ultimo scatto; digitando "60" su SIDE si ottiene lo scatto di 60 Hz, il caso del registro del Task 13), `test_value_text_parse_roundtrip` (`parse(format(v)) == v` per ogni scatto; testo non valido → `false`), `test_lufs_readouts` (−inf → "—"; −14.04 → "−14.0"; scarto +0,4 → LED acceso, +0,6 → spento), `test_release_text_follows_tuning` (il testo cambia se cambia `kLimitReleaseBaseMs` in una copia: funzione interna che prende le basi).
+- [x] **Step 2: Eseguire e vedere fallire.**
+- [x] **Step 3: Implementare.**
+- [x] **Step 4: Eseguire** `ctest -R "happy_ending_(ui|controller)"` → PASS.
+- [x] **Step 5: Commit:** `feat(happy-ending): value texts and LUFS readouts (pure)`.
 
 ---
 

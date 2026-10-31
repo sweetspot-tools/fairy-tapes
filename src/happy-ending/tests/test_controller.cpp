@@ -9,6 +9,7 @@
 #include "loudness_macro.h"
 #include "messages.h"
 #include "state.h"
+#include "ui/value_text.h"
 #include "pluginterfaces/base/ibstream.h"
 #include "pluginterfaces/vst/ivsteditcontroller.h"
 #include "pluginterfaces/vst/ivstmessage.h"
@@ -416,12 +417,45 @@ void testComponentStateAdoptsTheDecor() {
   ASSERT_TRUE(g.c.decor().seed != 0);
 }
 
+// The texts under the editor's controls (ui/value_text.h) are the host's: same string for every parameter, every step and
+// both HI PASS scales, and the same position for every typed text.
+void test_value_text_matches_controller() {
+  Fixture f;
+  for (int ms = 0; ms < 3; ++ms) {
+    f.setIndex(kHpMs, ms);
+    double all[kNumParams];
+    loadDefaults(all);
+    all[kHpMs] = normFromIndex(kHpMs, ms);
+    for (int i = 0; i < static_cast<int>(kNumParams); ++i) {
+      const auto id = static_cast<ParamID>(i);
+      for (int s = 0; s < kParams[id].steps; ++s) {
+        const std::string host = f.text(id, s);
+        ASSERT_TRUE(!host.empty());
+        ASSERT_TRUE(Ui::formatValue(id, normFromIndex(id, s), all) == host);
+        // typing what the host prints, and a bare number, lands on the same step through both parsers
+        for (const std::string& typed : {host, std::to_string(s - 5), std::to_string(s * 0.7)}) {
+          Steinberg::Vst::TChar t[64];
+          int k = 0;
+          for (; k < 63 && typed[k]; ++k) t[k] = static_cast<Steinberg::Vst::TChar>(typed[k]);
+          t[k] = 0;
+          double viaHost = -1.0, viaText = -2.0;
+          const bool okHost = f.c.getParamValueByString(id, t, viaHost) == Steinberg::kResultOk;
+          const bool okText = Ui::parseValue(id, typed, all, viaText);
+          ASSERT_TRUE(okHost == okText);
+          if (okHost) ASSERT_TRUE(viaHost == viaText);
+        }
+      }
+    }
+  }
+}
+
 } // namespace
 
 int main() {
   RUN_TEST(testParameterStrings);
   RUN_TEST(testHiPassFrequencyFollowsItsMsPosition);
   RUN_TEST(testTypedValues);
+  RUN_TEST(test_value_text_matches_controller);
   RUN_TEST(testParametersReadBackAtTheSameIndex);
   RUN_TEST(testMatchMovesLoudnessOnceAsOneHostEdit);
   RUN_TEST(testMatchDoesNothingWithoutMeasurementOrWhenCentred);
