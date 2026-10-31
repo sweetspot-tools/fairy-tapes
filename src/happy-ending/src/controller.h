@@ -5,8 +5,9 @@
  * Registers the stored table (params.h, ParamID order, every control stepped), the two hidden session
  * parameters (LISTEN, SET: never stored, reset by setComponentState) and the hidden display
  * parameters. Every parameter is automatable except OVERSAMPLING, hidden session and display ones.
- * A change of OVERSAMPLING (not from a state load) is sent to the processor as an "Oversampling"
- * message and asks the host to re-read the latency (restartComponent(kLatencyChanged)).
+ * A change of OVERSAMPLING (a user edit, or a state load that differs: once, after the load) is sent to the
+ * processor as an "Oversampling" message and asks the host to re-read the latency
+ * (restartComponent(kLatencyChanged)).
  */
 
 #pragma once

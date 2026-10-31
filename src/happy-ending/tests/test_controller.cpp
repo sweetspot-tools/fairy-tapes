@@ -207,13 +207,37 @@ void testComponentStateLoadsParamsAndResetsSessionParameters() {
   ASSERT_TRUE(f.index(kCeiling) == 3 && f.index(kOversampling) == 2);
   ASSERT_TRUE(listenFromNorm(f.c.getParamNormalized(kListenBand)) == -1);
   ASSERT_TRUE(f.c.getParamNormalized(kSetActive) == 0.0);
-  ASSERT_TRUE(f.h.restarts.empty());   // a load is not a user change of OVERSAMPLING
+  ASSERT_TRUE(f.h.restarts.size() == 1 && f.h.restarts[0] == Steinberg::Vst::kLatencyChanged);  // OVERSAMPLING 2x -> 4x
 
   VecStream bad;
   bad.data = s.data;
   bad.data[0] = 7;
   ASSERT_TRUE(f.c.setComponentState(&bad) == Steinberg::kResultFalse);
   ASSERT_TRUE(f.index(kCeiling) == 3);
+}
+
+void testStateLoadRestartsOnlyWhenOversamplingDiffers() {
+  Fixture f;
+  double norm[kNumParams];
+  loadDefaults(norm);
+  norm[kOversampling] = normFromIndex(kOversampling, 2);
+  VecStream s;
+  serializeState(norm, s.data);
+  ASSERT_TRUE(f.c.setComponentState(&s) == Steinberg::kResultOk);
+  ASSERT_TRUE(f.h.restarts.size() == 1 && f.h.restarts[0] == Steinberg::Vst::kLatencyChanged);  // exactly once
+  s.pos = 0;
+  ASSERT_TRUE(f.c.setComponentState(&s) == Steinberg::kResultOk);                                 // same value again
+  ASSERT_TRUE(f.h.restarts.size() == 1);
+  norm[kCeiling] = normFromIndex(kCeiling, 2);                                                   // other change, same OVERSAMPLING
+  VecStream t;
+  serializeState(norm, t.data);
+  ASSERT_TRUE(f.c.setComponentState(&t) == Steinberg::kResultOk);
+  ASSERT_TRUE(f.h.restarts.size() == 1);
+  norm[kOversampling] = normFromIndex(kOversampling, 1);
+  VecStream u;
+  serializeState(norm, u.data);
+  ASSERT_TRUE(f.c.setComponentState(&u) == Steinberg::kResultOk);
+  ASSERT_TRUE(f.h.restarts.size() == 2);
 }
 
 void testOversamplingChangeAsksForALatencyRestart() {
@@ -248,6 +272,7 @@ int main() {
   RUN_TEST(testMatchDoesNothingWithoutMeasurementOrWhenCentred);
   RUN_TEST(testMatchClampsAtTheEndsOfTheKnob);
   RUN_TEST(testComponentStateLoadsParamsAndResetsSessionParameters);
+  RUN_TEST(testStateLoadRestartsOnlyWhenOversamplingDiffers);
   RUN_TEST(testOversamplingChangeAsksForALatencyRestart);
   RUN_TEST(testNoRestartWithoutHandler);
   std::printf("\n%d passed, %d failed\n", g_passed, g_failed);

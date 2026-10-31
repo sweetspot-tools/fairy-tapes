@@ -381,6 +381,26 @@ void test_latency_follows_oversampling_at_the_next_activation() {
   h.close();
 }
 
+void test_set_state_with_other_oversampling_applies_at_the_next_activation() {
+  Host h; CHECK(h.open());
+  CHECK(h.latency() == static_cast<uint32>(expectedLatency(2)));
+  double norm[kNumParams];
+  loadDefaults(norm);
+  norm[kOversampling] = normFromIndex(kOversampling, 2);   // 4x
+  VecStream s;
+  serializeState(norm, s.data);
+  h.blocks(5, kSilence);
+  CHECK(h.comp->setState(&s) == kResultOk);
+  h.blocks(5, kSilence);                                  // still running: the engine is not rebuilt
+  CHECK(h.latency() == static_cast<uint32>(expectedLatency(2)));
+  h.reactivate();                                         // the host restarts it after the controller's request
+  CHECK(h.latency() == static_cast<uint32>(expectedLatency(4)));
+  h.published.clear();
+  h.blocks(10, kSilence);
+  CHECK(std::fabs(h.last(kDispLatency) - normFromLatency(expectedLatency(4))) < 1e-9);
+  h.close();
+}
+
 void test_state_round_trip_and_session_parameters_not_stored() {
   Host h; CHECK(h.open());
   MockChanges set;
@@ -497,6 +517,7 @@ int main() {
   test_mono_and_in_place_audio_match_the_stereo_chain();
   test_bypass_is_the_input_delayed_by_the_reported_latency();
   test_latency_follows_oversampling_at_the_next_activation();
+  test_set_state_with_other_oversampling_applies_at_the_next_activation();
   test_state_round_trip_and_session_parameters_not_stored();
   test_listen_is_off_after_set_state();
   test_no_allocation_while_processing();

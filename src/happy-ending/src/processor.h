@@ -8,7 +8,9 @@
  *    OVERSAMPLING; both run with processing stopped. getLatencySamples() is Engine::latencySamples().
  *  - A change of OVERSAMPLING while the plug-in runs never touches the engine on the audio thread: the
  *    value is kept, the zones are rebuilt at the next activation. The controller asks the host for that
- *    with restartComponent(kLatencyChanged) and tells this side with an "Oversampling" message.
+ *    with restartComponent(kLatencyChanged) and tells this side with an "Oversampling" message. A setState
+ *    with another OVERSAMPLING only stores the value (no rebuild while running): the controller's
+ *    setComponentState asks for the restart, and an inactive processor picks it up at the next setActive.
  *  - process() allocates nothing: parameters, the display writes and the mono scratch buffer (sized in
  *    setupProcessing) are all preallocated.
  *  - LISTEN and SET live only in this object (atomics), never in the state; setState puts them back

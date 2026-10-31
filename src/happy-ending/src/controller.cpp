@@ -167,12 +167,17 @@ Steinberg::tresult PLUGIN_API Controller::setComponentState(Steinberg::IBStream*
   double norm[kNumParams];
   if (!deserializeState(bytes.data(), bytes.size(), norm))
     return Steinberg::kResultFalse;
-  loadingState_ = true;  // a load is not a user change of OVERSAMPLING: no restart request
+  const int osBefore = indexFromNorm(kOversampling, getParamNormalized(kOversampling));
+  loadingState_ = true;  // one restart request after the whole load, not one per parameter
   for (int i = 0; i < static_cast<int>(kNumParams); ++i)
     setParamNormalized(static_cast<Steinberg::Vst::ParamID>(i), norm[i]);
   setParamNormalized(kListenBand, kDefaultListenNorm);  // session parameters are never stored
   setParamNormalized(kSetActive, kDefaultSetNorm);
   loadingState_ = false;
+  // The processor rebuilds its zones only when the host restarts it: ask for that once if OVERSAMPLING changed.
+  const int osAfter = indexFromNorm(kOversampling, getParamNormalized(kOversampling));
+  if (osAfter != osBefore)
+    oversamplingChanged(osAfter);
   return Steinberg::kResultOk;
 }
 
