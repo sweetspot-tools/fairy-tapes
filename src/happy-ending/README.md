@@ -23,7 +23,7 @@ INPUT → FINE EQ → VIBE EQ → GLUE → CLIP → LIMIT → FINAL → METALHEA
 
 There is no true-peak detection (design choice): the limiters work on the sample peak, and CEIL −1.0 dB is the margin for streaming.
 
-BYPASS crossfades to the input delayed by the reported latency, sample-exact once settled. LISTEN and SET are never saved in the state and always start off.
+BYPASS crossfades to the input delayed by the reported latency, sample-exact once settled. LISTEN and SET are never saved in the state and always start off. The state is versioned (v2 adds the decor; v1 projects load with a fresh decor; a v2 whose decor part is damaged still loads its parameters).
 
 ## Build
 
@@ -44,11 +44,11 @@ cmake --build /tmp/he-build --target happy_ending_params_tests happy_ending_fine
   happy_ending_clip_tests happy_ending_limiter_tests happy_ending_final_tests \
   happy_ending_loudness_tests happy_ending_loudness_macro_tests happy_ending_engine_tests \
   happy_ending_state_tests happy_ending_display_tests happy_ending_controller_tests \
-  happy_ending_factory_test happy_ending_processor_level_test -j2
+  happy_ending_factory_test happy_ending_processor_level_test happy_ending_state_module_test -j2
 ctest --test-dir /tmp/he-build -R happy_ending --output-on-failure
 ```
 
-One executable per block, with the `RUN_TEST` / `ASSERT_TRUE` harness and synthetic signals; the two module tests (`factory`, `processor_level`) load `HappyEnding.vst3` and are skipped (exit 77) when it is missing; the others link the code directly. They cover the parameter table, every DSP block (curves against analog prototypes, M/S, LISTEN, DYN, GLUE reduction and MIX, level-matched CLIP, ceiling guarantees for every LIMIT style, SET, FINAL and METALHEAD, oversampler latency and flatness, BS.1770 reference loudness, LOUDNESS and MATCH), the engine (BYPASS, latency per oversampling, all-max never above the ceiling, silence after the tail, no allocation in `process`), the saved state and the processor. All tuning values are read from `src/tuning.h`, never copied.
+One executable per block, with the `RUN_TEST` / `ASSERT_TRUE` harness and synthetic signals; the three module tests (`factory`, `processor_level`, `state_module`) load `HappyEnding.vst3` and are skipped (exit 77) when it is missing; the others link the code directly. They cover the parameter table, every DSP block (curves against analog prototypes, M/S, LISTEN, DYN, GLUE reduction and MIX, level-matched CLIP, ceiling guarantees for every LIMIT style, SET, FINAL and METALHEAD, oversampler latency and flatness, BS.1770 reference loudness, LOUDNESS and MATCH), the engine (BYPASS, latency per oversampling, all-max never above the ceiling, silence after the tail, no allocation in `process`), the saved state (v2: parameters plus the instance decor: wear seed, screw angles, tape texts) and the processor. All tuning values are read from `src/tuning.h`, never copied.
 
 ## Tuning
 

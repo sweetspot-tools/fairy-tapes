@@ -431,7 +431,7 @@ void test_set_state_with_other_oversampling_applies_at_the_next_activation() {
   loadDefaults(norm);
   norm[kOversampling] = normFromIndex(kOversampling, 2);   // 4x
   VecStream s;
-  serializeState(norm, s.data);
+  serializeState(norm, Decor{}, s.data);
   h.blocks(5, kSilence);
   CHECK(h.comp->setState(&s) == kResultOk);
   h.blocks(5, kSilence);                                  // still running: the engine is not rebuilt
@@ -456,9 +456,10 @@ void test_state_round_trip_and_session_parameters_not_stored() {
 
   VecStream s;
   CHECK(h.comp->getState(&s) == kResultOk);
-  CHECK(s.data.size() == kStateBytes);
+  CHECK(s.data.size() == kStateSizeV1 + 4 + 4 * kNumScrews + 4);   // parameters, seed, angles, no texts: nothing for LISTEN / SET
   double norm[kNumParams];
-  CHECK(deserializeState(s.data.data(), s.data.size(), norm));
+  Decor decor;
+  CHECK(deserializeState(s.data.data(), s.data.size(), norm, decor));
   CHECK(indexFromNorm(kCeiling, norm[kCeiling]) == 3);
   CHECK(indexFromNorm(kLoudness, norm[kLoudness]) == 12);
   CHECK(indexFromNorm(kOversampling, norm[kOversampling]) == 2);
@@ -479,7 +480,8 @@ void test_state_round_trip_and_session_parameters_not_stored() {
   VecStream s3;
   CHECK(g.comp->getState(&s3) == kResultOk);
   double after[kNumParams], defaults[kNumParams];
-  CHECK(deserializeState(s3.data.data(), s3.data.size(), after));
+  Decor decor3;
+  CHECK(deserializeState(s3.data.data(), s3.data.size(), after, decor3));
   loadDefaults(defaults);
   CHECK(after[kLoudness] == defaults[kLoudness] && after[kOversampling] == defaults[kOversampling]);
   g.close(); h.close();

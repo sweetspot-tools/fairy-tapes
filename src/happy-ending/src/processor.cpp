@@ -27,6 +27,7 @@ Processor::Processor() {
   double defaults[kNumParams];
   loadDefaults(defaults);
   for (int i = 0; i < static_cast<int>(kNumParams); ++i) param_[static_cast<std::size_t>(i)].store(defaults[i]);
+  ensureSeed(decor_);   // a fresh instance saves a seed with its first getState
 }
 
 Steinberg::tresult PLUGIN_API Processor::initialize(Steinberg::FUnknown* context) {
@@ -217,11 +218,18 @@ Steinberg::tresult PLUGIN_API Processor::setState(Steinberg::IBStream* state) {
   if (!readStateBytes(state, bytes))
     return Steinberg::kResultFalse;
   double norm[kNumParams];
-  if (!deserializeState(bytes.data(), bytes.size(), norm))
+  Decor decor;
+  if (!deserializeState(bytes.data(), bytes.size(), norm, decor))
     return Steinberg::kResultFalse;
+  ensureSeed(decor);          // v1, seed 0 or a corrupt decor: a new seed, saved by the next getState
   for (int i = 0; i < static_cast<int>(kNumParams); ++i) param_[static_cast<std::size_t>(i)].store(norm[i]);
   listen_.store(-1);          // session parameters: always off after a load
   setActive_.store(false);
+  {
+    std::lock_guard<std::mutex> lk(decor_mutex_);
+    decor_ = std::move(decor);
+  }
+  sendDecor();
   return Steinberg::kResultOk;
 }
 
@@ -230,8 +238,13 @@ Steinberg::tresult PLUGIN_API Processor::getState(Steinberg::IBStream* state) {
     return Steinberg::kResultFalse;
   double norm[kNumParams];
   for (int i = 0; i < static_cast<int>(kNumParams); ++i) norm[i] = param_[static_cast<std::size_t>(i)].load();
+  Decor decor;
+  {
+    std::lock_guard<std::mutex> lk(decor_mutex_);
+    decor = decor_;
+  }
   std::vector<std::uint8_t> bytes;
-  serializeState(norm, bytes);
+  serializeState(norm, decor, bytes);
   Steinberg::int32 written = 0;
   if (state->write(bytes.data(), static_cast<Steinberg::int32>(bytes.size()), &written) != Steinberg::kResultOk ||
       written != static_cast<Steinberg::int32>(bytes.size()))
@@ -239,7 +252,37 @@ Steinberg::tresult PLUGIN_API Processor::getState(Steinberg::IBStream* state) {
   return Steinberg::kResultOk;
 }
 
+void Processor::sendDecor() {
+  if (!getPeer())
+    return;
+  Steinberg::Vst::IMessage* msg = allocateMessage();
+  if (!msg)
+    return;
+  Decor d;
+  {
+    std::lock_guard<std::mutex> lk(decor_mutex_);
+    d = decor_;
+  }
+  encodeDecorMessage(msg, d);
+  sendMessage(msg);
+  msg->release();
+}
+
+Steinberg::tresult PLUGIN_API Processor::connect(Steinberg::Vst::IConnectionPoint* other) {
+  const auto r = AudioEffect::connect(other);
+  sendDecor();   // the controller learns the seed of this instance
+  return r;
+}
+
 Steinberg::tresult PLUGIN_API Processor::notify(Steinberg::Vst::IMessage* message) {
+  Decor d;
+  if (decodeDecorMessage(message, d)) {   // an editor edit, or the seed the controller had to generate
+    std::lock_guard<std::mutex> lk(decor_mutex_);
+    if (d.seed == 0)
+      d.seed = decor_.seed;   // never clears the seed
+    decor_ = std::move(d);
+    return Steinberg::kResultOk;
+  }
   int index = 0;
   if (decodeOversamplingMessage(message, index)) {
     param_[kOversampling].store(normFromIndex(kOversampling, index));

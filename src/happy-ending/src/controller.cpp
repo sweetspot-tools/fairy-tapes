@@ -172,7 +172,8 @@ Steinberg::tresult PLUGIN_API Controller::setComponentState(Steinberg::IBStream*
   if (!readStateBytes(state, bytes))
     return Steinberg::kResultFalse;
   double norm[kNumParams];
-  if (!deserializeState(bytes.data(), bytes.size(), norm))
+  Decor stored;
+  if (!deserializeState(bytes.data(), bytes.size(), norm, stored))
     return Steinberg::kResultFalse;
   const int osBefore = indexFromNorm(kOversampling, getParamNormalized(kOversampling));
   loadingState_ = true;  // one restart request after the whole load, not one per parameter
@@ -185,7 +186,68 @@ Steinberg::tresult PLUGIN_API Controller::setComponentState(Steinberg::IBStream*
   const int osAfter = indexFromNorm(kOversampling, getParamNormalized(kOversampling));
   if (osAfter != osBefore)
     oversamplingChanged(osAfter);
+
+  // The decor: no seed in the state (v1, or a corrupt decor part): keep the one already known (usually the
+  // processor's, sent from its setState); with none, generate one and tell the processor.
+  Decor copy;
+  bool generated = false;
+  {
+    std::lock_guard<std::mutex> lk(decorMutex_);
+    if (stored.seed == 0)
+      stored.seed = decor_.seed;
+    generated = ensureSeed(stored);
+    decor_ = std::move(stored);
+    copy = decor_;
+  }
+  ++decorRevision_;
+  if (generated)
+    sendDecor(copy);
   return Steinberg::kResultOk;
+}
+
+Steinberg::tresult PLUGIN_API Controller::notify(Steinberg::Vst::IMessage* message) {
+  Decor d;
+  if (!decodeDecorMessage(message, d))
+    return EditController::notify(message);
+  {
+    std::lock_guard<std::mutex> lk(decorMutex_);
+    if (d.seed == 0)
+      d.seed = decor_.seed;   // never clears the seed
+    decor_ = std::move(d);
+  }
+  ++decorRevision_;
+  return Steinberg::kResultOk;
+}
+
+Decor Controller::decor() const {
+  std::lock_guard<std::mutex> lk(decorMutex_);
+  return decor_;
+}
+
+void Controller::editDecor(Decor d) {
+  sanitizeDecor(d);
+  {
+    std::lock_guard<std::mutex> lk(decorMutex_);
+    if (d.seed == 0)
+      d.seed = decor_.seed;
+    ensureSeed(d);
+    decor_ = d;
+  }
+  ++decorRevision_;
+  sendDecor(d);
+  // Not a parameter: tell the host the project changed so the new decor gets saved.
+  if (Steinberg::FUnknownPtr<Steinberg::Vst::IComponentHandler2> handler2{componentHandler})
+    handler2->setDirty(true);
+}
+
+void Controller::sendDecor(const Decor& d) {
+  if (!getPeer())
+    return;
+  if (Steinberg::Vst::IMessage* msg = allocateMessage()) {
+    encodeDecorMessage(msg, d);
+    sendMessage(msg);
+    msg->release();
+  }
 }
 
 Steinberg::tresult PLUGIN_API Controller::setParamNormalized(Steinberg::Vst::ParamID tag, Steinberg::Vst::ParamValue value) {

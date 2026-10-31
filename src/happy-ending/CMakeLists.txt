@@ -91,7 +91,7 @@ else()
   )
 endif()
 
-target_link_libraries(happy_ending PRIVATE sdk)
+target_link_libraries(happy_ending PRIVATE sdk fairy_ui)  # fairy_ui: header-only (fairy_ui/tape_label.h for the state)
 if(APPLE)
   target_link_libraries(happy_ending PRIVATE "-framework CoreFoundation")
   target_link_options(happy_ending PRIVATE
@@ -239,6 +239,7 @@ target_include_directories(happy_ending_state_tests PRIVATE
   ${VST3_SDK_PATH}/pluginterfaces/base
   ${VST3_SDK_PATH}/pluginterfaces/vst
 )
+target_link_libraries(happy_ending_state_tests PRIVATE fairy_ui)  # header-only (fairy_ui/tape_label.h)
 add_test(NAME happy_ending_state_tests COMMAND happy_ending_state_tests)
 
 # Display parameters: normalization, hold between writes, pacing (pure; engine.h only for the meter types).
@@ -266,7 +267,7 @@ target_include_directories(happy_ending_controller_tests PRIVATE
   ${VST3_SDK_PATH}/pluginterfaces/base
   ${VST3_SDK_PATH}/pluginterfaces/vst
 )
-target_link_libraries(happy_ending_controller_tests PRIVATE sdk)
+target_link_libraries(happy_ending_controller_tests PRIVATE sdk fairy_ui)
 add_test(NAME happy_ending_controller_tests COMMAND happy_ending_controller_tests)
 
 # Module tests: dlopen the built bundle from dist/ (exit 77 = skipped when the plug-in has not been built).
@@ -296,8 +297,25 @@ if(NOT WIN32)
     ${VST3_SDK_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/../../shared/inflator)
   target_compile_definitions(happy_ending_processor_level_test PRIVATE
     HAPPY_ENDING_MODULE="${HAPPY_ENDING_MODULE_PATH}")
-  target_link_libraries(happy_ending_processor_level_test PRIVATE pluginterfaces ${CMAKE_DL_LIBS})
+  target_link_libraries(happy_ending_processor_level_test PRIVATE pluginterfaces fairy_ui ${CMAKE_DL_LIBS})
   set_target_properties(happy_ending_processor_level_test PROPERTIES ENABLE_EXPORTS ON)
   add_test(NAME happy_ending_processor_level_test COMMAND happy_ending_processor_level_test)
   set_tests_properties(happy_ending_processor_level_test PROPERTIES SKIP_RETURN_CODE 77)
+
+  # State v2 (seed, screw angles, tape texts) and the Decor messages on the real module, with the SDK's minimal host
+  # classes (IHostApplication, IMessage); skipped when the module is absent. Depends on the plug-in target so that
+  # the bundle in dist/ is built (and current) before the test runs.
+  add_executable(happy_ending_state_module_test tests/test_state_module.cpp
+    ${VST3_SDK_PATH}/public.sdk/source/vst/vstinitiids.cpp
+    ${VST3_SDK_PATH}/public.sdk/source/vst/hosting/hostclasses.cpp
+    ${VST3_SDK_PATH}/public.sdk/source/vst/hosting/pluginterfacesupport.cpp
+    ${VST3_SDK_PATH}/public.sdk/source/vst/utility/stringconvert.cpp
+    ${VST3_SDK_PATH}/public.sdk/source/common/commonstringconvert.cpp)
+  target_include_directories(happy_ending_state_module_test PRIVATE ${VST3_SDK_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_compile_definitions(happy_ending_state_module_test PRIVATE
+    HAPPY_ENDING_MODULE="${HAPPY_ENDING_MODULE_PATH}")
+  target_link_libraries(happy_ending_state_module_test PRIVATE pluginterfaces fairy_ui ${CMAKE_DL_LIBS})
+  add_dependencies(happy_ending_state_module_test happy_ending)
+  add_test(NAME happy_ending_state_module_test COMMAND happy_ending_state_module_test)
+  set_tests_properties(happy_ending_state_module_test PROPERTIES SKIP_RETURN_CODE 77)
 endif()

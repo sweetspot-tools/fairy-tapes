@@ -83,11 +83,11 @@
 - Produces in `messages.h`: `kMsgDecor = "Decor"`, `encodeDecorMessage`, `decodeDecorMessage` (accanto al messaggio Oversampling).
 - Produces in `Controller`: `Decor decor() const; std::uint32_t decorRevision() const; void editDecor(Decor d); tresult PLUGIN_API notify(IMessage*) override;` (mai nel thread audio). `Processor::getState/setState` salvano e caricano il decor, lo mandano al controller dopo `setState` e alla connessione.
 
-- [ ] **Step 1: Scrivere i test** (modello Deep Throat, Task 3): `test_state_v2_roundtrip`, `test_state_v1_loads_with_default_decor` (un blob v1 costruito a mano: tutti i parametri, `seed == 0`; `ensureSeed` dà un seme ≠ 0 e stabile), `test_state_v1_short_blob_still_loads` (il comportamento v1 di oggi resta), `test_state_v2_corrupt_decor` (decor troncato a ogni lunghezza, numero di testi enorme, lunghezza oltre il blob → parametri caricati, decor di default), `test_decor_sanitised` (angoli non finiti o fuori giro → [0, 360); testi non ASCII o lunghi → ASCII stampabile, 14 caratteri; più di 6 testi → 6), `test_decor_message_roundtrip`; nel modulo: `setState` v2 seguito da `getState` restituisce lo stesso blob; il controller riceve il decor tramite `notify`; LISTEN e SET non compaiono nel blob.
-- [ ] **Step 2: Eseguire e vedere fallire.**
-- [ ] **Step 3: Implementare** sul modello di Deep Throat.
-- [ ] **Step 4: Eseguire** `ctest -R happy_ending` → verde.
-- [ ] **Step 5: Commit:** `feat(happy-ending): state v2 with the instance decor and controller/processor messages`.
+- [x] **Step 1: Scrivere i test** (modello Deep Throat, Task 3): `test_state_v2_roundtrip`, `test_state_v1_loads_with_default_decor` (un blob v1 costruito a mano: tutti i parametri, `seed == 0`; `ensureSeed` dà un seme ≠ 0 e stabile), `test_state_v1_short_blob_still_loads` (il comportamento v1 di oggi resta), `test_state_v2_corrupt_decor` (decor troncato a ogni lunghezza, numero di testi enorme, lunghezza oltre il blob → parametri caricati, decor di default), `test_decor_sanitised` (angoli non finiti o fuori giro → [0, 360); testi non ASCII o lunghi → ASCII stampabile, 14 caratteri; più di 6 testi → 6), `test_decor_message_roundtrip`; nel modulo: `setState` v2 seguito da `getState` restituisce lo stesso blob; il controller riceve il decor tramite `notify`; LISTEN e SET non compaiono nel blob.
+- [x] **Step 2: Eseguire e vedere fallire.**
+- [x] **Step 3: Implementare** sul modello di Deep Throat.
+- [x] **Step 4: Eseguire** `ctest -R happy_ending` → verde.
+- [x] **Step 5: Commit:** `feat(happy-ending): state v2 with the instance decor and controller/processor messages`.
 
 ---
 
