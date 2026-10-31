@@ -314,15 +314,21 @@ void Editor::clearClips() {
 
 // The display values (neutral until the host forwards the processor's output): one SCOPE point, the LEVEL rows with their
 // peak hold, the clip LEDs and the BREATH lamp. Read on every timer run: the processor writes them every 16 ms.
+// As the preview: a breath (lamp, scope band) shows only with Breath IN on and no Bypass (the engine reports the raw
+// detector), and the GR row is empty under Bypass (Comp IN off already reads 0 from the engine).
 void Editor::updateDisplays() {
   auto* ctl = getController();
+  const bool breathShown = !dim_.bypass && !moduleOut(Module::Breath, dim_);
   ScopePoint p;
   p.voice = static_cast<float>(displayNorm(ctl, kDispVoice, 0.0));
   p.rider = static_cast<float>(displayNorm(ctl, kDispRider, 0.5));
-  p.breath = static_cast<float>(displayNorm(ctl, kDispBreath, 0.0));
+  p.breath = breathShown ? static_cast<float>(displayNorm(ctl, kDispBreath, 0.0)) : 0.f;
   if (scope_) scope_->push(p);
-  for (int i = 0; i < kMeterRowCount; ++i)
-    if (MeterBar* bar = bars_[static_cast<std::size_t>(i)]) bar->setLevel(displayNorm(ctl, kMeterRows[i].id, 0.0), kTimerSeconds);
+  for (int i = 0; i < kMeterRowCount; ++i) {
+    const MeterRow& row = kMeterRows[i];
+    const double v = row.gainReduction && dim_.bypass ? 0.0 : displayNorm(ctl, row.id, 0.0);
+    if (MeterBar* bar = bars_[static_cast<std::size_t>(i)]) bar->setLevel(v, kTimerSeconds);
+  }
   for (int i = 0; i < kClipCount; ++i)
     if (ClipLed* clip = clips_[static_cast<std::size_t>(i)]) clip->setLit(displayNorm(ctl, kClips[i].id, 0.0) >= 0.5);
   if (readouts_) readouts_->setLampLit(p.breath > 0.5f);

@@ -188,11 +188,11 @@
 - Consumes: `kMeterRows`, `kClips`, `kScopeRect` (Task 4), `History`/`ScopeColumn` (Task 6), `displayNorms` (Task 2).
 - Produces: `class ScopeView : public VSTGUI::CView` (rettangolo nero con bordo, linea tratteggiata a metà, inviluppo bianco della voce, linea ambra del guadagno del Rider, banda rossa semitrasparente del respiro, legenda VOICE / RIDER GAIN / BREATH sotto); in `Editor`: righe di `MeterBar` (15 LED, -60..+6 dB; la riga GR 0..21 dB, ambra con gli ultimi quattro rossi), `ClipLed` IN e OUT (un clic li azzera: scrive `kClearClips`), `PeakHold` come negli altri plugin; il timer legge i parametri `kDisp*`, alimenta la `History` (292 punti) e aggiorna le viste; SCOPE e LEVEL si attenuano solo col Bypass (le righe IN/OUT dei meter restano accese).
 
-- [ ] **Step 1: Scrivere i test:** `test_meters_follow_display_params` (con il fake host: portare `kDispInL` a 0.5 accende ~metà dei 15 LED e `kDispClipIn` a 1 accende il clip), `test_clip_click_clears_via_trigger` (un clic su un clip scrive `kClearClips` = 1 e il processor di test lo azzera), `test_scope_history_grows_to_292` (dopo 400 tick la storia ha 292 punti e il più vecchio è il tick 108), `test_scope_dimming_only_on_bypass` (IN spenti non attenuano scope e meter; Bypass sì, tranne le righe IN/OUT e i clip), `test_editor_timer_stops_on_close` (dopo `close()` il timer non gira e nessuna vista viene toccata: ripetere open/close 50 volte con tick in mezzo).
-- [ ] **Step 2: Eseguire e vedere fallire.**
-- [ ] **Step 3: Implementare** `ScopeView`, i meter e la lettura dei parametri nel timer (modello: `duck_scope.cpp` e la parte dei meter di `editor.cpp` di Pillow Talk).
-- [ ] **Step 4: Eseguire** build e test → PASS; render e controllo a occhio dello scope con dati di prova (il tool di render accetta valori di prova per i parametri di visualizzazione).
-- [ ] **Step 5: Commit:** `feat(deep-throat): LEVEL meters, clip LEDs and the SCOPE view`.
+- [x] **Step 1: Scrivere i test:** `test_meters_follow_display_params` (con il fake host: portare `kDispInL` a 0.5 accende ~metà dei 15 LED e `kDispClipIn` a 1 accende il clip), `test_clip_click_clears_via_trigger` (un clic su un clip scrive `kClearClips` = 1 e il processor di test lo azzera), `test_scope_history_grows_to_292` (dopo 400 tick la storia ha 292 punti e il più vecchio è il tick 108), `test_scope_dimming_only_on_bypass` (IN spenti non attenuano scope e meter; Bypass sì, tranne le righe IN/OUT e i clip), `test_editor_timer_stops_on_close` (dopo `close()` il timer non gira e nessuna vista viene toccata: ripetere open/close 50 volte con tick in mezzo).
+- [x] **Step 2: Eseguire e vedere fallire.**
+- [x] **Step 3: Implementare** `ScopeView`, i meter e la lettura dei parametri nel timer (modello: `duck_scope.cpp` e la parte dei meter di `editor.cpp` di Pillow Talk).
+- [x] **Step 4: Eseguire** build e test → PASS; render e controllo a occhio dello scope con dati di prova (il tool di render accetta valori di prova per i parametri di visualizzazione).
+- [x] **Step 5: Commit:** `feat(deep-throat): LEVEL meters, clip LEDs and the SCOPE view`.
 
 ---
 

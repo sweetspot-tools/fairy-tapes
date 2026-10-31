@@ -939,6 +939,10 @@ void test_tape_texts_and_ink() {
 // ---- scope history ----------------------------------------------------------------------------------------------------
 float normOfDb(double db) { return static_cast<float>(FairyTapes::Ui::meterNormFromDb(db, -60.0, 6.0)); }
 float riderNorm(double db) { return static_cast<float>(0.5 + db / 12.0); }
+// The preview's scope scale (deep_throat_rack.html, renderSim): voice bottom - clamp((dB + 64) / 54) * 94 % of the height
+// - 2 px; Rider gain mid - clamp(gain / 6) * 85 % of the half height.
+double previewVoiceY(const Rect& r, double db) { return r.y + r.h - std::clamp((db + 64.0) / 54.0, 0.0, 1.0) * r.h * 0.94 - 2.0; }
+double previewRiderY(const Rect& r, double gainDb) { return r.y + r.h / 2 - std::clamp(gainDb / 6.0, -1.0, 1.0) * r.h / 2 * 0.85; }
 
 void test_history_ring_and_columns() {
   History<4> h;
@@ -963,12 +967,15 @@ void test_history_ring_and_columns() {
   s.push({normOfDb(-60), riderNorm(6), 0.6f});    // silence, +6 dB, breath on
   s.push({normOfDb(0), riderNorm(-6), 0.5f});     // 0 dB, -6 dB, exactly 0.5: not above
   s.push({normOfDb(-30), riderNorm(0), 0.4f});
-  s.push({normOfDb(6), riderNorm(0), 1.0f});      // above 0 dB: stays at the top
+  s.push({normOfDb(6), riderNorm(3), 1.0f});      // above -10 dB: stays at the top of the voice range
   const std::vector<ScopeColumn> cols = scopeColumns(s, r);
   ASSERT_TRUE(cols.size() == 4);
-  ASSERT_TRUE(nearD(cols[0].voiceTop, r.y + r.h) && nearD(cols[1].voiceTop, r.y) && nearD(cols[2].voiceTop, r.y + r.h / 2) &&
-              nearD(cols[3].voiceTop, r.y));
-  ASSERT_TRUE(nearD(cols[0].riderY, r.y) && nearD(cols[1].riderY, r.y + r.h) && nearD(cols[2].riderY, r.y + r.h / 2));
+  ASSERT_TRUE(nearD(cols[0].voiceTop, previewVoiceY(r, -60)) && nearD(cols[1].voiceTop, previewVoiceY(r, 0)) &&
+              nearD(cols[2].voiceTop, previewVoiceY(r, -30)) && nearD(cols[3].voiceTop, previewVoiceY(r, -10)));
+  ASSERT_TRUE(nearD(cols[1].voiceTop, r.y + r.h - r.h * 0.94 - 2) && nearD(cols[2].voiceTop, r.y + r.h - 34.0 / 54.0 * r.h * 0.94 - 2));
+  ASSERT_TRUE(nearD(cols[0].riderY, previewRiderY(r, 6)) && nearD(cols[1].riderY, previewRiderY(r, -6)) &&
+              nearD(cols[2].riderY, r.y + r.h / 2) && nearD(cols[3].riderY, previewRiderY(r, 3)));
+  ASSERT_TRUE(nearD(cols[0].riderY, r.y + r.h / 2 - r.h / 2 * 0.85));
   ASSERT_TRUE(cols[0].breath && !cols[1].breath && !cols[2].breath && cols[3].breath);
   // bad values are limited into the rectangle (NaN: silence, centre, no breath)
   History<8> bad;
@@ -978,10 +985,31 @@ void test_history_ring_and_columns() {
   bad.push({INFINITY, -INFINITY, INFINITY});
   for (const ScopeColumn& c : scopeColumns(bad, r)) ASSERT_TRUE(c.voiceTop >= r.y && c.voiceTop <= r.y + r.h && c.riderY >= r.y && c.riderY <= r.y + r.h);
   const auto bc = scopeColumns(bad, r);
-  ASSERT_TRUE(nearD(bc[0].voiceTop, r.y + r.h) && nearD(bc[0].riderY, r.y + r.h / 2) && !bc[0].breath);
-  ASSERT_TRUE(nearD(bc[1].voiceTop, r.y + r.h) && nearD(bc[1].riderY, r.y + r.h) && !bc[1].breath);
-  ASSERT_TRUE(nearD(bc[2].voiceTop, r.y) && nearD(bc[2].riderY, r.y) && bc[2].breath);
+  ASSERT_TRUE(nearD(bc[0].voiceTop, previewVoiceY(r, -60)) && nearD(bc[0].riderY, r.y + r.h / 2) && !bc[0].breath);
+  ASSERT_TRUE(nearD(bc[1].voiceTop, previewVoiceY(r, -60)) && nearD(bc[1].riderY, previewRiderY(r, -6)) && !bc[1].breath);
+  ASSERT_TRUE(nearD(bc[2].voiceTop, previewVoiceY(r, 0)) && nearD(bc[2].riderY, previewRiderY(r, 6)) && bc[2].breath);
   ASSERT_TRUE(scopeColumns(History<8>{}, r).empty());
+}
+
+// The traces never touch the scope border (1.5 px): the Rider gain over its whole +-6 dB range (and beyond, NaN, inf)
+// stays at least 6 px inside, the voice at least 2 px above the bottom and 3 px below the top.
+void test_scope_traces_stay_inside_the_border() {
+  const Rect r{156, 106, 292, 84};
+  const float odd[] = {std::nanf(""), INFINITY, -INFINITY, -5.f, 5.f};
+  std::vector<float> values;
+  for (int i = 0; i <= 1000; ++i) values.push_back(static_cast<float>(i) / 1000.f);
+  values.insert(values.end(), std::begin(odd), std::end(odd));
+  double minRider = 1e9, maxRider = -1e9, minVoice = 1e9, maxVoice = -1e9;
+  for (float v : values) {
+    const ScopeColumn c = scopeColumnOf({v, v, 0.f}, r);
+    minRider = std::min(minRider, static_cast<double>(c.riderY));
+    maxRider = std::max(maxRider, static_cast<double>(c.riderY));
+    minVoice = std::min(minVoice, static_cast<double>(c.voiceTop));
+    maxVoice = std::max(maxVoice, static_cast<double>(c.voiceTop));
+  }
+  ASSERT_TRUE(minRider >= r.y + 6 && maxRider <= r.y + r.h - 6);
+  ASSERT_TRUE(nearD(minRider, r.y + r.h / 2 - r.h / 2 * 0.85) && nearD(maxRider, r.y + r.h / 2 + r.h / 2 * 0.85));   // +-6 dB used
+  ASSERT_TRUE(minVoice >= r.y + 3 && maxVoice <= r.y + r.h - 2);
 }
 
 } // namespace
@@ -1026,6 +1054,7 @@ int main() {
   RUN_TEST(test_screw_angles);
   RUN_TEST(test_tape_texts_and_ink);
   RUN_TEST(test_history_ring_and_columns);
+  RUN_TEST(test_scope_traces_stay_inside_the_border);
   { std::error_code ec; fs::remove_all(scratchDir(), ec); }
   std::printf("deep_throat_ui_tests: %d passed, %d failed\n", g_passed, g_failed);
   return g_failed ? 1 : 0;

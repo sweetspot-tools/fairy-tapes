@@ -1187,6 +1187,10 @@ void test_scope_and_level_dim_only_on_bypass() {
     if (!bmp) return false;
     const Pixels px = pixelsOf(bmp);
     for (int r = 0; r < kMeterRowCount; ++r) {
+      if (bypass && kMeterRows[r].gainReduction) {   // no gain reduction while bypassed: the row is empty
+        if (litLeds(EditorTest::bar(ed, r)) != 0) return false;
+        continue;
+      }
       const bool dim = bypass && !kMeterRows[r].alwaysLit;
       const int lit = brightness(ledPixel(px, kMeterRows[r], 0));
       if (dim ? lit > 0x80 : lit < 0xc0) {
@@ -1210,6 +1214,39 @@ void test_scope_and_level_dim_only_on_bypass() {
   ASSERT_TRUE(check(true));
   g_ctl->setParamNormalized(kBypass, 0.0);
   ASSERT_TRUE(check(false));
+  resetParams(g_ctl);
+  resetDisplay(g_ctl);
+  EditorTest::destroy(ed, root);
+}
+
+// As the preview: a breath is shown (lamp, scope band) only while Breath IN is on and the plugin is not bypassed, and
+// the GR row is empty while bypassed (Comp IN off already reads 0 from the engine). The display values stay as written.
+void test_breath_and_gr_gated_by_in_and_bypass() {
+  Editor ed(g_ctl);
+  auto root = EditorTest::build(ed);
+  ReadoutView* lamp = EditorTest::readouts(ed);
+  ScopeView* scope = EditorTest::scope(ed);
+  FairyTapes::Ui::MeterBar* gr = EditorTest::bar(ed, 4);
+  ASSERT_TRUE(lamp && scope && gr && kMeterRows[4].id == kDispGr);
+  g_ctl->setParamNormalized(kDispBreath, 0.9);
+  g_ctl->setParamNormalized(kDispGr, 1.0);
+  auto state = [&](bool breath, int grLit) {
+    EditorTest::tick(ed);
+    const auto cols = scope->columns();
+    return !cols.empty() && lamp->lampLit() == breath && cols.back().breath == breath &&
+           (scope->history().at(scope->history().size() - 1).breath > 0.f) == breath && litLeds(gr) == grLit;
+  };
+  ASSERT_TRUE(state(true, 15));
+  g_ctl->setParamNormalized(kBreathIn, 0.0);
+  ASSERT_TRUE(state(false, 15));   // Breath IN off: no breath shown, GR as it is
+  g_ctl->setParamNormalized(kBreathIn, 1.0);
+  ASSERT_TRUE(state(true, 15));
+  g_ctl->setParamNormalized(kBypass, 1.0);
+  ASSERT_TRUE(state(false, 0));    // Bypass: no breath, no gain reduction
+  g_ctl->setParamNormalized(kCompIn, 0.0);
+  g_ctl->setParamNormalized(kBypass, 0.0);
+  ASSERT_TRUE(state(true, 15));    // Comp IN off is the engine's job (it reports 0): the editor shows what it gets
+  ASSERT_TRUE(near(g_ctl->getParamNormalized(kDispBreath), 0.9) && near(g_ctl->getParamNormalized(kDispGr), 1.0));
   resetParams(g_ctl);
   resetDisplay(g_ctl);
   EditorTest::destroy(ed, root);
@@ -1293,6 +1330,7 @@ int main() {
   RUN_TEST(test_breath_lamp_lights_above_half);
   RUN_TEST(test_scope_and_level_dim_only_on_bypass);
   RUN_TEST(test_editor_timer_stops_on_close);
+  RUN_TEST(test_breath_and_gr_gated_by_in_and_bypass);
   ctl.terminate();
   g_ctl = nullptr;
   VSTGUI::exit();

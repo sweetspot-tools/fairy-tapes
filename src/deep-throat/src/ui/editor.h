@@ -5,7 +5,8 @@
 // the panel come with the next tasks of docs/superpowers/plans/2026-10-24-deep-throat-gui.md.
 // The display values (meters, clips, scope, BREATH lamp) are the hidden read-only kDisp* parameters the processor writes;
 // the UI timer reads them on every run. SCOPE and the GR row dim with the global Bypass only; the IN / OUT rows and the
-// clip LEDs never dim. A click on a clip LED writes the kClearClips trigger (the processor clears and answers 0).
+// clip LEDs never dim. A breath (lamp, scope band) shows only with Breath IN on and no Bypass; the GR row is empty under
+// Bypass. A click on a clip LED writes the kClearClips trigger (the processor clears and answers 0).
 // Every one of the 25 parameters is bound to one control (ui/layout.h kControls). User gestures go to the controller as
 // beginEdit / performEdit / endEdit; a double click on a knob is its default (one edit); a click on a knob's printed
 // value opens a text field (Enter or leaving it confirms, Escape cancels) whose text the controller reads

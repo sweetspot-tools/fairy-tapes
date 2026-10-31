@@ -61,16 +61,20 @@ struct ScopeColumn {
   bool breath = false;    // inside the breath band
 };
 
-constexpr float kScopeVoiceFloorDb = -60.f, kScopeVoiceCeilDb = 0.f, kScopeNormMinDb = -60.f, kScopeNormMaxDb = 6.f;
+// Scale of the preview (deep_throat_rack.html, renderSim): the voice from kScopeVoiceFloorDb (bottom, 2 px up) to
+// kScopeVoiceCeilDb (94 % of the height); the Rider gain +-6 dB over 85 % of the half height around the middle, so no
+// trace touches the border.
+constexpr float kScopeVoiceFloorDb = -64.f, kScopeVoiceCeilDb = -10.f, kScopeNormMinDb = -60.f, kScopeNormMaxDb = 6.f;
+constexpr float kScopeVoiceSpan = 0.94f, kScopeVoiceLift = 2.f, kScopeRiderSpan = 0.85f;
 
 inline ScopeColumn scopeColumnOf(const ScopePoint& p, const Rect& r) {
   const auto unit = [](float v) { return std::isfinite(v) ? std::clamp(v, 0.f, 1.f) : 0.f; };
   const float db = kScopeNormMinDb + unit(p.voice) * (kScopeNormMaxDb - kScopeNormMinDb);
   const float v = std::clamp((db - kScopeVoiceFloorDb) / (kScopeVoiceCeilDb - kScopeVoiceFloorDb), 0.f, 1.f);
-  const float g = std::isfinite(p.rider) ? std::clamp(p.rider, 0.f, 1.f) : 0.5f;   // 0 = -6 dB (bottom), 1 = +6 dB (top)
+  const float g = std::isfinite(p.rider) ? std::clamp((p.rider - 0.5f) * 2.f, -1.f, 1.f) : 0.f;   // -1 = -6 dB, +1 = +6 dB
   ScopeColumn c;
-  c.voiceTop = r.y + r.h * (1.f - v);
-  c.riderY = r.y + r.h * (1.f - g);
+  c.voiceTop = r.y + r.h - v * r.h * kScopeVoiceSpan - kScopeVoiceLift;
+  c.riderY = r.y + r.h / 2 - g * (r.h / 2) * kScopeRiderSpan;
   c.breath = std::isfinite(p.breath) && p.breath > 0.5f;
   return c;
 }

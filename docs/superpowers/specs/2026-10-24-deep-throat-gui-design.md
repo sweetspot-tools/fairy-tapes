@@ -61,7 +61,9 @@ Parametri nascosti, sola lettura, fuori dallo stato e dall'automazione (`kMeterB
 
 L'engine accumula questi valori senza allocare (massimo del periodo per i picchi, ultimo valore per gli altri) e un limitatore di velocità ne consente la scrittura ogni circa 16 ms di audio (`DisplayRateLimiter` di Pillow Talk come modello). Il processor li scrive come punti di parametro in uscita; il controller li registra con i flag `kIsReadOnly | kIsHidden`.
 
-Lo SCOPE sta sulla linea temporale dell'**ingresso**: il buffer circolare dell'editor tiene 292 punti (una colonna di pixel ciascuno, circa 4,7 s a 16 ms); la linea del guadagno del Rider è quella calcolata per l'audio ritardato, quindi appare circa D (85 ms) prima rispetto alla voce disegnata: è solo estetico e va scritto nei limiti noti.
+Lo SCOPE sta sulla linea temporale dell'**ingresso**: il buffer circolare dell'editor tiene 292 punti (una colonna di pixel ciascuno, un punto per ogni giro del timer dell'editor da 30 ms, quindi circa 8,8 s; il processor scrive ogni 16 ms e l'editor legge l'ultimo valore); la linea del guadagno del Rider è quella calcolata per l'audio ritardato, quindi appare circa D (85 ms) prima rispetto alla voce disegnata: è solo estetico e va scritto nei limiti noti.
+
+Scala dello SCOPE come la preview: la voce va da −64 dB (in basso, 2 px sopra il bordo) a −10 dB (94 % dell'altezza); il guadagno del Rider ±6 dB occupa l'85 % della mezza altezza attorno alla linea tratteggiata di metà (0 dB), così nessuna traccia tocca il bordo. Filtri nell'editor, come la preview (il motore riporta i valori grezzi): il respiro (spia BREATH e banda rossa dello SCOPE) si mostra solo con Breath IN acceso e senza Bypass; con il Bypass la riga GR è vuota (con Comp IN spento il motore riporta già 0).
 
 ## 6. Stato v2 e preferenze
 
