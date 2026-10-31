@@ -2,10 +2,14 @@
  * Fairy Tapes · Happy Ending — tests for the pure editor layout (ui/editor_size.h, ui/layout.h): no VSTGUI.
  * Build target: happy_ending_ui_tests.
  */
+#include "ui/decor.h"
 #include "ui/editor_size.h"
 #include "ui/layout.h"
+#include "ui/prefs.h"
 #include "ui/readouts.h"
 #include "ui/screen_model.h"
+#include "ui/screw_angles.h"
+#include "ui/tapes.h"
 #include "ui/value_text.h"
 
 #include "dsp/clip_softly.h"
@@ -18,14 +22,21 @@
 #include "tuning.h"
 
 #include "fairy_ui/screws.h"
+#include "fairy_ui/tape_paper.h"
 
 #include <algorithm>
 #include <cctype>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <ctime>
+#include <filesystem>
+#include <fstream>
 #include <limits>
+#include <set>
 #include <string>
+#include <system_error>
 #include <vector>
 
 using namespace FairyTapes::HappyEnding;
@@ -1070,6 +1081,304 @@ void test_curve_paths_inside_screen() {
   ASSERT_TRUE(std::fabs(cp[best].y - clipY(std::fabs(clipTransfer(xa, clipN.data())))) < 1e-3);
 }
 
+// ---- Preferences, decor, screws, tapes (ui/prefs.h, ui/decor.h, ui/screw_angles.h, ui/tapes.h) ------------------------
+namespace fs = std::filesystem;
+using FairyTapes::Ui::EditorSize;
+using FairyTapes::Ui::WearLevel;
+
+// A scratch folder of its own: the tests only ever use explicit paths, never the real preferences folder.
+fs::path scratchDir() {
+  static fs::path dir;
+  if (dir.empty()) {
+    std::error_code ec;
+    dir = fs::temp_directory_path(ec) / ("happy_ending_ui_test_" + std::to_string(std::rand()) + "_" + std::to_string(std::time(nullptr)));
+    fs::remove_all(dir, ec);
+    fs::create_directories(dir, ec);
+  }
+  return dir;
+}
+void writeFile(const fs::path& p, const std::string& text) { std::ofstream(p, std::ios::binary) << text; }
+bool isDefaultPrefs(const Prefs& p) {
+  const Prefs d;
+  return p.wear == d.wear && p.notes == d.notes && p.tapeFont == d.tapeFont && p.handwrittenValues == d.handwrittenValues &&
+         p.size == d.size;
+}
+
+void test_prefs_parse_defaults_and_bad_values() {
+  const Prefs d;
+  ASSERT_TRUE(d.wear == WearLevel::Light && d.notes && d.tapeFont == TapeFont::Zeyada && d.handwrittenValues && d.size == EditorSize::S100);
+  ASSERT_TRUE(isDefaultPrefs(parsePrefs("")));
+  ASSERT_TRUE(isDefaultPrefs(parsePrefs("wear\n=Heavy\nnoequals here\n# wear=Off\nunknownKey=1\n# size=75\n")));
+  const Prefs p = parsePrefs("wear=Rusty\nnotes=Hide\ntapeFont=Comic\nvaluesFont=Standard\nsize=33\n");
+  ASSERT_TRUE(p.wear == WearLevel::Light && !p.notes && p.tapeFont == TapeFont::Zeyada && !p.handwrittenValues && p.size == EditorSize::S100);
+  const Prefs q = parsePrefs("# only wear\n  wear = Heavy  \r\nnotes=maybe\nvaluesFont=Mono\n  size = 125 \r\n");
+  ASSERT_TRUE(q.wear == WearLevel::Heavy && q.notes && q.handwrittenValues && q.size == EditorSize::S125);
+  // a bad size falls back on its own, without touching the other keys
+  const Prefs r = parsePrefs("wear=Off\nsize=big\n");
+  ASSERT_TRUE(r.wear == WearLevel::Off && r.size == EditorSize::S100);
+  ASSERT_TRUE(parsePrefs("size=75\n").size == EditorSize::S75 && parsePrefs("size=90\n").size == EditorSize::S90);
+}
+
+void test_prefs_roundtrip() {
+  const WearLevel wears[] = {WearLevel::Off, WearLevel::Light, WearLevel::Heavy};
+  const TapeFont fonts[] = {TapeFont::Zeyada, TapeFont::RockSalt, TapeFont::HomemadeApple};
+  const EditorSize sizes[] = {EditorSize::S75, EditorSize::S90, EditorSize::S100, EditorSize::S125};
+  for (WearLevel w : wears)
+    for (TapeFont f : fonts)
+      for (EditorSize z : sizes)
+        for (int b = 0; b < 4; ++b) {
+          Prefs p;
+          p.wear = w;
+          p.tapeFont = f;
+          p.size = z;
+          p.notes = (b & 1) != 0;
+          p.handwrittenValues = (b & 2) != 0;
+          const Prefs q = parsePrefs(serializePrefs(p));
+          ASSERT_TRUE(q.wear == w && q.tapeFont == f && q.size == z && q.notes == p.notes &&
+                      q.handwrittenValues == p.handwrittenValues);
+        }
+  // the key is written as "size=125"
+  Prefs p;
+  p.size = EditorSize::S125;
+  ASSERT_TRUE(serializePrefs(p).find("\nsize=125\n") != std::string::npos);
+}
+
+void test_prefs_file_missing_or_oversized_or_binary() {
+  const fs::path file = scratchDir() / "cfg" / "FairyTapes" / "HappyEnding.prefs";   // no environment changes: explicit paths
+  ASSERT_TRUE(isDefaultPrefs(loadPrefs(file)));   // absent
+  std::error_code ec;
+  fs::create_directories(file.parent_path(), ec);
+  writeFile(file, "wear=Heavy\n" + std::string(kMaxPrefsBytes, '#'));   // oversized, with a valid line in it
+  ASSERT_TRUE(isDefaultPrefs(loadPrefs(file)));
+  writeFile(file, std::string("wear=Off\n\0\0\0binary", 18));   // binary
+  ASSERT_TRUE(isDefaultPrefs(loadPrefs(file)));
+  writeFile(file, std::string("wear=Heavy\nsize=75\n") + std::string(kMaxPrefsBytes - 40, '#'));   // large but allowed
+  ASSERT_TRUE(loadPrefs(file).wear == WearLevel::Heavy && loadPrefs(file).size == EditorSize::S75);
+  fs::remove(file, ec);
+  Prefs p;
+  p.wear = WearLevel::Off;
+  p.notes = false;
+  p.tapeFont = TapeFont::RockSalt;
+  p.handwrittenValues = false;
+  p.size = EditorSize::S90;
+  ASSERT_TRUE(savePrefs(file, p));
+  const Prefs q = loadPrefs(file);
+  ASSERT_TRUE(q.wear == WearLevel::Off && !q.notes && q.tapeFont == TapeFont::RockSalt && !q.handwrittenValues &&
+              q.size == EditorSize::S90);
+  ASSERT_TRUE(!fs::exists(fs::path(file) += ".tmp", ec));
+  int files = 0;
+  for (const auto& e : fs::directory_iterator(file.parent_path(), ec)) { (void)e; ++files; }
+  ASSERT_TRUE(files == 1);   // only HappyEnding.prefs
+  writeFile(scratchDir() / "blocker", "x");   // a file where the folder should be, and a folder as target: both fail cleanly
+  ASSERT_TRUE(!savePrefs(scratchDir() / "blocker" / "HappyEnding.prefs", p));
+  ASSERT_TRUE(!savePrefs(fs::path(), p));
+  ASSERT_TRUE(!savePrefs(file.parent_path(), p));
+  ASSERT_TRUE(isDefaultPrefs(loadPrefs(fs::path())) && isDefaultPrefs(loadPrefs(file.parent_path())));
+}
+
+void test_prefs_path_per_os() {
+#if defined(_WIN32)
+  ASSERT_TRUE(prefsPathFor("C:/Users/u", "", "C:/Users/u/AppData/Roaming") ==
+              fs::path("C:/Users/u/AppData/Roaming") / "FairyTapes" / "HappyEnding.prefs");
+#elif defined(__APPLE__)
+  ASSERT_TRUE(prefsPathFor("/Users/u", "", "") == fs::path("/Users/u/Library/Application Support/FairyTapes/HappyEnding.prefs"));
+#else
+  ASSERT_TRUE(prefsPathFor("/home/u", "", "") == fs::path("/home/u/.config/FairyTapes/HappyEnding.prefs"));
+  ASSERT_TRUE(prefsPathFor("/home/u", "/xdg", "") == fs::path("/xdg/FairyTapes/HappyEnding.prefs"));
+  ASSERT_TRUE(prefsPathFor("/home/u", "relative/xdg", "") == fs::path("/home/u/.config/FairyTapes/HappyEnding.prefs"));
+#endif
+  ASSERT_TRUE(prefsPathFor("", "", "").empty());
+  ASSERT_TRUE(prefsPath().empty() || prefsPath().filename() == "HappyEnding.prefs");
+}
+
+// ---- decor ------------------------------------------------------------------------------------------------------------
+bool tapeInsidePanel(const TapePlacement& t, const Rect& p) {
+  const float r = t.rotDeg * 3.14159265f / 180.f, c = std::cos(r), s = std::sin(r);
+  for (int i = 0; i < 4; ++i) {
+    const float lx = (i & 1 ? 0.5f : -0.5f) * t.w, ly = (i & 2 ? 0.5f : -0.5f) * t.h;
+    const float x = t.cx + lx * c - ly * s, y = t.cy + lx * s + ly * c;
+    if (x < p.x || x > p.x + p.w || y < p.y || y > p.y + p.h) return false;
+  }
+  return true;
+}
+
+void test_decor_layout_deterministic() {
+  const Rect panel = kPanel;
+  int sawMissing = 0;
+  for (uint32_t seed = 0; seed < 3000; ++seed) {
+    for (WearLevel lv : {WearLevel::Off, WearLevel::Light, WearLevel::Heavy}) {
+      const WearLayout a = layoutFromSeed(seed, lv, panel), b = layoutFromSeed(seed, lv, panel);
+      ASSERT_TRUE(a.tapes.size() == b.tapes.size() && a.screws.size() == 4);
+      for (size_t i = 0; i < a.tapes.size(); ++i)
+        ASSERT_TRUE(a.tapes[i].cx == b.tapes[i].cx && a.tapes[i].cy == b.tapes[i].cy && a.tapes[i].rotDeg == b.tapes[i].rotDeg &&
+                    a.tapes[i].slot == b.tapes[i].slot && tapeInsidePanel(a.tapes[i], panel));
+      const size_t n = a.tapes.size();
+      if (lv == WearLevel::Off) ASSERT_TRUE(n == 0);
+      if (lv == WearLevel::Light) ASSERT_TRUE(n >= 1 && n <= 2);
+      if (lv == WearLevel::Heavy) ASSERT_TRUE(n >= 2 && n <= 3);
+      int missing = 0;
+      for (const auto& s : a.screws) missing += s.missing ? 1 : 0;
+      ASSERT_TRUE(missing <= 1);
+      sawMissing += missing;
+      std::set<int> slots;   // distinct slots, valid index
+      for (const auto& t : a.tapes) ASSERT_TRUE(t.slot >= 0 && t.slot < kNumTapeSlots && slots.insert(t.slot).second);
+    }
+  }
+  ASSERT_TRUE(sawMissing > 0);
+  // Light is a prefix of Heavy; screws do not depend on the level; the seed matters
+  for (uint32_t seed = 0; seed < 500; ++seed) {
+    const WearLayout l = layoutFromSeed(seed, WearLevel::Light, panel), h = layoutFromSeed(seed, WearLevel::Heavy, panel);
+    ASSERT_TRUE(l.tapes.size() <= h.tapes.size());
+    for (size_t i = 0; i < l.tapes.size(); ++i) ASSERT_TRUE(l.tapes[i].slot == h.tapes[i].slot && l.tapes[i].cx == h.tapes[i].cx);
+    for (int i = 0; i < 4; ++i) ASSERT_TRUE(l.screws[i].angleDeg == h.screws[i].angleDeg && l.screws[i].missing == h.screws[i].missing);
+  }
+  bool differs = false;
+  const WearLayout a = layoutFromSeed(5u, WearLevel::Heavy, panel);
+  for (uint32_t s = 6; s < 40 && !differs; ++s) {
+    const WearLayout c = layoutFromSeed(s, WearLevel::Heavy, panel);
+    differs = c.tapes.size() != a.tapes.size() || c.tapes[0].cx != a.tapes[0].cx || c.screws[0].angleDeg != a.screws[0].angleDeg;
+  }
+  ASSERT_TRUE(differs);
+  // a different panel size scales the placement and keeps the tapes inside
+  const Rect small{10, 20, 640, 445};
+  for (uint32_t seed = 0; seed < 300; ++seed)
+    for (const auto& t : layoutFromSeed(seed, WearLevel::Heavy, small).tapes) ASSERT_TRUE(tapeInsidePanel(t, small));
+  // the drawn tape (ragged ends and shadow) stays inside the panel too, at the edge where the clamp acts
+  const Rect tight{0, 0, 120, 80};
+  for (uint32_t seed = 0; seed < 300; ++seed)
+    for (const auto& t : layoutFromSeed(seed, WearLevel::Heavy, tight).tapes) {
+      const auto b = FairyTapes::Ui::tapeBounds(t.cx, t.cy, t.w, t.h, t.rotDeg, FairyTapes::Ui::kTapeRaggedX + 1.0);
+      ASSERT_TRUE(b.left >= -1e-3 && b.top >= -1e-3 && b.right <= tight.w + 1e-3 && b.bottom <= tight.h + 1e-3);
+    }
+}
+
+// What a generated tape must never touch: the control views, the screens, the meter and GR rows, the clip and ACT LEDs,
+// the LUFS screen, the target LED (fixedReadouts), the MATCH and view actions, and the screws.
+bool overlapsBox(const FairyTapes::Ui::TapeBox& b, const Rect& r) {
+  return b.left < r.x + r.w && b.right > r.x && b.top < r.y + r.h && b.bottom > r.y;
+}
+FairyTapes::Ui::TapeBox drawnBox(const TapePlacement& t) {   // rotated rectangle plus ragged ends and shadow
+  return FairyTapes::Ui::tapeBounds(t.cx, t.cy, t.w, t.h, t.rotDeg, FairyTapes::Ui::kTapeRaggedX + 1.0);
+}
+Rect asRect(const FairyTapes::Ui::TapeBox& b) {
+  return {static_cast<float>(b.left), static_cast<float>(b.top), static_cast<float>(b.right - b.left), static_cast<float>(b.bottom - b.top)};
+}
+
+void test_decor_tapes_never_cover_controls() {
+  struct Obstacle {
+    Rect rect;
+    std::string what;
+  };
+  std::vector<Obstacle> obstacles;
+  for (const Rect& r : fixedReadouts()) obstacles.push_back({r, "a screen, meter or LED"});
+  for (const ControlSpec& c : kControls) obstacles.push_back({viewRect(c), std::string("control ") + (c.name ? c.name : "?")});
+  for (const ActionSpec& a : kActions) obstacles.push_back({viewRect(a), std::string("action ") + a.name});
+  obstacles.push_back({kLufsScreenRect, "the LUFS screen"});
+  obstacles.push_back({kScreenRect, "the screen"});
+  for (const MeterRow& r : kMeterRows) obstacles.push_back({meterBarRect(r), "a peak row"});
+  std::set<std::string> clashes;   // "slot N covers X", all of them listed before failing
+  size_t tapesSeen = 0;
+  for (uint32_t seed = 0; seed < 200; ++seed) {
+    for (WearLevel lv : {WearLevel::Light, WearLevel::Heavy, WearLevel::Off}) {
+      const WearLayout l = layoutFromSeed(seed, lv, kPanel);
+      for (size_t i = 0; i < l.tapes.size(); ++i) {
+        ++tapesSeen;
+        const auto b = drawnBox(l.tapes[i]);
+        const std::string slot = "slot " + std::to_string(l.tapes[i].slot) + " covers ";
+        for (const Obstacle& o : obstacles)
+          if (overlapsBox(b, o.rect)) clashes.insert(slot + o.what);
+        for (const ScrewPlacement& s : l.screws)
+          if (overlapsBox(b, Rect{s.x - 7, s.y - 7, 14, 14})) clashes.insert(slot + "a screw");
+        for (size_t j = i + 1; j < l.tapes.size(); ++j)
+          if (overlapsBox(b, asRect(drawnBox(l.tapes[j])))) clashes.insert(slot + "tape " + std::to_string(l.tapes[j].slot));
+      }
+    }
+  }
+  for (const std::string& c : clashes) std::fprintf(stderr, "  %s\n", c.c_str());
+  ASSERT_TRUE(tapesSeen > 400);   // the loop did look at tapes
+  ASSERT_TRUE(clashes.empty());
+}
+
+void test_screw_look_matches_shared_generator() {
+  const Rect panel = kPanel;
+  for (uint32_t k = 0; k < 5000; ++k) {
+    const uint32_t seed = k * 2654435761u;
+    const auto shared = FairyTapes::Ui::generateScrews(seed);
+    const WearLayout l = layoutFromSeed(seed, WearLevel::Light, panel);
+    ASSERT_TRUE(l.screws.size() == shared.size());
+    for (size_t i = 0; i < shared.size(); ++i) {
+      ASSERT_TRUE(l.screws[i].cross == shared[i].cross && l.screws[i].missing == shared[i].missing &&
+                  l.screws[i].angleDeg == static_cast<float>(shared[i].initialAngle));
+      ASSERT_TRUE(l.screws[i].x == kScrewPos[i][0] && l.screws[i].y == kScrewPos[i][1]);
+    }
+    const auto specs = screwSpecs(seed);   // screw_angles.h: the same look at the kScrewPos
+    for (size_t i = 0; i < shared.size(); ++i)
+      ASSERT_TRUE(specs[i].x == kScrewPos[i][0] && specs[i].y == kScrewPos[i][1] && specs[i].cross == shared[i].cross &&
+                  specs[i].missing == shared[i].missing && specs[i].initialAngle == shared[i].initialAngle);
+  }
+}
+
+bool nearD(double a, double b) { return std::fabs(a - b) < 1e-4; }
+
+void test_screw_angles() {
+  ASSERT_TRUE(nearD(shownScrewAngle(30.0, 0.f), 30) && nearD(shownScrewAngle(30.0, 45.5f), 75.5) && nearD(shownScrewAngle(170.0, 300.f), 110));
+  ASSERT_TRUE(nearD(shownScrewAngle(30.0, std::nanf("")), 30) && nearD(shownScrewAngle(30.0, INFINITY), 30));
+  ASSERT_TRUE(nearD(userScrewAngle(75.5, 30.0), 45.5) && nearD(userScrewAngle(10, 30.0), 340) && userScrewAngle(30, 30.0) == 0.f);
+  for (double initial : {0.0, 8.0, 91.0, 180.0})
+    for (double shown : {0.0, 0.25, 33.3, 179.9, 359.75}) {
+      const float user = userScrewAngle(shown, initial);
+      ASSERT_TRUE(user >= 0.f && user < 360.f);
+      const double back = shownScrewAngle(initial, user);
+      ASSERT_TRUE(nearD(back, shown) || nearD(std::fabs(back - shown), 360));
+    }
+  Decor d;
+  d.seed = 77;
+  d.screwAngles[1] = 12.f;
+  d.tapeTexts = {"VOX"};
+  const auto e = withScrewAngle(d, 2, 400.f);
+  ASSERT_TRUE(e.seed == 77 && e.tapeTexts == d.tapeTexts && e.screwAngles[0] == 0.f && e.screwAngles[1] == 12.f &&
+              e.screwAngles[2] == 40.f && e.screwAngles[3] == 0.f);
+  ASSERT_TRUE(withScrewAngle(d, -1, 5.f).screwAngles[0] == 0.f && withScrewAngle(d, 4, 5.f).screwAngles[3] == 0.f);
+  ASSERT_TRUE(withScrewAngle(d, 0, std::nanf("")).screwAngles[0] == 0.f);
+}
+
+void test_tape_texts_and_ink() {
+  using FairyTapes::Ui::TapeFontId;
+  ASSERT_TRUE(tapeFontIdOf(TapeFont::Zeyada) == TapeFontId::Zeyada && tapeFontIdOf(TapeFont::RockSalt) == TapeFontId::RockSalt &&
+              tapeFontIdOf(TapeFont::HomemadeApple) == TapeFontId::HomemadeApple);
+  Decor d;
+  ASSERT_TRUE(tapeTextFor(d, 0).empty());
+  d.tapeTexts = {"VOX", "", "keep!"};
+  ASSERT_TRUE(tapeTextFor(d, 0) == "VOX" && tapeTextFor(d, 2) == "keep!" && tapeTextFor(d, 3).empty() && tapeTextFor(d, -1).empty());
+  Decor e = withTapeText(Decor{}, 4, "  TAKE 3  ");
+  ASSERT_TRUE(e.tapeTexts.size() == 5 && e.tapeTexts[4] == "TAKE 3");
+  e = withTapeText(e, 4, "a very long text indeed");
+  ASSERT_TRUE(e.tapeTexts[4] == "a very long te");
+  ASSERT_TRUE(withTapeText(e, kNumTapeSlots, "x").tapeTexts == e.tapeTexts && withTapeText(e, -1, "x").tapeTexts == e.tapeTexts);
+  const TapeLook a = tapeLook(5, 2), b = tapeLook(5, 2), c = tapeLook(5, 3);
+  ASSERT_TRUE(a.paperSeed == b.paperSeed && a.inkSeed == b.inkSeed && a.paperSeed != c.paperSeed);
+  for (uint32_t s = 0; s < 200; ++s)
+    for (int slot = 0; slot < kNumTapeSlots; ++slot) {
+      const TapeLook l = tapeLook(s, slot);
+      ASSERT_TRUE(l.textSize >= 11 && l.textSize <= 14 && std::fabs(l.textRotDeg) <= 3);
+    }
+  for (TapeFontId f : {TapeFontId::Zeyada, TapeFontId::RockSalt, TapeFontId::HomemadeApple})
+    for (const char* t : {"VOX", "WWWWWWWWWWWWWW", "@@@@@@@@@@@@@@", "7/12 keep!"})
+      for (double w : {58.0, 70.0, 96.0})
+        for (uint32_t seed = 0; seed < 20; ++seed) {
+          const TapeLook look = tapeLook(seed, static_cast<int>(seed % kNumTapeSlots));
+          const TapeInk ink = tapeInk(f, t, w, look);
+          ASSERT_TRUE(ink.emPx > 0);
+          double lo = 0, hi = 0;
+          for (const auto& p : FairyTapes::Ui::layoutText(f, ink.text, ink.emPx, look.inkSeed, 1.0)) {
+            lo = std::min(lo, p.x);
+            hi = std::max(hi, p.x + p.glyph->advance / 1000.0 * ink.emPx * p.scale);
+          }
+          ASSERT_TRUE(hi - lo <= w - 2 * kTapeTextEdge);
+        }
+  ASSERT_TRUE(tapeInk(TapeFontId::Zeyada, "", 96, tapeLook(1, 0)).text.empty());
+}
+
 } // namespace
 
 int main() {
@@ -1096,6 +1405,17 @@ int main() {
   RUN_TEST(test_scroll_history_ring);
   RUN_TEST(test_axis_scales);
   RUN_TEST(test_curve_paths_inside_screen);
+  RUN_TEST(test_prefs_parse_defaults_and_bad_values);
+  RUN_TEST(test_prefs_roundtrip);
+  RUN_TEST(test_prefs_file_missing_or_oversized_or_binary);
+  RUN_TEST(test_prefs_path_per_os);
+  RUN_TEST(test_decor_layout_deterministic);
+  RUN_TEST(test_decor_tapes_never_cover_controls);
+  RUN_TEST(test_screw_look_matches_shared_generator);
+  RUN_TEST(test_screw_angles);
+  RUN_TEST(test_tape_texts_and_ink);
+  std::error_code ec;
+  fs::remove_all(scratchDir(), ec);   // the scratch folder of the prefs tests
   std::printf("%d passed, %d failed\n", g_passed, g_failed);
   return g_failed == 0 ? 0 : 1;
 }

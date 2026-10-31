@@ -156,11 +156,11 @@
 **Interfaces:**
 - Produces (modelli: file omonimi di `src/deep-throat/src/ui/`): `Prefs` (i campi di Deep Throat più `FairyTapes::Ui::EditorSize size = S100`, chiave `size`, con `sizeLabel`/`parseSizeLabel` del Task 1), `parsePrefs`, `serializePrefs`, `prefsPathFor`, `prefsPath`, `loadPrefs`, `savePrefs` (file `HappyEnding.prefs`); `WearLayout layoutFromSeed(std::uint32_t seed, WearLevel, const Rect& panel)` (nastri 0 / 1-2 / 2-3 per Off / Light / Heavy, solo negli slot di `kTapeSlots`, mai su controlli, schermo, meter, LED, LUFS); `screw_angles.h` e `tapes.h` come in Deep Throat.
 
-- [ ] **Step 1: Scrivere i test** (modello Deep Throat, Task 6): `test_prefs_parse_defaults_and_bad_values`, `test_prefs_roundtrip` (anche `size`; `size=33` → 100), `test_prefs_file_missing_or_oversized_or_binary`, `test_decor_layout_deterministic`, `test_decor_tapes_never_cover_controls` (200 semi × tre livelli contro ogni `viewRect`, `kScreenRect`, righe dei meter, LED e schermo LUFS), `test_screw_look_matches_shared_generator`.
-- [ ] **Step 2: Eseguire e vedere fallire.**
-- [ ] **Step 3: Implementare** copiando e adattando i file di Deep Throat.
-- [ ] **Step 4: Eseguire** `ctest -R happy_ending_ui_tests` → PASS.
-- [ ] **Step 5: Commit:** `feat(happy-ending): preferences and seeded decor (pure)`.
+- [x] **Step 1: Scrivere i test** (modello Deep Throat, Task 6): `test_prefs_parse_defaults_and_bad_values`, `test_prefs_roundtrip` (anche `size`; `size=33` → 100), `test_prefs_file_missing_or_oversized_or_binary`, `test_decor_layout_deterministic`, `test_decor_tapes_never_cover_controls` (200 semi × tre livelli contro ogni `viewRect`, `kScreenRect`, righe dei meter, LED e schermo LUFS), `test_screw_look_matches_shared_generator`.
+- [x] **Step 2: Eseguire e vedere fallire.**
+- [x] **Step 3: Implementare** copiando e adattando i file di Deep Throat.
+- [x] **Step 4: Eseguire** `ctest -R happy_ending_ui_tests` → PASS.
+- [x] **Step 5: Commit:** `feat(happy-ending): preferences and seeded decor (pure)`.
 
 ---
 
