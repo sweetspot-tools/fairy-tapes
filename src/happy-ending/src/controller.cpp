@@ -249,9 +249,11 @@ Steinberg::tresult PLUGIN_API Controller::getParamValueByString(Steinberg::Vst::
   char* end = nullptr;
   const double num = std::strtod(typed.c_str(), &end);
   if (t.size && end != typed.c_str()) {
+    // HI PASS FREQ is read on the scale of the current HI PASS M/S (SIDE has the mono-bass scale)
+    const auto valueAt = [&](int i) { return id == kHpFreq ? hpFreqHz(hpMs == 2, i) : t.data[i]; };
     int best = 0;
     for (int i = 1; i < steps; ++i)
-      if (std::fabs(t.data[i] - num) < std::fabs(t.data[best] - num)) best = i;
+      if (std::fabs(valueAt(i) - num) < std::fabs(valueAt(best) - num)) best = i;
     valueNormalized = normFromIndex(id, best);
     return Steinberg::kResultOk;
   }

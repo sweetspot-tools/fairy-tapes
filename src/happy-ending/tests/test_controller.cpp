@@ -135,6 +135,13 @@ void testTypedValues() {
   ASSERT_TRUE(parse(kInputGain, "+3.0 dB", v) && indexFromNorm(kInputGain, v) == 30);
   ASSERT_TRUE(parse(kInputGain, "-3", v) && indexFromNorm(kInputGain, v) == 18);   // nearest table value
   ASSERT_TRUE(parse(kBypass, "on", v) && v == 1.0);
+  // a bare number on HI PASS FREQ is read on the scale of the current HI PASS M/S
+  f.setIndex(kHpMs, 0);
+  ASSERT_TRUE(parse(kHpFreq, "35", v) && indexFromNorm(kHpFreq, v) == 4);   // 35 Hz on ST
+  f.setIndex(kHpMs, 2);
+  ASSERT_TRUE(parse(kHpFreq, "60", v) && indexFromNorm(kHpFreq, v) == 1);   // 60 Hz on SIDE
+  ASSERT_TRUE(parse(kHpFreq, "160", v) && indexFromNorm(kHpFreq, v) == 4);
+  ASSERT_TRUE(parse(kHpFreq, "80 Hz", v) && indexFromNorm(kHpFreq, v) == 2);
   ASSERT_TRUE(!parse(kLmQ, "bogus", v));
 }
 
