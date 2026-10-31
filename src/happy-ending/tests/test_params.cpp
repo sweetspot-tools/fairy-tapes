@@ -5,6 +5,7 @@
 
 #include "params.h"
 #include "tuning.h"
+#include "pluginterfaces/base/futils.h"
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -83,6 +84,20 @@ void testNormEdges() {
   ASSERT_NEAR(normFromIndex(kBypass, 1), 1.0);
   ASSERT_TRUE(indexFromNorm(kInputGain, -0.3) == 0);
   ASSERT_TRUE(indexFromNorm(kInputGain, 1.7) == kParams[kInputGain].steps - 1);
+}
+
+// The host and the SDK's StringListParameter / Parameter::toPlain read a normalized value as
+// min(steps - 1, floor(norm * steps)); the processor must read the same index (no lround).
+void testIndexMatchesSdkConversion() {
+  for (int i = 0; i < kNumParams; ++i) {
+    const auto id = static_cast<ParamID>(i);
+    const int steps = kParams[id].steps;
+    for (int k = 0; k <= 2000; ++k) {
+      const double n = k / 2000.0;
+      const int sdk = Steinberg::FromNormalized<double>(n, steps - 1);
+      ASSERT_TRUE(indexFromNorm(id, n) == sdk);
+    }
+  }
 }
 
 void testFrozenOrder() {
@@ -221,6 +236,7 @@ int main() {
   RUN_TEST(testNamesUnique);
   RUN_TEST(testDefaultsRoundTrip);
   RUN_TEST(testNormEdges);
+  RUN_TEST(testIndexMatchesSdkConversion);
   RUN_TEST(testFrozenOrder);
   RUN_TEST(testHpSideScaleSameIndexRange);
   RUN_TEST(testDefaultValues);

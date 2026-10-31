@@ -73,6 +73,40 @@ enum HiddenID : Steinberg::Vst::ParamID {
   kSetActive
 };
 
+// LISTEN is a 4-position session parameter (-1, 0, 1, 2), normalized as (band + 1) / 3: off at the default.
+inline constexpr int kListenSteps = 4;
+inline constexpr double kDefaultListenNorm = 0.0;  // -1 = off
+inline constexpr double kDefaultSetNorm = 0.0;     // SET off
+inline double normFromListen(int band) {
+  const int i = band < -1 ? 0 : (band > 2 ? 3 : band + 1);
+  return static_cast<double>(i) / 3.0;
+}
+// Same reading as the SDK for a 3-step parameter: min(3, floor(norm * 4)).
+inline int listenFromNorm(double norm) {
+  if (!(norm > 0.0)) return -1;
+  if (norm >= 1.0) return 2;
+  const int i = static_cast<int>(norm * kListenSteps);
+  return (i > 3 ? 3 : i) - 1;
+}
+
+// Display parameters (processor -> editor): hidden, read-only, outside the stored table. Values are
+// normalized as in display.h (peaks over -60..0 dB, GR over 0..12 dB, LUFS over -60..0, clip 0/1).
+// kClearClips and kResetIntegrated are the only writable ones: the editor sets 1, the processor does
+// the action on the audio thread and writes 0 back (the acknowledgement).
+inline constexpr Steinberg::Vst::ParamID kDisplayBase = 1000;
+enum DisplayID : Steinberg::Vst::ParamID {
+  kDispInL = kDisplayBase, kDispInR, kDispOutL, kDispOutR,
+  kDispGr0, kDispGr1, kDispGr2, kDispGr3, kDispGr4,          // G C L F M
+  kDispClip0, kDispClip1, kDispClip2, kDispClip3, kDispClip4,
+  kDispClip5, kDispClip6, kDispClip7, kDispClip8,            // IN FEQ VEQ GLU CLP LIM FIN MTL OUT
+  kDispLufsShort, kDispLufsInt,
+  kDispDynLow, kDispDynAir,
+  kDispLatency,                                              // samples, normalized over 0..kLatencyDisplayMax
+  kClearClips,
+  kResetIntegrated,
+  kNumDisplayIDs
+};
+
 struct ParamSpec {
   const char* name;
   int steps;         // number of positions (2 for a switch)
@@ -236,11 +270,16 @@ inline constexpr std::array<ParamSpec, kNumParams> kParams = {{
 }};
 
 // Position <-> normalized value. Out-of-range input is clamped.
+// The index is min(steps - 1, floor(norm * steps)): exactly what the SDK's Parameter::toPlain and
+// StringListParameter read (FromNormalized), so the processor, the controller (strings, MATCH) and
+// the host's generic UI all see the same position for any normalized value, not only for the grid
+// points index / (steps - 1).
 inline int indexFromNorm(ParamID id, double norm) {
-  const int last = kParams[id].steps - 1;
+  const int steps = kParams[id].steps;
   if (!(norm > 0.0)) return 0;  // also NaN
-  if (norm >= 1.0) return last;
-  return static_cast<int>(std::lround(norm * last));
+  if (norm >= 1.0) return steps - 1;
+  const int i = static_cast<int>(norm * steps);
+  return i > steps - 1 ? steps - 1 : i;
 }
 
 inline double normFromIndex(ParamID id, int index) {
@@ -248,6 +287,12 @@ inline double normFromIndex(ParamID id, int index) {
   if (index <= 0) return 0.0;
   if (index >= last) return 1.0;
   return static_cast<double>(index) / static_cast<double>(last);
+}
+
+// Normalized defaults of the whole table, in ParamID order (kNumParams values).
+inline void loadDefaults(double* norm) {
+  for (int i = 0; i < static_cast<int>(kNumParams); ++i)
+    norm[i] = normFromIndex(static_cast<ParamID>(i), kParams[static_cast<std::size_t>(i)].defaultIndex);
 }
 
 // The oversampling choice is a project setting, not an automation target.

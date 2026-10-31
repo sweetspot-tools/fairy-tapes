@@ -133,6 +133,7 @@ Licenze da ricontrollare sui file `LICENSE` prima del rilascio. ZL Equalizer è 
 ## 9. Stato, latenza, robustezza
 
 - **Non salvati nello stato:** LISTEN e SET (sempre spenti all'apertura del progetto e alla chiusura dell'editor).
+- **Stato (Task 13):** versione 1, i soli parametri della tabella congelata (OVERSAMPLING compreso); uno stato più corto (build più vecchia) carica ciò che c'è e lascia il resto ai default. **Bus:** un ingresso e un'uscita, entrambi mono o entrambi stereo, nessun sidechain; il mono è elaborato come doppio mono e i LUFS sono corretti di −3,01 LU. Il cambio di OVERSAMPLING chiede all'host di rileggere la latenza e ricostruisce le zone alla riattivazione.
 - **Latenza:** FINE EQ e GLUE a latenza zero; il look-ahead del LIMIT (e del METALHEAD, se lo usa) va dichiarato all'host e resta costante cambiando stile.
 - **Oversampling (deciso 2026-10-24):** impostazione **OVERSAMPLING** in BEHAVIOUR (salvata nel progetto): Off / 2× / 4×, default 2×; vale solo per gli stadi non lineari (CLIP, TUBE del VIBE EQ, FINAL, METALHEAD). Filtri a fase lineare; la latenza aggiunta si somma a quella del LIMIT, è dichiarata all'host e cambia solo cambiando l'impostazione.
 - **Valori da tarare a orecchio (deciso 2026-10-24):** soglie e tempi del DYN del VIBE, basi di release degli stili, soglia forzata di SET, curva della LOUDNESS. Si parte dai valori della preview, raccolti in un'unica tabella nel codice; il piano ha un compito di taratura con una build di prova, che comprende anche l'ascolto finale di FINE EQ e GLUE con tutta la catena.
