@@ -2,7 +2,7 @@
 
 Channel strip VST3 per voci, della suite Fairy Tapes. Catena fissa e pochi controlli: si mette sulla traccia voce, si sceglie la modalità e si regolano le manopole. Ingresso e uscita stereo (accettato anche mono → mono).
 
-Documenti: spec `docs/superpowers/specs/2026-10-10-deep-throat-design.md`, piano `docs/superpowers/plans/2026-10-10-deep-throat.md`, ricerca sul compressore `src/deep-throat/docs/COMPRESSOR_RESEARCH.md`.
+Documenti: spec `docs/superpowers/specs/2026-10-10-deep-throat-design.md`, piano `docs/superpowers/plans/2026-10-10-deep-throat.md`, ricerca sul compressore `src/deep-throat/docs/COMPRESSOR_RESEARCH.md`. Editor: spec `docs/superpowers/specs/2026-10-24-deep-throat-gui-design.md`, piano `docs/superpowers/plans/2026-10-24-deep-throat-gui.md`, preview `src/deep-throat/docs/mockups/deep_throat_rack.html`.
 
 ## Modalità
 
@@ -71,30 +71,60 @@ Breath Listen ha la precedenza su De-ess Listen. Breath Listen funziona anche co
 
 80 ms di look-ahead più un frame del rilevatore spettrale (`nextPow2(20 ms · sample rate)` campioni), uguale in tutte le modalità (in Puke il rilevatore a livello ha latenza 0 e riceve più look-ahead). Il valore è riportato all'host, che compensa; con Bypass e IN spenti non cambia. Un cambio di sample rate cambia la latenza e l'host la rilegge dopo `setupProcessing` (non c'è una notifica di riavvio).
 
+## Editor
+
+L'editor (VSTGUI, 1000 × 614, dimensione fissa con il fattore di scala dell'host) si apre dall'host come quello di ogni plugin VST3; riproduce la preview `src/deep-throat/docs/mockups/deep_throat_rack.html`.
+
+- **Fronte:** un controllo per ognuno dei 25 parametri. Manopole: doppio clic = valore predefinito, clic sul valore stampato = campo per scriverlo (Invio conferma, Esc annulla). I controlli a scatti (Mode, Ratio, Dist, SC HPF) mostrano sempre lo scatto usato dal DSP, anche quando l'host manda un valore fuori griglia. Un modulo con IN spento attenua i propri controlli e le proprie scritte (anche il suo Listen); il Bypass attenua tutto tranne il proprio pulsante, le righe IN e OUT di LEVEL, i LED di clip e le scritte dell'intestazione e di LEVEL e MODE. Le scritte di sola lettura (rilevatore, descrizione della modalità, `MAX ±`, HPF e MUD CUT, i tre dB del Tone, Ratio e Dist in AUTO) vengono dalla tabella unica `src/mode_table.h`. I valori mostrati dall'host sono le stesse stringhe del pannello (`src/value_format.h`).
+- **SCOPE e LEVEL:** alimentati dal motore tramite parametri nascosti di sola lettura (ID da 1000, circa ogni 16 ms). LEVEL: picchi d'ingresso e d'uscita, riduzione del compressore (GR), LED di clip tenuti 2 s (un clic li spegne). SCOPE: circa 8,8 s di inviluppo della voce, guadagno del Rider e banda dei respiri rilevati. La spia BREATH e la banda dei respiri si spengono con Breath IN spento o con il Bypass; la riga GR si svuota col Bypass.
+- **Usura, nastri e viti:** generati da un seme salvato nello stato dell'istanza (stato v2; uno stato v1 si carica con i default). Un clic su un nastro permette di scriverci (al massimo 14 caratteri); le viti si ruotano trascinandole. Testi e angoli si salvano col progetto.
+- **Retro:** il link **BACK →** in alto a destra gira il pannello. Schede: **SETTINGS** (APPEARANCE: Wear Off/Light/Heavy, font dei nastri, font dei valori, RE-ROLL per un nuovo seme dell'istanza; NOTES), **MODES** (valori imposti da ogni modalità, generati da `mode_table.h`, colonna attiva in giallo), **ROUTING** (schema del segnale nell'ordine del motore), **CREDITS** (versione, licenza, componenti di terzi). **← BACK** torna al fronte.
+- **Preferenze:** valgono per l'utente, in ogni progetto. File `FairyTapes/DeepThroat.prefs` nella cartella delle preferenze: `$XDG_CONFIG_HOME` (o `~/.config`) su Linux, `~/Library/Application Support` su macOS, `%APPDATA%` su Windows. Chiavi `wear=Off|Light|Heavy`, `notes=Show|Hide`, `tapeFont=Zeyada|RockSalt|HomemadeApple`, `valuesFont=Tape|Standard`; scrittura atomica, un file mancante o rovinato dà i default.
+
+### Render fuori schermo
+
+`deep_throat_render` (solo Linux) disegna l'editor in PNG senza host né finestra, per il confronto a occhio con la preview:
+
+```
+cmake --build /tmp/dt-build --target deep_throat_render -j2
+/tmp/dt-build/src/deep-throat/deep_throat_render /tmp/dt-render back=all meters scope
+```
+
+Scrive `front.png` e, con `back=all`, `back_settings.png`, `back_modes.png`, `back_routing.png`, `back_credits.png`. Altre opzioni (elenco completo in testa a `tools/render_editor.cpp`): `bypass`, `mode=speak|sing|puke`, `module-off=<modulo>`, `wear=off|light|heavy`, `seed=<n>`, `text=<s>`, `font=…`, `values=standard|tape`, `screw1..4=<gradi>`, `no-grain`, `cycles=<n>`. Senza `wear=`, `font=` e `values=` decide il file delle preferenze.
+
 ## Costruire
 
 Fuori dal repo (il disco `/srv/http` è piccolo):
 
 ```
 cmake -S . -B /tmp/dt-build -DCMAKE_BUILD_TYPE=Release -DGPU_NAM_DISABLE_CUDA=ON
-cmake --build /tmp/dt-build --target deep_throat deep_throat_tests deep_throat_factory_test -j2
+cmake --build /tmp/dt-build --target deep_throat -j2
+cmake --build /tmp/dt-build --target deep_throat_tests deep_throat_factory_test deep_throat_state_module_test deep_throat_ui_tests -j2
+cmake --build /tmp/dt-build --target deep_throat_editor_tests -j2
+cmake --build /tmp/dt-build --target deep_throat_render -j2
 ctest --test-dir /tmp/dt-build -R deep_throat --output-on-failure
 ```
 
-Il bundle è `DeepThroat.vst3`, costruito in locale in `dist/`. La CI (al merge verso `master`) costruisce tutti i target e carica il bundle come artifact `deep-throat-linux`, `deep-throat-windows` e `deep-throat-macos`; non esegue `ctest`. Non costruire tutti i target insieme.
+Il bundle è `DeepThroat.vst3`, costruito in locale in `dist/`. La CI (al merge verso `master`) costruisce tutti i target e carica il bundle come artifact `deep-throat-linux`, `deep-throat-windows` e `deep-throat-macos`; non esegue `ctest`. Non costruire tutti i target insieme; i target con VSTGUI (`deep_throat`, `deep_throat_editor_tests`, `deep_throat_render`) uno alla volta.
 
 ## Test
 
-`tests/test_deep_throat.cpp` (harness `RUN_TEST`/`ASSERT_TRUE`, segnali sintetici) e `tests/test_factory.cpp` (carica il bundle, SKIP se manca). Coprono:
+`tests/test_deep_throat.cpp` (harness `RUN_TEST`/`ASSERT_TRUE`, segnali sintetici), `tests/test_factory.cpp` (carica il bundle, SKIP se manca: ciclo di vita, flag dei parametri nascosti, `createView`), `tests/test_state_module.cpp` (stato v2 e messaggi del decor sul modulo reale, SKIP se manca), `tests/test_ui.cpp` (parti pure dell'editor: layout, scritte dinamiche, formati dei valori, preferenze, decor, storia dello scope, schede del retro), `tests/test_editor.cpp` (comportamento dell'editor senza finestra con un `Controller` reale come host: controlli, timer, meter, scope, nastri, viti, flip; solo Linux) e il test `deep_throat_render_smoke` (il tool scrive un PNG 1000 × 614). Coprono:
 
 - parametri: numero, intervalli, scalini delle scelte (coerenti con la `StringListParameter` dell'SDK), default, salvataggio e ripristino dello stato, rifiuto di versioni sbagliate e NaN;
 - ogni blocco: Rider, FFT, rilevatori di respiri (spettrale e a livello, sensibilità, silenzio, growl e inalazione forte in Puke), riduttore, EQ (passa-alto, fango, notch dinamico e sua persistenza), de-esser (Freq, Listen, collegamento stereo, Puke), compressore (rapporti, tempi, passa-alto, distorsione, compensazione, Mix, input estremi), Tone, preset;
+- tabella per modalità e valori di visualizzazione (picchi, clip, GR, Rider, respiro, limitatore a 16 ms, nessuna allocazione);
 - engine: valori finiti e silenzio esatto, blocchi da 0 e 1 campione, mono, latenza e Bypass, respiro ridotto end to end, bordi del respiro coperti dal look-ahead, cambio di modalità, sample rate 44,1-192 kHz, tutti gli IN spenti = passthrough, click dei toggle, Listen, ordine della catena contro un riferimento, nessuna allocazione in `process`.
 
 ## Limiti noti
 
 - **Soglie tarate su segnali sintetici**, non su voci reali, growl e scream soprattutto. Vanno ritarate con registrazioni di riferimento (spec §9).
-- **Nessuna GUI custom:** l'host mostra la lista dei parametri. Layout in anteprima in `src/deep-throat/docs/mockups/deep_throat_rack.html` (spec §10); l'implementazione è un piano a parte.
+- **Editor:**
+  - nessun confronto automatico con la preview: il confronto dei PNG del tool di render con `deep_throat_rack.html` è a occhio;
+  - colori, attenuazioni a schermo e flip 3D del retro non sono provati senza un host (i test dell'editor sono senza finestra);
+  - lo SCOPE sta sulla linea temporale dell'ingresso: la linea del guadagno del Rider è calcolata per l'audio ritardato e appare sfalsata di circa D (85 ms) rispetto alla voce disegnata (solo estetico);
+  - il timer dell'editor (30 ms) legge solo l'ultimo dei valori scritti ogni 16 ms: un picco breve può non comparire;
+  - i test dell'editor e il tool di render girano solo su Linux; la compilazione dell'editor su Windows e macOS non è verificata qui (lo fa la CI al merge verso `master`).
 - **Rilevamento dei respiri:**
   - l'inizio di un respiro è riconosciuto con un ritardo di circa 60-80 ms (durata minima): in Puke la riduzione parte circa 30 ms dopo l'inizio del respiro; in Speak/Sing parte circa 25 ms prima e può intaccare la coda della frase precedente;
   - il primo respiro di una ripresa non viene rilevato (i rilevatori hanno bisogno del contesto di frase);
