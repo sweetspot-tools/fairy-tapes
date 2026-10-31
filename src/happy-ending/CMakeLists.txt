@@ -270,6 +270,19 @@ target_include_directories(happy_ending_controller_tests PRIVATE
 target_link_libraries(happy_ending_controller_tests PRIVATE sdk fairy_ui)
 add_test(NAME happy_ending_controller_tests COMMAND happy_ending_controller_tests)
 
+# Pure editor layout (ui/layout.h, ui/editor_size.h): no VSTGUI, only SDK type headers through params.h.
+add_executable(happy_ending_ui_tests
+  tests/test_ui.cpp
+)
+target_include_directories(happy_ending_ui_tests PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/src
+  ${VST3_SDK_PATH}
+  ${VST3_SDK_PATH}/pluginterfaces/base
+  ${VST3_SDK_PATH}/pluginterfaces/vst
+)
+target_link_libraries(happy_ending_ui_tests PRIVATE fairy_ui)  # header-only (fairy_ui/silkscreen.h, screws.h)
+add_test(NAME happy_ending_ui_tests COMMAND happy_ending_ui_tests)
+
 # Module tests: dlopen the built bundle from dist/ (exit 77 = skipped when the plug-in has not been built).
 if(NOT WIN32)
   if(APPLE)
