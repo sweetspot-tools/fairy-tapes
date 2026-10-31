@@ -1,9 +1,11 @@
 /**
  * Fairy Tapes · Happy Ending — LUFS meter (ITU-R BS.1770-4, spec §3).
  *
- * Own implementation (GPL-3.0) of the published algorithm; the way the K-weighting biquads are
- * derived for any sample rate (analog prototype + bilinear transform) follows the approach of
- * libebur128 (MIT, Jan Kokemüller), no code copied.
+ * Own implementation (GPL-3.0) of the published algorithm. The constants of the analog prototypes
+ * of the two K-weighting stages (centre frequencies, gain, Q and band exponent in
+ * loudness_meter.cpp) come from libebur128 (MIT licence, Copyright (c) 2011 Jan Kokemüller,
+ * https://github.com/jiixyj/libebur128), which derives the biquads for any sample rate the same way
+ * (analog prototype + bilinear transform); no other code is copied.
  *
  * K-weighting = pre-filter (high shelf, about +4 dB at high frequencies) + RLB high pass, then the
  * mean square of each channel (weights 1.0 for L and R) summed. The signal is cut into 100 ms

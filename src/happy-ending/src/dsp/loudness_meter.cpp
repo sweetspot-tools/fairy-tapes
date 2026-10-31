@@ -13,8 +13,10 @@ constexpr double kLoudnessOffset = -0.691;
 constexpr double kAbsoluteGateLufs = -70.0;
 constexpr double kRelativeGateLu = -10.0;
 
-// Analog prototypes of the two stages (fitted so that the bilinear transform at 48 kHz gives the
-// coefficients of the standard); the same prototypes are re-warped for every other rate.
+// Analog prototypes of the two stages. The constants below are those of libebur128 (MIT licence,
+// Copyright (c) 2011 Jan Kokemüller, https://github.com/jiixyj/libebur128, filter.c), fitted so
+// that the bilinear transform at 48 kHz gives the coefficients of the standard; the same
+// prototypes are re-warped for every other rate.
 constexpr double kShelfHz = 1681.974450955533;
 constexpr double kShelfGainDb = 3.999843853973347;
 constexpr double kShelfQ = 0.7071752369554196;

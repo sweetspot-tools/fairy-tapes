@@ -416,8 +416,7 @@ void testOffIsDelayedIdentity() {
   lim2.prepare(kSr, 64);
   lim2.set(make(0, -2.0f, -0.3f));
   std::vector<float> l2 = pl, r2 = pr;
-  const int half = 10000;  // multiple of 64? no: use whole blocks
-  const int blocks = half / 64;
+  const int blocks = 10000 / 64;  // whole blocks only: the limiter is switched off at a block boundary
   for (int b = 0; b < blocks; ++b) lim2.process(l2.data() + b * 64, r2.data() + b * 64, 64);
   lim2.set(make(0, -2.0f, -0.3f, 4, false, false));
   for (int b = blocks; b < 20000 / 64; ++b) lim2.process(l2.data() + b * 64, r2.data() + b * 64, 64);

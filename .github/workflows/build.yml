@@ -124,3 +124,24 @@ jobs:
         with:
           name: deep-throat-macos
           path: dist/DeepThroat.vst3
+
+      - name: Upload Happy Ending (Linux)
+        if: matrix.os == 'ubuntu-24.04' && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: happy-ending-linux
+          path: dist/HappyEnding.vst3
+
+      - name: Upload Happy Ending (Windows)
+        if: matrix.os == 'windows-latest' && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: happy-ending-windows
+          path: dist/HappyEnding.vst3
+
+      - name: Upload Happy Ending (macOS)
+        if: matrix.os == 'macos-latest' && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: happy-ending-macos
+          path: dist/HappyEnding.vst3
