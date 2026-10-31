@@ -41,6 +41,15 @@ void testDisplayIdsAreContiguousFromBase() {
   ASSERT_TRUE(kClearClips >= kDisplayBase && static_cast<int>(kDisplayBase) > static_cast<int>(kSetActive));
 }
 
+void testNewDisplayIdsFollowResetIntegrated() {
+  // appended after the existing ids, which keep their numbers
+  ASSERT_TRUE(kDispGlueIn == kResetIntegrated + 1 && kDispGlueGr == kDispGlueIn + 1);
+  ASSERT_TRUE(kDispLimitIn == kDispGlueGr + 1 && kDispLimitThresh == kDispLimitIn + 1);
+  ASSERT_TRUE(kDispClipIn == kDispLimitThresh + 1 && kDispFinalIn == kDispClipIn + 1);
+  ASSERT_TRUE(kDispFinalIn + 1 == kNumDisplayIDs);
+  ASSERT_TRUE(kDispLatency == 1000 + 22 && kClearClips == 1000 + 23 && kResetIntegrated == 1000 + 24);
+}
+
 void testPeakNorm() {
   ASSERT_NEAR(normFromPeakDb(-60.0), 0.0, 1e-12);
   ASSERT_NEAR(normFromPeakDb(-120.0), 0.0, 1e-12);
@@ -72,6 +81,37 @@ void testLatencyNorm() {
   ASSERT_NEAR(normFromLatency(0), 0.0, 1e-12);
   for (int s : {1, 64, 481, 1920, 16384}) ASSERT_TRUE(latencyFromNorm(normFromLatency(s)) == s);
   ASSERT_TRUE(normFromLatency(1000000) == 1.0 && normFromLatency(-5) == 0.0);
+}
+
+void testStageDbNorm() {
+  ASSERT_TRUE(kStageDisplayMinDb == -60.0 && kStageDisplayMaxDb == 12.0);
+  ASSERT_NEAR(normFromStageDb(-60.0), 0.0, 1e-12);
+  ASSERT_NEAR(normFromStageDb(-120.0), 0.0, 1e-12);   // stage off
+  ASSERT_NEAR(normFromStageDb(12.0), 1.0, 1e-12);
+  ASSERT_NEAR(normFromStageDb(30.0), 1.0, 1e-12);
+  ASSERT_NEAR(normFromStageDb(0.0), 60.0 / 72.0, 1e-12);
+  ASSERT_NEAR(normFromStageDb(-24.0), 0.5, 1e-12);
+  ASSERT_TRUE(normFromStageDb(std::nan("")) == 0.0);
+  ASSERT_TRUE(normFromStageDb(-kInf) == 0.0);
+  ASSERT_NEAR(stageDbFromNorm(0.0), -60.0, 1e-12);
+  ASSERT_NEAR(stageDbFromNorm(1.0), 12.0, 1e-12);
+  ASSERT_NEAR(stageDbFromNorm(-0.3), -60.0, 1e-12);   // clamped
+  ASSERT_NEAR(stageDbFromNorm(4.0), 12.0, 1e-12);
+  for (double d : {-59.0, -30.0, -6.0, 0.0, 3.5, 11.0}) ASSERT_NEAR(stageDbFromNorm(normFromStageDb(d)), d, 1e-9);
+}
+
+void testThreshNorm() {
+  ASSERT_NEAR(normFromThreshDb(-12.0), 0.0, 1e-12);
+  ASSERT_NEAR(normFromThreshDb(0.0), 1.0, 1e-12);
+  ASSERT_NEAR(normFromThreshDb(-6.0), 0.5, 1e-12);
+  ASSERT_NEAR(normFromThreshDb(-30.0), 0.0, 1e-12);
+  ASSERT_NEAR(normFromThreshDb(3.0), 1.0, 1e-12);
+  ASSERT_TRUE(normFromThreshDb(std::nan("")) == 0.0);
+  ASSERT_NEAR(threshDbFromNorm(0.0), -12.0, 1e-12);
+  ASSERT_NEAR(threshDbFromNorm(1.0), 0.0, 1e-12);
+  ASSERT_NEAR(threshDbFromNorm(-1.0), -12.0, 1e-12);
+  ASSERT_NEAR(threshDbFromNorm(2.0), 0.0, 1e-12);
+  for (double d : {-11.5, -8.0, -3.5, -2.0, -0.5}) ASSERT_NEAR(threshDbFromNorm(normFromThreshDb(d)), d, 1e-9);
 }
 
 Meters meters(float inL, float inR, float gr0, bool clipIn, double shortL) {
@@ -110,6 +150,35 @@ void testHoldKeepsPeaksGrAndClipsBetweenWrites() {
   ASSERT_NEAR(g.lufsShort, -17.0, 1e-9);
 }
 
+// Stage inputs and the GLUE GR are held as maxima, the threshold is the latest value; a take restarts
+// the maxima (-120 / 0) and keeps the threshold for the next write.
+void testHoldStageInputsGlueGrAndThreshold() {
+  MeterHold h;
+  Meters a;
+  a.stageInDb[0] = -10.0f; a.stageInDb[1] = -20.0f; a.stageInDb[2] = -120.0f; a.stageInDb[3] = -30.0f;
+  a.glueGrDb = 5.0f; a.limitThreshDb = -2.0f;
+  Meters b;
+  b.stageInDb[0] = -40.0f; b.stageInDb[1] = -15.0f; b.stageInDb[2] = -50.0f; b.stageInDb[3] = -120.0f;
+  b.glueGrDb = 1.0f; b.limitThreshDb = -5.0f;
+  h.add(a, 0.0);
+  h.add(b, 0.0);
+  const DisplayFrame f = h.take();
+  ASSERT_NEAR(f.stageInDb[0], -10.0, 1e-6);
+  ASSERT_NEAR(f.stageInDb[1], -15.0, 1e-6);
+  ASSERT_NEAR(f.stageInDb[2], -50.0, 1e-6);
+  ASSERT_NEAR(f.stageInDb[3], -30.0, 1e-6);
+  ASSERT_NEAR(f.glueGrDb, 5.0, 1e-6);
+  ASSERT_NEAR(f.limitThreshDb, -5.0, 1e-6);   // the latest, not held
+
+  const DisplayFrame empty = h.take();        // nothing added since the last take
+  for (int i = 0; i < 4; ++i) ASSERT_NEAR(empty.stageInDb[i], -120.0, 1e-6);
+  ASSERT_NEAR(empty.glueGrDb, 0.0, 1e-6);
+  ASSERT_NEAR(empty.limitThreshDb, -5.0, 1e-6);   // kept for the next write
+
+  h.add(b, 0.0);
+  ASSERT_NEAR(h.take().stageInDb[1], -15.0, 1e-6);
+}
+
 void testClearClipsDropsHeldLeds() {
   MeterHold h;
   h.add(meters(-6.0f, -6.0f, 0.0f, true, -20.0), 0.0);
@@ -143,11 +212,15 @@ void testRateLimiterWritesFirstBlockThenPaced() {
 
 int main() {
   RUN_TEST(testDisplayIdsAreContiguousFromBase);
+  RUN_TEST(testNewDisplayIdsFollowResetIntegrated);
   RUN_TEST(testPeakNorm);
   RUN_TEST(testGrNorm);
   RUN_TEST(testLufsNormRoundTripAndNoMeasurement);
   RUN_TEST(testLatencyNorm);
+  RUN_TEST(testStageDbNorm);
+  RUN_TEST(testThreshNorm);
   RUN_TEST(testHoldKeepsPeaksGrAndClipsBetweenWrites);
+  RUN_TEST(testHoldStageInputsGlueGrAndThreshold);
   RUN_TEST(testClearClipsDropsHeldLeds);
   RUN_TEST(testMonoOffsetAppliesToFiniteLufsOnly);
   RUN_TEST(testRateLimiterWritesFirstBlockThenPaced);

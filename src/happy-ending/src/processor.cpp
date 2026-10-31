@@ -152,6 +152,12 @@ void Processor::publishDisplay(Steinberg::Vst::ProcessData& data, bool dualMono)
   put(kDispDynLow, std::clamp(static_cast<double>(f.dynLow), 0.0, 1.0));
   put(kDispDynAir, std::clamp(static_cast<double>(f.dynAir), 0.0, 1.0));
   put(kDispLatency, normFromLatency(engine_.latencySamples()));
+  put(kDispGlueIn, normFromStageDb(f.stageInDb[kStageInGlue]));
+  put(kDispGlueGr, normFromGrDb(f.glueGrDb));
+  put(kDispLimitIn, normFromStageDb(f.stageInDb[kStageInLimit]));
+  put(kDispLimitThresh, normFromThreshDb(f.limitThreshDb));
+  put(kDispClipIn, normFromStageDb(f.stageInDb[kStageInClip]));
+  put(kDispFinalIn, normFromStageDb(f.stageInDb[kStageInFinal]));
 }
 
 Steinberg::tresult PLUGIN_API Processor::process(Steinberg::Vst::ProcessData& data) {

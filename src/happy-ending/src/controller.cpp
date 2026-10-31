@@ -156,6 +156,13 @@ Steinberg::tresult PLUGIN_API Controller::initialize(Steinberg::FUnknown* contex
   // Writable (no kIsReadOnly): the editor sets 1, the processor acts and writes 0 back.
   parameters.addParameter(STR16("Clear Clips"), nullptr, 1, 0.0, ParameterInfo::kIsHidden, kClearClips);
   parameters.addParameter(STR16("Reset Integrated"), nullptr, 1, 0.0, ParameterInfo::kIsHidden, kResetIntegrated);
+  // Stage values for the screen (read-only, after the triggers: the ids above keep their numbers)
+  addDisplay("Display Glue In", 0, kDispGlueIn);
+  addDisplay("Display Glue GR Before Mix", 0, kDispGlueGr);
+  addDisplay("Display Limit In", 0, kDispLimitIn);
+  addDisplay("Display Limit Threshold", 0, kDispLimitThresh);
+  addDisplay("Display Clip In", 0, kDispClipIn);
+  addDisplay("Display Final In", 0, kDispFinalIn);
 
   return Steinberg::kResultOk;
 }

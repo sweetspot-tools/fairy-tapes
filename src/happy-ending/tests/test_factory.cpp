@@ -84,6 +84,31 @@ void exerciseController(Steinberg::FUnknown* obj) {
     }
   }
   CHECK(session == 2 && display == static_cast<int>(kNumDisplayIDs - kDisplayBase) && writable == 2);
+
+  // The six display values for the screen: present, hidden and read-only, outside automation and the
+  // stored table; the number of automatable parameters is what it was (every stored one but OVERSAMPLING).
+  for (const Steinberg::Vst::ParamID id : {static_cast<Steinberg::Vst::ParamID>(kDispGlueIn), static_cast<Steinberg::Vst::ParamID>(kDispGlueGr),
+                                           static_cast<Steinberg::Vst::ParamID>(kDispLimitIn), static_cast<Steinberg::Vst::ParamID>(kDispLimitThresh),
+                                           static_cast<Steinberg::Vst::ParamID>(kDispClipIn), static_cast<Steinberg::Vst::ParamID>(kDispFinalIn)}) {
+    ParameterInfo info{};
+    bool found = false;
+    for (int i = 0; i < ctl->getParameterCount() && !found; ++i) {
+      CHECK(ctl->getParameterInfo(i, info) == Steinberg::kResultOk);
+      found = info.id == id;
+    }
+    CHECK(found);
+    CHECK(id > kResetIntegrated && id < kNumDisplayIDs);
+    CHECK((info.flags & (ParameterInfo::kIsReadOnly | ParameterInfo::kIsHidden)) == (ParameterInfo::kIsReadOnly | ParameterInfo::kIsHidden));
+    CHECK((info.flags & ParameterInfo::kCanAutomate) == 0);
+    CHECK(info.defaultNormalizedValue == 0.0);
+  }
+  int automatable = 0;
+  for (int i = 0; i < ctl->getParameterCount(); ++i) {
+    ParameterInfo info{};
+    CHECK(ctl->getParameterInfo(i, info) == Steinberg::kResultOk);
+    if (info.flags & ParameterInfo::kCanAutomate) ++automatable;
+  }
+  CHECK(automatable == static_cast<int>(kNumParams) - 1);
   CHECK(ctl->terminate() == Steinberg::kResultOk);
   ctl->release();
 }

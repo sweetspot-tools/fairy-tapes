@@ -744,6 +744,166 @@ void testMetersReadStages() {
   ASSERT_TRUE(e.meters().grDb[kGrLimit] == 0.0f && e.meters().grDb[kGrMetal] == 0.0f && e.meters().grDb[kGrClip] == 0.0f);
 }
 
+// Stage input peaks (for the screen): a -6 dBFS sine through every stage at neutral values reads about
+// -6 dB at the input of GLUE, LIMIT, CLIP and FINAL, at every oversampling factor; a stage that is off
+// reads -120.
+void testStageInputPeaks() {
+  EngineSettings s = defaults();
+  s.vibe.low = 0;
+  s.vibe.air = 0;
+  s.vibe.tube = 0;
+  s.glue.threshDb = 0.0f;
+  s.glue.makeupDb = 0.0f;
+  s.clipDriveDb = 0.0f;
+  s.limitThreshDb = 0.0f;
+  s.ceilingDb = -0.1f;   // the LIMIT brings THRESH up to the ceiling: at 0 / -0.1 dB it moves the level by 0.1 dB only
+  ASSERT_TRUE(s.glue.on && s.clipOn && s.limitOn && s.finalOn);
+  for (int factor : {1, 2, 4}) {
+    Engine e;
+    e.prepare(kSr, 512, factor);
+    e.set(s);
+    std::vector<float> l = sineVec(24000, 1000.0, 0.5), r = l;
+    run(e, l, r, 512);
+    const Meters& m = e.meters();
+    for (int i = 0; i < 4; ++i) ASSERT_NEAR_EPS(m.stageInDb[i], -6.02, 0.5);
+
+    // CLIP at +6 dB changes the level: its own input still reads the level before it, LIMIT hears what it made
+    EngineSettings hot = s;
+    hot.clipDriveDb = 6.0f;
+    e.set(hot);
+    l = sineVec(24000, 1000.0, 0.5);
+    r = l;
+    run(e, l, r, 512);
+    ASSERT_NEAR_EPS(m.stageInDb[kStageInClip], -6.02, 0.5);
+    ASSERT_TRUE(std::fabs(m.stageInDb[kStageInLimit] - m.stageInDb[kStageInClip]) > 0.5f);
+    e.set(s);
+
+    // CLIP off: its input reads -120 once the crossfade is over, the others keep reading
+    EngineSettings off = s;
+    off.clipOn = false;
+    e.set(off);
+    l = sineVec(24000, 1000.0, 0.5);
+    r = l;
+    run(e, l, r, 512);
+    ASSERT_TRUE(m.stageInDb[kStageInClip] == -120.0f);
+    ASSERT_NEAR_EPS(m.stageInDb[kStageInGlue], -6.02, 0.5);
+    ASSERT_NEAR_EPS(m.stageInDb[kStageInLimit], -6.02, 0.5);
+    ASSERT_NEAR_EPS(m.stageInDb[kStageInFinal], -6.02, 0.5);
+
+    // the others, one at a time
+    off = s;
+    off.glue.on = false;
+    off.limitOn = false;
+    off.finalOn = false;
+    e.set(off);
+    l = sineVec(24000, 1000.0, 0.5);
+    r = l;
+    run(e, l, r, 512);
+    ASSERT_TRUE(m.stageInDb[kStageInGlue] == -120.0f);
+    ASSERT_TRUE(m.stageInDb[kStageInLimit] == -120.0f);
+    ASSERT_TRUE(m.stageInDb[kStageInFinal] == -120.0f);
+    ASSERT_NEAR_EPS(m.stageInDb[kStageInClip], -6.02, 0.5);
+  }
+}
+
+// The peak is taken over the whole process() call, in chunks of maxBlock too, and starts over with the next call.
+void testStageInputPeakIsHeldOverChunksAndRestarts() {
+  Engine e;
+  e.prepare(kSr, 64, 2);
+  EngineSettings s = defaults();
+  s.vibe.tube = 0;
+  s.glue.threshDb = 0.0f;
+  e.set(s);
+  std::vector<float> l(2048, 0.0f), r;
+  l[100] = 0.5f;   // a click early in a call that is much longer than maxBlock (32 chunks)
+  r = l;
+  e.process(l.data(), r.data(), 2048);
+  ASSERT_TRUE(e.meters().stageInDb[kStageInGlue] > -9.0f);
+  ASSERT_TRUE(e.meters().stageInDb[kStageInClip] > -12.0f);
+  std::vector<float> z(2048, 0.0f), z2 = z;
+  for (int i = 0; i < 10; ++i) e.process(z.data(), z2.data(), 2048);
+  ASSERT_TRUE(e.meters().stageInDb[kStageInGlue] < -60.0f);
+}
+
+// The GLUE GR for the screen is the compressor's own reduction, before MIX: with MIX 50 % the net
+// reduction at the output of the stage is smaller.
+void testGlueGrBeforeMix() {
+  Engine e;
+  e.prepare(kSr, 512, 2);
+  EngineSettings s = defaults();
+  s.glue.mix = 0.5f;
+  s.glue.threshDb = -20.0f;
+  e.set(s);
+  std::vector<float> l, r;
+  pinkPair(l, r, static_cast<int>(3 * kSr), 0.9, 21u);
+  run(e, l, r, 512);
+  const Meters& m = e.meters();
+  ASSERT_TRUE(m.grDb[kGrGlue] > 0.5f);
+  ASSERT_TRUE(m.glueGrDb > m.grDb[kGrGlue]);
+  ASSERT_TRUE(m.glueGrDb < 20.5f);
+
+  // full MIX: before and after MIX are the same reduction
+  s.glue.mix = 1.0f;
+  e.set(s);
+  run(e, l, r, 512);
+  ASSERT_NEAR_EPS(m.glueGrDb, m.grDb[kGrGlue], 0.05);
+
+  // stage off: nothing
+  s.glue.on = false;
+  e.set(s);
+  run(e, l, r, 512);
+  ASSERT_TRUE(m.glueGrDb == 0.0f);
+}
+
+// The LIMIT threshold the screen draws is the one the limiter uses now: THRESH, lowered by the LOUDNESS
+// push (kLoudCurve.limitDb, linear over the middle third of the knob), pulled to -8 dB by SET within the
+// glide time, and back to the push-lowered THRESH when SET ends.
+void testLimitThreshFollowsLoudnessAndSet() {
+  const auto settle = [](Engine& e, double seconds, float amp) {
+    std::vector<float> l = sineVec(static_cast<int>(seconds * kSr), 1000.0, amp), r = l;
+    run(e, l, r, 480);
+  };
+  Engine e;
+  e.prepare(kSr, 512, 2);
+  EngineSettings s = defaults();
+  ASSERT_NEAR_EPS(s.limitThreshDb, -2.0, 1e-6);
+  e.set(s);
+  settle(e, 0.5, 0.1f);
+  ASSERT_NEAR_EPS(e.meters().limitThreshDb, -2.0, 1e-4);
+
+  // LOUDNESS 5: half-way through the LIMIT third
+  s.loudness = 5.0f;
+  ASSERT_TRUE(loudPush(5.0f).limitDb > 0.0f);
+  e.set(s);
+  settle(e, 0.5, 0.1f);
+  const double lowered = -2.0 - 0.5 * -Tuning::kLoudCurve.limitDb;
+  ASSERT_NEAR_EPS(e.meters().limitThreshDb, lowered, 1e-3);
+  ASSERT_TRUE(e.meters().limitThreshDb < -3.0f);
+  s.loudness = 0.0f;
+  e.set(s);
+  settle(e, 0.5, 0.1f);
+  ASSERT_NEAR_EPS(e.meters().limitThreshDb, -2.0, 1e-4);
+
+  // SET: on its way after 30 ms (8 dB per 150 ms), at -8 within 150 ms, back to THRESH afterwards
+  s.setActive = true;
+  e.set(s);
+  settle(e, 0.030, 0.1f);
+  ASSERT_TRUE(e.meters().limitThreshDb < -2.5f && e.meters().limitThreshDb > -7.5f);
+  settle(e, 0.120, 0.1f);
+  ASSERT_NEAR_EPS(e.meters().limitThreshDb, Tuning::kSetThresholdDb, 1e-3);
+  s.setActive = false;
+  e.set(s);
+  settle(e, 0.2, 0.1f);
+  ASSERT_NEAR_EPS(e.meters().limitThreshDb, -2.0, 1e-4);
+
+  // SET with LOUDNESS: the threshold is the lower of the two
+  s.loudness = 5.0f;
+  s.setActive = true;
+  e.set(s);
+  settle(e, 0.4, 0.1f);
+  ASSERT_NEAR_EPS(e.meters().limitThreshDb, Tuning::kSetThresholdDb, 1e-3);
+}
+
 // The ceiling holds after the OUTPUT gain too: LIMIT on, OUTPUT +6 dB, pink noise at 0 dBFS, every
 // oversampling factor.
 void testOutputGainKeepsCeiling() {
@@ -906,6 +1066,10 @@ int main() {
   RUN_TEST(testNonFiniteInputDoesNotPoison);
   RUN_TEST(testStageSwitchesNoClick);
   RUN_TEST(testMetersReadStages);
+  RUN_TEST(testStageInputPeaks);
+  RUN_TEST(testStageInputPeakIsHeldOverChunksAndRestarts);
+  RUN_TEST(testGlueGrBeforeMix);
+  RUN_TEST(testLimitThreshFollowsLoudnessAndSet);
   RUN_TEST(testOutputGainKeepsCeiling);
   RUN_TEST(testSafetyLimiterCatchesDecimationOvershoot);
   RUN_TEST(testSafetyLimiterIsTransparentBelowCeiling);
