@@ -39,10 +39,13 @@ set(DEEP_THROAT_DSP_SOURCES
 
 # Editor (VSTGUI) sources: the plugin, the editor tests and the render tool.
 set(DEEP_THROAT_EDITOR_SOURCES
+  src/ui/decor.cpp
   src/ui/editor.cpp
   src/ui/panel_view.cpp
+  src/ui/prefs.cpp
   src/ui/readout_view.cpp
   src/ui/scope_view.cpp
+  src/ui/tape_view.cpp
 )
 
 # The shared assets (panel grain tile), for the tools and tests that run outside the bundle.

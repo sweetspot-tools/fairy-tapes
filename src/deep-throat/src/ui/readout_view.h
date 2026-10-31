@@ -2,7 +2,9 @@
 // kReadouts of ui/layout.h: "MAX ±x dB · y dB/s" under the RIDER knobs (dim white), HPF and MUD CUT of EQ and the three
 // Tone gains (amber; in the tape font when the values are handwritten, as the preview does with its amber texts). The
 // strings come from ui/dynamic_text.h (the editor sets them); each one dims (35 %) on its own. Also the BREATH detector
-// lamp (kBreathLamp): dark red, lit red while the editor says a breath is detected. Clicks go through.
+// lamp (kBreathLamp): dark red, lit red while the editor says a breath is detected. The editor uses two of these views:
+// the texts on the panel layer (under the wear) and the lamp, an LED, on the top layer (over the wear, tapes and screws,
+// as the preview draws it in its module). Clicks go through.
 #pragma once
 
 #include "ui/layout.h"
@@ -22,7 +24,11 @@ class ReadoutView : public VSTGUI::CView {
 public:
   static constexpr int kCount = static_cast<int>(sizeof(kReadouts) / sizeof(kReadouts[0]));
 
-  explicit ReadoutView(const VSTGUI::CRect& size);
+  // What a view draws: the texts, the lamp or both (the state of both is kept either way).
+  enum class Part { All, Texts, Lamp };
+
+  explicit ReadoutView(const VSTGUI::CRect& size, Part part = Part::All);
+  Part part() const { return part_; }
 
   void setText(ReadoutId id, const std::string& text);
   const std::string& text(ReadoutId id) const;
@@ -42,6 +48,7 @@ public:
 private:
   static int indexOf(ReadoutId id);
 
+  Part part_;
   std::array<std::string, kCount> texts_{};
   std::array<bool, kCount> dimmed_{};
   bool lampDimmed_ = false;

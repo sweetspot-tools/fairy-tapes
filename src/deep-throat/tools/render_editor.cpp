@@ -1,11 +1,16 @@
 // Developer tool: draws the Deep Throat editor offscreen into PNG files, no host or window needed.
 //   deep_throat_render <out-dir> [bypass] [no-grain] [module-off=rider|breath|eq|deess|comp|tone] [meters] [scope]
-//                     [cycles=<n>]
+//                     [wear=off|light|heavy] [seed=<n>] [text=<s>] [text1..text6=<s>] [font=zeyada|rocksalt|homemade]
+//                     [values=standard|tape] [screw1..screw4=<deg>] [cycles=<n>]
 // Writes <out-dir>/front.png (1000 x 614). The back of the panel (SETTINGS, MODES, ROUTING, CREDITS) is drawn here too
 // once it exists (Task 11). bypass sets the global Bypass, module-off= turns a module's IN off (both through the
 // controller, picked up by the editor's timer work); no-grain draws the panel without the grain tile. meters sets proof
 // values of the display parameters (LEVEL rows, GR, IN clip lit, BREATH lamp lit); scope fills the SCOPE history with a
-// simulated voice (phrases, a breath, a pause, the Rider gain following), one timer run per point. cycles=<n> builds
+// simulated voice (phrases, a breath, a pause, the Rider gain following), one timer run per point. The seed, the tape
+// texts and the screw rotations go through the controller's decor (as a stored state would): text= writes on every tape
+// slot, textN= on slot N-1 (only the slots the seed and Wear show are drawn; the tool prints them), screwN= is the user's
+// rotation of screw N-1. wear=, font= and values= go through Editor::setWearLevel / setTapeFont / setValuesFont; without
+// them the user preferences file decides, as when the editor opens. cycles=<n> builds
 // and removes the editor's views n times first (for leak checkers). Used to check the code-drawn GUI against
 // docs/mockups/deep_throat_rack.html on a machine without a host.
 #include "controller.h"
@@ -14,6 +19,11 @@
 #include "ui/layout.h"
 #include "ui/panel_view.h"
 #include "ui/scope_view.h"
+#include "ui/tape_view.h"
+#include "ui/tapes.h"
+
+#include "fairy_ui/screw_view.h"
+#include "fairy_ui/wear_view.h"
 
 #include "pluginterfaces/base/ipluginbase.h"
 #include "vstgui/lib/cbitmap.h"
@@ -41,6 +51,13 @@ void* moduleHandle = nullptr;   // normally set by the platform module entry poi
 namespace FairyTapes::DeepThroat::Ui {
 
 struct EditorPreview {
+  struct Options {
+    bool scope = false;
+    int wear = -1;     // -1: from the preferences, else WearLevel
+    int font = -1;     // -1: from the preferences, else TapeFont
+    int values = -1;   // -1: from the preferences, 0 standard, 1 tape font
+  };
+
   // Builds and removes the editor's views as open()/close() do, without a window.
   static void cycle(Steinberg::Vst::EditController& ctl, int n) {
     for (int i = 0; i < n; ++i) {
@@ -87,11 +104,33 @@ struct EditorPreview {
     }
   }
 
-  static bool render(Steinberg::Vst::EditController& ctl, const std::string& dir, bool scope) {
+  static bool render(Steinberg::Vst::EditController& ctl, const std::string& dir, const Options& opt) {
     Editor ed(&ctl);
+    std::filesystem::path prefsFile;
+    try {
+      prefsFile = prefsPath();
+    } catch (...) {
+    }
+    ed.loadAppearance(prefsFile);   // what open() does
     auto root = VSTGUI::makeOwned<VSTGUI::CViewContainer>(VSTGUI::CRect(0, 0, Editor::kWidth, Editor::kHeight));
     ed.createViews(root);
-    if (scope) {
+    if (opt.wear >= 0) ed.setWearLevel(static_cast<WearLevel>(opt.wear));
+    if (opt.font >= 0) ed.setTapeFont(static_cast<TapeFont>(opt.font));
+    if (opt.values >= 0) ed.setValuesFont(opt.values == 1);
+    for (const TapeView* t : ed.tapes_) {
+      const VSTGUI::CRect r = t->tapeRect(), v = t->getViewSize();
+      std::printf("tape slot %d at (%.0f, %.0f) %.0f x %.0f, box (%.0f, %.0f)-(%.0f, %.0f): \"%s\"\n", t->slot(),
+                  r.getCenter().x, r.getCenter().y, r.getWidth(), r.getHeight(), v.left, v.top, v.right, v.bottom,
+                  t->text().c_str());
+    }
+    for (const auto* sv : ed.screws_)
+      if (sv)
+        std::printf("screw at (%.0f, %.0f): %s, %s, shown %.1f deg (seeded %.0f)\n", sv->spec().x, sv->spec().y,
+                    sv->spec().cross ? "cross" : "slot", sv->spec().missing ? "missing" : "present", sv->angle(),
+                    sv->spec().initialAngle);
+    std::printf("seed %u, wear %d, %zu marks, values %s\n", ed.wearSeed(), static_cast<int>(ed.wearLevel()),
+                ed.wear_ ? ed.wear_->marks().size() : 0u, ed.valuesHandwritten() ? "tape font" : "standard");
+    if (opt.scope) {
       const double breath = ctl.getParamNormalized(kDispBreath);   // the lamp of `meters`, if set
       simulateScope(ctl, ed);
       ctl.setParamNormalized(kDispBreath, breath);
@@ -125,8 +164,9 @@ int main(int argc, char** argv) {
   using namespace FairyTapes::DeepThroat;
   if (argc < 2) {
     std::fprintf(stderr,
-                 "usage: %s <out-dir> [bypass] [no-grain] [module-off=rider|breath|eq|deess|comp|tone] [meters] [scope] "
-                 "[cycles=<n>]\n",
+                 "usage: %s <out-dir> [bypass] [no-grain] [module-off=rider|breath|eq|deess|comp|tone] [meters] [scope]\n"
+                 "       [wear=off|light|heavy] [seed=<n>] [text=<s>] [text1..text6=<s>] [font=zeyada|rocksalt|homemade]\n"
+                 "       [values=standard|tape] [screw1..screw4=<deg>] [cycles=<n>]\n",
                  argv[0]);
     return 2;
   }
@@ -150,7 +190,9 @@ int main(int argc, char** argv) {
   Controller ctl;
   ctl.initialize(nullptr);
   int cycles = 0;
-  bool scope = false;
+  Ui::EditorPreview::Options opt;
+  bool customDecor = false;
+  Decor decor = ctl.decor();
   for (int i = 2; i < argc; ++i) {
     if (!std::strcmp(argv[i], "bypass")) {
       ctl.setParamNormalized(kBypass, 1.0);
@@ -169,13 +211,36 @@ int main(int argc, char** argv) {
                              {kDispGr, .85},  {kDispClipIn, 1.0}, {kDispClipOut, 0.0}, {kDispBreath, .9}};
       for (const auto& p : v) ctl.setParamNormalized(static_cast<Steinberg::Vst::ParamID>(p[0]), p[1]);
     } else if (!std::strcmp(argv[i], "scope")) {
-      scope = true;
+      opt.scope = true;
+    } else if (!std::strncmp(argv[i], "wear=", 5)) {
+      const char* w = argv[i] + 5;
+      opt.wear = !std::strcmp(w, "off") ? 0 : !std::strcmp(w, "heavy") ? 2 : 1;
+    } else if (!std::strncmp(argv[i], "font=", 5)) {
+      const char* f = argv[i] + 5;
+      opt.font = !std::strcmp(f, "rocksalt") ? static_cast<int>(Ui::TapeFont::RockSalt)
+                 : !std::strcmp(f, "homemade") ? static_cast<int>(Ui::TapeFont::HomemadeApple)
+                                               : static_cast<int>(Ui::TapeFont::Zeyada);
+    } else if (!std::strncmp(argv[i], "values=", 7)) {
+      opt.values = !std::strcmp(argv[i] + 7, "standard") ? 0 : 1;
+    } else if (!std::strncmp(argv[i], "seed=", 5)) {
+      decor.seed = static_cast<uint32_t>(std::strtoul(argv[i] + 5, nullptr, 0));
+      customDecor = true;
+    } else if (!std::strncmp(argv[i], "text=", 5)) {
+      for (int s = 0; s < Ui::kNumTapeSlots; ++s) decor = Ui::withTapeText(decor, s, argv[i] + 5);
+      customDecor = true;
+    } else if (!std::strncmp(argv[i], "text", 4) && argv[i][4] >= '1' && argv[i][4] <= '6' && argv[i][5] == '=') {
+      decor = Ui::withTapeText(decor, argv[i][4] - '1', argv[i] + 6);
+      customDecor = true;
+    } else if (!std::strncmp(argv[i], "screw", 5) && argv[i][5] >= '1' && argv[i][5] <= '4' && argv[i][6] == '=') {
+      decor.screwAngles[argv[i][5] - '1'] = static_cast<float>(std::atof(argv[i] + 7));
+      customDecor = true;
     } else if (!std::strncmp(argv[i], "cycles=", 7)) {
       cycles = std::atoi(argv[i] + 7);
     }
   }
   if (cycles > 0) Ui::EditorPreview::cycle(ctl, cycles);
-  const bool ok = Ui::EditorPreview::render(ctl, argv[1], scope);
+  if (customDecor) ctl.editDecor(decor);
+  const bool ok = Ui::EditorPreview::render(ctl, argv[1], opt);
   ctl.terminate();
   VSTGUI::exit();
   return ok ? 0 : 1;

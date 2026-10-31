@@ -12,8 +12,13 @@
 #include "ui/layout.h"
 #include "ui/dynamic_text.h"
 #include "ui/panel_view.h"
+#include "ui/decor.h"
+#include "ui/prefs.h"
 #include "ui/readout_view.h"
 #include "ui/scope_view.h"
+#include "ui/screw_angles.h"
+#include "ui/tape_view.h"
+#include "ui/tapes.h"
 #include "ui/value_text.h"
 
 #include "fairy_ui/controls.h"
@@ -21,7 +26,10 @@
 #include "fairy_ui/meters.h"
 #include "fairy_ui/rack_controls.h"
 #include "fairy_ui/silkscreen.h"
+#include "fairy_ui/screw_view.h"
 #include "fairy_ui/silkscreen_view.h"
+#include "fairy_ui/tape_paper.h"
+#include "fairy_ui/wear_view.h"
 
 #include "pluginterfaces/base/ipluginbase.h"
 #include "pluginterfaces/gui/iplugview.h"
@@ -43,6 +51,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <iterator>
 #include <limits>
 #include <string>
@@ -66,6 +76,7 @@ struct EditorTest {
   static void destroy(Editor& ed, VSTGUI::CViewContainer* root) {
     ed.unwatchParameters();
     ed.closeValueEdit(false);
+    ed.closeTapeEdit(false);
     root->removeAll(true);
     ed.resetViewPointers();
   }
@@ -102,6 +113,7 @@ struct EditorTest {
     return nullptr;
   }
   static ReadoutView* readouts(const Editor& ed) { return ed.readouts_; }
+  static ReadoutView* lamp(const Editor& ed) { return ed.lamp_; }
   static VSTGUI::CTextEdit* valueEdit(const Editor& ed) { return ed.valueEdit_; }
   static void closeValueEdit(Editor& ed, bool confirm) { ed.closeValueEdit(confirm); }
   static bool handwritten(const Editor& ed) { return ed.valuesHandwritten_; }
@@ -111,6 +123,14 @@ struct EditorTest {
   static ScopeView* scope(const Editor& ed) { return ed.scope_; }
   static bool timerRunning(const Editor& ed) { return ed.timer_ != nullptr; }
   static void setHandwritten(Editor& ed, bool on) { ed.valuesHandwritten_ = on; }
+  // Wear, tapes and screws (Task 10).
+  static FairyTapes::Ui::WearView* wear(const Editor& ed) { return ed.wear_; }
+  static const std::vector<TapeView*>& tapes(const Editor& ed) { return ed.tapes_; }
+  static FairyTapes::Ui::ScrewView* screw(const Editor& ed, int i) { return ed.screws_[static_cast<std::size_t>(i)]; }
+  static VSTGUI::CTextEdit* tapeEdit(const Editor& ed) { return ed.tapeEdit_; }
+  static void closeTapeEdit(Editor& ed, bool confirm) { ed.closeTapeEdit(confirm); }
+  static void loadAppearance(Editor& ed, const std::filesystem::path& file) { ed.loadAppearance(file); }
+  static FairyTapes::Ui::TapeFontId valuesFont(const Editor& ed) { return ed.valuesFont_; }
 };
 
 } // namespace FairyTapes::DeepThroat::Ui
@@ -415,6 +435,7 @@ void test_render_smoke() {
   setResourcePath(false);
   Editor ed(g_ctl);
   auto root = EditorTest::build(ed);
+  ed.setWearLevel(FairyTapes::Ui::WearLevel::Off);   // the panel layer alone (no marks, no tapes)
   auto bmp = drawOffscreen(root);
   ASSERT_TRUE(bmp != nullptr);
   ASSERT_TRUE(bmp->getWidth() == kEditorWidth && bmp->getHeight() == kEditorHeight);
@@ -446,6 +467,7 @@ void test_title_text_is_drawn() {
   setResourcePath(false);
   Editor ed(g_ctl);
   auto root = EditorTest::build(ed);
+  ed.setWearLevel(FairyTapes::Ui::WearLevel::Off);
   auto bmp = drawOffscreen(root);
   ASSERT_TRUE(bmp != nullptr);
   const Pixels px = pixelsOf(bmp);
@@ -470,6 +492,7 @@ void test_panel_grain_when_asset_found() {
     setResourcePath(grain);
     Editor ed(g_ctl);
     auto root = EditorTest::build(ed);
+    ed.setWearLevel(FairyTapes::Ui::WearLevel::Off);
     auto bmp = drawOffscreen(root);
     int lo = 255, hi = 0;
     if (bmp) {
@@ -700,7 +723,8 @@ bool dimmingMatches(const Editor& ed, const DimState& s) {
       std::fprintf(stderr, "  readout %d\n", (int)ro.id);
       return false;
     }
-  if (r->lampDimmed() != (s.bypass || moduleOut(Module::Breath, s))) return false;
+  const ReadoutView* lamp = EditorTest::lamp(ed);
+  if (!lamp || lamp->lampDimmed() != (s.bypass || moduleOut(Module::Breath, s))) return false;
   for (const TagSpec& t : kTags) {
     const auto* tag = EditorTest::tag(ed, t.tag.key);
     const bool want = t.module != Module::None && (s.bypass || moduleOut(t.module, s));   // the MODE tags never dim
@@ -1145,7 +1169,7 @@ void test_breath_lamp_lights_above_half() {
   setResourcePath(false);
   Editor ed(g_ctl);
   auto root = EditorTest::build(ed);
-  ReadoutView* r = EditorTest::readouts(ed);
+  ReadoutView* r = EditorTest::lamp(ed);
   ASSERT_TRUE(r != nullptr && !r->lampLit());
   const double nan = std::numeric_limits<double>::quiet_NaN();
   const struct { double p; bool lit; } cases[] = {{0.4, false}, {0.6, true}, {0.5, false}, {1.0, true}, {nan, false}, {0.51, true}, {0.0, false}};
@@ -1224,7 +1248,7 @@ void test_scope_and_level_dim_only_on_bypass() {
 void test_breath_and_gr_gated_by_in_and_bypass() {
   Editor ed(g_ctl);
   auto root = EditorTest::build(ed);
-  ReadoutView* lamp = EditorTest::readouts(ed);
+  ReadoutView* lamp = EditorTest::lamp(ed);
   ScopeView* scope = EditorTest::scope(ed);
   FairyTapes::Ui::MeterBar* gr = EditorTest::bar(ed, 4);
   ASSERT_TRUE(lamp && scope && gr && kMeterRows[4].id == kDispGr);
@@ -1293,6 +1317,301 @@ void test_editor_timer_stops_on_close() {
   resetDisplay(g_ctl);
 }
 
+
+// ---- Wear, paper tapes, screws and preferences (Task 10) -----------------------------------------------------------
+
+using FairyTapes::Ui::WearLevel;
+
+const Rect kPanelRect{0.f, 0.f, static_cast<float>(kEditorWidth), static_cast<float>(kEditorHeight)};
+
+// Index of `v` among the children of `root` (-1 when it is not one).
+int childIndex(VSTGUI::CViewContainer* root, const VSTGUI::CView* v) {
+  for (uint32_t i = 0; i < root->getNbViews(); ++i)
+    if (root->getView(i) == v) return static_cast<int>(i);
+  return -1;
+}
+int countTapeChildren(VSTGUI::CViewContainer* root) {
+  int n = 0;
+  for (uint32_t i = 0; i < root->getNbViews(); ++i) n += dynamic_cast<TapeView*>(root->getView(i)) ? 1 : 0;
+  return n;
+}
+// The decor back to blank tapes and unturned screws (the seed is kept).
+void clearDecor() { g_ctl->editDecor(Decor{}); }
+
+// Light (the default) shows marks and 1-2 tapes; Off: no wear mark and no tape view (the four screws stay).
+void test_wear_off_has_no_marks_and_no_tapes() {
+  Editor ed(g_ctl);
+  auto root = EditorTest::build(ed);
+  ASSERT_TRUE(ed.wearLevel() == WearLevel::Light);
+  auto* wear = EditorTest::wear(ed);
+  ASSERT_TRUE(wear != nullptr && root->isChild(wear));
+  ASSERT_TRUE(!wear->marks().empty());
+  const std::size_t light = layoutFromSeed(ed.wearSeed(), WearLevel::Light, kPanelRect).tapes.size();
+  ASSERT_TRUE(light >= 1 && EditorTest::tapes(ed).size() == light && countTapeChildren(root) == static_cast<int>(light));
+  ed.setWearLevel(WearLevel::Off);
+  ASSERT_TRUE(EditorTest::wear(ed) == wear && wear->marks().empty());
+  ASSERT_TRUE(EditorTest::tapes(ed).empty() && countTapeChildren(root) == 0);
+  for (int i = 0; i < 4; ++i) ASSERT_TRUE(EditorTest::screw(ed, i) != nullptr && root->isChild(EditorTest::screw(ed, i)));
+  EditorTest::destroy(ed, root);
+}
+
+// Wear Light -> Heavy -> Light: the same views (panel, wear, controls, screws), new marks and tapes for the level, tapes
+// drawn in the 4 px box of the decor model, every decor layer between the silkscreen and the controls.
+void test_wear_level_change_redraws_without_rebuild() {
+  Editor ed(g_ctl);
+  auto root = EditorTest::build(ed);
+  auto* wear = EditorTest::wear(ed);
+  ASSERT_TRUE(wear != nullptr);
+  std::vector<VSTGUI::CView*> before;
+  for (Steinberg::Vst::ParamID id = 0; id < kNumParams; ++id) before.push_back(EditorTest::control(ed, static_cast<ParamID>(id)));
+  for (int i = 0; i < 4; ++i) before.push_back(EditorTest::screw(ed, i));
+  before.push_back(EditorTest::panel(ed));
+  const uint32_t seed = ed.wearSeed();
+  for (WearLevel level : {WearLevel::Heavy, WearLevel::Light, WearLevel::Heavy}) {
+    ed.setWearLevel(level);
+      ASSERT_TRUE(ed.wearLevel() == level && EditorTest::wear(ed) == wear);
+    ASSERT_TRUE(wear->marks().size() == FairyTapes::Ui::generateWear(seed, level, kEditorWidth, kEditorHeight).size());
+    std::vector<VSTGUI::CView*> now;
+    for (Steinberg::Vst::ParamID id = 0; id < kNumParams; ++id) now.push_back(EditorTest::control(ed, static_cast<ParamID>(id)));
+    for (int i = 0; i < 4; ++i) now.push_back(EditorTest::screw(ed, i));
+    now.push_back(EditorTest::panel(ed));
+    ASSERT_TRUE(now == before);
+    const WearLayout layout = layoutFromSeed(seed, level, kPanelRect);
+    const auto& tapes = EditorTest::tapes(ed);
+    ASSERT_TRUE(tapes.size() == layout.tapes.size() && countTapeChildren(root) == static_cast<int>(tapes.size()));
+    for (std::size_t k = 0; k < tapes.size(); ++k) {
+      const TapePlacement& p = layout.tapes[k];
+      const auto b = FairyTapes::Ui::tapeBounds(p.cx, p.cy, p.w, p.h, p.rotDeg, FairyTapes::Ui::kTapeRaggedX + 1);
+      const VSTGUI::CRect v = tapes[k]->getViewSize();
+      ASSERT_TRUE(tapes[k]->slot() == p.slot);
+      ASSERT_TRUE(std::fabs(v.left - b.left) < 1e-6 && std::fabs(v.right - b.right) < 1e-6 &&
+                  std::fabs(v.top - b.top) < 1e-6 && std::fabs(v.bottom - b.bottom) < 1e-6);
+    }
+    // Layers: silkscreen and read-outs < wear < tapes < screws < SCOPE and controls.
+    const int iWear = childIndex(root, wear);
+    ASSERT_TRUE(childIndex(root, EditorTest::readouts(ed)) < iWear);
+    int lastTape = iWear;
+    for (TapeView* t : tapes) {
+      ASSERT_TRUE(childIndex(root, t) > iWear);
+      lastTape = std::max(lastTape, childIndex(root, t));
+    }
+    int firstControl = 1 << 30;
+    for (Steinberg::Vst::ParamID id = 0; id < kNumParams; ++id) firstControl = std::min(firstControl, childIndex(root, EditorTest::control(ed, static_cast<ParamID>(id))));
+    for (int i = 0; i < 4; ++i) {
+      const int s = childIndex(root, EditorTest::screw(ed, i));
+      ASSERT_TRUE(s > lastTape && s < childIndex(root, EditorTest::scope(ed)) && s < firstControl);
+      ASSERT_TRUE(s < childIndex(root, EditorTest::lamp(ed)));   // the BREATH lamp is an LED: over the decor
+    }
+  }
+  ed.setWearLevel(WearLevel::Light);
+  EditorTest::destroy(ed, root);
+}
+
+// A click on a tape opens a field; 40 typed characters (some not ASCII) are stored as the 14-character printable ASCII
+// text through one editDecor; Escape stores nothing.
+void test_tape_text_edit_goes_to_decor() {
+  clearDecor();
+  Editor ed(g_ctl);
+  auto root = EditorTest::build(ed);
+  ed.setWearLevel(WearLevel::Heavy);
+  ASSERT_TRUE(!EditorTest::tapes(ed).empty());
+  TapeView* tape = EditorTest::tapes(ed)[0];
+  const int slot = tape->slot();
+  VSTGUI::CPoint at = tape->tapeRect().getCenter();
+  const uint32_t rev0 = g_ctl->decorRevision();
+  ASSERT_TRUE(tape->onMouseDown(at, VSTGUI::CButtonState(VSTGUI::kLButton)) == VSTGUI::kMouseEventHandled);
+  VSTGUI::CTextEdit* field = EditorTest::tapeEdit(ed);
+  ASSERT_TRUE(field != nullptr && root->isChild(field));
+  const std::string typed = "  Lead vox \xC3\xA9 take 3 - keep it, sure!!!!";   // 40 bytes, two of them not ASCII
+  ASSERT_TRUE(typed.size() == 40);
+  field->setText(typed.c_str());
+  ed.valueChanged(field);   // Enter
+  EditorTest::closeTapeEdit(ed, true);
+  ASSERT_TRUE(EditorTest::tapeEdit(ed) == nullptr && !root->isChild(field));
+  ASSERT_TRUE(g_ctl->decorRevision() == rev0 + 1);   // one editDecor
+  const std::string stored = tapeTextFor(g_ctl->decor(), slot);
+  ASSERT_TRUE(stored == sanitizeTapeText(typed) && stored.size() == 14);
+  for (char c : stored) ASSERT_TRUE(c >= 0x20 && c <= 0x7E);
+  ASSERT_TRUE(tape->text() == stored);
+  // Escape: nothing stored
+  ASSERT_TRUE(tape->onMouseDown(at, VSTGUI::CButtonState(VSTGUI::kLButton)) == VSTGUI::kMouseEventHandled);
+  field = EditorTest::tapeEdit(ed);
+  ASSERT_TRUE(field != nullptr && field->getText() == stored.c_str());
+  field->setText("other");
+  VSTGUI::KeyboardEvent esc;
+  esc.type = VSTGUI::EventType::KeyDown;
+  esc.virt = VSTGUI::VirtualKey::Escape;
+  field->onKeyboardEvent(esc);
+  ed.valueChanged(field);
+  EditorTest::closeTapeEdit(ed, false);
+  ASSERT_TRUE(g_ctl->decorRevision() == rev0 + 1 && tapeTextFor(g_ctl->decor(), slot) == stored && tape->text() == stored);
+  EditorTest::destroy(ed, root);
+  clearDecor();
+}
+
+// A drag of a screw: no decor edit while it moves, exactly one at the end with the user's rotation; the timer keeps the
+// shown angle.
+void test_screw_drag_stores_angle_once() {
+  clearDecor();
+  Editor ed(g_ctl);
+  auto root = EditorTest::build(ed);
+  for (int i = 0; i < 4; ++i) ASSERT_TRUE(EditorTest::screw(ed, i) != nullptr);
+  int index = -1;
+  for (int i = 0; i < 4 && index < 0; ++i)
+    if (!EditorTest::screw(ed, i)->spec().missing) index = i;
+  ASSERT_TRUE(index >= 0);
+  FairyTapes::Ui::ScrewView* screw = EditorTest::screw(ed, index);
+  const double initial = screw->spec().initialAngle;
+  ASSERT_TRUE(std::fabs(screw->angle() - FairyTapes::Ui::normalizeScrewAngle(initial)) < 1e-6);
+  const uint32_t rev0 = g_ctl->decorRevision();
+  VSTGUI::CPoint p(screw->spec().x, screw->spec().y);
+  ASSERT_TRUE(screw->onMouseDown(p, VSTGUI::CButtonState(VSTGUI::kLButton)) == VSTGUI::kMouseEventHandled);
+  for (int k = 1; k <= 4; ++k) {
+    VSTGUI::CPoint q(screw->spec().x + 8 * k, screw->spec().y - 4 * k);
+    screw->onMouseMoved(q, VSTGUI::CButtonState(VSTGUI::kLButton));
+    ASSERT_TRUE(g_ctl->decorRevision() == rev0);
+  }
+  VSTGUI::CPoint end(screw->spec().x + 32, screw->spec().y - 16);
+  screw->onMouseUp(end, VSTGUI::CButtonState(VSTGUI::kLButton));
+  ASSERT_TRUE(g_ctl->decorRevision() == rev0 + 1);
+  const double shown = screw->angle();
+  ASSERT_TRUE(std::fabs(shown - FairyTapes::Ui::normalizeScrewAngle(initial)) > 1.0);   // it turned
+  const float stored = g_ctl->decor().screwAngles[index];
+  ASSERT_TRUE(std::fabs(stored - userScrewAngle(shown, initial)) < 1e-4 && stored != 0.f);
+  for (int i = 0; i < 4; ++i)
+    if (i != index) ASSERT_TRUE(g_ctl->decor().screwAngles[i] == 0.f);
+  EditorTest::tick(ed);
+  ASSERT_TRUE(std::fabs(screw->angle() - shown) < 1e-4 && g_ctl->decorRevision() == rev0 + 1);
+  EditorTest::destroy(ed, root);
+  clearDecor();
+}
+
+// RE-ROLL: a new non-zero seed in the decor, rotations back to 0, tapes blank; wear, tapes and screws follow the new seed.
+void test_reroll_changes_seed_and_clears_decor() {
+  Decor d = g_ctl->decor();
+  d.screwAngles[0] = 45.f;
+  d.screwAngles[3] = 90.f;
+  d.tapeTexts.assign(kNumTapeSlots, "WRITTEN");
+  g_ctl->editDecor(d);
+  Editor ed(g_ctl);
+  auto root = EditorTest::build(ed);
+  ed.setWearLevel(WearLevel::Heavy);
+  const uint32_t seed0 = ed.wearSeed();
+  ASSERT_TRUE(seed0 != 0 && seed0 == g_ctl->decor().seed);
+  ASSERT_TRUE(!EditorTest::tapes(ed).empty() && EditorTest::tapes(ed)[0]->text() == "WRITTEN");
+  ed.reroll();
+  const Decor r = g_ctl->decor();
+  ASSERT_TRUE(r.seed != 0 && r.seed != seed0 && ed.wearSeed() == r.seed);
+  for (float a : r.screwAngles) ASSERT_TRUE(a == 0.f);
+  for (const std::string& t : r.tapeTexts) ASSERT_TRUE(t.empty());
+  const auto& tapes = EditorTest::tapes(ed);
+  const WearLayout layout = layoutFromSeed(r.seed, WearLevel::Heavy, kPanelRect);
+  ASSERT_TRUE(tapes.size() == layout.tapes.size());
+  for (std::size_t k = 0; k < tapes.size(); ++k) ASSERT_TRUE(tapes[k]->text().empty() && tapes[k]->slot() == layout.tapes[k].slot);
+  const auto specs = screwSpecs(r.seed);
+  for (int i = 0; i < 4; ++i) {
+    const auto* s = EditorTest::screw(ed, i);
+    ASSERT_TRUE(s != nullptr);
+    ASSERT_TRUE(s->spec().cross == specs[static_cast<std::size_t>(i)].cross && s->spec().missing == specs[static_cast<std::size_t>(i)].missing &&
+                s->spec().initialAngle == specs[static_cast<std::size_t>(i)].initialAngle);
+    ASSERT_TRUE(std::fabs(s->angle() - FairyTapes::Ui::normalizeScrewAngle(specs[static_cast<std::size_t>(i)].initialAngle)) < 1e-6);
+  }
+  ASSERT_TRUE(EditorTest::wear(ed) && EditorTest::wear(ed)->marks().size() ==
+              FairyTapes::Ui::generateWear(r.seed, WearLevel::Heavy, kEditorWidth, kEditorHeight).size());
+  ed.setWearLevel(WearLevel::Light);
+  EditorTest::destroy(ed, root);
+}
+
+// The timer applies a decor changed elsewhere (state recall, undo) on its next run, and only then; with the same
+// revision nothing is rebuilt.
+void test_decor_change_applied_on_tick() {
+  clearDecor();
+  Editor ed(g_ctl);
+  auto root = EditorTest::build(ed);
+  ed.setWearLevel(WearLevel::Heavy);
+  const std::vector<TapeView*> tapes = EditorTest::tapes(ed);
+  ASSERT_TRUE(!tapes.empty());
+  EditorTest::tick(ed);
+  ASSERT_TRUE(EditorTest::tapes(ed) == tapes);
+  Decor d = g_ctl->decor();
+  d = withTapeText(d, tapes[0]->slot(), "FROM HOST");
+  d.screwAngles[1] = 30.f;
+  g_ctl->editDecor(d);
+  ASSERT_TRUE(tapes[0]->text().empty());   // not before the timer
+  EditorTest::tick(ed);
+  ASSERT_TRUE(EditorTest::tapes(ed) == tapes && tapes[0]->text() == "FROM HOST");   // same seed: texts only
+  const auto* s = EditorTest::screw(ed, 1);
+  ASSERT_TRUE(s != nullptr && std::fabs(s->angle() - shownScrewAngle(s->spec().initialAngle, 30.f)) < 1e-4);
+  ed.setWearLevel(WearLevel::Light);
+  EditorTest::destroy(ed, root);
+  clearDecor();
+}
+
+// Preferences: a valid file is applied (Heavy, Rock Salt, plain values); a missing folder or a corrupt file gives the
+// defaults (Light, Zeyada, values in the tape font) and the editor still has all its views.
+void test_prefs_missing_file_opens_with_defaults() {
+  namespace fs = std::filesystem;
+  const fs::path dir = fs::temp_directory_path() / ("dt_editor_prefs_" + std::to_string(static_cast<unsigned>(std::rand())));
+  const fs::path file = dir / "FairyTapes" / "DeepThroat.prefs";
+  Editor ed(g_ctl);
+  auto root = EditorTest::build(ed);
+  auto isDefault = [&]() {
+    return ed.wearLevel() == WearLevel::Light && ed.tapeFont() == TapeFont::Zeyada && ed.valuesHandwritten() &&
+           EditorTest::valuesFont(ed) == FairyTapes::Ui::TapeFontId::Zeyada &&
+           EditorTest::tapes(ed).size() == layoutFromSeed(ed.wearSeed(), WearLevel::Light, kPanelRect).tapes.size();
+  };
+  auto applyCustom = [&]() {
+    Prefs p;
+    p.wear = WearLevel::Heavy;
+    p.tapeFont = TapeFont::RockSalt;
+    p.handwrittenValues = false;
+    if (!savePrefs(file, p)) return false;
+    EditorTest::loadAppearance(ed, file);
+    return ed.wearLevel() == WearLevel::Heavy && ed.tapeFont() == TapeFont::RockSalt && !ed.valuesHandwritten() &&
+           EditorTest::valuesFont(ed) == FairyTapes::Ui::TapeFontId::RockSalt &&
+           EditorTest::wear(ed) && EditorTest::wear(ed)->marks().size() ==
+               FairyTapes::Ui::generateWear(ed.wearSeed(), WearLevel::Heavy, kEditorWidth, kEditorHeight).size();
+  };
+  ASSERT_TRUE(applyCustom());
+  EditorTest::loadAppearance(ed, dir / "missing" / "FairyTapes" / "DeepThroat.prefs");   // no such folder
+  ASSERT_TRUE(isDefault());
+  ASSERT_TRUE(applyCustom());
+  {
+    std::ofstream out(file, std::ios::binary | std::ios::trunc);
+    const char junk[] = {'\x00', '\xff', '\x13', 'w', 'e', 'a', 'r', '\x00', '=', '\x7f', '\xfe'};
+    out.write(junk, sizeof junk);
+  }
+  EditorTest::loadAppearance(ed, file);
+  ASSERT_TRUE(isDefault());
+  for (Steinberg::Vst::ParamID id = 0; id < kNumParams; ++id) ASSERT_TRUE(EditorTest::control(ed, static_cast<ParamID>(id)) != nullptr);
+  EditorTest::destroy(ed, root);
+  std::error_code ec;
+  fs::remove_all(dir, ec);
+}
+
+// No grain asset: the editor with its wear, tapes and screws draws without crashing and, with Wear Off, the panel is
+// plain (a blank row of the margin is one colour).
+void test_missing_grain_asset_draws_plain_panel() {
+  setResourcePath(false);
+  Editor ed(g_ctl);
+  auto root = EditorTest::build(ed);
+  ed.setWearLevel(WearLevel::Heavy);
+  ASSERT_TRUE(drawOffscreen(root) != nullptr);
+  ed.setWearLevel(WearLevel::Off);
+  auto bmp = drawOffscreen(root);
+  ASSERT_TRUE(bmp != nullptr);
+  const Pixels px = pixelsOf(bmp);
+  int lo = 255, hi = 0;
+  for (int x = 6; x <= 20; ++x)
+    for (int y = 280; y <= 320; y += 10) {
+      lo = std::min<int>(lo, px.at(x, y).red);
+      hi = std::max<int>(hi, px.at(x, y).red);
+    }
+  ASSERT_TRUE(hi - lo <= 2 && brightness(px.at(10, 300)) >= 0x08);
+  ed.setWearLevel(WearLevel::Light);
+  EditorTest::destroy(ed, root);
+}
+
 } // namespace
 
 int main() {
@@ -1300,6 +1619,11 @@ int main() {
   setResourcePath(false);
   Controller ctl;
   ctl.initialize(nullptr);
+  {
+    Decor d;
+    d.seed = 0x51u;   // a fixed instance seed: the same wear, tapes and screws on every run
+    ctl.editDecor(d);
+  }
   g_ctl = &ctl;
   RUN_TEST(test_panel_layer_built);
   RUN_TEST(test_panel_texts_from_layout);
@@ -1331,6 +1655,14 @@ int main() {
   RUN_TEST(test_scope_and_level_dim_only_on_bypass);
   RUN_TEST(test_editor_timer_stops_on_close);
   RUN_TEST(test_breath_and_gr_gated_by_in_and_bypass);
+  RUN_TEST(test_wear_off_has_no_marks_and_no_tapes);
+  RUN_TEST(test_wear_level_change_redraws_without_rebuild);
+  RUN_TEST(test_tape_text_edit_goes_to_decor);
+  RUN_TEST(test_screw_drag_stores_angle_once);
+  RUN_TEST(test_reroll_changes_seed_and_clears_decor);
+  RUN_TEST(test_decor_change_applied_on_tick);
+  RUN_TEST(test_prefs_missing_file_opens_with_defaults);
+  RUN_TEST(test_missing_grain_asset_draws_plain_panel);
   ctl.terminate();
   g_ctl = nullptr;
   VSTGUI::exit();

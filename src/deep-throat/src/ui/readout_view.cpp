@@ -24,7 +24,7 @@ constexpr bool readoutsInEnumOrder() {
 static_assert(readoutsInEnumOrder(), "kReadouts[i].id == i: the view indexes its texts by ReadoutId");
 } // namespace
 
-ReadoutView::ReadoutView(const CRect& size) : CView(size) {
+ReadoutView::ReadoutView(const CRect& size, Part part) : CView(size), part_(part) {
   font10_ = makeOwned<CFontDesc>("Arial", 10, kBoldFace);
   setMouseEnabled(false);
 }
@@ -77,7 +77,7 @@ void ReadoutView::draw(CDrawContext* ctx) {
   ctx->setDrawMode(kAntiAliasing | kNonIntegralMode);
   const CPoint o = getViewSize().getTopLeft();
   const float base = ctx->getGlobalAlpha();
-  for (int i = 0; i < kCount; ++i) {
+  for (int i = 0; i < kCount && part_ != Part::Lamp; ++i) {
     const Readout& r = kReadouts[i];
     const std::string& t = texts_[static_cast<std::size_t>(i)];
     if (t.empty()) continue;
@@ -95,6 +95,11 @@ void ReadoutView::draw(CDrawContext* ctx) {
     ctx->drawString(t.c_str(), CPoint(o.x + FairyTapes::Ui::alignedLeft(r.x, w, r.align), o.y + r.y));
   }
   // BREATH lamp
+  if (part_ == Part::Texts) {
+    ctx->restoreGlobalState();
+    setDirty(false);
+    return;
+  }
   ctx->setGlobalAlpha(base * (lampDimmed_ ? FairyTapes::Ui::kSilkDimmedAlpha : 1.f));
   if (auto path = owned(ctx->createGraphicsPath())) {
     const Lamp& l = kBreathLamp;

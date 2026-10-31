@@ -3,10 +3,16 @@
 // the UI timer) and The Stripper's typed values.
 #include "ui/editor.h"
 
+#include "controller.h"
+#include "state.h"
+#include "ui/decor.h"
 #include "ui/dynamic_text.h"
 #include "ui/panel_view.h"
 #include "ui/readout_view.h"
 #include "ui/scope_view.h"
+#include "ui/screw_angles.h"
+#include "ui/tape_view.h"
+#include "ui/tapes.h"
 #include "ui/value_text.h"
 
 #include "fairy_ui/controls.h"
@@ -15,8 +21,10 @@
 #include "fairy_ui/meters.h"
 #include "fairy_ui/rack_controls.h"
 #include "fairy_ui/sanitize.h"
+#include "fairy_ui/screw_view.h"
 #include "fairy_ui/silkscreen_view.h"
 #include "fairy_ui/tape_draw.h"
+#include "fairy_ui/wear_view.h"
 
 #include "base/source/updatehandler.h"
 #include "vstgui/lib/cfont.h"
@@ -32,6 +40,7 @@
 #include "vstgui/lib/platform/platformfactory.h"
 #endif
 
+#include <algorithm>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -48,20 +57,29 @@ using FairyTapes::Ui::RackKnob;
 using FairyTapes::Ui::RackLed;
 using FairyTapes::Ui::RackLitChoice;
 using FairyTapes::Ui::RackToggle;
+using FairyTapes::Ui::ScrewView;
 using FairyTapes::Ui::SilkscreenView;
 using FairyTapes::Ui::TapeAlign;
+using FairyTapes::Ui::WearMark;
+using FairyTapes::Ui::WearView;
 using Steinberg::Vst::ParamID;
 
 namespace {
 
 static_assert(kNumParams <= 32, "pending_ holds one bit per persistent parameter");
+static_assert(kMaxTapeTexts == kNumTapeSlots, "one stored tape text per tape slot");
+static_assert(Editor::kNumScrewViews == kNumScrews, "one view per stored screw angle");
+static_assert(kNumScrews == static_cast<int>(sizeof(kScrewPos) / sizeof(kScrewPos[0])), "one stored angle per screw");
 
 constexpr uint32_t kTimerMs = 30;
 constexpr double kTimerSeconds = kTimerMs / 1000.0;   // the step of the meters' peak hold
 constexpr CColor kFrameBackground(0x16, 0x16, 0x17);
 constexpr int32_t kValueEditTag = 9100;   // outside the parameter ids
+constexpr int32_t kTapeEditTag = 9000;    // + slot; outside the parameter ids
+constexpr CCoord kTapeEditMinWidth = 120, kTapeEditHeight = 24;
 
-// The text field of a typed value (The Stripper's pattern): Escape cancels, Enter or leaving the field confirms.
+// The text field of a typed value or of a tape (The Stripper's pattern): Escape cancels, Enter or leaving the field
+// confirms.
 // CTextEdit itself would still report the typed text when Escape comes through the platform field.
 class ValueEdit : public CTextEdit {
 public:
@@ -109,13 +127,25 @@ void toString128(const std::string& in, Steinberg::Vst::String128 out) {
   out[i] = 0;
 }
 
+// RE-ROLL: the decor with a new seed (new wear, tapes and screws), the screws' rotations back to 0 and the tapes blank.
+// A seed of 0 or equal to the current one is replaced by another one (as Pillow Talk's rerolledDecor).
+Decor rerolledDecor(Decor d, uint32_t newSeed) {
+  if (newSeed == 0 || newSeed == d.seed) newSeed = (d.seed ^ 0x9E3779B9u) * 2654435761u + 0x7F4A7C15u;
+  if (newSeed == 0 || newSeed == d.seed) newSeed = d.seed + 1u ? d.seed + 1u : 1u;
+  d.seed = newSeed;
+  for (float& a : d.screwAngles) a = 0.f;
+  d.tapeTexts.clear();
+  return d;
+}
+
 bool dynamicTextInput(ParamID id) {
   return id == kMode || id == kEqAmount || id == kTone || id == kCompRatio || id == kCompDist || id == kCompHpf;
 }
 
 } // namespace
 
-Editor::Editor(Steinberg::Vst::EditController* controller) : VSTGUIEditor(controller) {
+Editor::Editor(Steinberg::Vst::EditController* controller)
+: VSTGUIEditor(controller), owner_(dynamic_cast<Controller*>(controller)) {
   const PixelSize px = scaledEditorSize(scale_);
   setRect(Steinberg::ViewRect(0, 0, px.width, px.height));
   // Parameter dependents need the global update handler (VST3Editor creates it the same way).
@@ -177,6 +207,14 @@ bool PLUGIN_API Editor::open(void* parent, const PlatformType& platformType) {
   config = &x11Config;
 #endif
 
+  // Appearance from the user preferences (missing or bad file: defaults); the seed comes from the instance decor.
+  std::filesystem::path prefsFile;
+  try {
+    prefsFile = prefsPath();
+  } catch (...) {
+  }
+  loadAppearance(prefsFile);
+
   frame = new CFrame(CRect(0, 0, kWidth, kHeight), this);
   frame->setBackgroundColor(kFrameBackground);
   createViews(frame);
@@ -197,6 +235,7 @@ void PLUGIN_API Editor::close() {
   }
   unwatchParameters();
   closeValueEdit(true);   // what was typed is kept, as when the field loses the focus
+  closeTapeEdit(true);
   if (frame) {
     // Removing the views closes any open knob gesture (controlEndEdit -> endEdit).
     frame->removeAll(true);
@@ -214,17 +253,24 @@ void Editor::resetViewPointers() {
   panel_ = nullptr;
   silk_ = nullptr;
   readouts_ = nullptr;
+  lamp_ = nullptr;
+  wear_ = nullptr;
+  tapes_.clear();
+  screws_.fill(nullptr);
   controls_.fill(nullptr);
   scope_ = nullptr;
   bars_.fill(nullptr);
   clips_.fill(nullptr);
   valueEdit_ = nullptr;
   valueEditId_ = kNumParams;
+  tapeEdit_ = nullptr;
+  tapeEditSlot_ = -1;
 }
 
 void Editor::createViews(CViewContainer* parent) {
   auto* ctl = getController();
   const CRect all(0, 0, kWidth, kHeight);
+  refreshDecor();   // the instance seed, tape texts and screw rotations (no views yet)
   root_ = parent;
 
   // 1-2: panel body, grain, boxes and printed texts.
@@ -243,19 +289,23 @@ void Editor::createViews(CViewContainer* parent) {
                                                                           : TapeAlign::Center;
     FairyTapes::Ui::drawTapeText(ctx, valuesFont_, t.text, CPoint(origin.x + t.x, origin.y + t.y),
                                  FairyTapes::Ui::normalizedFontSize(valuesFont_, FairyTapes::Ui::kSilkValueSize),
-                                 FairyTapes::Ui::kAmber, valuesSeed_ + static_cast<uint32_t>(id) * 131u, 0.5, align);
+                                 FairyTapes::Ui::kAmber, seed_ + static_cast<uint32_t>(id) * 131u, 0.5, align);
     return true;
   });
   silk_->setTag(kTagEq, kTagEqText);
   silk_->setTag(kTagComp, kTagCompText);
   parent->addView(silk_);
-  readouts_ = new ReadoutView(all);
-  readouts_->setHandwriting(valuesHandwritten_, valuesFont_, valuesSeed_);
+  readouts_ = new ReadoutView(all, ReadoutView::Part::Texts);
+  readouts_->setHandwriting(valuesHandwritten_, valuesFont_, seed_);
   parent->addView(readouts_);
 
-  // SCOPE: under the controls (it never overlaps one).
+  // 4-6: wear, paper tapes, screws (inserted under the SCOPE); then the SCOPE, under the controls (it never overlaps one).
+  wear_ = new WearView(all, wearMarks(seed_, wearLevel_));
+  parent->addView(wear_);
   scope_ = new ScopeView(toCRect(kScopeRect));
   parent->addView(scope_);
+  placeScrews();    // inserted before the SCOPE
+  rebuildTapes();   // inserted before the screws
 
   // The controls, one per parameter.
   for (const ControlSpec& spec : kControls) {
@@ -299,6 +349,10 @@ void Editor::createViews(CViewContainer* parent) {
     parent->addView(clip);
   }
 
+  // The BREATH lamp: an LED, over the wear, the tapes and the screws.
+  lamp_ = new ReadoutView(all, ReadoutView::Part::Lamp);
+  parent->addView(lamp_);
+
   watchParameters();   // every control, value, text and dimming from the controller
 }
 
@@ -331,7 +385,7 @@ void Editor::updateDisplays() {
   }
   for (int i = 0; i < kClipCount; ++i)
     if (ClipLed* clip = clips_[static_cast<std::size_t>(i)]) clip->setLit(displayNorm(ctl, kClips[i].id, 0.0) >= 0.5);
-  if (readouts_) readouts_->setLampLit(p.breath > 0.5f);
+  if (lamp_) lamp_->setLampLit(p.breath > 0.5f);
 }
 
 void Editor::watchParameters() {
@@ -373,6 +427,8 @@ void Editor::onTimer() {
     if (changed & bit(id)) syncFromController(id);
   // The field reported what was typed when it lost the focus (Enter, a click elsewhere): it is done.
   if (valueEdit_ && frame && frame->getFocusView() != valueEdit_) closeValueEdit(false);
+  if (tapeEdit_ && frame && frame->getFocusView() != tapeEdit_) closeTapeEdit(false);
+  refreshDecor();   // only when the controller's decor revision changed
   updateDisplays();
 }
 
@@ -449,10 +505,9 @@ void Editor::refreshDimming() {
     if (silk_) silk_->setDimmed(static_cast<int>(c.id), dimmed);
   }
   auto partDimmed = [this](Module m) { return dim_.bypass || moduleOut(m, dim_); };
-  if (readouts_) {
+  if (readouts_)
     for (const Readout& r : kReadouts) readouts_->setDimmed(r.id, partDimmed(r.module));
-    readouts_->setLampDimmed(partDimmed(Module::Breath));
-  }
+  if (lamp_) lamp_->setLampDimmed(partDimmed(Module::Breath));
   if (silk_)
     for (const TagSpec& t : kTags) silk_->setTagDimmed(t.tag.key, t.module != Module::None && partDimmed(t.module));   // MODE tags never
   if (panel_) panel_->setDimState(dim_);
@@ -464,7 +519,7 @@ void Editor::refreshDimming() {
 
 // ---- Typed values ---------------------------------------------------------------------------------------------------
 void Editor::editValue(ParamID id) {
-  if (!root_ || valueEdit_ || id >= kNumParams) return;
+  if (!root_ || valueEdit_ || tapeEdit_ || id >= kNumParams) return;
   auto* knob = dynamic_cast<RackKnob*>(controls_[id]);
   if (!knob) return;
   CRect area = knob->valueArea();
@@ -507,11 +562,190 @@ void Editor::commitTypedValue(ParamID id, const std::string& typed) {
   syncFromController(id);
 }
 
+// ---- Appearance and instance decor: wear, paper tapes, screws ------------------------------------------------------
+void Editor::loadAppearance(const std::filesystem::path& file) {
+  Prefs p;
+  try {
+    if (!file.empty()) p = loadPrefs(file);
+  } catch (...) {
+    p = Prefs{};
+  }
+  setWearLevel(p.wear);
+  setTapeFont(p.tapeFont);
+  setValuesFont(p.handwrittenValues);
+}
+
+const std::vector<WearMark>& Editor::wearMarks(uint32_t seed, WearLevel level) {
+  if (!marksValid_ || seed != marksSeed_ || level != marksLevel_) {
+    marks_ = FairyTapes::Ui::generateWear(seed, level, kWidth, kHeight);
+    marksSeed_ = seed;
+    marksLevel_ = level;
+    marksValid_ = true;
+  }
+  return marks_;
+}
+
+void Editor::refreshDecor() {
+  if (!owner_) return;
+  if (decorKnown_ && owner_->decorRevision() == decorRevision_) return;
+  const Decor d = owner_->decor();   // generates the seed if the controller has none yet
+  decorRevision_ = owner_->decorRevision();
+  decorKnown_ = true;
+  const bool textsChanged = d.tapeTexts != tapeTexts_;
+  tapeTexts_ = d.tapeTexts;
+  for (int i = 0; i < kNumScrewViews; ++i) screwAngles_[static_cast<std::size_t>(i)] = d.screwAngles[i];
+  if (d.seed != 0 && d.seed != seed_) {
+    seed_ = d.seed;
+    applyWear();   // new marks and tapes (with the new texts), the handwriting of the new seed
+  } else if (textsChanged) {
+    refreshTapeTexts();
+  }
+  placeScrews();   // a new seed or new rotations (state recall, undo, re-roll)
+}
+
+void Editor::setWearLevel(WearLevel level) {
+  if (level == wearLevel_) return;
+  wearLevel_ = level;
+  applyWear();
+}
+
+void Editor::setTapeFont(TapeFont font) {
+  if (font == tapeFont_) return;
+  tapeFont_ = font;
+  valuesFont_ = tapeFontIdOf(font);
+  for (TapeView* t : tapes_) t->setFont(valuesFont_);
+  applyHandwriting();
+}
+
+void Editor::setValuesFont(bool handwritten) {
+  if (handwritten == valuesHandwritten_) return;
+  valuesHandwritten_ = handwritten;
+  applyHandwriting();
+}
+
+void Editor::applyWear() {
+  if (wear_) wear_->setMarks(wearMarks(seed_, wearLevel_));
+  rebuildTapes();
+  applyHandwriting();   // the handwriting varies with the seed
+}
+
+void Editor::applyHandwriting() {
+  if (readouts_) readouts_->setHandwriting(valuesHandwritten_, valuesFont_, seed_);
+  if (silk_) silk_->invalid();
+}
+
+void Editor::reroll() {
+  if (!owner_) return;
+  closeTapeEdit(true);
+  owner_->editDecor(rerolledDecor(owner_->decor(), newRandomSeed()));
+  refreshDecor();   // the new revision: new wear, tapes and screws
+}
+
+void Editor::rebuildTapes() {
+  if (!root_) return;
+  closeTapeEdit(true);
+  for (TapeView* t : tapes_) root_->removeView(t, true);
+  tapes_.clear();
+  const WearLayout layout = layoutFromSeed(seed_, wearLevel_, Rect{0.f, 0.f, static_cast<float>(kWidth), static_cast<float>(kHeight)});
+  for (const TapePlacement& p : layout.tapes) {
+    auto* view = new TapeView(p, valuesFont_, seed_);
+    view->setText(p.slot < static_cast<int>(tapeTexts_.size()) ? tapeTexts_[static_cast<std::size_t>(p.slot)] : std::string());
+    view->onClick = [this](TapeView* t) { editTape(t); };
+    // above the wear, below the screws, the SCOPE and the controls
+    if (CView* above = screws_[0] ? static_cast<CView*>(screws_[0]) : static_cast<CView*>(scope_)) root_->addView(view, above);
+    else root_->addView(view);
+    tapes_.push_back(view);
+  }
+}
+
+void Editor::refreshTapeTexts() {
+  for (TapeView* t : tapes_) {
+    const int slot = t->slot();
+    t->setText(slot < static_cast<int>(tapeTexts_.size()) ? tapeTexts_[static_cast<std::size_t>(slot)] : std::string());
+  }
+}
+
+// A click on a tape: a text field over it with what is written; Enter or leaving it confirms, Escape cancels.
+void Editor::editTape(TapeView* tape) {
+  if (!root_ || !tape || tapeEdit_ || valueEdit_) return;
+  CRect box = tape->tapeRect();
+  const CPoint c = box.getCenter();
+  const CCoord w = std::max(box.getWidth() + 8, kTapeEditMinWidth);
+  box = CRect(c.x - w / 2, c.y - kTapeEditHeight / 2, c.x + w / 2, c.y + kTapeEditHeight / 2);
+  if (box.left < 0) box.offset(-box.left, 0);   // stays in the window
+  if (box.right > kWidth) box.offset(kWidth - box.right, 0);
+  auto* edit = new ValueEdit(box, this, kTapeEditTag + tape->slot(), tape->text().c_str());
+  edit->setFont(makeOwned<CFontDesc>("Arial", 13, kBoldFace));
+  edit->setFontColor(CColor(0x2b, 0x26, 0x20));
+  edit->setBackColor(CColor(0xd9, 0xcf, 0xa6));
+  edit->setFrameColor(CColor(0x8f, 0x85, 0x60));
+  edit->setHoriAlign(kCenterText);
+  tapeEdit_ = edit;
+  tapeEditSlot_ = tape->slot();
+  root_->addView(edit);
+  if (frame) frame->setFocusView(edit);   // starts the editing
+}
+
+void Editor::commitTapeText(int slot, const std::string& typed) {
+  if (!owner_) return;
+  const Decor d = withTapeText(owner_->decor(), slot, typed);   // printable ASCII, at most 14 characters
+  tapeTexts_ = d.tapeTexts;
+  owner_->editDecor(d);
+  decorRevision_ = owner_->decorRevision();
+  refreshTapeTexts();
+}
+
+void Editor::closeTapeEdit(bool confirm) {
+  if (!tapeEdit_) return;
+  CTextEdit* edit = tapeEdit_;
+  if (!confirm) static_cast<ValueEdit*>(edit)->cancelled = true;
+  if (frame && frame->getFocusView() == edit) frame->setFocusView(nullptr);   // the field reports unless cancelled
+  tapeEdit_ = nullptr;
+  tapeEditSlot_ = -1;
+  if (root_ && root_->isChild(edit)) root_->removeView(edit, true);
+}
+
+void Editor::placeScrews() {
+  if (!root_) return;
+  const auto specs = screwSpecs(seed_);
+  for (int i = 0; i < kNumScrewViews; ++i) {
+    const auto k = static_cast<std::size_t>(i);
+    const double shown = shownScrewAngle(specs[k].initialAngle, screwAngles_[k]);
+    if (ScrewView* v = screws_[k]) {
+      if (v->spec().cross != specs[k].cross || v->spec().missing != specs[k].missing ||
+          v->spec().initialAngle != specs[k].initialAngle)
+        v->setScrew(specs[k], shown);   // another seed: another screw
+      else
+        v->setAngle(shown);   // left alone while the user is turning it
+      continue;
+    }
+    auto* view = new ScrewView(specs[k], shown);
+    view->onTurned = [this, i](double angle) { screwTurned(i, angle); };
+    if (scope_) root_->addView(view, scope_);   // over the wear and the tapes, below the SCOPE and the controls
+    else root_->addView(view);
+    screws_[k] = view;
+  }
+}
+
+// The end of a drag: the rotation from the seeded angle goes to the instance decor (one edit, one dirty mark).
+void Editor::screwTurned(int index, double shownDeg) {
+  if (!owner_ || index < 0 || index >= kNumScrews || !screws_[static_cast<std::size_t>(index)]) return;
+  const float user = userScrewAngle(shownDeg, screws_[static_cast<std::size_t>(index)]->spec().initialAngle);
+  const Decor d = withScrewAngle(owner_->decor(), index, user);
+  screwAngles_[static_cast<std::size_t>(index)] = d.screwAngles[index];
+  owner_->editDecor(d);
+  decorRevision_ = owner_->decorRevision();
+}
+
 // ---- Control listener -----------------------------------------------------------------------------------------------
 void Editor::valueChanged(CControl* control) {
   if (!control) return;
   if (control == valueEdit_) {   // a typed value: read unless Escape was pressed
     if (!static_cast<ValueEdit*>(valueEdit_)->cancelled) commitTypedValue(valueEditId_, valueEdit_->getText().getString());
+    return;
+  }
+  if (control == tapeEdit_) {   // the writing on a tape: stored unless Escape was pressed
+    if (!static_cast<ValueEdit*>(tapeEdit_)->cancelled) commitTapeText(tapeEditSlot_, tapeEdit_->getText().getString());
     return;
   }
   const auto tag = control->getTag();
