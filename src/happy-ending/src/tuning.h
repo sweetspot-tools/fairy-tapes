@@ -56,15 +56,25 @@ inline constexpr double kGlueRampMs = 10.0;
 inline constexpr double kMetalLookAheadMs = 1.0;
 inline constexpr double kMetalReleaseMs = 30.0;
 
-// LIMIT: base release of each style (MODERN, PUNCH, DYN, then METAL); RELEASE trims around it.
-inline constexpr double kLimitReleaseBaseMs[4] = {50.0, 100.0, 250.0, kMetalReleaseMs};
+// SAFETY LIMITER: a transparent base-rate limiter between the OUTPUT gain and the hard ceiling guard.
+// The decimation filter of zone B can rebuild base-rate samples above the CEIL that the stages held at
+// the oversampled rate; this catches them instead of letting the guard clip them. It is the LIMIT
+// engine in a fifth, fixed style: threshold = CEIL, no gain recovery (it never raises the level),
+// attack ramp as long as the look-ahead (the ceiling holds by construction). Its look-ahead is added
+// to the chain latency and stays constant whether the stage is active or not.
+inline constexpr double kSafetyLookAheadMs = 1.0;
+inline constexpr double kSafetyReleaseMs = 50.0;
+inline constexpr int kSafetyRampSamples = 64;  // on/off crossfade, like the ceiling guard and BYPASS
+
+// LIMIT: base release of each style (MODERN, PUNCH, DYN, METAL, then SAFETY); RELEASE trims around it.
+inline constexpr double kLimitReleaseBaseMs[5] = {50.0, 100.0, 250.0, kMetalReleaseMs, kSafetyReleaseMs};
 
 // LIMIT: look-ahead of each style (MODERN, PUNCH, DYN) and the length of the attack ramp that
 // brings the gain down. The latency stays that of MODERN (the longest look-ahead) for every style.
 // PUNCH ramps down more slowly than it looks ahead, so the first instant of a transient passes
 // before the gain has fully arrived (the sample-peak guard still holds it under the ceiling).
-inline constexpr double kLimitLookAheadMs[4] = {1.5, 0.3, 0.8, kMetalLookAheadMs};
-inline constexpr double kLimitAttackMs[4] = {1.5, 0.45, 0.8, kMetalLookAheadMs};
+inline constexpr double kLimitLookAheadMs[5] = {1.5, 0.3, 0.8, kMetalLookAheadMs, kSafetyLookAheadMs};
+inline constexpr double kLimitAttackMs[5] = {1.5, 0.45, 0.8, kMetalLookAheadMs, kSafetyLookAheadMs};
 
 // LIMIT DYN: soft knee width (the reduction starts this far below the threshold, centred on it) and
 // the program-dependent release. The release time is the RELEASE value times a factor that goes from

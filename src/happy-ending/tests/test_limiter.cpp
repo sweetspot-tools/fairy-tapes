@@ -26,6 +26,7 @@ void operator delete(void* p) noexcept { std::free(p); }
 void operator delete(void* p, std::size_t) noexcept { std::free(p); }
 
 using namespace FairyTapes::HappyEnding;
+namespace DSP = FairyTapes::HappyEnding::DSP;
 using FairyTapes::HappyEnding::DSP::Limiter;
 using FairyTapes::HappyEnding::DSP::LimiterSettings;
 
@@ -221,6 +222,37 @@ void testLatencyConstantAcrossStyles() {
   run(off, l, r);
   ASSERT_TRUE(l[10 + base] == 0.5f);
   ASSERT_TRUE(r[20 + base] == -0.25f);
+}
+
+// SAFETY (internal style of the engine's base-rate safety limiter): look-ahead of
+// Tuning::kSafetyLookAheadMs whatever the MODERN latency, threshold = ceiling, no gain recovery.
+void testSafetyStyleNeverRaisesAndKeepsCeiling() {
+  for (double sr : {44100.0, kSr, 192000.0}) {
+    Limiter lim;
+    lim.prepare(sr, 128, 1, DSP::kLimiterStyleSafety);
+    const int d = lim.latencySamples();
+    ASSERT_TRUE(d == static_cast<int>(std::ceil(Tuning::kSafetyLookAheadMs * 0.001 * sr)));
+    lim.set(make(DSP::kLimiterStyleSafety, -0.3f, -0.3f));
+    ASSERT_TRUE(lim.latencySamples() == d);
+
+    // a hot burst, then quiet pink: the quiet part comes out as the delayed input, never louder
+    std::vector<float> l, r;
+    pinkPair(l, r, static_cast<int>(2 * sr), 0.5, 11u);
+    const std::vector<float> inL = l;
+    for (int i = 4000; i < 6000; ++i) {
+      l[static_cast<std::size_t>(i)] *= 4.0f;
+      r[static_cast<std::size_t>(i)] *= 4.0f;
+    }
+    const std::vector<float> hotL = l;
+    run(lim, l, r, 100);
+    const double cl = ceilLin(-0.3);
+    ASSERT_TRUE(peakOf(l) <= cl && peakOf(r) <= cl);
+    ASSERT_TRUE(lim.grDb() >= 0.0f);
+    for (std::size_t i = static_cast<std::size_t>(d); i < l.size(); ++i)
+      ASSERT_TRUE(std::fabs(l[i]) <= std::fabs(hotL[i - static_cast<std::size_t>(d)]) * 1.000001 + 1e-9);
+    // below the ceiling, long after the burst (the release is over), it is the delayed input bit for bit
+    for (auto i = static_cast<std::size_t>(1.5 * sr); i < l.size(); ++i) ASSERT_TRUE(l[i] == inL[i - static_cast<std::size_t>(d)]);
+  }
 }
 
 void testLatencyMultipleOfOversampling() {
@@ -555,6 +587,7 @@ int main() {
   RUN_TEST(testStyleAndSetChangesKeepCeiling);
   RUN_TEST(testLatencyConstantAcrossStyles);
   RUN_TEST(testLatencyMultipleOfOversampling);
+  RUN_TEST(testSafetyStyleNeverRaisesAndKeepsCeiling);
   RUN_TEST(testReleaseTrim);
   RUN_TEST(testDynReleaseFollowsProgram);
   RUN_TEST(testPunchLetsTransientThrough);

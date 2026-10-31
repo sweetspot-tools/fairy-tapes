@@ -19,6 +19,10 @@
  * of `latencyMultiple` (the engine runs the limiter at 1x / 2x / 4x the base rate, and the chain
  * latency must be a whole number of base-rate samples). A final per-sample guard keeps every
  * output sample at or below the ceiling whatever the style, threshold, SET state or transition.
+ * Internal styles: METAL (fixed 1 ms / 30 ms, METALHEAD) and SAFETY (the engine's base-rate safety
+ * limiter: look-ahead 1 ms, release 50 ms, threshold = ceiling, NO gain recovery, so it only ever
+ * lowers a peak that would pass the ceiling and leaves everything below it bit for bit; its latency
+ * is its own look-ahead, see prepare(); on / off crossfade of Tuning::kSafetyRampSamples).
  * Off = the input delayed by the same latency, bit for bit (10 ms crossfade on switching).
  */
 
@@ -32,7 +36,7 @@ namespace FairyTapes::HappyEnding::DSP {
 struct LimiterSettings {
   bool on = true;
   float threshDb = 0.0f;       // 0 .. -4 (the THRESH control)
-  int style = 0;               // 0 MODERN, 1 PUNCH, 2 DYN (3 METAL: fixed 1 ms / 30 ms, used by METALHEAD only)
+  int style = 0;               // 0 MODERN, 1 PUNCH, 2 DYN; internal: 3 METAL (METALHEAD), 4 SAFETY (engine)
   int releaseTrimIndex = 4;    // 0..8: 4 = as the style wants, 2^((index - 4) / 3) around it
   float ceilingDb = -0.3f;     // OUTPUT CEIL
   bool set = false;            // guided release setting: threshold forced to Tuning::kSetThresholdDb
@@ -40,10 +44,16 @@ struct LimiterSettings {
   bool operator==(const LimiterSettings&) const = default;
 };
 
+// Internal styles the LIMIT control does not offer (see LimiterSettings::style).
+inline constexpr int kLimiterStyleMetal = 3;
+inline constexpr int kLimiterStyleSafety = 4;
+
 class Limiter {
 public:
   // `latencyMultiple`: latencySamples() (at the rate given here) is always a multiple of it.
-  void prepare(double sampleRate, int maxBlock, int latencyMultiple = 1);
+  // `fixedStyle`: -1 for the styles of the LIMIT control (latency of MODERN); kLimiterStyleSafety for
+  // the engine's safety limiter, whose latency is its own, shorter look-ahead.
+  void prepare(double sampleRate, int maxBlock, int latencyMultiple = 1, int fixedStyle = -1);
   void set(const LimiterSettings& settings);
   void process(float* left, float* right, int n);
 
@@ -64,6 +74,7 @@ private:
   LimiterSettings s_;
   bool primed_ = false;
 
+  int style_ = 0;          // 0..4 (see LimiterSettings::style)
   int delay_ = 1;          // latency, samples
   int window_ = 1;         // look-ahead of the current style, samples
   int attack_ = 1;         // attack ramp (moving average) of the current style, samples

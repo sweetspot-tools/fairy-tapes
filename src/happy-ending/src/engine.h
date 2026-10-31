@@ -2,8 +2,8 @@
  * Fairy Tapes · Happy Ending — The whole mastering chain used by the VST3 Processor (pure, no SDK libs).
  *
  * INPUT gain -> FINE EQ -> VIBE EQ network -> [zone A, oversampled: VIBE TUBE] -> GLUE ->
- * [zone B, oversampled: CLIP -> LIMIT -> FINAL -> METALHEAD] -> OUTPUT gain -> ceiling guard ->
- * BYPASS crossfade -> OUT peak meter and LUFS (both read the plug-in output).
+ * [zone B, oversampled: CLIP -> LIMIT -> FINAL -> METALHEAD] -> OUTPUT gain -> safety limiter ->
+ * ceiling guard -> BYPASS crossfade -> OUT peak meter and LUFS (both read the plug-in output).
  *
  *  - CLIP (ClipSoftly) has no off state of its own: the engine crossfades it with its dry signal over
  *    Tuning::kClipRampMs (zero latency, so the two are aligned).
@@ -12,13 +12,17 @@
  *    threshold - limitDb, FINAL EFFECT + finalEffectMax * final01 (capped at 100 %) or DRIVE + finalDriveDb * final01
  *    (capped at +2 dB). The stage values in EngineSettings never change.
  *  - Latency (base rate) = zone A oversampler + zone B oversampler + (LIMIT + FINAL + METALHEAD
- *    latencies at the zone-B rate) / factor; it depends only on the oversampling factor given to
- *    prepare() (constant across styles, modes and on/off).
- *  - Ceiling guard: the decimation filter of zone B can rebuild base-rate samples slightly above
- *    the ceiling the stages held at the oversampled rate, and OUTPUT gain can raise them, so
- *    whenever LIMIT, FINAL or METALHEAD is on every sample is clamped at the CEILING after the
- *    OUTPUT gain (global constraint: no output sample above the CEIL with one of them on, OUTPUT
- *    included). Off when all three are off; BYPASS (after it) stays the exact delayed input.
+ *    latencies at the zone-B rate) / factor + the safety limiter's look-ahead (base rate, 1 ms);
+ *    it depends only on the oversampling factor and the sample rate given to prepare() (constant
+ *    across styles, modes and on/off, safety limiter included).
+ *  - Safety limiter + ceiling guard: the decimation filter of zone B can rebuild base-rate samples
+ *    above the ceiling the stages held at the oversampled rate, and OUTPUT gain can raise them. So
+ *    whenever LIMIT, FINAL or METALHEAD is on, a transparent base-rate look-ahead limiter (the
+ *    LIMIT engine in its internal SAFETY style: threshold = CEIL, no gain recovery, it never raises
+ *    the level) runs after the OUTPUT gain, with a 64-sample crossfade on switching, and the hard
+ *    clamp at the CEILING behind it is only the last net (global constraint: no output sample above
+ *    the CEIL with one of them on, OUTPUT included). Both off when all three are off; BYPASS (after
+ *    them) stays the exact delayed input.
  *  - BYPASS: the output crossfades (kGainRampSamples) to the sanitized input delayed by
  *    latencySamples() through one delay line, sample-exact once settled. The chain keeps running,
  *    so meters, LUFS and stage LEDs stay live.
@@ -174,9 +178,13 @@ public:
   const EngineSettings& settings() const { return applied_; }
   void clearClips();
   // Test hooks on the ceiling guard (only counted while the guard is on, reset by prepare): the
-  // peak seen BEFORE the guard clamps, and how many samples the guard actually had to clip.
+  // peak seen BEFORE the safety limiter and the guard (after OUTPUT), and how many samples the
+  // guard, behind the safety limiter, actually had to clip (0 unless the limiter let one through).
   double preGuardPeak() const { return preGuardPeak_; }
   std::uint64_t guardClippedSamples() const { return guardClipped_; }
+  // Samples above the ceiling that reached the safety limiter (after OUTPUT), i.e. what the stages
+  // and the decimation filter left over; counted only while the guard is on, reset by prepare.
+  std::uint64_t safetyCaughtSamples() const { return safetyCaught_; }
   void resetIntegrated();
 
 private:
@@ -214,6 +222,7 @@ private:
   DSP::Glue glue_;
   DSP::ClipSoftly clip_;
   DSP::Limiter limiter_;
+  DSP::Limiter safety_;  // base rate, after OUTPUT, before the ceiling guard
   DSP::FinalStage final_;
   DSP::Metalhead metal_;
   DSP::LoudnessMeter loud_;
@@ -238,6 +247,8 @@ private:
   float ceilLin_ = 1.0f;
   double preGuardPeak_ = 0.0;
   std::uint64_t guardClipped_ = 0;
+  std::uint64_t safetyCaught_ = 0;
+  DSP::LimiterSettings safetyApplied_{};
 
   // buffers (allocated in prepare)
   std::vector<float> bypassRingL_, bypassRingR_;

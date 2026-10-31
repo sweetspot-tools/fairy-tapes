@@ -13,10 +13,11 @@ inline double dbOf(double lin) { return 20.0 * std::log10(lin); }
 inline double linOf(double db) { return std::pow(10.0, db / 20.0); }
 }
 
-void Limiter::prepare(double sampleRate, int /*maxBlock*/, int latencyMultiple) {
+void Limiter::prepare(double sampleRate, int /*maxBlock*/, int latencyMultiple, int fixedStyle) {
   sampleRate_ = sampleRate;
   const int mult = std::max(1, latencyMultiple);
-  const int base = std::max(1, static_cast<int>(std::ceil(Tuning::kLimitLookAheadMs[0] * 0.001 * sampleRate)));
+  const int latencyStyle = fixedStyle == kLimiterStyleSafety ? kLimiterStyleSafety : 0;  // MODERN for every LIMIT style
+  const int base = std::max(1, static_cast<int>(std::ceil(Tuning::kLimitLookAheadMs[latencyStyle] * 0.001 * sampleRate)));
   delay_ = (base + mult - 1) / mult * mult;
 
   const auto d = static_cast<std::size_t>(delay_);
@@ -31,7 +32,8 @@ void Limiter::prepare(double sampleRate, int /*maxBlock*/, int latencyMultiple) 
 
   sustainCoef_ = 1.0 - std::exp(-1.0 / std::max(1.0, Tuning::kLimitDynSustainMs * 0.001 * sampleRate));
   sustain_ = 0.0;
-  mixStep_ = 1.0 / std::max(1.0, Tuning::kLimitOnRampMs * 0.001 * sampleRate);
+  mixStep_ = fixedStyle == kLimiterStyleSafety ? 1.0 / Tuning::kSafetyRampSamples
+                                               : 1.0 / std::max(1.0, Tuning::kLimitOnRampMs * 0.001 * sampleRate);
   glidePerSample_ = std::fabs(Tuning::kSetThresholdDb) / std::max(1.0, Tuning::kSetGlideMs * 0.001 * sampleRate);
 
   primed_ = false;
@@ -48,7 +50,8 @@ void Limiter::set(const LimiterSettings& settings) {
 }
 
 void Limiter::apply(bool snap) {
-  const int style = std::clamp(s_.style, 0, 3);
+  const int style = std::clamp(s_.style, 0, kLimiterStyleSafety);
+  style_ = style;
   const int trim = std::clamp(s_.releaseTrimIndex, 0, 8);
 
   window_ = std::clamp(static_cast<int>(std::lround(Tuning::kLimitLookAheadMs[style] * 0.001 * sampleRate_)), 1, delay_);
@@ -84,6 +87,13 @@ void Limiter::apply(bool snap) {
 }
 
 void Limiter::refreshLevels() {
+  if (style_ == kLimiterStyleSafety) {
+    // SAFETY: the threshold is the ceiling and there is no gain recovery, so nothing below the
+    // ceiling is touched and the level is never raised
+    threshLin_ = ceilLin_;
+    makeupLin_ = 1.0;
+    return;
+  }
   threshLin_ = linOf(effDb_);
   // gain recovery from THRESH, not from the forced SET threshold; effDb_ never rises above it for
   // long (both glide at the same speed), so the peaks stay at or under the ceiling

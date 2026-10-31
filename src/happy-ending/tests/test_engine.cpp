@@ -6,6 +6,7 @@
 #include "engine.h"
 #include "loudness_macro.h"
 #include "params.h"
+#include "tuning.h"
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -149,6 +150,7 @@ struct RefChain {
   DSP::Glue glue;
   DSP::ClipSoftly clip;
   DSP::Limiter lim;
+  DSP::Limiter safety;  // base rate, after zone B (OUTPUT is 0 dB in these comparisons)
   DSP::FinalStage fin;
   DSP::Metalhead metal;
   DSP::Oversampler a[2], b[2];
@@ -166,6 +168,7 @@ struct RefChain {
     glue.prepare(kSr, maxBlock);
     clip.prepare(osRate);
     lim.prepare(osRate, maxBlock * f, f);
+    safety.prepare(kSr, maxBlock, 1, DSP::kLimiterStyleSafety);
     fin.prepare(osRate, f);
     metal.prepare(osRate, maxBlock * f, f);
     for (int c = 0; c < 2; ++c) {
@@ -191,6 +194,12 @@ struct RefChain {
     lim.set(ls);
     fin.set(s.finalOn, s.finalMode, effect, s.finalCurve, driveDb, s.ceilingDb);
     metal.set(s.metalOn, s.pushDb, s.ceilingDb);
+    DSP::LimiterSettings ss;
+    ss.on = s.limitOn || s.finalOn || s.metalOn;
+    ss.style = DSP::kLimiterStyleSafety;
+    ss.ceilingDb = s.ceilingDb;
+    ss.threshDb = s.ceilingDb;
+    safety.set(ss);
 
     const double c = std::pow(10.0, static_cast<double>(std::min(s.ceilingDb, 0.0f)) / 20.0);
     ceil = static_cast<float>(c);
@@ -226,6 +235,7 @@ struct RefChain {
       b[0].down(osL.data(), n * f, l);
       b[1].down(osR.data(), n * f, r);
     }
+    safety.process(l, r, n);
     for (int i = 0; i < n; ++i) {
       l[i] = std::clamp(l[i], -ceil, ceil);
       r[i] = std::clamp(r[i], -ceil, ceil);
@@ -376,6 +386,22 @@ void testLatencyPerOversampling() {
       if (std::fabs(l[i]) > std::fabs(l[at])) at = i;
     ASSERT_TRUE(static_cast<int>(at) == 1000 + lat[k]);
     if (factor == 1) ASSERT_TRUE(l[at] == 0.5f && r[at] == -0.5f);
+
+    // the total is the sum of its parts: both oversamplers, the zone-B look-aheads (at the zone-B
+    // rate, divided by the factor) and the look-ahead of the base-rate safety limiter
+    DSP::Oversampler osa, osb;
+    osa.prepare(factor, 512);
+    osb.prepare(factor, 512);
+    DSP::Limiter lim;
+    lim.prepare(sr * factor, 512 * factor, factor);
+    DSP::FinalStage fin;
+    fin.prepare(sr * factor, factor);
+    DSP::Metalhead metal;
+    metal.prepare(sr * factor, 512 * factor, factor);
+    const int safety = static_cast<int>(std::ceil(Tuning::kSafetyLookAheadMs * 0.001 * sr));
+    ASSERT_TRUE(safety > 0);
+    ASSERT_TRUE(lat[k] == osa.latencySamples() + osb.latencySamples() +
+                              (lim.latencySamples() + fin.latencySamples() + metal.latencySamples()) / factor + safety);
     ++k;
   }
   ASSERT_TRUE(lat[0] < lat[1]);
@@ -738,10 +764,84 @@ void testOutputGainKeepsCeiling() {
       peak = std::max(peak, static_cast<double>(std::max(std::fabs(l[i]), std::fabs(r[i]))));
     if (!(peak <= ceiling)) std::fprintf(stderr, "  factor %d: peak %.9f > %.9f\n", factor, peak, ceiling);
     ASSERT_TRUE(peak <= ceiling);
+    ASSERT_TRUE(e.guardClippedSamples() == 0);  // the safety limiter did the work, not the guard
   }
 }
 
-// The guard is the last resort, not the limiter: with OUTPUT at 0 dB and pink noise at 0 dBFS the
+// The decimation filter of zone B rebuilds samples above the CEIL: the safety limiter must catch
+// them, so the hard guard behind it never has to clip anything (everything at full push, INPUT +12).
+void testSafetyLimiterCatchesDecimationOvershoot() {
+  const double ceiling = std::pow(10.0, -0.1 / 20.0);
+  for (double sr : {44100.0, kSr, 192000.0}) {
+    std::vector<float> srcL, srcR;
+    pinkPair(srcL, srcR, static_cast<int>(2 * sr), 1.0, 31337u);
+    for (int factor : {1, 2, 4})
+      for (int mode = 0; mode < 2; ++mode) {
+        auto norm = defaultNorm();
+        setIdx(norm, kCeiling, 0);
+        setIdx(norm, kLoudness, 20);
+        setIdx(norm, kMetalOn, 1);
+        setIdx(norm, kPush, 12);
+        setIdx(norm, kFinalEffect, 10);
+        setIdx(norm, kFinalMode, mode);
+        setIdx(norm, kInputGain, 48);
+        Engine e;
+        e.prepare(sr, 512, factor);
+        e.set(mapParams(norm.data(), -1, false));
+        std::vector<float> l = srcL, r = srcR;
+        run(e, l, r, 512);
+        double peak = 0.0;
+        for (std::size_t i = 0; i < l.size(); ++i)
+          peak = std::max(peak, static_cast<double>(std::max(std::fabs(l[i]), std::fabs(r[i]))));
+        if (!(peak <= ceiling && e.guardClippedSamples() == 0))
+          std::fprintf(stderr, "  sr %.0f factor %d mode %d: peak %.9f (ceil %.9f), guard clipped %llu\n", sr, factor, mode, peak,
+                       ceiling, static_cast<unsigned long long>(e.guardClippedSamples()));
+        ASSERT_TRUE(peak <= ceiling);
+        ASSERT_TRUE(peak > 0.5);
+        ASSERT_TRUE(e.guardClippedSamples() == 0);
+      }
+  }
+}
+
+// Below the ceiling the safety limiter is invisible: LIMIT on with THRESH = CEIL (no gain recovery)
+// and every other stage off passes pink noise at -6 dBFS as the delayed input (OVERSAMPLING off:
+// exactly that; 2x / 4x: as the same chain with every stage off, whose latency is the same).
+void testSafetyLimiterIsTransparentBelowCeiling() {
+  std::vector<float> srcL, srcR;
+  pinkPair(srcL, srcR, static_cast<int>(2 * kSr), std::pow(10.0, -6.0 / 20.0), 99u);
+  for (int factor : {1, 2, 4}) {
+    EngineSettings s = allOff();
+    s.ceilingDb = -0.3f;
+    s.limitOn = true;
+    s.limitThreshDb = -0.3f;
+    Engine a;
+    a.prepare(kSr, 512, factor);
+    a.set(s);
+    Engine b;
+    b.prepare(kSr, 512, factor);
+    b.set(allOff());
+    ASSERT_TRUE(a.latencySamples() == b.latencySamples());
+    const int lat = a.latencySamples();
+    std::vector<float> al = srcL, ar = srcR, bl = srcL, br = srcR;
+    run(a, al, ar, 512);
+    run(b, bl, br, 512);
+    double maxDiff = 0.0;
+    for (std::size_t i = 0; i < al.size(); ++i) {
+      maxDiff = std::max(maxDiff, static_cast<double>(std::fabs(al[i] - bl[i])));
+      maxDiff = std::max(maxDiff, static_cast<double>(std::fabs(ar[i] - br[i])));
+      if (factor == 1) {
+        const float wantL = static_cast<int>(i) >= lat ? srcL[i - static_cast<std::size_t>(lat)] : 0.0f;
+        ASSERT_NEAR_EPS(al[i], wantL, 1e-6);
+      }
+    }
+    if (!(maxDiff <= 1e-6)) std::fprintf(stderr, "  factor %d: max difference %.3g\n", factor, maxDiff);
+    ASSERT_TRUE(maxDiff <= 1e-6);
+    ASSERT_TRUE(a.guardClippedSamples() == 0);
+  }
+}
+
+// The guard is the last resort, not the limiter (and neither is the safety limiter in front of it):
+// with OUTPUT at 0 dB and pink noise at 0 dBFS the
 // chain itself (zone B and its decimation) must already stay near the CEIL, so a regression in
 // zone B cannot hide behind the guard. LIMIT, FINAL and METALHEAD alone never reach the CEIL before
 // the guard (bound: 0.5 dB, under 0.1 % of the samples); with everything at full push the decimation
@@ -775,11 +875,12 @@ void testOvershootBeforeGuardIsSmall() {
         std::vector<float> l = srcL, r = srcR;
         run(e, l, r, 512);
         const double overDb = 20.0 * std::log10(e.preGuardPeak() / ceiling);
-        const double fraction = static_cast<double>(e.guardClippedSamples()) / static_cast<double>(l.size());
+        const double fraction = static_cast<double>(e.safetyCaughtSamples()) / static_cast<double>(l.size());
         if (!(overDb <= maxOverDb && fraction < maxFraction))
           std::fprintf(stderr, "  sr %.0f factor %d stage %d: pre-guard peak %+.3f dB over CEIL, %.5f clipped\n", sr, factor, stage, overDb, fraction);
         ASSERT_TRUE(overDb <= maxOverDb);
         ASSERT_TRUE(fraction < maxFraction);
+        ASSERT_TRUE(e.guardClippedSamples() == 0);
         ASSERT_TRUE(e.preGuardPeak() > 0.5);   // the guard was really on and the signal really there
       }
   }
@@ -804,6 +905,8 @@ int main() {
   RUN_TEST(testStageSwitchesNoClick);
   RUN_TEST(testMetersReadStages);
   RUN_TEST(testOutputGainKeepsCeiling);
+  RUN_TEST(testSafetyLimiterCatchesDecimationOvershoot);
+  RUN_TEST(testSafetyLimiterIsTransparentBelowCeiling);
   RUN_TEST(testOvershootBeforeGuardIsSmall);
   std::printf("\n%d passed, %d failed\n", g_passed, g_failed);
   return g_failed == 0 ? 0 : 1;

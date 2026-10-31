@@ -145,6 +145,7 @@ void Engine::prepare(double sampleRate, int maxBlock, int oversampling) {
   limiter_.prepare(osRate, osBlock, factor_);
   final_.prepare(osRate, factor_);
   metal_.prepare(osRate, osBlock, factor_);
+  safety_.prepare(sampleRate_, maxBlock_, 1, DSP::kLimiterStyleSafety);
   loud_.prepare(sampleRate_);
   for (int c = 0; c < 2; ++c) {
     osA_[c].prepare(factor_, maxBlock_);
@@ -153,9 +154,11 @@ void Engine::prepare(double sampleRate, int maxBlock, int oversampling) {
 
   preGuardPeak_ = 0.0;
   guardClipped_ = 0;
+  safetyCaught_ = 0;
 
   latency_ = osA_[0].latencySamples() + osB_[0].latencySamples() +
-             (limiter_.latencySamples() + final_.latencySamples() + metal_.latencySamples()) / factor_;
+             (limiter_.latencySamples() + final_.latencySamples() + metal_.latencySamples()) / factor_ +
+             safety_.latencySamples();
 
   const auto ring = static_cast<std::size_t>(std::max(1, latency_));
   bypassRingL_.assign(ring, 0.0f);
@@ -237,6 +240,18 @@ void Engine::apply(const EngineSettings& s, bool force) {
 
   ceilLin_ = ceilingFloat(s.ceilingDb);
   guardOn_ = s.limitOn || s.finalOn || s.metalOn;
+
+  // the safety limiter works with the guard: same condition, 64-sample crossfade (its own on/off ramp)
+  DSP::LimiterSettings ss;
+  ss.on = guardOn_;
+  ss.style = DSP::kLimiterStyleSafety;
+  ss.releaseTrimIndex = 4;
+  ss.ceilingDb = s.ceilingDb;
+  ss.threshDb = s.ceilingDb;
+  if (force || !(ss == safetyApplied_)) {
+    safety_.set(ss);
+    safetyApplied_ = ss;
+  }
   clipMixTarget_ = s.clipOn ? 1.0 : 0.0;
 
   const double inG = dbToGain(s.inputGainDb), outG = dbToGain(s.outputGainDb), byp = s.bypass ? 1.0 : 0.0;
@@ -403,6 +418,14 @@ void Engine::processChunk(float* l, float* r, int n, double* inPeak, double* out
     for (int i = 0; i < n; ++i) {
       const float pk = std::max(std::fabs(l[i]), std::fabs(r[i]));
       preGuardPeak_ = std::max(preGuardPeak_, static_cast<double>(pk));
+      if (pk > c) ++safetyCaught_;
+    }
+  }
+  safety_.process(l, r, n);  // always runs: its delay is part of the latency, on or off
+  if (guardOn_) {
+    const float c = ceilLin_;
+    for (int i = 0; i < n; ++i) {
+      const float pk = std::max(std::fabs(l[i]), std::fabs(r[i]));
       if (pk > c) ++guardClipped_;
       l[i] = std::clamp(l[i], -c, c);
       r[i] = std::clamp(r[i], -c, c);
