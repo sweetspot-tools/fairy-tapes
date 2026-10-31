@@ -112,6 +112,10 @@ public:
   // Response in dB of the linear network at `hz`: with the settings alone (`staticSetting`) or
   // with the DYN pull-back at this moment. Call it from the thread that calls set().
   double magnitudeDb(double hz, bool staticSetting) const;
+  // The same with a given DYN pull-back: `pullLow` / `pullAir` are the amounts 0..1 that dynLowAmount() /
+  // dynAirAmount() publish (the share of the boost removed is amount * Tuning::kDynMaxPullback). Reads the
+  // settings only, not the detectors: the editor calls it on its own copy with the published values.
+  double magnitudeDb(double hz, float pullLow, float pullAir) const;
 
 private:
   // One biquad whose coefficients glide linearly to a new target.

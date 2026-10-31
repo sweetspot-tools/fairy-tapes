@@ -5,8 +5,16 @@
 #include "ui/editor_size.h"
 #include "ui/layout.h"
 #include "ui/readouts.h"
+#include "ui/screen_model.h"
 #include "ui/value_text.h"
 
+#include "dsp/clip_softly.h"
+#include "dsp/final_stage.h"
+#include "dsp/fine_eq.h"
+#include "dsp/vibe_eq.h"
+#include "engine.h"
+#include "loudness_macro.h"
+#include "params.h"
 #include "tuning.h"
 
 #include "fairy_ui/screws.h"
@@ -58,8 +66,8 @@ bool isFinalModeControl(Steinberg::Vst::ParamID id) {
 std::vector<Rect> fixedReadouts() {
   std::vector<Rect> out{kScreenRect, kLufsScreenRect};
   for (const MeterRow& r : kMeterRows) out.push_back(meterBarRect(r));
-  for (const GrRow& r : kGrRows) out.push_back(grBarRect(r));
-  for (const ClipLed& c : kClipLeds) out.push_back(clipLedRect(c));
+  for (const Ui::GrRow& r : kGrRows) out.push_back(grBarRect(r));
+  for (const Ui::ClipLed& c : kClipLeds) out.push_back(clipLedRect(c));
   for (const Led& l : kActLeds) out.push_back({l.cx - l.r, l.cy - l.r, 2 * l.r, 2 * l.r});
   out.push_back({kTargetLed.cx - kTargetLed.r, kTargetLed.cy - kTargetLed.r, 2 * kTargetLed.r, 2 * kTargetLed.r});
   return out;
@@ -173,8 +181,8 @@ void test_layout_rects_inside() {
   ASSERT_TRUE(inside(kScreenRect, boxOf(Box::Screen).rect));
   ASSERT_TRUE(inside(kLufsScreenRect, boxOf(Box::Level).rect));
   for (const MeterRow& r : kMeterRows) ASSERT_TRUE(inside(meterBarRect(r), boxOf(Box::Level).rect));
-  for (const GrRow& r : kGrRows) ASSERT_TRUE(inside(grBarRect(r), boxOf(Box::Level).rect));
-  for (const ClipLed& c : kClipLeds) ASSERT_TRUE(inside(clipLedRect(c), boxOf(Box::Level).rect));
+  for (const Ui::GrRow& r : kGrRows) ASSERT_TRUE(inside(grBarRect(r), boxOf(Box::Level).rect));
+  for (const Ui::ClipLed& c : kClipLeds) ASSERT_TRUE(inside(clipLedRect(c), boxOf(Box::Level).rect));
   ASSERT_TRUE(inside(kLufsResetRect, kLufsScreenRect));
   for (const Led& l : kActLeds) ASSERT_TRUE(inside({l.cx - l.r, l.cy - l.r, 2 * l.r, 2 * l.r}, boxOf(Box::VibeEq).rect));
 }
@@ -404,7 +412,7 @@ void test_silkscreen_items_cover_controls() {
   for (const ActionSpec& a : kActions) ASSERT_TRUE(!hasSourceName(a.name));
   for (const LitChoiceSpec& l : kLitChoices)
     for (int i = 0; i < l.count; ++i) ASSERT_TRUE(!hasSourceName(l.names[i]));
-  for (const ClipLed& c : kClipLeds) ASSERT_TRUE(!hasSourceName(c.label));
+  for (const Ui::ClipLed& c : kClipLeds) ASSERT_TRUE(!hasSourceName(c.label));
   for (Box b : {Box::FineEq, Box::VibeEq, Box::Glue, Box::Clip, Box::Final})
     for (int mode : {0, 1}) ASSERT_TRUE(!hasSourceName(engineTag(b, mode)));
   // and the texts the spec asks for are there
@@ -559,6 +567,509 @@ void test_release_text_follows_tuning() {
   ASSERT_TRUE(releaseText(0, -5) == releaseText(0, 0) && releaseText(0, 50) == releaseText(0, 8));
 }
 
+// ---- Screen model: EQ curves, transfer curves, scrolling history, paths --------------------------------------------
+
+using Norm = std::vector<double>;
+
+Norm defaultsNorm() {
+  Norm n(kNumParams);
+  loadDefaults(n.data());
+  return n;
+}
+void setIdx(Norm& n, ParamID id, int index) { n[id] = normFromIndex(id, index); }
+
+// Three different FINE EQ + VIBE EQ settings: stereo bands, bands on MID / SIDE, and an extreme VIBE.
+Norm eqSettingA() {
+  Norm n = defaultsNorm();
+  setIdx(n, kHpFreq, 3);
+  setIdx(n, kLsOn, 1); setIdx(n, kLsFreq, 2); setIdx(n, kLsGain, 14);
+  setIdx(n, kLmOn, 1); setIdx(n, kLmFreq, 4); setIdx(n, kLmGain, 3); setIdx(n, kLmQ, 2);
+  setIdx(n, kMidOn, 1); setIdx(n, kMidFreq, 5); setIdx(n, kMidGain, 16); setIdx(n, kMidQ, 1);
+  setIdx(n, kHmOn, 1); setIdx(n, kHmFreq, 7); setIdx(n, kHmGain, 2); setIdx(n, kHmQ, 3);
+  setIdx(n, kHsOn, 1); setIdx(n, kHsFreq, 4); setIdx(n, kHsGain, 12);
+  setIdx(n, kVibeOn, 1); setIdx(n, kLowFreq, 2); setIdx(n, kLow, 7); setIdx(n, kAirFreq, 2); setIdx(n, kAir, 6);
+  setIdx(n, kTilt, 9);
+  return n;
+}
+Norm eqSettingB() {
+  Norm n = defaultsNorm();
+  setIdx(n, kLmOn, 1); setIdx(n, kLmMs, 1); setIdx(n, kLmFreq, 3); setIdx(n, kLmGain, 15); setIdx(n, kLmQ, 1);
+  setIdx(n, kMidOn, 1); setIdx(n, kMidMs, 2); setIdx(n, kMidFreq, 6); setIdx(n, kMidGain, 1); setIdx(n, kMidQ, 2);
+  setIdx(n, kHmOn, 1); setIdx(n, kHmMs, 1); setIdx(n, kHmFreq, 8); setIdx(n, kHmGain, 13); setIdx(n, kHmQ, 0);
+  setIdx(n, kHpMs, 2); setIdx(n, kHpFreq, 4);
+  setIdx(n, kVibeOn, 1); setIdx(n, kLowFreq, 3); setIdx(n, kLow, 10); setIdx(n, kAirFreq, 4); setIdx(n, kAir, 3);
+  setIdx(n, kTilt, 2);
+  return n;
+}
+Norm eqSettingC() {
+  Norm n = defaultsNorm();
+  setIdx(n, kFineOn, 1);
+  setIdx(n, kLsOn, 1); setIdx(n, kLsMs, 0); setIdx(n, kLsFreq, 5); setIdx(n, kLsGain, 0);
+  setIdx(n, kHsOn, 1); setIdx(n, kHsFreq, 6); setIdx(n, kHsGain, 16);
+  setIdx(n, kVibeOn, 1); setIdx(n, kLowFreq, 0); setIdx(n, kLow, 4); setIdx(n, kAirFreq, 0); setIdx(n, kAir, 10);
+  setIdx(n, kTilt, 12);
+  return n;
+}
+
+// The reference: the DSP blocks as the engine sets them from the same settings, at 48 kHz.
+struct EngineRef {
+  DSP::FineEq fine;
+  DSP::VibeEq vibe;
+  explicit EngineRef(const Norm& n, int listen = -1) {
+    const EngineSettings s = mapParams(n.data(), -1, false);
+    fine.prepare(48000.0, 512);
+    fine.setStageOn(s.fineOn);
+    for (int b = 0; b < DSP::FineEq::kNumBands; ++b) fine.setBand(b, s.bands[static_cast<std::size_t>(b)]);
+    fine.setListen(listen);
+    vibe.prepare(48000.0, 512);
+    vibe.set(s.vibe);
+  }
+};
+
+double hzAt(int i, int n) { return 20.0 * std::pow(1000.0, static_cast<double>(i) / (n - 1)); }
+
+void test_eq_curves_match_engine() {
+  const Norm settings[3] = {eqSettingA(), eqSettingB(), eqSettingC()};
+  for (const Norm& n : settings) {
+    EqCurves curves;
+    curves.update(n.data());
+    EngineRef ref(n);
+    double fineSpan = 0.0, vibeSpan = 0.0;
+    for (int i = 0; i < 200; ++i) {
+      const double hz = hzAt(i, 200);
+      for (int t = 0; t < 3; ++t) {
+        const double want = ref.fine.magnitudeDb(t, hz);
+        ASSERT_TRUE(std::fabs(curves.fineDb(t, hz) - want) < 0.01);
+        fineSpan = std::max(fineSpan, std::fabs(want));
+      }
+      const double vWant = ref.vibe.magnitudeDb(hz, true);
+      ASSERT_TRUE(std::fabs(curves.vibeStaticDb(hz) - vWant) < 0.01);
+      ASSERT_TRUE(std::fabs(curves.vibeDb(hz, 0.0f, 0.0f) - vWant) < 0.01);
+      vibeSpan = std::max(vibeSpan, std::fabs(vWant));
+    }
+    ASSERT_TRUE(fineSpan > 1.0 && vibeSpan > 1.0);  // the settings are not flat: the comparison means something
+  }
+  // update() replaces the previous settings (it does not accumulate)
+  EqCurves curves;
+  const Norm a = eqSettingA(), c = eqSettingC();
+  curves.update(a.data());
+  curves.update(c.data());
+  EngineRef refC(c);
+  for (int i = 0; i < 50; ++i) {
+    const double hz = hzAt(i, 50);
+    ASSERT_TRUE(std::fabs(curves.fineDb(0, hz) - refC.fine.magnitudeDb(0, hz)) < 0.01);
+    ASSERT_TRUE(std::fabs(curves.vibeStaticDb(hz) - refC.vibe.magnitudeDb(hz, true)) < 0.01);
+  }
+  // stage off: the signal passes untouched, so the curve is flat (the stage IN, as the preview)
+  Norm off = eqSettingA();
+  setIdx(off, kFineOn, 0);
+  setIdx(off, kVibeOn, 0);
+  curves.update(off.data());
+  for (int i = 0; i < 20; ++i) {
+    ASSERT_TRUE(curves.fineDb(0, hzAt(i, 20)) == 0.0);
+    ASSERT_TRUE(curves.vibeStaticDb(hzAt(i, 20)) == 0.0);
+  }
+  ASSERT_TRUE(!curves.msActive());
+}
+
+void test_eq_curves_ms() {
+  EqCurves curves;
+  const Norm flat = defaultsNorm();
+  curves.update(flat.data());
+  ASSERT_TRUE(!curves.msActive());
+
+  // all bands on ST: one curve (MID and SIDE are the same as ST)
+  const Norm st = eqSettingA();
+  curves.update(st.data());
+  ASSERT_TRUE(!curves.msActive());
+  for (int i = 0; i < 50; ++i) {
+    const double hz = hzAt(i, 50);
+    ASSERT_TRUE(curves.fineDb(1, hz) == curves.fineDb(0, hz));
+    ASSERT_TRUE(curves.fineDb(2, hz) == curves.fineDb(0, hz));
+  }
+
+  // one band on MID: msActive, MID differs from SIDE (and from ST at that band's frequency)
+  Norm oneMid = defaultsNorm();
+  setIdx(oneMid, kMidOn, 1); setIdx(oneMid, kMidMs, 1); setIdx(oneMid, kMidFreq, 4); setIdx(oneMid, kMidGain, 14);
+  curves.update(oneMid.data());
+  ASSERT_TRUE(curves.msActive());
+  double maxDiff = 0.0;
+  for (int i = 0; i < 100; ++i) {
+    const double hz = hzAt(i, 100);
+    maxDiff = std::max(maxDiff, std::fabs(curves.fineDb(1, hz) - curves.fineDb(2, hz)));
+    ASSERT_TRUE(std::fabs(curves.fineDb(2, hz) - curves.fineDb(0, hz)) < 1e-9);  // SIDE and ST: the MID band is not in them
+  }
+  ASSERT_TRUE(maxDiff > 1.0);
+
+  // a band on SIDE: MID stays as ST, SIDE moves
+  Norm oneSide = defaultsNorm();
+  setIdx(oneSide, kHmOn, 1); setIdx(oneSide, kHmMs, 2); setIdx(oneSide, kHmFreq, 6); setIdx(oneSide, kHmGain, 2);
+  curves.update(oneSide.data());
+  ASSERT_TRUE(curves.msActive());
+  ASSERT_TRUE(std::fabs(curves.fineDb(2, 5000.0) - curves.fineDb(1, 5000.0)) > 1.0);
+
+  // a band on MID that is switched off does not count as M/S
+  Norm offMid = oneMid;
+  setIdx(offMid, kMidOn, 0);
+  curves.update(offMid.data());
+  ASSERT_TRUE(!curves.msActive());
+  // ... nor does the whole stage off
+  Norm stageOff = oneMid;
+  setIdx(stageOff, kFineOn, 0);
+  curves.update(stageOff.data());
+  ASSERT_TRUE(!curves.msActive());
+}
+
+void test_vibe_pull_back() {
+  Norm n = defaultsNorm();
+  setIdx(n, kVibeOn, 1); setIdx(n, kLowFreq, 2); setIdx(n, kLow, 10); setIdx(n, kAirFreq, 2); setIdx(n, kAir, 10);
+  setIdx(n, kTilt, 6);
+  EqCurves curves;
+  curves.update(n.data());
+
+  // pull 0 is the static setting
+  for (int i = 0; i < 60; ++i) {
+    const double hz = hzAt(i, 60);
+    ASSERT_TRUE(curves.vibeDb(hz, 0.0f, 0.0f) == curves.vibeStaticDb(hz));
+  }
+  const double boostStatic = curves.vibeStaticDb(60.0);
+  const double airStatic = curves.vibeStaticDb(10000.0);
+  ASSERT_TRUE(boostStatic > 5.0 && airStatic > 5.0);
+
+  // pull 1: the boost is reduced by the share of tuning.h: LOW / AIR amount * (1 - kDynMaxPullback), the same
+  // network as the stepped setting with that amount
+  const double keep = 10.0 * (1.0 - Tuning::kDynMaxPullback);
+  ASSERT_TRUE(keep > 0.0 && keep < 10.0);
+  const double boostFull = curves.vibeDb(60.0, 1.0f, 1.0f);
+  const double airFull = curves.vibeDb(10000.0, 1.0f, 1.0f);
+  ASSERT_TRUE(boostFull < boostStatic - 1.0 && airFull < airStatic - 1.0);
+  ASSERT_TRUE(boostFull > 0.0 && airFull > 0.0);  // never pulled all the way to nothing (the share stays below 1)
+  if (std::fabs(keep - std::round(keep)) < 1e-9) {  // the kept amount is a step of the knob: compare with that step
+    Norm kept = n;
+    setIdx(kept, kLow, static_cast<int>(std::lround(keep)));
+    setIdx(kept, kAir, static_cast<int>(std::lround(keep)));
+    EqCurves keptCurves;
+    keptCurves.update(kept.data());
+    for (int i = 0; i < 60; ++i) {
+      const double hz = hzAt(i, 60);
+      ASSERT_TRUE(std::fabs(curves.vibeDb(hz, 1.0f, 1.0f) - keptCurves.vibeStaticDb(hz)) < 1e-6);
+    }
+  }
+  // halfway pull: halfway amount, between the two
+  const double boostHalf = curves.vibeDb(60.0, 0.5f, 0.5f);
+  ASSERT_TRUE(boostHalf < boostStatic && boostHalf > boostFull);
+  // LOW and AIR are pulled independently
+  ASSERT_TRUE(std::fabs(curves.vibeDb(60.0, 1.0f, 0.0f) - boostFull) < 0.5);
+  ASSERT_TRUE(std::fabs(curves.vibeDb(10000.0, 1.0f, 0.0f) - airStatic) < 0.5);
+  ASSERT_TRUE(std::fabs(curves.vibeDb(10000.0, 0.0f, 1.0f) - airFull) < 0.5);
+  // out-of-range and non-finite pulls are clamped to 0..1
+  ASSERT_TRUE(curves.vibeDb(60.0, 5.0f, 5.0f) == curves.vibeDb(60.0, 1.0f, 1.0f));
+  ASSERT_TRUE(curves.vibeDb(60.0, -3.0f, -3.0f) == curves.vibeStaticDb(60.0));
+  ASSERT_TRUE(std::isfinite(curves.vibeDb(60.0, std::numeric_limits<float>::quiet_NaN(), 0.0f)));
+
+  // the DSP overload itself: pull 0 / 0 is the static response of the existing function
+  EngineRef ref(n);
+  for (int i = 0; i < 60; ++i) {
+    const double hz = hzAt(i, 60);
+    ASSERT_TRUE(ref.vibe.magnitudeDb(hz, 0.0f, 0.0f) == ref.vibe.magnitudeDb(hz, true));
+  }
+}
+
+void test_listen_not_in_curves() {
+  // LISTEN solos a bell for the ear: the curves are those of the settings, whatever bell is soloed
+  const Norm n = eqSettingA();
+  EqCurves curves;
+  curves.update(n.data());
+  for (int listen = -1; listen <= 2; ++listen) {
+    EngineRef ref(n, listen);  // the engine's FINE EQ with LISTEN on that bell
+    for (int i = 0; i < 100; ++i) {
+      const double hz = hzAt(i, 100);
+      for (int t = 0; t < 3; ++t) ASSERT_TRUE(std::fabs(curves.fineDb(t, hz) - ref.fine.magnitudeDb(t, hz)) < 0.01);
+    }
+  }
+  // and update() takes the stored table only: the LISTEN session value never reaches it (mapParams is called
+  // with listen = -1), so the curves equal those of a table whose bells are all on and LISTEN-free
+  const EngineSettings listening = mapParams(n.data(), 1, false);
+  ASSERT_TRUE(listening.listenBand == 1);
+  EqCurves again;
+  again.update(n.data());
+  for (int i = 0; i < 50; ++i) ASSERT_TRUE(again.fineDb(0, hzAt(i, 50)) == curves.fineDb(0, hzAt(i, 50)));
+}
+
+// A constant input through the DSP block, long enough to settle: the static transfer of the block.
+double dspClip(const Norm& n, double x) {
+  const EngineSettings s = mapParams(n.data(), -1, false);
+  const LoudPush push = loudPush(s.loudness);
+  DSP::ClipSoftly clip;
+  clip.prepare(48000.0);
+  clip.setDriveDb(s.clipDriveDb + push.clipDb);
+  const int len = 6000;
+  std::vector<float> l(static_cast<std::size_t>(len), static_cast<float>(x)), r = l;
+  clip.process(l.data(), r.data(), len);
+  return l.back();
+}
+
+double dspFinal(const Norm& n, double x) {
+  const EngineSettings s = mapParams(n.data(), -1, false);
+  const LoudPush push = loudPush(s.loudness);
+  DSP::FinalStage fin;
+  fin.prepare(48000.0, 1);
+  fin.set(s.finalOn, s.finalMode, std::min(1.0f, s.finalEffect + finalEffectPush(push)), s.finalCurve,
+          std::min(2.0f, s.finalDriveDb + finalDrivePush(push)), s.ceilingDb);
+  const int len = 256;
+  std::vector<float> l(static_cast<std::size_t>(len), static_cast<float>(x)), r = l;
+  fin.process(l.data(), r.data(), len);
+  return l.back();
+}
+
+void test_transfer_functions_match_dsp() {
+  // CLIP: drive 0 / +2 / +6 dB, LOUDNESS 0 / 2.5 / 5 / 10 (the push adds drive)
+  const int driveIdx[3] = {0, 4, 12};
+  const int loudIdx[4] = {0, 5, 10, 20};
+  const double xs[] = {0.0, 0.05, 0.2, 0.5, 0.7, 0.9, 1.0, 1.02, 1.05, -0.4, -1.0};
+  for (int d : driveIdx) {
+    for (int l : loudIdx) {
+      Norm n = defaultsNorm();
+      setIdx(n, kClipOn, 1); setIdx(n, kClipDrive, d); setIdx(n, kLoudness, l);
+      for (double x : xs) ASSERT_TRUE(std::fabs(clipTransfer(x, n.data()) - dspClip(n, x)) < 1e-6);
+    }
+  }
+  {  // LOUDNESS moves the curve; CLIP off is the identity
+    Norm quiet = defaultsNorm(), loud = defaultsNorm();
+    setIdx(quiet, kClipOn, 1); setIdx(quiet, kClipDrive, 4); setIdx(quiet, kLoudness, 0);
+    setIdx(loud, kClipOn, 1); setIdx(loud, kClipDrive, 4); setIdx(loud, kLoudness, 20);
+    ASSERT_TRUE(std::fabs(clipTransfer(0.8, quiet.data()) - clipTransfer(0.8, loud.data())) > 1e-3);
+    Norm off = loud;
+    setIdx(off, kClipOn, 0);
+    ASSERT_TRUE(clipTransfer(0.8, off.data()) == 0.8);
+  }
+
+  // FINAL: INFLATE and CLIP modes, ceilings, LOUDNESS 0 / 5 / 10 (the push adds EFFECT or DRIVE), several curves
+  const double fx[] = {0.0, 0.1, 0.3, 0.5, 0.8, 0.95, 1.0, 1.1, 1.25, -0.6, -1.2};
+  int compared = 0;
+  for (int mode = 0; mode < 2; ++mode) {
+    for (int ceil = 0; ceil < 4; ++ceil) {
+      for (int l : loudIdx) {
+        for (int e : {0, 5, 10}) {
+          for (int c : {0, 1, 4}) {
+            for (int drv : {0, 4}) {
+              Norm n = defaultsNorm();
+              setIdx(n, kFinalOn, 1); setIdx(n, kFinalMode, mode); setIdx(n, kFinalEffect, e);
+              setIdx(n, kFinalCurve, c); setIdx(n, kFinalDrive, drv);
+              setIdx(n, kCeiling, ceil); setIdx(n, kLoudness, l);
+              const double ceilLin = std::pow(10.0, mapParams(n.data(), -1, false).ceilingDb / 20.0);
+              for (double x : fx) {
+                ASSERT_TRUE(std::fabs(finalTransfer(x, n.data(), ceilLin) - dspFinal(n, x)) < 1e-6);
+                ++compared;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  ASSERT_TRUE(compared > 1000);
+  {  // the curves are not trivial: INFLATE lifts the body, CLIP at +2 dB clamps at the ceiling, LOUDNESS adds
+    Norm n = defaultsNorm();
+    setIdx(n, kFinalOn, 1); setIdx(n, kFinalMode, 0); setIdx(n, kFinalEffect, 10); setIdx(n, kFinalCurve, 2);
+    setIdx(n, kCeiling, 1); setIdx(n, kLoudness, 0);
+    const double ceilLin = std::pow(10.0, Tables::kCeilings[1] / 20.0);
+    ASSERT_TRUE(finalTransfer(0.5, n.data(), ceilLin) > 0.5 + 0.01);
+    ASSERT_TRUE(finalTransfer(2.0, n.data(), ceilLin) <= ceilLin + 1e-12);
+    Norm half = n;
+    setIdx(half, kFinalEffect, 5);
+    const double a = finalTransfer(0.5, half.data(), ceilLin);
+    setIdx(half, kLoudness, 20);  // FINAL third complete: EFFECT + 0.6
+    ASSERT_TRUE(finalTransfer(0.5, half.data(), ceilLin) > a + 0.005);
+    Norm clipMode = defaultsNorm();
+    setIdx(clipMode, kFinalOn, 1); setIdx(clipMode, kFinalMode, 1); setIdx(clipMode, kFinalDrive, 4);
+    setIdx(clipMode, kCeiling, 1); setIdx(clipMode, kLoudness, 0);
+    ASSERT_TRUE(std::fabs(finalTransfer(1.25, clipMode.data(), ceilLin) - ceilLin) < 0.05);
+    ASSERT_TRUE(finalTransfer(1.25, clipMode.data(), ceilLin) <= ceilLin + 1e-12);
+    Norm off = clipMode;
+    setIdx(off, kFinalOn, 0);
+    ASSERT_TRUE(finalTransfer(1.1, off.data(), ceilLin) == 1.1);
+  }
+}
+
+void test_scroll_history_ring() {
+  ScrollHistory<8> h;
+  ASSERT_TRUE(h.size() == 0 && h.capacity() == 8);
+  for (int i = 0; i < 3; ++i) h.push({static_cast<float>(i), 0.f, 0.f, 0.f});
+  ASSERT_TRUE(h.size() == 3);
+  ASSERT_TRUE(h.at(0).levelDb == 0.f && h.at(2).levelDb == 2.f);
+  for (int i = 3; i < 8; ++i) h.push({static_cast<float>(i), static_cast<float>(i) * 2.f, 0.f, 0.f});
+  ASSERT_TRUE(h.size() == 8 && h.at(0).levelDb == 0.f && h.at(7).levelDb == 7.f);
+  // past the capacity the oldest drop off: size stays, at(0) is the oldest left
+  for (int i = 8; i < 58; ++i) h.push({static_cast<float>(i), static_cast<float>(i) * 2.f, 1.f, -1.f});
+  ASSERT_TRUE(h.size() == 8);
+  for (std::size_t i = 0; i < 8; ++i) {
+    ASSERT_TRUE(h.at(i).levelDb == static_cast<float>(50 + i));
+    ASSERT_TRUE(h.at(i).grDb == static_cast<float>(50 + i) * 2.f);
+    ASSERT_TRUE(h.at(i).netGrDb == 1.f && h.at(i).threshDb == -1.f);
+  }
+  // an index out of range reads the newest (never outside the ring)
+  ASSERT_TRUE(h.at(99).levelDb == 57.f);
+  h.clear();
+  ASSERT_TRUE(h.size() == 0);
+  h.push({5.f, 0.f, 0.f, 0.f});
+  ASSERT_TRUE(h.size() == 1 && h.at(0).levelDb == 5.f);
+  ScrollHistory<4> empty;
+  ASSERT_TRUE(empty.at(0).levelDb == ScrollPoint{}.levelDb);
+}
+
+bool pathInside(const std::vector<Point>& path) {
+  for (const Point& p : path) {
+    if (!std::isfinite(p.x) || !std::isfinite(p.y)) return false;
+    if (p.x < kScreenRect.x || p.x > kScreenRect.x + kScreenRect.w) return false;
+    if (p.y < kScreenRect.y || p.y > kScreenRect.y + kScreenRect.h) return false;
+  }
+  return true;
+}
+
+void test_axis_scales() {
+  // EQ: 20 Hz at the left edge, 20 kHz at the right, 0 dB on the middle line, log spacing
+  ASSERT_TRUE(std::fabs(eqX(20.0) - kScreenRect.x) < 1e-3);
+  ASSERT_TRUE(std::fabs(eqX(20000.0) - (kScreenRect.x + kScreenRect.w)) < 1e-3);
+  ASSERT_TRUE(std::fabs(eqX(632.4555320336759) - (kScreenRect.x + kScreenRect.w / 2)) < 0.05);
+  ASSERT_TRUE(std::fabs(eqY(0.0) - (kScreenRect.y + kScreenRect.h / 2)) < 1e-3);
+  ASSERT_TRUE(eqY(3.0) < eqY(0.0) && eqY(-3.0) > eqY(0.0));            // up is louder
+  ASSERT_TRUE(std::fabs((eqY(0.0) - eqY(3.0)) - (eqY(-3.0) - eqY(0.0))) < 1e-3);
+  ASSERT_TRUE(eqY(100.0) == eqY(7.5) && eqY(-100.0) == eqY(-7.5));      // +-7.5 dB range
+  ASSERT_TRUE(eqY(7.5) < eqY(7.0));
+  // GLUE: level -36..0 from the bottom, GR 0..12 from the top
+  ASSERT_TRUE(levelY(ScreenView::Glue, -36.0) > levelY(ScreenView::Glue, -18.0));
+  ASSERT_TRUE(levelY(ScreenView::Glue, -18.0) > levelY(ScreenView::Glue, 0.0));
+  ASSERT_TRUE(levelY(ScreenView::Glue, -100.0) == levelY(ScreenView::Glue, -36.0));
+  ASSERT_TRUE(levelY(ScreenView::Glue, 5.0) == levelY(ScreenView::Glue, 0.0));
+  ASSERT_TRUE(grY(ScreenView::Glue, 12.0) > grY(ScreenView::Glue, 6.0) && grY(ScreenView::Glue, 6.0) > grY(ScreenView::Glue, 0.0));
+  ASSERT_TRUE(grY(ScreenView::Glue, 50.0) == grY(ScreenView::Glue, 12.0) && grY(ScreenView::Glue, -5.0) == grY(ScreenView::Glue, 0.0));
+  // LIMIT: level -24..0, GR 0..8 (other scales than GLUE)
+  ASSERT_TRUE(levelY(ScreenView::Limit, -24.0) == levelY(ScreenView::Glue, -36.0));
+  ASSERT_TRUE(std::fabs(levelY(ScreenView::Limit, -12.0) - (levelY(ScreenView::Limit, 0.0) + levelY(ScreenView::Limit, -24.0)) / 2) < 1e-3);
+  ASSERT_TRUE(grY(ScreenView::Limit, 8.0) == grY(ScreenView::Glue, 12.0));
+  ASSERT_TRUE(grY(ScreenView::Limit, 4.0) != grY(ScreenView::Glue, 4.0));
+  // CLIP: input 0..1.05, FINAL: 0..1.25, the unity point of each one is where the diagonal passes
+  ASSERT_TRUE(clipX(0.0) < clipX(1.0) && clipX(1.0) < clipX(1.05) && clipX(2.0) == clipX(1.05) && clipX(-1.0) == clipX(0.0));
+  ASSERT_TRUE(clipY(0.0) > clipY(1.0) && clipY(1.0) > clipY(1.05));
+  ASSERT_TRUE(finalX(1.25) > finalX(1.0) && finalX(9.0) == finalX(1.25));
+  ASSERT_TRUE(finalY(1.25) < finalY(1.0) && finalY(0.0) > finalY(1.0));
+  ASSERT_TRUE(finalCeilingY(0.9) == finalY(0.9) && finalCeilingY(std::pow(10.0, -0.3 / 20.0)) > finalY(1.0));  // below 0 dBFS
+  {  // the ceiling line: the table's CEILING as a linear amplitude
+    Norm n = defaultsNorm();
+    for (int c = 0; c < 4; ++c) {
+      setIdx(n, kCeiling, c);
+      ASSERT_TRUE(std::fabs(ceilingLinear(n.data()) - std::pow(10.0, Tables::kCeilings[static_cast<std::size_t>(c)] / 20.0)) < 1e-6);
+    }
+  }
+  // history: the newest at the right edge, the oldest of a full ring at the left edge
+  ASSERT_TRUE(std::fabs(historyX(9, 10, 150) - (kScreenRect.x + kScreenRect.w)) < 1e-3);
+  ASSERT_TRUE(std::fabs(historyX(0, 150, 150) - kScreenRect.x) < 1e-3);
+  ASSERT_TRUE(historyX(0, 10, 150) > kScreenRect.x + kScreenRect.w - 10.f * kScreenRect.w / 149.f);
+}
+
+void test_curve_paths_inside_screen() {
+  const float nan = std::numeric_limits<float>::quiet_NaN(), inf = std::numeric_limits<float>::infinity();
+  const double dnan = std::numeric_limits<double>::quiet_NaN(), dinf = std::numeric_limits<double>::infinity();
+
+  // EQ views, with the plain, the busy and the extreme settings, and odd pull-backs
+  Norm lo(kNumParams, 0.0), hi(kNumParams, 1.0);
+  Norm extremeEq = eqSettingB();
+  setIdx(extremeEq, kLmGain, 16); setIdx(extremeEq, kMidGain, 16); setIdx(extremeEq, kHmGain, 16); setIdx(extremeEq, kLsGain, 16);
+  const Norm sets[] = {defaultsNorm(), eqSettingA(), eqSettingB(), eqSettingC(), lo, hi, extremeEq};
+  const EqTrace traces[] = {EqTrace::FineSt, EqTrace::FineMid, EqTrace::FineSide, EqTrace::Vibe, EqTrace::VibeStatic};
+  const float pulls[] = {0.f, 0.5f, 1.f, 7.f, -7.f, nan, inf, -inf};
+  for (const Norm& n : sets) {
+    EqCurves curves;
+    curves.update(n.data());
+    for (EqTrace t : traces) {
+      for (float pl : pulls) {
+        const std::vector<Point> path = curvePath(curves, t, pl, pl);
+        ASSERT_TRUE(path.size() >= 200);
+        ASSERT_TRUE(pathInside(path));
+        // the curve runs from 20 Hz at the left edge to 20 kHz at the right, left to right
+        ASSERT_TRUE(std::fabs(path.front().x - kScreenRect.x) < 1e-3);
+        ASSERT_TRUE(std::fabs(path.back().x - (kScreenRect.x + kScreenRect.w)) < 1e-3);
+        for (std::size_t i = 1; i < path.size(); ++i) ASSERT_TRUE(path[i].x > path[i - 1].x);
+      }
+    }
+  }
+  {  // the flat curve sits on the 0 dB line; a boost goes above it
+    EqCurves curves;
+    const Norm flat = defaultsNorm();
+    curves.update(flat.data());
+    const std::vector<Point> p = curvePath(curves, EqTrace::FineSt);
+    for (const Point& q : p) ASSERT_TRUE(std::fabs(q.y - eqY(0.0)) < 1e-3);
+    Norm boost = defaultsNorm();
+    setIdx(boost, kMidOn, 1); setIdx(boost, kMidFreq, 4); setIdx(boost, kMidGain, 16);
+    curves.update(boost.data());
+    const std::vector<Point> b = curvePath(curves, EqTrace::FineSt);
+    float top = b[0].y;
+    for (const Point& q : b) top = std::min(top, q.y);
+    ASSERT_TRUE(top < eqY(0.0) - 10.f);
+  }
+
+  // GLUE / LIMIT history with ordinary and hostile values
+  const float evil[] = {nan, inf, -inf, 1e30f, -1e30f, 0.f, -40.f, 20.f};
+  for (ScreenView v : {ScreenView::Glue, ScreenView::Limit}) {
+    for (int mode = 0; mode < 2; ++mode) {
+      ScrollHistory<64> h;
+      for (int i = 0; i < 100; ++i) {
+        const float a = mode == 0 ? -30.f + static_cast<float>(i % 30) : evil[static_cast<std::size_t>(i) % 8];
+        const float b = mode == 0 ? static_cast<float>(i % 13) : evil[static_cast<std::size_t>(i + 3) % 8];
+        h.push({a, b, b * 0.5f, a - 3.f});
+        for (HistoryTrace t : {HistoryTrace::Level, HistoryTrace::LevelFill, HistoryTrace::Gr, HistoryTrace::NetGr, HistoryTrace::Thresh}) {
+          const std::vector<Point> path = curvePath(v, t, h);
+          ASSERT_TRUE(path.size() >= h.size());
+          ASSERT_TRUE(pathInside(path));
+        }
+      }
+      // newest at the right edge: the last point of a trace is on the right
+      const std::vector<Point> lvl = curvePath(v, HistoryTrace::Level, h);
+      ASSERT_TRUE(lvl.size() == 64 && std::fabs(lvl.back().x - (kScreenRect.x + kScreenRect.w)) < 1e-3);
+      ASSERT_TRUE(std::fabs(lvl.front().x - kScreenRect.x) < 1e-3);
+    }
+  }
+  {  // a short history starts part-way in; an empty one has no path
+    ScrollHistory<150> h;
+    ASSERT_TRUE(curvePath(ScreenView::Glue, HistoryTrace::Level, h).empty());
+    h.push({-20.f, 3.f, 2.f, -10.f});
+    h.push({-18.f, 4.f, 2.f, -10.f});
+    const std::vector<Point> p = curvePath(ScreenView::Glue, HistoryTrace::Level, h);
+    ASSERT_TRUE(p.size() == 2 && p[0].x > kScreenRect.x + 100.f && std::fabs(p[1].x - (kScreenRect.x + kScreenRect.w)) < 1e-3);
+    ASSERT_TRUE(p[0].y == levelY(ScreenView::Glue, -20.0));
+    const std::vector<Point> g = curvePath(ScreenView::Glue, HistoryTrace::Gr, h);
+    ASSERT_TRUE(g[0].y == grY(ScreenView::Glue, 3.0) && g[1].y == grY(ScreenView::Glue, 4.0));
+    const std::vector<Point> fill = curvePath(ScreenView::Glue, HistoryTrace::LevelFill, h);
+    ASSERT_TRUE(fill.size() == 4 && fill[2].y == kScreenRect.y + kScreenRect.h && fill[3].y == kScreenRect.y + kScreenRect.h);
+  }
+
+  // CLIP / FINAL transfer curves, with every setting extreme and hostile ceilings
+  const double ceilings[] = {0.966, 1.0, 0.5, 0.0, -1.0, dnan, dinf, 1e9};
+  for (const Norm& n : sets) {
+    for (double c : ceilings) {
+      const std::vector<Point> cp = curvePath(ScreenView::Clip, n.data(), c);
+      const std::vector<Point> fp = curvePath(ScreenView::Final, n.data(), c);
+      ASSERT_TRUE(cp.size() >= 100 && fp.size() >= 100);
+      ASSERT_TRUE(pathInside(cp) && pathInside(fp));
+      ASSERT_TRUE(std::fabs(cp.front().x - clipX(0.0)) < 1e-3 && std::fabs(cp.back().x - clipX(Scale::kClipMax)) < 1e-3);
+      ASSERT_TRUE(std::fabs(fp.front().x - finalX(0.0)) < 1e-3 && std::fabs(fp.back().x - finalX(Scale::kFinalMax)) < 1e-3);
+    }
+  }
+  // the views without such a path give nothing
+  Norm d = defaultsNorm();
+  ASSERT_TRUE(curvePath(ScreenView::Eq, d.data(), 1.0).empty() && curvePath(ScreenView::Glue, d.data(), 1.0).empty());
+  // the transfer curve follows clipTransfer: at x = 0.5 the point is where clipTransfer says
+  Norm clipN = defaultsNorm();
+  setIdx(clipN, kClipOn, 1); setIdx(clipN, kClipDrive, 12); setIdx(clipN, kLoudness, 20);
+  const std::vector<Point> cp = curvePath(ScreenView::Clip, clipN.data(), 1.0);
+  std::size_t best = 0;
+  for (std::size_t i = 0; i < cp.size(); ++i)
+    if (std::fabs(cp[i].x - clipX(0.9)) < std::fabs(cp[best].x - clipX(0.9))) best = i;
+  const double xa = Scale::kClipMax * static_cast<double>(best) / static_cast<double>(cp.size() - 1);
+  ASSERT_TRUE(std::fabs(cp[best].y - clipY(std::fabs(clipTransfer(xa, clipN.data())))) < 1e-3);
+}
+
 } // namespace
 
 int main() {
@@ -577,6 +1088,14 @@ int main() {
   RUN_TEST(test_value_text_parse_roundtrip);
   RUN_TEST(test_lufs_readouts);
   RUN_TEST(test_release_text_follows_tuning);
+  RUN_TEST(test_eq_curves_match_engine);
+  RUN_TEST(test_eq_curves_ms);
+  RUN_TEST(test_vibe_pull_back);
+  RUN_TEST(test_listen_not_in_curves);
+  RUN_TEST(test_transfer_functions_match_dsp);
+  RUN_TEST(test_scroll_history_ring);
+  RUN_TEST(test_axis_scales);
+  RUN_TEST(test_curve_paths_inside_screen);
   std::printf("%d passed, %d failed\n", g_passed, g_failed);
   return g_failed == 0 ? 0 : 1;
 }

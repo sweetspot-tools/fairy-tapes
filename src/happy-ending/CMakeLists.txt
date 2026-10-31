@@ -270,12 +270,17 @@ target_include_directories(happy_ending_controller_tests PRIVATE
 target_link_libraries(happy_ending_controller_tests PRIVATE sdk fairy_ui)
 add_test(NAME happy_ending_controller_tests COMMAND happy_ending_controller_tests)
 
-# Pure editor layout (ui/layout.h, ui/editor_size.h): no VSTGUI, only SDK type headers through params.h.
+# Pure editor model (ui/layout.h, ui/editor_size.h, ui/screen_model.h): no VSTGUI, only SDK type headers through params.h.
+# The screen model computes the EQ curves on its own FineEq / VibeEq and uses mapParams, so the UI tests compile
+# the chain's sources (never the processor or a view).
 add_executable(happy_ending_ui_tests
   tests/test_ui.cpp
+  src/ui/screen_model.cpp
+  ${HAPPY_ENDING_ENGINE_SOURCES}
 )
 target_include_directories(happy_ending_ui_tests PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../shared/inflator
   ${VST3_SDK_PATH}
   ${VST3_SDK_PATH}/pluginterfaces/base
   ${VST3_SDK_PATH}/pluginterfaces/vst
