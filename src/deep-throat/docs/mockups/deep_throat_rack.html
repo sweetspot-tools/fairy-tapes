@@ -516,7 +516,7 @@ txt('FAIRY TAPES',36,78,11,DIMW,'start',700);
 var TABKEYS=['settings','modes','routing','credits'];
 var PANES={credits:el('g',{},back),settings:el('g',{},back),modes:el('g',{},back),routing:el('g',{},back)},BOXES={credits:el('g',{},LY.box),settings:el('g',{},LY.box),modes:el('g',{},LY.box),routing:el('g',{},LY.box)},TABEL={};
 function tabLink(label,key,x){var g=el('g',{style:'cursor:pointer'});el('rect',{x:x-84,y:66,width:86,height:18,fill:'transparent'},g);TABEL[key]=txt(label,x,78,11,DIMW,'end',700,g);g.addEventListener('click',function(){showTab(key);});}
-tabLink('SETTINGS','settings',600);tabLink('MODES','modes',690);tabLink('ROUTING','routing',780);tabLink('CREDITS','credits',870);
+tabLink('SETTINGS','settings',610);tabLink('MODES','modes',700);tabLink('ROUTING','routing',790);tabLink('CREDITS','credits',880);
 var bk=el('g',{style:'cursor:pointer'});el('rect',{x:896,y:66,width:76,height:18,fill:'transparent'},bk);txt('←  BACK',966,78,11,DIMW,'end',700,bk);
 bk.addEventListener('click',function(){document.getElementById('card').classList.remove('flipped');});
 function showTab(k){if(TABKEYS.indexOf(k)<0)k='settings';lsSet('dt_tab',k);bTitle.textContent=k.toUpperCase();TABKEYS.forEach(function(t){PANES[t].style.display=BOXES[t].style.display=(t===k?'':'none');TABEL[t].setAttribute('fill',t===k?W:DIMW);});}
@@ -524,13 +524,17 @@ txt('DEEP THROAT  ·  VOCAL CHANNEL STRIP VST3',966,46,13,W,'end',700);
 
 /* ---- CREDITS tab ---- */
 CUR=PANES.credits;BOXOVR=BOXES.credits;
-box(24,102,952,220,'COMPONENTS AND LICENSES','top');
+box(24,102,952,118,'DEEP THROAT','top');
+txt('Version 1.0.0  ·  Fairy Tapes  ·  github.com/sweetspot-tools',50,140,14,W,'start',700);
+txt('Free software: released under the GNU General Public License v3.0 (GPL-3.0), full text in the LICENSE file.',50,164,12,DIMW,'start',700);
+txt('Source code, build instructions and the license texts of the components are in the project repository.',50,184,12,DIMW,'start',700);
+box(24,246,952,252,'COMPONENTS AND LICENSES','top');
 var CRD=[['VST 3 SDK','Steinberg Media Technologies','MIT'],['VSTGUI','Steinberg Media Technologies','BSD-3-Clause'],['Zeyada (tape font)','Kimberly Geswein','OFL-1.1'],['Rock Salt (tape font)','Font Diner','Apache-2.0'],['Homemade Apple (tape font)','Font Diner','Apache-2.0']];
-CRD.forEach(function(c,i){var y=148+i*34;txt(c[0],50,y,14,W,'start',800);txt(c[1],350,y,13,DIMW,'start',700);txt(c[2],950,y,13,AMBL,'end',700);
-  if(i<CRD.length-1)el('path',{d:'M50 '+(y+10)+' H950',stroke:DIMW,'stroke-width':1,opacity:.25});});
-box(24,344,952,80,'NOTICES','top');
-txt('VST is a trademark of Steinberg Media Technologies GmbH, registered in Europe and other countries.',50,380,12,DIMW,'start',700);
-txt('Third-party names are cited for attribution only.',50,400,12,DIMW,'start',700);
+CRD.forEach(function(c,i){var y=284+i*30;txt(c[0],50,y,14,W,'start',800);txt(c[1],350,y,13,DIMW,'start',700);txt(c[2],950,y,13,AMBL,'end',700);
+  if(i<CRD.length-1)el('path',{d:'M50 '+(y+12)+' H950',stroke:DIMW,'stroke-width':1,opacity:.25});});
+box(24,522,952,88,'NOTICES','top');
+txt('VST is a trademark of Steinberg Media Technologies GmbH, registered in Europe and other countries.',50,556,12,DIMW,'start',700);
+txt('Third-party names are cited for attribution only.',50,577,12,DIMW,'start',700);
 
 /* ---- SETTINGS tab: appearance (saved for the user, all projects) ---- */
 CUR=PANES.settings;BOXOVR=BOXES.settings;
@@ -542,23 +546,21 @@ function seg(x,y,items,sel,cb,w){var rects=[],labels=[];w=w||70;
 function act(x,y,w,label,cb,off){var g=el('g',{style:off?'':'cursor:pointer',opacity:off?.4:1});el('rect',{x:x,y:y,width:w,height:24,rx:2,fill:'#8e8e91',stroke:'#b8b8bb'},g);txt(label,x+w/2,y+16,11,'#1a1a1c','middle',800,g);if(!off)g.addEventListener('click',cb);}
 function row(label,y,hint,x0){x0=x0||50;txt(label,x0,y+16,13,W,'start',800);if(hint)txt(hint,x0,y+32,10,DIMW,'start',700);}
 var SC=514;
-box(24,102,462,420,'APPEARANCE','top');txt('saved for you, in every project',255,130,10,DIMW,'middle',700);
+box(24,102,462,364,'APPEARANCE','top');txt('saved for you, in every project',255,130,10,DIMW,'middle',700);
 row('WEAR',146);seg(200,146,['OFF','LIGHT','HEAVY'],['off','light','heavy'].indexOf(WEAR),function(i){var w=document.getElementById('wear');w.value=['off','light','heavy'][i];w.dispatchEvent(new Event('change'));},84);
-row('NOTES LAYER',194,'tape and pen marks on the values');seg(200,194,['HIDE','SHOW'],1,function(){},84);
-row('TAPE FONT',242,'handwriting on the tape');(function(){var names=Object.keys(TAPEFONTS),x=200,y=242,w=176;
+row('TAPE FONT',194,'handwriting on the tape');(function(){var names=Object.keys(TAPEFONTS),x=200,y=194,w=176;
   function arrow(ax,lab,d){var g=el('g',{style:'cursor:pointer'});el('rect',{x:ax,y:y,width:24,height:24,rx:2,fill:'#8e8e91',stroke:'#b8b8bb'},g);txt(lab,ax+12,y+17,14,'#1a1a1c','middle',800,g);g.addEventListener('click',function(){var i=(names.indexOf(TAPEFONT)+d+names.length)%names.length;TAPEFONT=names[i];lsSet('dt_tapefont',TAPEFONT);upd();redrawWear();applyHW();});}
   el('rect',{x:x+26,y:y,width:w,height:24,rx:2,fill:'none',stroke:W,'stroke-width':1.5});var t=el('text',{x:x+26+w/2,y:y+17,'text-anchor':'middle',fill:W});
   function upd(){t.textContent=TAPEFONT;t.setAttribute('font-family',"'"+TAPEFONT+"',cursive");t.setAttribute('font-size',Math.min(19,(12*TAPEFONTS[TAPEFONT]+3)).toFixed(1));}
   arrow(x,'‹',-1);arrow(x+26+w+2,'›',1);upd();})();
-row('VALUES FONT',290,'values on the knobs');seg(200,290,['STANDARD','TAPE FONT'],HW?1:0,function(i){HW=(i===1);lsSet('dt_hw',HW?'1':'0');applyHW();},118);
-row('METER HOLD',338);seg(200,338,['OFF','1.5 S','3 S','INF'],1,function(){},63);
-row('METER RELEASE',386);seg(200,386,['SLOW','NORMAL','FAST'],1,function(){},84);
-row('LOOK',434);act(200,434,120,'RE-ROLL',function(){document.getElementById('reroll').click();});txt('new wear, dirt and screws',332,450,10,DIMW,'start',700);
-box(SC,102,462,420,'NOTES','top');
-['Appearance settings belong to you: they are kept in your','preferences and apply to every project and every instance.','',
- 'The wear layout (scratches, tape, screws) is generated once','per instance from a saved seed and never changes by itself.','Use RE-ROLL to get a new one.','',
- 'Double-click on a knob returns it to its default value.','Click a clip LED to clear it.','',
- 'The three mode buttons (SPEAK, SING, PUKE) change values','inside the chain: see the MODES tab.'].forEach(function(s,i){txt(s,SC+26,146+i*22,12,DIMW,'start',700);});
+row('VALUES FONT',242,'values on the knobs');seg(200,242,['STANDARD','TAPE FONT'],HW?1:0,function(i){HW=(i===1);lsSet('dt_hw',HW?'1':'0');applyHW();},118);
+row('LOOK',290);act(200,290,120,'RE-ROLL',function(){document.getElementById('reroll').click();});txt('new wear, dirt and screws',332,306,10,DIMW,'start',700);
+box(SC,102,462,364,'BEHAVIOUR','top');txt('saved with the project',SC+231,130,10,DIMW,'middle',700);
+box(24,484,952,120,'NOTES','top');
+['Appearance settings belong to you: they are kept in your preferences and apply to every project and every instance.',
+ 'The wear layout (scratches, tape, screws) is generated once per instance from a saved seed: RE-ROLL gives a new one.',
+ 'Double-click on a knob returns it to its default value. Click a clip LED to clear it.',
+ 'The three mode buttons (SPEAK, SING, PUKE) change values inside the chain: see the MODES tab.'].forEach(function(s,i){txt(s,50,522+i*22,12,DIMW,'start',700);});
 
 /* ---- MODES tab: what the mode buttons force (generated from the MODES table above) ---- */
 CUR=PANES.modes;BOXOVR=BOXES.modes;
@@ -627,8 +629,8 @@ box(24,102,952,388,'SIGNAL FLOW','top');
   L('M560 '+Y2+' H600');RT.amp(600,Y2,'OUTPUT');L('M628 '+Y2+' H697.4');
   RT.ring(700,Y2);RT.ring(700,Y2-14);RT.ring(716,Y2);L('M716 '+Y2+' L702.5 '+(Y2-1),false,1.8);L('M718.6 '+Y2+' H935');RT.tap(760,Y2,26,'OUT METER','CLIP OUT');
   RT.jack(944,Y2,'OUT L · R');})();
-box(24,504,952,86,'LEGEND','top');
-(function(){var y=540,L=RT.ln;
+box(24,508,952,102,'LEGEND','top');
+(function(){var y=552,L=RT.ln;
   el('rect',{x:50,y:y-12,width:34,height:24,rx:3,fill:'none',stroke:W,'stroke-width':2});txt('module',92,y+4,10,DIMW,'start',700);
   el('path',{d:'M160 '+(y-11)+' L182 '+y+' L160 '+(y+11)+' Z',fill:'none',stroke:W,'stroke-width':2,'stroke-linejoin':'round'});txt('gain stage',190,y+4,10,DIMW,'start',700);
   RT.ring(268,y);RT.ring(280,y);RT.ring(280,y-14);L('M268 '+y+' L279 '+(y-2),false,1.8);txt('switch, default position',290,y+4,10,DIMW,'start',700);
@@ -636,7 +638,7 @@ box(24,504,952,86,'LEGEND','top');
   L('M552 '+y+' H600',true);txt('control signal',608,y+4,10,DIMW,'start',700);
   RT.dot(712,y);L('M712 '+y+' V'+(y-12),false,1.4);txt('meter / clip point',722,y+4,10,DIMW,'start',700);
   RT.conn(858,y,'A');txt('continues',874,y+4,10,DIMW,'start',700);
-  txt('SPEAK / SING / PUKE change the values inside the blocks (see MODES). LISTEN plays the DE-ESS band first, then the BREATH; off, the mix.',50,y+34,11,DIMW,'start',700);})();
+  txt('SPEAK / SING / PUKE change the values inside the blocks (see MODES). LISTEN plays the DE-ESS band first, then the BREATH; off, the mix.',50,y+40,11,DIMW,'start',700);})();
 CUR=null;BOXOVR=null;showTab(lsGet('dt_tab','settings'));
 ROOT=svg;
 setMode(MODE);

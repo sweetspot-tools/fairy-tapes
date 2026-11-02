@@ -28,6 +28,20 @@
         "."
       ],
       "port": 8766
+    },
+    {
+      "name": "swingers-mockups",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8767",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "/srv/http/midiconverter/docs/mockups"
+      ],
+      "port": 8767
     }
   ]
 }
