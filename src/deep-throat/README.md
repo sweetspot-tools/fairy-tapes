@@ -2,7 +2,7 @@
 
 Deep Throat is a VST3 channel strip for a single voice track. It evens out the level, turns breaths down, cleans up rumble, mud and harsh resonances, tames sibilance, compresses and adds a last touch of tone. The chain is fixed and there are few controls: put it on the vocal track, pick a mode (Speak, Sing or Puke) and adjust the knobs. Input and output are stereo; mono in to mono out also works.
 
-**Status:** audio engine and editor are finished and their tests pass on Linux (2026-10-31). Not verified yet: tuning on real voices (every threshold is set on synthetic signals), colours and the panel flip inside a real host, and the Windows and macOS builds (CI builds them on merge to `master`).
+**Status:** audio engine and editor are finished and their tests pass on Linux (2026-10-31); the LATENCY setting (MIX / LIVE, for recording through the plug-in) was added on 2026-11-02. Not verified yet: tuning on real voices (every threshold is set on synthetic signals), colours and the panel flip inside a real host, and the Windows and macOS builds (CI builds them on merge to `master`).
 
 ## When to use it
 
@@ -12,6 +12,8 @@ Deep Throat is a VST3 channel strip for a single voice track. It evens out the l
 
 In every mode you can switch single modules off with their IN button, and use Breath Listen or De-ess Listen to hear exactly what is being removed.
 
+To record or perform through the plug-in, set **LATENCY** to **LIVE** on the back panel (SETTINGS > BEHAVIOUR): no delay at all, at the price of a simpler and later breath reduction (see [Latency](#latency)). Mixing stays on **MIX**, the default.
+
 ## Signal flow
 
 ![Deep Throat signal flow](docs/images/routing.png)
@@ -20,7 +22,7 @@ In engine order:
 
 1. **Input** sets the level going into the chain.
 2. **Detection** runs on the live signal after Input, summed to mono (L+R)/2: a level meter for the Rider and the breath detector of the current mode.
-3. **Look-ahead delay.** The audio waits about 100 ms so the breath detector can see a breath before it reaches the reducer.
+3. **Look-ahead delay** (LATENCY MIX only). The audio waits about 100 ms so the breath detector can see a breath before it reaches the reducer. With LATENCY LIVE there is no delay.
 4. **Rider** rides the vocal level toward a target. It holds still during breaths and silence.
 5. **Breath control** turns breaths down.
 6. **Corrective EQ** removes rumble, cuts mud at 300 Hz and notches a ringing resonance.
@@ -30,7 +32,7 @@ In engine order:
 10. **Listen** (when on) replaces the chain output with what the de-esser or the breath reducer removes.
 11. **Output** sets the final level.
 
-Bypass replaces everything with the input, delayed by the same latency.
+Bypass replaces everything with the input, delayed by the same latency (none in LIVE).
 
 ### The blocks in detail
 
@@ -95,26 +97,29 @@ Breath Listen takes precedence over De-ess Listen. Breath Listen also works with
 
 ## Latency
 
-80 ms of look-ahead plus one frame of the spectral detector (`nextPow2(20 ms · sample rate)` samples): about 101 ms at 48 kHz. It is the same in every mode (in Puke the level detector has zero latency and simply gets more look-ahead). The plug-in reports it to the host, which compensates. Bypass and the IN buttons do not change it. A sample-rate change changes the latency, and the host reads it again after `setupProcessing` (there is no restart notification).
+The **LATENCY** setting on the back panel (SETTINGS > BEHAVIOUR) chooses between two ways of working. It is saved with the project, it is not a parameter and it cannot be automated.
 
-Because of the latency, Deep Throat suits mixing and post-production better than live monitoring.
+- **MIX** (default): 80 ms of look-ahead plus one frame of the spectral detector (`nextPow2(20 ms · sample rate)` samples): about 101 ms at 48 kHz. It is the same in every mode (in Puke the level detector has zero latency and simply gets more look-ahead). The host compensates it, so in a mix nothing is late. The breath detector sees each breath before it reaches the reducer.
+- **LIVE**: no look-ahead and latency 0, for recording or playing through the plug-in. Breath detection uses the level detector in every mode, Speak and Sing included (the spectral detector needs its look-ahead). Breaths are therefore reduced worse: the reduction starts about 80 ms after a breath begins (the detector's minimum duration), so the first part of every breath goes through, and in Speak and Sing a breath is only recognised by level (about 20 dB under the phrase), not by its sound. Everything else in the chain works as in MIX. The front panel shows **LEVEL DETECTOR · LIVE** in amber in the MODE box, and the faint detector label of BREATH reads LEVEL.
+
+The plug-in reports the latency to the host. Changing LATENCY asks the host to re-read it (`restartComponent(kLatencyChanged)`); the new setting takes effect when the host restarts the processing, which most hosts do at once. Bypass and the IN buttons do not change the latency. A sample-rate change changes the MIX latency, and the host reads it again after `setupProcessing`.
 
 ## Editor
 
 The editor opens from the host like any VST3 editor. It is 1000 × 614, fixed size, scaled by the host's scale factor.
 
-- **Front:** one control for each of the 25 parameters. On a knob, double-click sets the default value; click the printed value to type one (Enter confirms, Esc cancels). The stepped controls (Mode, Ratio, Dist, SC HPF) always show the step the DSP uses, even when the host sends a value between steps. A module with IN off dims its controls and labels (its Listen too). Bypass dims everything except its own button, the IN and OUT rows of LEVEL, the clip LEDs and the labels of the header, LEVEL and MODE. Read-only labels show what the mode does: detector, mode description, `MAX ±`, HPF and MUD CUT, the three Tone dB values, and Ratio and Dist in AUTO.
+- **Front:** one control for each of the 25 parameters. On a knob, double-click sets the default value; click the printed value to type one (Enter confirms, Esc cancels). The stepped controls (Mode, Ratio, Dist, SC HPF) always show the step the DSP uses, even when the host sends a value between steps. A module with IN off dims its controls and labels (its Listen too). Bypass dims everything except its own button, the IN and OUT rows of LEVEL, the clip LEDs and the labels of the header, LEVEL and MODE. Read-only labels show what the mode does: detector, mode description, `MAX ±`, HPF and MUD CUT, the three Tone dB values, and Ratio and Dist in AUTO. With LATENCY LIVE, MODE shows **LEVEL DETECTOR · LIVE** in amber under the mode buttons (never dimmed) and the detector label reads LEVEL in every mode.
 - **LEVEL:** input and output peaks, compressor gain reduction (GR), and clip LEDs held for 2 s (a click clears them).
 - **SCOPE:** about 8.8 s of voice envelope, Rider gain and the band of detected breaths. The BREATH lamp and the breath band go dark with Breath IN off or with Bypass. The GR row empties under Bypass.
 - **Wear, tapes and screws:** generated from a seed saved with the plug-in instance. Click a tape to write on it (at most 14 characters). Drag a screw to turn it. Texts and angles are saved with the project.
-- **Back:** the **BACK →** link at the top right flips the panel. Tabs: **SETTINGS** (APPEARANCE: Wear Off/Light/Heavy, tape font, values font, RE-ROLL for a new instance seed; NOTES), **MODES** (the values each mode sets, active column in yellow), **ROUTING** (the signal flow shown above), **CREDITS** (version, licence, third-party components). **← BACK** returns to the front.
-- **Preferences:** the APPEARANCE choices apply per user, in every project (see Technical notes for the file).
+- **Back:** the **BACK →** link at the top right flips the panel. Tabs: **SETTINGS** (APPEARANCE: Wear Off/Light/Heavy, tape font, values font, RE-ROLL for a new instance seed; BEHAVIOUR: LATENCY MIX/LIVE, saved with the project; NOTES), **MODES** (the values each mode sets, active column in yellow), **ROUTING** (the signal flow shown above), **CREDITS** (version, licence, third-party components). **← BACK** returns to the front.
+- **Preferences:** the APPEARANCE choices apply per user, in every project (see Technical notes for the file). BEHAVIOUR belongs to the instance and is saved with the project.
 
 ## Known limits
 
 - **Thresholds are tuned on synthetic signals**, not on real voices, and least of all on growls and screams. They need retuning with reference recordings (spec §9).
 - **Breath detection:**
-  - the start of a breath is recognised with a delay of about 60 to 80 ms (minimum duration). In Puke the reduction starts about 30 ms after the breath starts. In Speak and Sing it starts about 25 ms before and can touch the tail of the previous phrase;
+  - the start of a breath is recognised with a delay of about 60 to 80 ms (minimum duration). In Puke the reduction starts about 30 ms after the breath starts. In Speak and Sing it starts about 25 ms before and can touch the tail of the previous phrase. With LATENCY LIVE there is no look-ahead to hide that delay: the reduction starts about 80 ms after the breath in every mode;
   - the first breath of a take is not detected (the detectors need phrase context);
   - sibilants against breaths: not tested on real voice;
   - in Puke a quiet passage after a scream is reduced like a breath for at most 1.5 s;
@@ -165,6 +170,7 @@ CI (on merge to `master`) builds every target and uploads the bundle as the arti
 - Per sample, all channels in the same step: input gain, then detection on the live mono (L+R)/2 (breath detector and the Rider's 200 ms RMS meter), then the audio delay D, Rider gain, breath reducer gain, corrective EQ, de-esser, compressor (parallel Mix inside), Tone, output gain (`src/engine.h`).
 - The input gain is applied before the delay: it belongs to the input timeline, so a change or automation of Input reaches the output when the audio of that moment leaves the delay. Bypass plays the raw input, delayed.
 - The breath probability that drives the reducer and the Rider freeze is the sliding maximum of every probability produced since the delayed sample entered the engine (a window of D + 1 values). This holds the reduction to the last sample of the breath, and the 30 ms release starts at the breath end.
+- LATENCY is chosen by `Engine::prepare(sampleRate, LatencyMode)`. LIVE: D = 0 (the delay is a single write-then-read slot, the sliding maximum a window of one value) and the level detector whatever the mode. The processor keeps the setting from the state or from the controller's "Decor" message and applies it in `setupProcessing` / `setActive(true)`, never while processing; the controller calls `restartComponent(kLatencyChanged)` once whenever the setting it knows changes (an editor choice, a loaded state, the processor's decor message).
 - Breath Listen outputs the delayed input (after Input gain) times (1 - reducer gain): the reducer gain only, no Rider gain. De-ess Listen outputs the de-esser's input minus its output. The stages after the listened one are not heard.
 - Choice parameters map with `floor(n · count)` (limited to `count - 1`), like `toPlain` of the SDK's `StringListParameter`.
 - One table per mode, `src/mode_table.h`, feeds the DSP blocks, the editor's read-only labels and the MODES tab.
@@ -176,7 +182,7 @@ SCOPE and LEVEL are fed by the engine through hidden read-only parameters (IDs f
 
 ### State
 
-Version 2: version, the 25 normalized parameters, then the decor (seed, four screw angles, tape texts). A version 1 state still loads, with the default decor. A corrupt state is refused as a whole. See `src/state.h`.
+Version 3: version, the 25 normalized parameters, the decor (seed, four screw angles, tape texts), then the behaviour block (uint32 LATENCY: 0 MIX, 1 LIVE; an unknown value loads as MIX). Version 1 (parameters only) and version 2 (no behaviour block) still load, as MIX and, for version 1, with the default decor. The "Decor" message between controller and processor carries the same decor and behaviour blob. A corrupt state is refused as a whole. See `src/state.h`.
 
 ### Preferences file
 
@@ -191,23 +197,23 @@ cmake --build /tmp/dt-build --target deep_throat_render -j2
 /tmp/dt-build/src/deep-throat/deep_throat_render /tmp/dt-render back=all meters scope
 ```
 
-It writes `front.png` and, with `back=all`, `back_settings.png`, `back_modes.png`, `back_routing.png` and `back_credits.png`. Other options (full list at the top of `tools/render_editor.cpp`): `bypass`, `mode=speak|sing|puke`, `module-off=<module>`, `wear=off|light|heavy`, `seed=<n>`, `text=<s>`, `font=…`, `values=standard|tape`, `screw1..4=<degrees>`, `no-grain`, `cycles=<n>`. Without `wear=`, `font=` and `values=` the preferences file decides.
+It writes `front.png` and, with `back=all`, `back_settings.png`, `back_modes.png`, `back_routing.png` and `back_credits.png`. Other options (full list at the top of `tools/render_editor.cpp`): `bypass`, `mode=speak|sing|puke`, `module-off=<module>`, `wear=off|light|heavy`, `seed=<n>`, `text=<s>`, `font=…`, `values=standard|tape`, `screw1..4=<degrees>`, `latency=mix|live`, `no-grain`, `cycles=<n>`. Without `wear=`, `font=` and `values=` the preferences file decides.
 
 ### Tests
 
 - `tests/test_deep_throat.cpp`: engine and DSP with synthetic signals (`RUN_TEST`/`ASSERT_TRUE` harness).
 - `tests/test_factory.cpp`: loads the bundle (skipped if missing): lifecycle, flags of the hidden parameters, `createView`.
-- `tests/test_state_module.cpp`: state v2 and the decor messages on the real module (skipped if missing).
+- `tests/test_state_module.cpp`: state v3 and the decor messages on the real module, LATENCY applied by the processor and the controller's latency restart (skipped if missing).
 - `tests/test_ui.cpp`: the pure parts of the editor: layout, dynamic labels, value formats, preferences, decor, scope history, back tabs.
 - `tests/test_editor.cpp`: editor behaviour without a window, with a real `Controller` as host: controls, timer, meters, scope, tapes, screws, flip. Linux only.
 - `deep_throat_render_smoke`: the render tool writes a 1000 × 614 PNG.
 
 They cover:
 
-- parameters: count, ranges, choice steps (consistent with the SDK's `StringListParameter`), defaults, state save and restore, refusal of wrong versions and NaN;
+- parameters: count, ranges, choice steps (consistent with the SDK's `StringListParameter`), defaults, state save and restore (v3 with LATENCY; v1 and v2 load as MIX), refusal of wrong versions and NaN;
 - every block: Rider, FFT, breath detectors (spectral and level, sensitivity, silence, growl and loud inhale in Puke), reducer, EQ (high-pass, mud, dynamic notch and its persistence), de-esser (Freq, Listen, stereo link, Puke), compressor (ratios, times, high-pass, distortion, makeup, Mix, extreme inputs), Tone, presets;
 - the mode table and the display values (peaks, clip, GR, Rider, breath, 16 ms limiter, no allocation);
-- engine: finite values and exact silence, blocks of 0 and 1 samples, mono, latency and Bypass, breath reduced end to end, breath edges covered by the look-ahead, mode changes, sample rates from 44.1 to 192 kHz, all IN off = passthrough, toggle clicks, Listen, chain order against a reference, no allocation in `process`.
+- engine: finite values and exact silence, blocks of 0 and 1 samples, mono, latency and Bypass (MIX and LIVE), the level detector in every mode with LIVE, breath reduced end to end, breath edges covered by the look-ahead, mode changes, sample rates from 44.1 to 192 kHz, all IN off = passthrough, toggle clicks, Listen, chain order against a reference, no allocation in `process`.
 
 ## Third-party code and licences
 

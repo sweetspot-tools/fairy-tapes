@@ -2,6 +2,7 @@
 //   deep_throat_render <out-dir> [bypass] [mode=speak|sing|puke] [no-grain] [module-off=rider|breath|eq|deess|comp|tone] [meters] [scope]
 //                     [wear=off|light|heavy] [seed=<n>] [text=<s>] [text1..text6=<s>] [font=zeyada|rocksalt|homemade]
 //                     [values=standard|tape] [screw1..screw4=<deg>] [back=settings|modes|routing|credits|all] [cycles=<n>]
+//                     [latency=mix|live]
 // Writes <out-dir>/front.png (1000 x 614); back= also writes the back of the panel on that tab (or on every tab with
 // all) as <out-dir>/back_<tab>.png, with the editor's own BackView (mode= picks the yellow column of MODES).
 // bypass sets the global Bypass, module-off= turns a module's IN off (both through the
@@ -10,8 +11,10 @@
 // simulated voice (phrases, a breath, a pause, the Rider gain following), one timer run per point. The seed, the tape
 // texts and the screw rotations go through the controller's decor (as a stored state would): text= writes on every tape
 // slot, textN= on slot N-1 (only the slots the seed and Wear show are drawn; the tool prints them), screwN= is the user's
-// rotation of screw N-1. wear=, font= and values= go through Editor::setWearLevel / setTapeFont / setValuesFont; without
-// them the user preferences file decides, as when the editor opens. cycles=<n> builds
+// rotation of screw N-1. latency= sets BEHAVIOUR > LATENCY of the instance decor the same way (LIVE: the amber
+// "LEVEL DETECTOR . LIVE" in MODE, LIVE selected on SETTINGS). wear=, font= and values= go through
+// Editor::setWearLevel / setTapeFont / setValuesFont; without them the user preferences file decides, as when the
+// editor opens. cycles=<n> builds
 // and removes the editor's views n times first (for leak checkers). Used to check the code-drawn GUI against
 // docs/mockups/deep_throat_rack.html on a machine without a host.
 #include "controller.h"
@@ -194,7 +197,8 @@ int main(int argc, char** argv) {
     std::fprintf(stderr,
                  "usage: %s <out-dir> [bypass] [mode=speak|sing|puke] [no-grain] [module-off=rider|breath|eq|deess|comp|tone] [meters] [scope]\n"
                  "       [wear=off|light|heavy] [seed=<n>] [text=<s>] [text1..text6=<s>] [font=zeyada|rocksalt|homemade]\n"
-                 "       [values=standard|tape] [screw1..screw4=<deg>] [back=settings|modes|routing|credits|all] [cycles=<n>]\n",
+                 "       [values=standard|tape] [screw1..screw4=<deg>] [back=settings|modes|routing|credits|all] [cycles=<n>]\n"
+                 "       [latency=mix|live]\n",
                  argv[0]);
     return 2;
   }
@@ -270,6 +274,9 @@ int main(int argc, char** argv) {
       opt.back = !std::strcmp(b, "all") ? 4 : 0;
       for (int t = 0; t < 4; ++t)
         if (!std::strcmp(b, Ui::EditorPreview::kTabNames[t])) opt.back = t;
+    } else if (!std::strncmp(argv[i], "latency=", 8)) {
+      decor.behaviour.latency = !std::strcmp(argv[i] + 8, "live") ? LatencyMode::Live : LatencyMode::Mix;
+      customDecor = true;
     } else if (!std::strncmp(argv[i], "cycles=", 7)) {
       cycles = std::atoi(argv[i] + 7);
     }

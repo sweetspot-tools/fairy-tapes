@@ -1,6 +1,7 @@
 // Deep Throat GUI: the read-only values printed on the panel (silkscreen layer, below the wear), positions and styles from
 // kReadouts of ui/layout.h: "MAX ±x dB · y dB/s" under the RIDER knobs (dim white), HPF and MUD CUT of EQ and the three
-// Tone gains (amber; in the tape font when the values are handwritten, as the preview does with its amber texts). The
+// Tone gains (amber; in the tape font when the values are handwritten, as the preview does with its amber texts), and
+// with LATENCY LIVE "LEVEL DETECTOR . LIVE" in MODE (amber, 9 px, always printed: a status, not a value). The
 // strings come from ui/dynamic_text.h (the editor sets them); each one dims (35 %) on its own. Also the BREATH detector
 // lamp (kBreathLamp): dark red, lit red while the editor says a breath is detected. The editor uses two of these views:
 // the texts on the panel layer (under the wear) and the lamp, an LED, on the top layer (over the wear, tapes and screws,
@@ -56,7 +57,7 @@ private:
   bool handwritten_ = false;
   FairyTapes::Ui::TapeFontId font_ = FairyTapes::Ui::TapeFontId::Zeyada;
   uint32_t seed_ = 0;
-  VSTGUI::SharedPointer<VSTGUI::CFontDesc> font10_;
+  VSTGUI::SharedPointer<VSTGUI::CFontDesc> font10_, font9_;
 };
 
 } // namespace FairyTapes::DeepThroat::Ui

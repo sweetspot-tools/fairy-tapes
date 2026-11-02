@@ -92,8 +92,9 @@ Engine::Engine() {
   prepare(48000.0);
 }
 
-void Engine::prepare(double sampleRate) {
+void Engine::prepare(double sampleRate, LatencyMode latency) {
   sr_ = sampleRate > 1.0 && std::isfinite(sampleRate) ? sampleRate : 48000.0;
+  latencyMode_ = latency == LatencyMode::Live ? LatencyMode::Live : LatencyMode::Mix;
   spectral_.prepare(sr_);
   level_.prepare(sr_);
   meter_.prepare(sr_, kRiderMeterMs);
@@ -105,8 +106,13 @@ void Engine::prepare(double sampleRate) {
   tone_.prepare(sr_, 2);
 
   clipHoldSamples_ = (long long)std::lround(kClipHoldSeconds * sr_);
-  lookahead_ = (int)std::lround(kLookaheadMs * 0.001 * sr_);
-  latency_ = lookahead_ + spectral_.latencySamples();
+  if (latencyMode_ == LatencyMode::Live) {
+    lookahead_ = 0;   // the level detector reports no latency of its own
+    latency_ = 0;
+  } else {
+    lookahead_ = (int)std::lround(kLookaheadMs * 0.001 * sr_);
+    latency_ = lookahead_ + spectral_.latencySamples();
+  }
   delayL_.assign((size_t)latency_ + 1, 0.0f);
   delayR_.assign((size_t)latency_ + 1, 0.0f);
   gainedL_.assign((size_t)latency_ + 1, 0.0f);
@@ -118,6 +124,7 @@ void Engine::prepare(double sampleRate) {
   gainCoef_ = (float)(1.0 - std::exp(-1.0 / (kGainSmoothMs * 0.001 * sr_)));
   rampInc_ = (float)(1.0 / (kSwitchFadeMs * 0.001 * sr_));
 
+  detector_ = detectorFor(s_.mode);   // reset() below clears both detectors
   applySettings(s_, true);
   reset();
 }
@@ -200,8 +207,7 @@ void Engine::applySettings(const Settings& s, bool force) {
     deess_.setMode(s.mode);
     comp_.setMode(s.mode);
     tone_.setMode(s.mode);
-    DSP::BreathDetector* want =
-        modeRow(s.mode).levelDetector ? static_cast<DSP::BreathDetector*>(&level_) : &spectral_;
+    DSP::BreathDetector* want = detectorFor(s.mode);
     if (want != detector_) {
       detector_ = want;
       // The newly selected detector starts clean: it needs a few hundred ms of phrase context
@@ -238,6 +244,11 @@ void Engine::applySettings(const Settings& s, bool force) {
   deEssListen_.target = s.deEssListen ? 1.0f : 0.0f;
   bypass_.target = s.bypass ? 1.0f : 0.0f;
   s_ = s;
+}
+
+DSP::BreathDetector* Engine::detectorFor(Mode m) {
+  if (latencyMode_ == LatencyMode::Live || modeRow(m).levelDetector) return &level_;
+  return &spectral_;
 }
 
 void Engine::setSettings(const Settings& raw) {

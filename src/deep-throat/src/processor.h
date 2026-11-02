@@ -2,7 +2,11 @@
  * Fairy Tapes · Deep Throat — VST3 Audio Processor.
  * Supported layouts: stereo in -> stereo out and mono in -> mono out (both tested; mixed layouts
  * are rejected). The whole chain runs in Engine (engine.h); the reported latency is the engine's
- * look-ahead delay (constant for a given sample rate, the same for mono and stereo).
+ * look-ahead delay (constant for a given sample rate and LATENCY setting, the same for mono and stereo).
+ * LATENCY (spec 9b: MIX / LIVE) is part of the instance decor (state v3, "Decor" messages). setupProcessing() and
+ * setActive(true) prepare the engine for it, with processing stopped; a change that arrives while the plug-in runs
+ * (setState, the controller's decor message) is only kept: the controller asks the host for
+ * restartComponent(kLatencyChanged), and the next activation applies it. process() never touches it.
  */
 
 #pragma once
@@ -12,6 +16,7 @@
 #include "params.h"
 #include "state.h"
 #include "public.sdk/source/vst/vstaudioeffect.h"
+#include <atomic>
 #include <mutex>
 
 namespace FairyTapes::DeepThroat {
@@ -51,6 +56,8 @@ private:
   // (messages.h); process() never touches it.
   std::mutex decor_mutex_;   // setState/getState/notify may come from different non-audio threads
   Decor decor_;              // seed generated in the constructor or when a state has none
+  // decor_.behaviour.latency, readable without the lock (setupProcessing / setActive).
+  std::atomic<LatencyMode> latency_{LatencyMode::Mix};
 };
 
 } // namespace FairyTapes::DeepThroat

@@ -193,17 +193,76 @@ void test_state_v2_roundtrip() {
   ASSERT_TRUE(got.tapeTexts.size() == 2 && got.tapeTexts[0] == "VOX" && got.tapeTexts[1] == "LEAD 2");
 }
 
-void test_state_v2_exact_size() {
+void test_state_v3_exact_size() {
   double in[kNumParams];
   loadDefaults(in);
   std::vector<uint8_t> bytes;
   serializeState(in, Decor{}, bytes);
-  ASSERT_TRUE(bytes.size() == kStateSizeV1 + 4 + 4 * 4 + 4);   // seed + 4 angles + text count
+  ASSERT_TRUE(bytes.size() == kStateSizeV1 + 4 + 4 * 4 + 4 + 4);   // seed + 4 angles + text count + latency
   Decor d;
   d.tapeTexts = {"abc", "", "hello"};
   serializeState(in, d, bytes);
-  ASSERT_TRUE(bytes.size() == kStateSizeV1 + 4 + 4 * 4 + 4 + (4 + 3) + (4 + 0) + (4 + 5));
-  ASSERT_TRUE(bytes[0] == 2 && bytes[1] == 0 && bytes[2] == 0 && bytes[3] == 0);
+  ASSERT_TRUE(bytes.size() == kStateSizeV1 + 4 + 4 * 4 + 4 + (4 + 3) + (4 + 0) + (4 + 5) + 4);
+  ASSERT_TRUE(bytes[0] == 3 && bytes[1] == 0 && bytes[2] == 0 && bytes[3] == 0);
+  ASSERT_TRUE(bytes.size() <= kMaxStateBytes);
+}
+
+// LATENCY (spec 9b) is saved with the project: state v3 ends with the behaviour block (uint32 latency, 0 MIX, 1 LIVE).
+void test_state_v3_latency_roundtrip() {
+  double in[kNumParams];
+  for (int i = 0; i < (int)kNumParams; ++i) in[i] = (i + 1) / 26.0;
+  ASSERT_TRUE(Decor{}.behaviour.latency == LatencyMode::Mix);   // the default
+  for (LatencyMode m : {LatencyMode::Live, LatencyMode::Mix}) {
+    Decor d;
+    d.seed = 77;
+    d.tapeTexts = {"VOX"};
+    d.behaviour.latency = m;
+    std::vector<uint8_t> bytes;
+    serializeState(in, d, bytes);
+    ASSERT_TRUE(detail::getLE(bytes.data() + bytes.size() - 4, 4) == (m == LatencyMode::Live ? 1u : 0u));
+    double out[kNumParams] = {};
+    Decor got;
+    got.behaviour.latency = m == LatencyMode::Live ? LatencyMode::Mix : LatencyMode::Live;   // must be replaced
+    ASSERT_TRUE(deserializeState(bytes.data(), bytes.size(), out, got));
+    ASSERT_TRUE(got.behaviour.latency == m && got.seed == 77 && got.tapeTexts == d.tapeTexts);
+    for (int i = 0; i < (int)kNumParams; ++i) ASSERT_TRUE(out[i] == in[i]);
+  }
+  // An unknown latency index (a newer or corrupt writer) loads as MIX; the rest of the state is kept.
+  Decor d;
+  d.seed = 5;
+  std::vector<uint8_t> bytes;
+  serializeState(in, d, bytes);
+  bytes[bytes.size() - 4] = 7;
+  Decor got;
+  got.behaviour.latency = LatencyMode::Live;
+  double out[kNumParams] = {};
+  ASSERT_TRUE(deserializeState(bytes.data(), bytes.size(), out, got));
+  ASSERT_TRUE(got.behaviour.latency == LatencyMode::Mix && got.seed == 5);
+}
+
+// States saved before LATENCY existed (v1: parameters only; v2: parameters and decor) load as MIX.
+void test_state_v1_v2_load_as_mix() {
+  double in[kNumParams];
+  for (int i = 0; i < (int)kNumParams; ++i) in[i] = (i + 1) / 26.0;
+  Decor d;
+  d.seed = 0xABCDu;
+  d.tapeTexts = {"OLD"};
+  d.behaviour.latency = LatencyMode::Live;
+  std::vector<uint8_t> v2;
+  serializeState(in, d, v2);
+  v2.resize(v2.size() - 4);   // a v2 blob: the v3 layout without the behaviour block
+  v2[0] = 2;
+  double out[kNumParams] = {};
+  Decor got;
+  got.behaviour.latency = LatencyMode::Live;
+  ASSERT_TRUE(deserializeState(v2.data(), v2.size(), out, got));
+  ASSERT_TRUE(got.behaviour.latency == LatencyMode::Mix && got.seed == 0xABCDu && got.tapeTexts == d.tapeTexts);
+  for (int i = 0; i < (int)kNumParams; ++i) ASSERT_TRUE(out[i] == in[i]);
+  const std::vector<uint8_t> v1 = v1Blob(in);
+  Decor g1;
+  g1.behaviour.latency = LatencyMode::Live;
+  ASSERT_TRUE(deserializeState(v1.data(), v1.size(), out, g1));
+  ASSERT_TRUE(g1.behaviour.latency == LatencyMode::Mix);
 }
 
 void test_state_v1_loads_with_default_decor() {
@@ -256,7 +315,7 @@ void test_state_rejects_corrupt() {
   ASSERT_TRUE(!deserializeState(nullptr, 0, out, keep));
 
   std::vector<uint8_t> bad = bytes;
-  bad[0] = 3;   // unknown version
+  bad[0] = 4;   // unknown version
   ASSERT_TRUE(!deserializeState(bad.data(), bad.size(), out, keep) && untouched());
   bad[0] = 0;
   ASSERT_TRUE(!deserializeState(bad.data(), bad.size(), out, keep) && untouched());
@@ -348,7 +407,9 @@ void test_decor_sanitised() {
     detail::putLE(raw, 40u, 4);
     raw.insert(raw.end(), 40, i == 0 ? '\x07' : 'q');
   }
+  detail::putLE(raw, 1u, 4);   // behaviour: LATENCY LIVE
   ASSERT_TRUE(deserializeDecor(raw.data(), raw.size(), got));
+  ASSERT_TRUE(got.behaviour.latency == LatencyMode::Live);
   ASSERT_TRUE(got.screwAngles[0] == 0.f && got.screwAngles[1] == 270.f && got.screwAngles[2] == 0.f);
   ASSERT_TRUE(got.tapeTexts.size() == 6 && got.tapeTexts[0].empty());
   ASSERT_TRUE(got.tapeTexts[1] == std::string(14, 'q'));
@@ -385,13 +446,14 @@ void test_decor_message_roundtrip() {
   d.screwAngles[1] = 12.5f;
   d.screwAngles[3] = 300.f;
   d.tapeTexts = {"one", "two", "three"};
+  d.behaviour.latency = LatencyMode::Live;   // the LATENCY setting travels with the decor
   FakeMsg m;
   encodeDecorMessage(&m, d);
   ASSERT_TRUE(m.id == kMsgDecor && m.id == "Decor");
   Decor got;
   ASSERT_TRUE(decodeDecorMessage(&m, got));
   ASSERT_TRUE(got.seed == d.seed && got.screwAngles[1] == 12.5f && got.screwAngles[3] == 300.f);
-  ASSERT_TRUE(got.tapeTexts == d.tapeTexts);
+  ASSERT_TRUE(got.tapeTexts == d.tapeTexts && got.behaviour.latency == LatencyMode::Live);
 
   Decor keep;
   keep.seed = 1;
@@ -399,7 +461,7 @@ void test_decor_message_roundtrip() {
   other.id = "Other";
   ASSERT_TRUE(!decodeDecorMessage(&other, keep) && keep.seed == 1);
   FakeMsg corrupt = m;
-  corrupt.attrs.blob.resize(corrupt.attrs.blob.size() - 1);   // cuts the last text
+  corrupt.attrs.blob.resize(corrupt.attrs.blob.size() - 1);   // cuts the behaviour block
   ASSERT_TRUE(!decodeDecorMessage(&corrupt, keep) && keep.seed == 1);
   FakeMsg empty;
   empty.id = kMsgDecor;   // attribute missing
@@ -2294,6 +2356,75 @@ void test_engine_latency_reported_and_bypass_delay() {
   }
 }
 
+// LATENCY LIVE (spec 9b): no look-ahead, latency 0 at every rate and in every mode (Bypass gives the input back sample
+// for sample); MIX (the default) keeps D = 80 ms + F. The mode is chosen by prepare(), as the processor does it.
+void test_engine_live_latency_zero() {
+  for (double sr : {44100.0, 48000.0, 96000.0}) {
+    Engine e;
+    ASSERT_TRUE(e.latencyMode() == LatencyMode::Mix);
+    e.prepare(sr, LatencyMode::Live);
+    ASSERT_TRUE(e.latencyMode() == LatencyMode::Live && e.latencySamples() == 0);
+    const auto l = noiseVec((size_t)(0.2 * sr), 0.2, 0x5151u);
+    const auto r = noiseVec(l.size(), 0.2, 0x5252u);
+    for (Mode m : {Mode::Speak, Mode::Sing, Mode::Puke}) {
+      Settings s = engineDefaults();
+      s.mode = m;
+      s.bypass = true;
+      e.reset();
+      const Stereo y = runEngine(e, s, l, r, 300);
+      ASSERT_TRUE(e.latencySamples() == 0);
+      ASSERT_TRUE(y.l == l && y.r == r);
+    }
+    e.prepare(sr, LatencyMode::Mix);
+    ASSERT_TRUE(e.latencyMode() == LatencyMode::Mix && e.latencySamples() == expectedLatency(sr));
+    e.prepare(sr, LatencyMode::Live);
+    e.prepare(sr);   // no mode given: MIX
+    ASSERT_TRUE(e.latencyMode() == LatencyMode::Mix && e.latencySamples() == expectedLatency(sr));
+  }
+}
+
+// LATENCY LIVE uses the level detector in every mode, Speak and Sing included (the spectral one needs a frame of
+// look-ahead); MIX keeps the mode's own detector. Scream / quiet breath / scream, the signal only the level detector
+// sees: in LIVE the breath is reduced in Speak and Sing too, late (the detector's ~80 ms minimum duration, no look-ahead
+// to hide it), and the voice around it is left alone.
+void test_engine_live_level_detector_in_every_mode() {
+  const double sr = 48000.0;
+  const std::vector<float> dc(512, 0.1f);
+  for (Mode m : {Mode::Speak, Mode::Sing, Mode::Puke}) {
+    Settings s = engineDefaults();
+    s.mode = m;
+    Engine live, mix;
+    live.prepare(sr, LatencyMode::Live);
+    mix.prepare(sr, LatencyMode::Mix);
+    runEngine(live, s, dc);
+    runEngine(mix, s, dc);
+    ASSERT_TRUE(live.usingLevelDetector());
+    ASSERT_TRUE(mix.usingLevelDetector() == (m == Mode::Puke));
+  }
+  SignalBuilder b(sr);
+  b.wideNoise(-10.0, 1.0);
+  b.wideNoise(-35.0, 0.4);
+  b.wideNoise(-10.0, 1.0);
+  for (Mode m : {Mode::Speak, Mode::Sing}) {
+    auto run = [&](float amount) {
+      Settings s = engineDefaults();
+      s.mode = m;
+      s.breathAmount = amount;
+      Engine e;
+      e.prepare(sr, LatencyMode::Live);
+      return runEngine(e, s, b.x);
+    };
+    const Stereo y0 = run(0.0f), y1 = run(1.0f);
+    auto cut = [&](double t0, double t1) { return outRmsDb(y0.l, sr, 0, t0, t1) - outRmsDb(y1.l, sr, 0, t0, t1); };
+    const double body = cut(1.15, 1.38), onset = cut(1.0, 1.04);
+    if (!(body >= 6.0 && body <= 13.0) || !(onset < 3.0)) std::fprintf(stderr, "  mode %d: body %.2f dB, onset %.2f dB\n", (int)m, body, onset);
+    ASSERT_TRUE(body >= 6.0 && body <= 13.0);
+    ASSERT_TRUE(onset < 3.0);   // late: the start of the breath goes through
+    ASSERT_NEAR(cut(0.3, 0.95), 0.0, 0.5);
+    ASSERT_NEAR(cut(1.6, 2.3), 0.0, 0.5);
+  }
+}
+
 void test_engine_breath_reduced_end_to_end() {
   const double sr = 48000.0;
   const auto x = phraseBreathPhrase(sr);
@@ -3273,7 +3404,9 @@ int main() {
   RUN_TEST(test_defaults);
   RUN_TEST(test_state_roundtrip);
   RUN_TEST(test_state_v2_roundtrip);
-  RUN_TEST(test_state_v2_exact_size);
+  RUN_TEST(test_state_v3_exact_size);
+  RUN_TEST(test_state_v3_latency_roundtrip);
+  RUN_TEST(test_state_v1_v2_load_as_mix);
   RUN_TEST(test_state_v1_loads_with_default_decor);
   RUN_TEST(test_state_rejects_corrupt);
   RUN_TEST(test_state_clamps_and_ignores_trailing);
@@ -3370,6 +3503,8 @@ int main() {
   RUN_TEST(test_engine_zero_and_one_sample_blocks);
   RUN_TEST(test_engine_mono_in_mono_out);
   RUN_TEST(test_engine_latency_reported_and_bypass_delay);
+  RUN_TEST(test_engine_live_latency_zero);
+  RUN_TEST(test_engine_live_level_detector_in_every_mode);
   RUN_TEST(test_engine_breath_reduced_end_to_end);
   RUN_TEST(test_engine_puke_scream_intact);
   RUN_TEST(test_engine_puke_uses_level_detector);

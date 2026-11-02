@@ -6,7 +6,8 @@
  *   (L+R)/2] -> audio delay D -> Rider gain -> BreathReducer gain -> CorrectiveEq -> DeEsser ->
  *   DistressorComp (parallel Mix inside) -> ToneEq -> output gain.
  *
- * Latency D = lookahead (80 ms) + the spectral detector's frame, the same in every mode (the level
+ * LATENCY (spec 9b), chosen by prepare(): MIX (the default) or LIVE.
+ * MIX: latency D = lookahead (80 ms) + the spectral detector's frame, the same in every mode (the level
  * detector used in Puke reports 0 and simply gets more look-ahead). The breath probability that
  * drives the reducer and the Rider freeze is the maximum of every probability produced since the
  * delayed sample entered the engine (a window of D + 1 values). Both detectors drop their output as
@@ -20,6 +21,10 @@
  * The Puke level detector needs voice context only to enter a breath, so breaths longer than its
  * 300 ms context are held to their end (>= 11 dB over the last 50 ms of a 500 ms breath); a quiet
  * passage is treated as a breath for at most 1.5 s.
+ * LIVE: no look-ahead, latency 0 (the audio delay is one write-then-read slot), and the level detector in every mode,
+ * Speak and Sing included (the spectral one would need its frame of look-ahead); the sliding maximum has a window of
+ * one value, so the reducer follows the detector as it is: a breath is reduced late (the level detector's ~80 ms
+ * minimum duration plus its meter) and the first part of it goes through. The rest of the chain is the same.
  * A mode switch that changes detector resets the new one: it needs a few hundred ms of phrase
  * context (its phrase-level tracker) before it detects breaths again.
  *
@@ -72,8 +77,10 @@ class Engine {
 public:
   Engine();  // prepared at 48 kHz with the default settings
 
-  // Allocates every buffer; never allocates afterwards.
-  void prepare(double sampleRate);
+  // Allocates every buffer; never allocates afterwards. `latency` sets the look-ahead and the detector choice (above);
+  // it changes only here (the processor calls prepare from setupProcessing / setActive, never while processing).
+  void prepare(double sampleRate, LatencyMode latency = LatencyMode::Mix);
+  LatencyMode latencyMode() const { return latencyMode_; }
   // Clears all audio state; the next setSettings() snaps every smoothed value to its target.
   void reset();
   // Never allocates. Call once per block (values are smoothed inside).
@@ -106,6 +113,8 @@ private:
   };
 
   void applySettings(const Settings& s, bool force);
+  // The detector the engine reads for `m`: the mode's own in MIX, the level one in LIVE.
+  DSP::BreathDetector* detectorFor(Mode m);
   void resetBlocks();
   void snapSmoothers();
   float lookaheadMax(float prob);
@@ -122,6 +131,7 @@ private:
   DSP::ToneEq tone_;
 
   double sr_ = 48000.0;
+  LatencyMode latencyMode_ = LatencyMode::Mix;
   int latency_ = 0;
   int lookahead_ = 0;
   int window_ = 0;  // sliding-max length - 1 (= latency_)

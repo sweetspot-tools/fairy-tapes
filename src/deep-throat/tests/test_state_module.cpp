@@ -1,11 +1,13 @@
 /**
- * Fairy Tapes · Deep Throat — state v2 and the "Decor" messages, through the real module.
+ * Fairy Tapes · Deep Throat — state v3 and the "Decor" messages, through the real module.
  * dlopens the built bundle, creates the processor and the controller from the factory with a minimal host (SDK
  * hostclasses: IHostApplication + IMessage) and a fake peer that records the decor messages:
  *   - setState with a v2 blob then getState gives the same blob; a fresh processor, a v1 state and a v2 state with
  *     seed 0 all end with a non-zero seed, kept by getState; a corrupt state leaves the previous one in place;
  *   - the processor tells its peer the decor after setState and on connect, and adopts the decor the controller sends;
- *   - the controller receives the decor through notify, generates a seed only when it has none and sends it to its peer.
+ *   - the controller receives the decor through notify, generates a seed only when it has none and sends it to its peer;
+ *   - LATENCY (state v3, spec 9b): the processor applies it when prepared (latency 0 in LIVE, D in MIX; a v2 state is
+ *     MIX) and the controller asks the host for restartComponent(kLatencyChanged) once per change.
  * Exits 77 (skipped) when the module has not been built.
  */
 
@@ -343,6 +345,127 @@ void test_controller_decor(Module& m) {
   ctl->release();
 }
 
+// The host side of the controller: counts restartComponent(kLatencyChanged).
+struct RestartCounter : IComponentHandler {
+  int latencyRestarts = 0, otherRestarts = 0;
+  tresult PLUGIN_API queryInterface(const TUID, void** o) override { *o = nullptr; return kNoInterface; }
+  uint32 PLUGIN_API addRef() override { return 1; }
+  uint32 PLUGIN_API release() override { return 1; }
+  tresult PLUGIN_API beginEdit(Steinberg::Vst::ParamID) override { return kResultOk; }
+  tresult PLUGIN_API performEdit(Steinberg::Vst::ParamID, ParamValue) override { return kResultOk; }
+  tresult PLUGIN_API endEdit(Steinberg::Vst::ParamID) override { return kResultOk; }
+  tresult PLUGIN_API restartComponent(int32 flags) override {
+    (flags & kLatencyChanged ? latencyRestarts : otherRestarts) += 1;
+    return kResultOk;
+  }
+};
+
+constexpr uint32 kMixLatency48k = 4864;   // 80 ms + one 1024-sample spectral frame at 48 kHz
+
+// LATENCY (spec 9b) on the real processor: the setting comes from the state (v3) or from the controller's decor
+// message, and is applied when the host prepares the processor (setupProcessing / setActive), never while it runs.
+void test_processor_latency(Module& m) {
+  auto* comp = m.create<IComponent>(kProcessorUID, IComponent::iid);
+  CHECK(comp && comp->initialize(&g_host) == kResultOk);
+  if (!comp) return;
+  IAudioProcessor* proc = nullptr;
+  comp->queryInterface(IAudioProcessor::iid, (void**)&proc);
+  CHECK(proc != nullptr);
+  if (!proc) { comp->terminate(); comp->release(); return; }
+  ProcessSetup setup{kRealtime, kSample32, 512, 48000.0};
+  CHECK(proc->setupProcessing(setup) == kResultOk);
+  CHECK(proc->getLatencySamples() == kMixLatency48k);   // default MIX
+  CHECK(decorOf(savedBytes(comp)).behaviour.latency == LatencyMode::Mix);
+
+  double p[kNumParams];
+  loadDefaults(p);
+  Decor live;
+  live.seed = 99;
+  live.behaviour.latency = LatencyMode::Live;
+  MemStream in = streamOf(stateBytes(p, live));
+  CHECK(comp->setState(&in) == kResultOk);
+  CHECK(decorOf(savedBytes(comp)).behaviour.latency == LatencyMode::Live);   // saved with the project
+  CHECK(proc->setupProcessing(setup) == kResultOk);
+  CHECK(proc->getLatencySamples() == 0);
+
+  // While active, a change waits for the next activation (the controller asks the host for a restart).
+  CHECK(comp->setActive(true) == kResultOk);
+  CHECK(proc->getLatencySamples() == 0);
+  Decor mix = live;
+  mix.behaviour.latency = LatencyMode::Mix;
+  IConnectionPoint* cp = connectionOf(comp);
+  if (IMessage* msg = newMessage()) {
+    encodeDecorMessage(msg, mix);
+    CHECK(cp && cp->notify(msg) == kResultOk);
+    msg->release();
+  }
+  CHECK(proc->getLatencySamples() == 0);
+  CHECK(decorOf(savedBytes(comp)).behaviour.latency == LatencyMode::Mix);
+  CHECK(comp->setActive(false) == kResultOk);
+  CHECK(comp->setActive(true) == kResultOk);
+  CHECK(proc->getLatencySamples() == kMixLatency48k);
+  CHECK(comp->setActive(false) == kResultOk);
+
+  // A v2 state (saved before LATENCY existed) loads as MIX.
+  in.pos = 0;
+  CHECK(comp->setState(&in) == kResultOk);   // LIVE again
+  std::vector<uint8_t> v2 = stateBytes(p, live);
+  v2.resize(v2.size() - 4);
+  v2[0] = 2;
+  MemStream v2s = streamOf(v2);
+  CHECK(comp->setState(&v2s) == kResultOk);
+  CHECK(decorOf(savedBytes(comp)).behaviour.latency == LatencyMode::Mix);
+  CHECK(proc->setupProcessing(setup) == kResultOk);
+  CHECK(proc->getLatencySamples() == kMixLatency48k);
+
+  if (cp) cp->release();
+  proc->release();
+  comp->terminate();
+  comp->release();
+}
+
+// The controller asks the host to re-read the latency (restartComponent(kLatencyChanged)) once per change of the
+// LATENCY setting, whether it comes from a state or from the processor's decor message; nothing when it stays the same.
+void test_controller_latency_restart(Module& m) {
+  auto* ctl = m.create<IEditController>(kControllerUID, IEditController::iid);
+  CHECK(ctl && ctl->initialize(&g_host) == kResultOk);
+  if (!ctl) return;
+  RestartCounter host;
+  CHECK(ctl->setComponentHandler(&host) == kResultOk);
+  double p[kNumParams];
+  loadDefaults(p);
+  Decor d;
+  d.seed = 31;
+  MemStream mix = streamOf(stateBytes(p, d));
+  CHECK(ctl->setComponentState(&mix) == kResultOk);
+  CHECK(host.latencyRestarts == 0);   // MIX, as before
+  d.behaviour.latency = LatencyMode::Live;
+  MemStream live = streamOf(stateBytes(p, d));
+  CHECK(ctl->setComponentState(&live) == kResultOk);
+  CHECK(host.latencyRestarts == 1);
+  live.pos = 0;
+  CHECK(ctl->setComponentState(&live) == kResultOk);
+  CHECK(host.latencyRestarts == 1);   // unchanged: no restart
+  // The processor's decor (after its own setState) with another setting: one restart; the same again: none.
+  IConnectionPoint* cp = connectionOf(ctl);
+  d.behaviour.latency = LatencyMode::Mix;
+  for (int i = 0; i < 2; ++i)
+    if (IMessage* msg = newMessage()) {
+      encodeDecorMessage(msg, d);
+      CHECK(cp && cp->notify(msg) == kResultOk);
+      msg->release();
+    }
+  CHECK(host.latencyRestarts == 2);
+  // A v1 state is MIX: no restart from MIX.
+  MemStream v1 = streamOf(v1Bytes(p));
+  CHECK(ctl->setComponentState(&v1) == kResultOk);
+  CHECK(host.latencyRestarts == 2 && host.otherRestarts == 0);
+  if (cp) cp->release();
+  ctl->setComponentHandler(nullptr);
+  ctl->terminate();
+  ctl->release();
+}
+
 } // namespace
 
 int main() {
@@ -358,6 +481,8 @@ int main() {
   }
   test_processor_state(m);
   test_controller_decor(m);
+  test_processor_latency(m);
+  test_controller_latency_restart(m);
   m.close();
   std::printf("deep_throat_state_module_test: %s\n", g_failed ? "FAILED" : "all passed");
   return g_failed ? 1 : 0;

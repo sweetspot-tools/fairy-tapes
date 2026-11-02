@@ -44,17 +44,17 @@ Steinberg::tresult PLUGIN_API Processor::setBusArrangements(
 Steinberg::tresult PLUGIN_API Processor::setupProcessing(Steinberg::Vst::ProcessSetup& newSetup) {
   const auto result = AudioEffect::setupProcessing(newSetup);
   if (result == Steinberg::kResultOk) {
-    engine_.prepare(newSetup.sampleRate);  // latency is known before activation
+    engine_.prepare(newSetup.sampleRate, latency_.load());  // latency is known before activation
     display_limiter_.prepare(newSetup.sampleRate);
   }
   return result;
 }
 
 Steinberg::tresult PLUGIN_API Processor::setActive(Steinberg::TBool state) {
-  // Every (re)activation follows setupProcessing: rebuild all DSP for the current rate. The host
-  // re-reads getLatencySamples() after activation.
+  // Every (re)activation follows setupProcessing: rebuild all DSP for the current rate and LATENCY (a change made while
+  // the plug-in ran is picked up here). The host re-reads getLatencySamples() after activation.
   if (state) {
-    engine_.prepare(processSetup.sampleRate);
+    engine_.prepare(processSetup.sampleRate, latency_.load());
     display_limiter_.prepare(processSetup.sampleRate);
     display_acc_ = DisplayAccumulator{};
     level_acc_ = LevelAccumulator{};
@@ -155,6 +155,7 @@ Steinberg::tresult PLUGIN_API Processor::setState(Steinberg::IBStream* state) {
   {
     std::lock_guard<std::mutex> lk(decor_mutex_);
     decor_ = std::move(decor);
+    latency_.store(decor_.behaviour.latency);   // applied at the next setupProcessing / setActive
   }
   sendDecor();
   return Steinberg::kResultOk;
@@ -205,6 +206,7 @@ Steinberg::tresult PLUGIN_API Processor::notify(Steinberg::Vst::IMessage* messag
     std::lock_guard<std::mutex> lk(decor_mutex_);
     if (d.seed == 0) d.seed = decor_.seed;   // never clears the seed
     decor_ = std::move(d);
+    latency_.store(decor_.behaviour.latency);   // applied at the next setupProcessing / setActive
     return Steinberg::kResultOk;
   }
   return AudioEffect::notify(message);
