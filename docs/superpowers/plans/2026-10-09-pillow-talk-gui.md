@@ -185,3 +185,9 @@ git commit -m "feat(pillow-talk): add VSTGUI editor with ducking display"
 git add src/pillow-talk README.md docs
 git commit -m "docs(pillow-talk): document the editor and skin assets"
 ```
+
+### Task 7 (2026-11-02): colori e caduta dei meter sulla scala vera
+
+- [ ] Test che falliscono in `shared/ui` (−60…0: rosso da 0 dB, giallo da −9, verde chiaro da −18; caduta 20 dB/s) e in Pillow Talk.
+- [ ] `ledColor` e `PeakHold` con la scala del meter (default −60…+6, gli altri plugin invariati); `MeterBar` la riceve.
+- [ ] Test di tutti i plugin che usano `MeterBar` verdi.

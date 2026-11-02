@@ -377,3 +377,9 @@ Decisione del 2026-10-24 (spec §11, voce "Drive: NAM → TAPE"). Preview approv
 - [x] Test: tabella bloccata, stato v11 → v12 e v12 di andata e ritorno, posizione del blocco, layout (due motori, SATURATE ultima dell'EQ, sigle), BUTTONS, segni di richiamo, serigrafia, tooltip; nel modulo vero: Saturate nell'EQ e nel suo bypass, interruttore TAPE e IN del Drive, ordine della catena con i LED di clip (verificato anche con una mutazione: Drive sempre in coda → il test fallisce). I test del modulo usano ora sinusoidi: l'onda quadra alla Nyquist passava solo perché l'HPF difettoso la amplificava.
 - [x] Docs: `CONTROLS.md`, `DRIVE_STAGE_PARAMS.md` (posizione, parte TAPE, stato v12), `FEATURES.md`, `docs/DESIGN_SYSTEM.md` (esempi NAM/4K).
 
+### Task 21 (2026-11-02): filtri indipendenti, scritte del gate, NAM stereo (spec §11)
+
+- [ ] Filtri: test che fallisce (EQ IN spento, filtri accesi: l'HPF taglia ancora), poi il percorso solo-filtri nel processor.
+- [ ] Gate: test sul testo dell'host (`-48 dB` al massimo, `-inf` a 0), poi controller e serigrafia (−∞…−48), preview allineata.
+- [ ] NAM stereo in `shared/nam_drive`: test che falliscono (L e R diversi restano diversi; L = R usa una sola istanza; caricamento asincrono e GPU per due istanze), poi l'implementazione.
+- [ ] README, FEATURES, DRIVE_STAGE_PARAMS, test verdi.

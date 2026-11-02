@@ -151,10 +151,10 @@ Doggystyle riusa `shared/nam_drive` e il caricamento asincrono: questo spec va i
 ## 11. Decisioni aperte (2026-10-10)
 
 - **Corretti il 2026-11-02:** scheda ROUTING con IN METER sull'ingresso grezzo (prima di INPUT) e CLIP IN dopo; sigla del compressore in Bus `4K-G` come sul pannello (preview e editor, test in `test_back_panel.cpp`); cartelle predefinite dei modelli da `userHome()` (`HOME`, poi `USERPROFILE`, poi `HOMEDRIVE`+`HOMEPATH`; test in `test_preferences.cpp`); tolti i testi vecchi ("No custom UI", unità "Both modes" di `kBypassLPHP`, "when feasible", clone a mano di `vst3sdk` nel CMake).
-- **Emerse rivedendo i documenti (2026-11-02), da decidere:**
-  - **Filtri dentro l'EQ:** la scheda ROUTING disegna FILTERS come blocco a sé con il proprio IN, prima dell'EQUALISER; nel codice HPF e LPF stanno dentro il 4K-EQ (`processor.cpp`), quindi **con l'IN dell'EQ spento spariscono anche i filtri**. Scegliere se correggere il disegno o separare i filtri dall'IN dell'EQ.
-  - **Soglia del gate:** l'host mostra −72…0 dB, la serigrafia −∞…0, il DSP (DeNoise) arriva a circa −48 dBFS. Allineare la scala mostrata.
-  - **NAM in mono:** il Drive somma L+R e scrive lo stesso segnale sui due lati (anche in Mix bus) e non ricampiona. Decidere se va bene per il Mix bus.
+- **Decisioni dell'utente del 2026-11-02 (da implementare, piano Task 21):**
+  - **Filtri indipendenti dall'EQ:** HPF e LPF seguono solo il loro IN; con l'IN dell'EQ spento i filtri restano se il loro IN è acceso (il 4K-EQ è lineare: bande a 0 dB trasparenti, SATURATE resta con l'EQ). La scheda ROUTING resta com'è (FILTERS prima dell'EQUALISER).
+  - **Soglia del gate:** si correggono solo le scritte. Il DSP resta com'è (soglia = (v/4)^4 in ampiezza, da −∞ a circa −48 dBFS); l'host mostra `80·log10(v/4)` dB e la serigrafia −∞…−48.
+  - **NAM stereo:** doppio mono in CHAN e in BUS (due istanze del modello, L e R); quando L e R sono identici gira una sola istanza e il risultato si copia, così una sorgente mono non costa di più.
 
 - **OVERSAMPLING (proposto 2026-10-24, da decidere):** come in Happy Ending, impostazione OVERSAMPLING in BEHAVIOUR (Off / 2× / 4×, default 2×, filtri a fase lineare, latenza dichiarata e costante durante la riproduzione), applicata solo agli stadi non lineari di questo plugin: quelli del Drive diversi dal NAM (TAPE, Saturate) e probabilmente il limiter; non il NAM (il modello lavora alla frequenza su cui è addestrato).
 - **SET per la release della compressione (proposto 2026-10-24, da decidere):** lo schema comune di `docs/DESIGN_SYSTEM.md` ("Taratura guidata della release") applicato a COMPRESSION nei modi FET-76, VCA-160 e 4K-G, che hanno la release regolabile; non con OPTO-2A (release dipendente dal programma). Da decidere se adottarlo e dove metterlo nel riquadro.

@@ -93,7 +93,7 @@ Pannello rack orizzontale 1000 × 470 (altezza di Pillow Talk, così il retro us
 Nessuna decisione aperta sul kit comune (vedi "Decise").
 
 - **Legenda di ROUTING su CHARACTER IN (corretta il 2026-11-02):** preview ed editor dicevano che con IN spento i cinque controlli "keep the device values"; ora "IN off removes drive, noise and room", come fa `applyCharacterIn` e come dice il §2. Test in `test_back.cpp`.
-- **Schede della preview:** la preview ha SETTINGS, ROUTING, CREDITS; l'editor anche DEVICES (§8 dice già che il retro della preview è vecchio). L'immagine nel README viene dalla preview.
+- **Retro della preview (deciso il 2026-11-02, da fare):** la preview si aggiorna all'editor: retro alto 470, schede SETTINGS, DEVICES, ROUTING, CREDITS, credits di Hotline (VST 3 SDK, VSTGUI, i tre font). L'immagine del README resta generata dalla preview.
 
 Note tecniche rinviate (una riga ciascuna):
 - `band.h` giudica il neutro dopo il limite `0,45·fs`: sotto circa 43,3 kHz di sample rate la banda non risulta mai neutra; il motore lo aggira con il peso di banda (`engine.cpp`).

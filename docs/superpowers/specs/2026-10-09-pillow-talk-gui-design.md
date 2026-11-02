@@ -73,6 +73,8 @@ Finestra scorrevole di circa 6 secondi, da destra a sinistra, con tre tracce: **
 
 ## 11. Decisioni aperte
 
+- **Meter: colori e caduta del picco sulla scala vera (deciso il 2026-11-02, da fare):** i meter di Pillow Talk vanno da −60 a 0 dB, ma `ledColor` e `PeakHold` di `shared/ui` assumono −60…+6: il rosso parte a circa −5,5 dB e il picco cade a circa 18 dB/s. Il codice comune riceve la scala del meter (min e max in dB) e la usa per colori e caduta; i plugin con −60…+6 non cambiano.
+
 Stato al 2026-10-21 (Task 1-8 dell'editor v1 chiusi, Task 9 in corso). Risolte e uscite da questa lista: formato delle immagini della skin (non c'è skin: editor tutto da codice, vedi §12 e `UI_ASSETS.md`), allineamento di `DESIGN_SYSTEM.md` all'editor, dati del blocco LEVEL (parametri 1003-1009, Task 1), preview del linguaggio comune (`pillow_rack.html`, layout confermato il 2026-10-10 e realizzato nel Task 4), nota sul fatto che la traccia Voice si legge circa 4 dB sotto il picco (ora in README e CONTROLS), dipendenze Linux nel README, preferenze (Task 5) e retro (Task 8). Il pulsante IN per modulo è deciso: non c'è (nessun parametro corrispondente), resta solo il Bypass globale.
 
 Ancora aperte:

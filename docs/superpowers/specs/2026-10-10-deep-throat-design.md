@@ -91,6 +91,18 @@ Ogni blocco ha un test che prima fallisce: Rider (guadagno verso il Target, ness
 - (risolta) Interfaccia grafica: editor VSTGUI implementato (2026-10-31) secondo la spec `docs/superpowers/specs/2026-10-24-deep-throat-gui-design.md` e il piano `docs/superpowers/plans/2026-10-24-deep-throat-gui.md`; i punti ancora aperti dell'editor stanno nel §11 di quella spec.
 - (risolta) Il modulo EQ (ex Clean) ha il controllo Amount.
 
+## 9b. Modo LATENCY: Mix e Live (deciso dall'utente il 2026-11-02)
+
+La latenza costante D = 80 ms + F (circa 101 ms a 48 kHz) va bene in mix, dove l'host la compensa, ma è troppa per registrare o suonare dal vivo attraverso il plugin.
+
+- **Impostazione LATENCY** nel retro, SETTINGS > BEHAVIOUR (salvata nel progetto, non è un parametro e non si automatizza, come OVERSAMPLING di Happy Ending): **MIX** (default, come oggi) e **LIVE**.
+- **LIVE:** nessun look-ahead e rilevatore a livello in tutte le modalità (anche Speak e Sing), quindi latenza 0; il Breath control riduce i respiri in ritardo (circa 80 ms dopo l'inizio, durata minima del rilevatore a livello). Tutto il resto della catena è uguale.
+- **Cambio:** si applica in `setupProcessing`/`setActive` come il sample rate; il controller lo comunica all'host con `restartComponent(kLatencyChanged)`.
+- **Fronte:** nessun controllo nuovo; la scritta di sola lettura del rilevatore nel riquadro MODE diventa, in LIVE, `LEVEL DETECTOR · LIVE` in ambra, così si vede che i respiri sono ridotti peggio.
+- **Stato:** versione 3 con il campo latency; gli stati v1 e v2 si caricano in MIX.
+- **ROUTING:** il blocco DELAY dice `LOOKAHEAD · MIX ONLY`.
+
+
 ## 10. Grafica
 
 Segue `docs/DESIGN_SYSTEM.md` (rack orizzontale, materiali e grana di The Stripper, livelli, usura con seme, viti, nastro, retro). **L'editor esiste** (2026-10-31): spec del GUI `docs/superpowers/specs/2026-10-24-deep-throat-gui-design.md`, piano `docs/superpowers/plans/2026-10-24-deep-throat-gui.md`; segue la preview 2026-10-21/23 descritta qui sotto, e le note "editor da allineare" / "editor da fare" sono superate. Specifico di Deep Throat:
