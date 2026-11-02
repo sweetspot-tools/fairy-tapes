@@ -16,6 +16,12 @@ projects below. Every ported source file starts with a header that names its ori
 
 The commit of each submodule is pinned by this repository (`git submodule status --recursive`).
 
+**Eigen's benchmarks are not part of this repository or of any build.** Eigen's `bench/` directory (the benchmark suite;
+`bench/btl` carries its own GPL-2.0-only `COPYING`, which cannot be combined with GPL-3.0) exists only inside the pinned
+Eigen checkout, which this repository references and does not copy. The build uses Eigen's headers only
+(`shared/nam_drive` and `shared/gpu_nam` add `Dependencies/eigen` to the include path), so nothing from `bench/` is
+compiled, linked or distributed with the plug-ins. `.license-compliance` records this for the license checker.
+
 ## Reference sources (submodules not fetched by default)
 
 These two repositories are the origin of code that is already **ported into this repository** (`src/`, `shared/`). The
