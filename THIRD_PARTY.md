@@ -12,7 +12,7 @@ the three tape fonts. The table lists the rest.
 |---|---|
 | The Stripper | 4K-EQ and Multi-Comp (Dusk Audio, GPL-3.0); BlockParty, DeNoise and Tape (Airwindows, MIT); NeuralAmpModelerCore with Eigen and nlohmann/json (MIT, MPL-2.0) |
 | Pillow Talk | none |
-| Hotline | none |
+| Hotline | none (the Room uses the public-domain Freeverb tuning numbers, see below) |
 | Deep Throat | none |
 | Happy Ending | Multi-Comp `BusCompressor` and Multi-Q (Dusk Audio, GPL-3.0); ClipSoftly and ClipOnly2 (Airwindows, MIT); ZLInflator (ZL Audio, GPL-3.0); K-weighting constants from libebur128 (MIT). No editor yet. |
 | Doggystyle | not implemented |
@@ -59,6 +59,8 @@ git submodule update --init --checkout vendors/airwindows vendors/dusk-audio-plu
 | [ZLInflator](https://github.com/ZL-Audio/ZLInflator) (shaper curves, mixer) | zsliu98 (ZL Audio) | GPL-3.0 | `shared/inflator/inflator.h` |
 | [libebur128](https://github.com/jiixyj/libebur128) (K-weighting prototype constants only) | Jan Kokemüller | MIT ([LICENSES/libebur128-MIT.txt](LICENSES/libebur128-MIT.txt)) | `src/happy-ending/src/dsp/loudness_meter.*` |
 | "Matched Second Order Digital Filters" (published method, own implementation) | Martin Vicanek | — | `src/happy-ending/src/dsp/matched_biquad.h` |
+| Audio EQ Cookbook (published formulas, own implementation) | Robert Bristow-Johnson | — | `biquad.h` of Pillow Talk, Hotline and Deep Throat |
+| Freeverb tuning values: comb and allpass lengths, stereo spread (numbers only, own Schroeder implementation) | Jezar at Dreampoint | public domain | `src/hotline/src/dsp/room.h` |
 
 ## Fonts
 

@@ -1,6 +1,6 @@
 # Pillow Talk — Grafica dell'editor
 
-L'editor (**1000 x 628** logici, host-scalato) è **interamente disegnato da codice**: non c'è skin PNG, né sfondo né immagini dei controlli. Il vecchio meccanismo di skin opzionale (`panel.png`, `knob_body.png`, `button_on/off.png`) e la finestra 480 x 560 non esistono più nell'editor di Pillow Talk.
+L'editor (**1000 x 470** logici, host-scalato) è **interamente disegnato da codice**: non c'è skin PNG, né sfondo né immagini dei controlli. Il vecchio meccanismo di skin opzionale (`panel.png`, `knob_body.png`, `button_on/off.png`) e la finestra 480 x 560 non esistono più nell'editor di Pillow Talk.
 
 Riferimento visivo: `docs/mockups/pillow_rack.html`. Linguaggio comune della suite: `docs/DESIGN_SYSTEM.md`. Tutto il testo visibile è in inglese.
 
@@ -34,7 +34,7 @@ Nessuna immagine di usura. Graffi, macchie e sporco sono un elenco di segni vett
 
 ## HiDPI e vincoli
 
-- Dimensione logica fissa 1000 x 628: `checkSizeConstraint` forza questa dimensione per il fattore di scala. Su Windows e Linux l'host passa il fattore (`setContentScaleFactor`) e il frame VSTGUI si ingrandisce; su macOS la scala Retina è del sistema. Il disegno da codice resta nitido a ogni scala.
+- Dimensione logica fissa 1000 x 470 (era 628 fino al 2026-10-21): `checkSizeConstraint` forza questa dimensione per il fattore di scala. Su Windows e Linux l'host passa il fattore (`setContentScaleFactor`) e il frame VSTGUI si ingrandisce; su macOS la scala Retina è del sistema. Il disegno da codice resta nitido a ogni scala.
 - I controlli attenuati sono disegnati con opacità ridotta e restano operativi.
 - Testi e posizioni sono nel codice (`layout.h`, `editor.cpp`, `panel_view.cpp`).
 
