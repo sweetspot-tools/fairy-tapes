@@ -9,7 +9,7 @@
  *  - LUFS and DYN: the latest value;
  *  - stage inputs and the GLUE reduction: the maximum since the last write; the LIMIT threshold: the latest.
  * Normalizations (the editor reads them back with the inverse functions):
- *  - peaks: dB over -60..0 (the suite's LEVEL scale), GR: dB over 0..12 (the five GR rows);
+ *  - peaks: dB over -60..+6 (the suite's LEVEL scale: 15 LEDs, the 0 dB LED is the 14th), GR: dB over 0..12 (the five GR rows);
  *  - LUFS: over -60..0, "no measurement yet" (-inf, below -60) is 0;
  *  - stage inputs: dB over -60..+12, the LIMIT threshold: dB over -12..0 (the stage off, -120, is 0);
  *  - latency: samples over 0..kLatencyDisplayMax.
@@ -25,7 +25,7 @@
 namespace FairyTapes::HappyEnding {
 
 constexpr double kDisplayIntervalMs = 33.0;  // ~30 writes per second
-constexpr double kPeakDisplayMinDb = -60.0, kPeakDisplayMaxDb = 0.0;
+constexpr double kPeakDisplayMinDb = -60.0, kPeakDisplayMaxDb = 6.0;  // the suite's LEVEL scale (The Stripper, 15 LEDs)
 constexpr double kGrDisplayMaxDb = 12.0;
 constexpr double kStageDisplayMinDb = -60.0, kStageDisplayMaxDb = 12.0;  // stage inputs: headroom above 0 dBFS (LOUDNESS, drive)
 constexpr double kThreshDisplayMinDb = -12.0, kThreshDisplayMaxDb = 0.0;  // LIMIT threshold: THRESH 0..-4, LOUDNESS push, SET -8

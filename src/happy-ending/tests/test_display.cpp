@@ -53,9 +53,11 @@ void testNewDisplayIdsFollowResetIntegrated() {
 void testPeakNorm() {
   ASSERT_NEAR(normFromPeakDb(-60.0), 0.0, 1e-12);
   ASSERT_NEAR(normFromPeakDb(-120.0), 0.0, 1e-12);
-  ASSERT_NEAR(normFromPeakDb(0.0), 1.0, 1e-12);
+  ASSERT_NEAR(normFromPeakDb(0.0), 60.0 / 66.0, 1e-12);   // the suite scale -60..+6: 0 dB is LED 14 of 15
   ASSERT_NEAR(normFromPeakDb(6.0), 1.0, 1e-12);
-  ASSERT_NEAR(normFromPeakDb(-6.0206), 0.8997, 1e-3);
+  ASSERT_NEAR(normFromPeakDb(12.0), 1.0, 1e-12);
+  ASSERT_NEAR(normFromPeakDb(-30.0), 30.0 / 66.0, 1e-12);
+  ASSERT_NEAR(normFromPeakDb(-6.0206), 0.8184, 1e-3);
   ASSERT_NEAR(peakDbFromNorm(normFromPeakDb(-18.0)), -18.0, 1e-9);
 }
 

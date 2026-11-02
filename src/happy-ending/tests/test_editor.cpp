@@ -1201,6 +1201,8 @@ void test_knob_values_at_preview_offset() {
 
 // ---- LEVEL, LUFS and the ACT LEDs (Task 10) ---------------------------------------------------------------------------
 constexpr double kBarLow = -60.0, kBarSpan = 66.0;   // the peak rows span -60..+6 dB over 15 LEDs, as the printed scale
+// The display value of a peak in dB (the processor's normFromPeakDb, display.h).
+double peakNorm(double db) { return normFromPeakDb(db); }
 
 // Every display parameter back to 0 (host side, no edit sent).
 void resetDisplays() {
@@ -1239,16 +1241,19 @@ void test_meters_follow_display_params() {
   EditorTest::tick(ed);
   for (int i = 0; i < 4; ++i) ASSERT_TRUE(EditorTest::meter(ed, i) != nullptr && EditorTest::meter(ed, i)->level() == 0.0);
   for (int i = 0; i < 5; ++i) ASSERT_TRUE(EditorTest::grBar(ed, i) != nullptr && EditorTest::grBar(ed, i)->level() == 0.0);
-  g_ctl->setParamNormalized(kDispInL, 0.5);
-  g_ctl->setParamNormalized(kDispOutR, 1.0);
+  g_ctl->setParamNormalized(kDispInL, peakNorm(-30.0));
+  g_ctl->setParamNormalized(kDispOutR, peakNorm(0.0));
+  g_ctl->setParamNormalized(kDispInR, peakNorm(6.0));
+  g_ctl->setParamNormalized(kDispOutL, peakNorm(12.0));   // above the scale: all 15, no more
   g_ctl->setParamNormalized(kDispGr2, 0.5);
   EditorTest::tick(ed);
   using FairyTapes::Ui::ledsLit;
   ASSERT_TRUE(near(EditorTest::meter(ed, 0)->level(), (-30.0 - kBarLow) / kBarSpan));
   ASSERT_TRUE(ledsLit(EditorTest::meter(ed, 0)->level(), kMeterLeds) == 7);
-  ASSERT_TRUE(EditorTest::meter(ed, 1)->level() == 0.0 && EditorTest::meter(ed, 2)->level() == 0.0);
   ASSERT_TRUE(near(EditorTest::meter(ed, 3)->level(), (0.0 - kBarLow) / kBarSpan));
-  ASSERT_TRUE(ledsLit(EditorTest::meter(ed, 3)->level(), kMeterLeds) == 14);   // up to the 0 dB LED (index 13)
+  ASSERT_TRUE(ledsLit(EditorTest::meter(ed, 3)->level(), kMeterLeds) == 14);   // 0 dB: up to the LED of the 0 dB mark
+  ASSERT_TRUE(near(EditorTest::meter(ed, 1)->level(), 1.0) && ledsLit(EditorTest::meter(ed, 1)->level(), kMeterLeds) == 15);   // +6 dB: all 15
+  ASSERT_TRUE(near(EditorTest::meter(ed, 2)->level(), 1.0));
   ASSERT_TRUE(near(EditorTest::grBar(ed, 2)->level(), 0.5));
   ASSERT_TRUE(ledsLit(EditorTest::grBar(ed, 2)->level(), kMeterLeds) == 8);
   for (int i : {0, 1, 3, 4}) ASSERT_TRUE(EditorTest::grBar(ed, i)->level() == 0.0);
@@ -1260,6 +1265,8 @@ void test_meters_follow_display_params() {
   const VSTGUI::CColor first = px.at(static_cast<int>(ledX(0)), static_cast<int>(kMeterRows[0].cy));
   ASSERT_TRUE(first.green > 180 && first.red < 100);                                           // 0x37d04a
   ASSERT_TRUE(brightAt(px, ledX(7), kMeterRows[0].cy) < 60);                                    // 0x2a2a2c
+  const VSTGUI::CColor top = px.at(static_cast<int>(ledX(14)), static_cast<int>(kMeterRows[1].cy));   // IN R at +6 dB: the 15th LED, red
+  ASSERT_TRUE(top.red > 200 && top.green < 100);
   const VSTGUI::CColor gr = px.at(static_cast<int>(ledX(0)), static_cast<int>(kGrRows[2].cy));
   ASSERT_TRUE(gr.red > 200 && gr.green > 150 && gr.blue < 80);                                  // amber 0xf0b429
   ASSERT_TRUE(brightAt(px, ledX(14), kGrRows[2].cy) < 60);
@@ -1410,7 +1417,7 @@ void test_gr_rows_dim_with_stage_and_bypass() {
   GrTags* tags = EditorTest::grTags(ed);
   ASSERT_TRUE(tags != nullptr);
   for (int i = 0; i < 5; ++i) g_ctl->setParamNormalized(kDispGr0 + static_cast<Steinberg::Vst::ParamID>(i), 0.6);
-  g_ctl->setParamNormalized(kDispInL, 0.5);
+  g_ctl->setParamNormalized(kDispInL, peakNorm(-30.0));
   EditorTest::tick(ed);
   // defaults: METALHEAD is off, the other four stages on
   ASSERT_TRUE(!tags->dimmed(0) && !tags->dimmed(1) && !tags->dimmed(2) && !tags->dimmed(3) && tags->dimmed(4));

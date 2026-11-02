@@ -22,8 +22,8 @@
 // click on the lit one switches it off). close() switches LISTEN and SET off (one edit each) when they are on.
 // LEVEL (Task 10, ui/level_views.h): the four peak rows, the five GR rows with their tags, the nine clip LEDs, the LUFS
 // screen (short-term, integrated, TO TARGET with its green LED) and the two ACT LEDs of the DYN buttons show the hidden
-// display parameters, read on every UI timer run (they are not watched); the peak rows span -60..+6 dB over 15 LEDs, the
-// scale printed under them. The GR rows, the stage clip LEDs and the ACT LEDs dim with BYPASS and their stage's IN (a dimmed
+// display parameters, read on every UI timer run (they are not watched); the peak rows span -60..+6 dB over 15 LEDs (the
+// scale the processor publishes and the one printed under them). The GR rows, the stage clip LEDs and the ACT LEDs dim with BYPASS and their stage's IN (a dimmed
 // GR row shows no reduction); the peak rows, the IN and OUT clip LEDs and the LUFS screen are always live. A click on a clip
 // LED writes the kClearClips trigger, one on the integrated loudness kResetIntegrated (one host edit each).
 // Controller::decor() has seed 0 until the processor, a state or an edit gives one: the seeded parts (wear, tapes,

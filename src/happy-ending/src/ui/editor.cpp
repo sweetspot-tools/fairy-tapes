@@ -82,13 +82,6 @@ CRect ledRowRect(const Rect& bar, float radius) {
   return CRect(bar.x, cy - radius - 0.5, bar.x + bar.w, cy + radius + 0.5);
 }
 
-// The peak rows light 15 LEDs over -60..+6 dB, the scale printed under them (kPanelTexts, levelScaleX) and the one of
-// The Stripper; the display parameter spans -60..0 dB (display.h): the bar takes the dB position on its own span.
-double peakBarNorm(double displayNorm) {
-  const FairyTapes::Ui::MeterScale scale = FairyTapes::Ui::kDefaultMeterScale;
-  return (peakDbFromNorm(displayNorm) - scale.minDb) / (scale.maxDb - scale.minDb);
-}
-
 // A parameter the controls edit: the stored table, LISTEN and SET.
 bool editable(int32_t tag) { return (tag >= 0 && tag < static_cast<int32_t>(kNumParams)) || tag == kListenBand || tag == kSetActive; }
 
@@ -491,7 +484,7 @@ void Editor::updateDisplays() {
   auto* ctl = getController();
   auto display = [ctl](ParamID id) { return FairyTapes::Ui::sanitizeNorm(ctl->getParamNormalized(id), 0.0); };
   for (int i = 0; i < 4; ++i)
-    if (LevelBar* bar = meters_[static_cast<std::size_t>(i)]) bar->setLevel(peakBarNorm(display(kMeterRows[i].id)), kTimerSeconds);
+    if (LevelBar* bar = meters_[static_cast<std::size_t>(i)]) bar->setLevel(display(kMeterRows[i].id), kTimerSeconds);   // -60..+6 dB, the scale printed under the rows
   for (int i = 0; i < 5; ++i)
     if (LevelBar* bar = grBars_[static_cast<std::size_t>(i)]) bar->setLevel(grRowDimmed(i, state_) ? 0.0 : display(kGrRows[i].id), kTimerSeconds);
   for (int i = 0; i < 9; ++i)

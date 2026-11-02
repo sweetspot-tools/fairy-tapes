@@ -473,7 +473,7 @@ constexpr int kMeterLeds = 15;
 constexpr float kMeterFirstX = 242, kMeterPitch = 24, kMeterLedRadius = 3.4f, kGrLedRadius = 3.2f, kMeterBarHeight = 8;
 
 struct MeterRow {
-  VstParamID id;   // display parameter (peak over -60..0 dB)
+  VstParamID id;   // display parameter (peak over -60..+6 dB)
   float cy;
 };
 constexpr MeterRow kMeterRows[4] = {{kDispInL, 114}, {kDispInR, 128}, {kDispOutL, 156}, {kDispOutR, 170}};
