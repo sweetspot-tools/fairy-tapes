@@ -18,7 +18,9 @@
 #include "pluginterfaces/vst/ivstmessage.h"
 #include "pluginterfaces/vst/ivstprocesscontext.h"
 
+#include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <chrono>
 #include <cstdio>
 #include <cstring>
@@ -270,6 +272,50 @@ void test_controller_state_keeps_seed_and_tape() {
   dlclose(h);
 }
 
+// NAM stereo (2026-11-02): with a model loaded the Drive keeps L and R apart (dual mono) instead of summing them.
+// Only the Drive's NAM is in (state with every other module out, TAPE off) and the model delays by 3 samples.
+void test_nam_keeps_the_channels_apart() {
+  using namespace FairyTapes::TheStripper;
+  Plugin p; CHECK(p.open());
+  PluginState st; fillDefaultParams(st.params);
+  for (auto id : {kBypassLPHP, kBypassEQ, kBypassCompression, kBypassLimiter, kBypassGate}) st.params[id] = 1.0;
+  st.params[kBypassDrive] = 0.0; st.params[kDriveNamOn] = 1.0; st.params[kDriveTapeOn] = 0.0; st.params[kDriveAmount] = 0.0;
+  st.modelPath = std::string(NAM_DRIVE_FIXTURES) + "/linear_delay3.nam";
+  { MockStream s; Writer w{s.data}; CHECK(writeState(w, st)); CHECK(p.comp->setState(&s) == kResultOk); }
+  CHECK(p.peer.waitFor(2));
+  IAudioProcessor* ap = nullptr; p.comp->queryInterface(IAudioProcessor::iid, (void**)&ap);
+  CHECK(ap != nullptr);
+  if (!ap) { p.close(); return; }
+  ProcessContext ctx{}; ctx.sampleRate = 48000.0;
+  std::vector<float> inL(64), inR(64), outL(64), outR(64), histL, histR;
+  double worst = 0, apart = 0;
+  for (int b = 0; b < 100; ++b) {
+    for (int i = 0; i < 64; ++i) {
+      const double ph = 2.0 * 3.14159265358979 * (b * 64 + i) / 16.0;
+      inL[i] = 0.5f * (float)std::sin(ph); inR[i] = 0.5f * (float)std::cos(ph);
+      histL.push_back(inL[i]); histR.push_back(inR[i]);
+    }
+    float* ib[2] = {inL.data(), inR.data()}; float* ob[2] = {outL.data(), outR.data()};
+    AudioBusBuffers in{}, out{};
+    in.numChannels = 2; in.channelBuffers32 = ib; out.numChannels = 2; out.channelBuffers32 = ob;
+    ProcessData d{};
+    d.processMode = kRealtime; d.symbolicSampleSize = kSample32; d.numSamples = 64;
+    d.numInputs = 1; d.numOutputs = 1; d.inputs = &in; d.outputs = &out; d.processContext = &ctx;
+    ap->process(d);
+    if (b >= 50)
+      for (int i = 0; i < 64; ++i) {
+        const size_t n = (size_t)(b * 64 + i);
+        worst = std::max({worst, (double)std::fabs(outL[i] - histL[n - 3]), (double)std::fabs(outR[i] - histR[n - 3])});
+        apart = std::max(apart, (double)std::fabs(outL[i] - outR[i]));
+      }
+  }
+  if (worst > 1e-3) std::fprintf(stderr, "  NAM stereo in the processor: %g from each channel delayed\n", worst);
+  CHECK(worst < 1e-3);   // each channel is its own input, delayed by the model (the mono sum gave both the average)
+  CHECK(apart > 0.5);
+  ap->release();
+  p.close();
+}
+
 // The host text of the gate threshold follows the DSP (2026-11-02): 80 log10(v/4) dB, -inf at the bottom.
 void test_controller_gate_threshold_text() {
   void* h = dlopen(THE_STRIPPER_MODULE, RTLD_NOW | RTLD_LOCAL); CHECK(h != nullptr);
@@ -305,6 +351,7 @@ int main() {
   test_model_path_is_saved_and_restored();
   test_controller_state_keeps_seed_and_tape();
   test_controller_gate_threshold_text();
+  test_nam_keeps_the_channels_apart();
   std::printf(g_failed ? "Model message module tests FAILED\n" : "Model message module tests OK\n");
   return g_failed ? 1 : 0;
 }

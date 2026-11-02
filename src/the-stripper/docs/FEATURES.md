@@ -16,7 +16,7 @@ The plugin is a **channel strip** with multiple stages in series. Each stage is 
 
 | Stage            | Role                         | Bypassable |
 |------------------|------------------------------|------------|
-| **LP/HP**        | **Active in both modes** (from 4K-EQ HPF/LPF). Part of EQ stage. | Yes (both modes) |
+| **LP/HP**        | **Active in both modes** (from 4K-EQ HPF/LPF). Own IN, independent of the EQ's IN (2026-11-02). | Yes (both modes) |
 | **EQ**           | **4K-EQ** in both modes — Channel = Black (G-series, auto), Mix bus = Brown (E-series, auto). §1.2c.1 | Yes        |
 | **Compression**  | Multi-Comp (Channel: Voice, Drums, Classic; Mix bus: Bus only); **sidechain** (2nd input bus) for detection | Yes        |
 | **Gain / Drive** | **Core stage:** NAM (local `.nam`, GPU with CPU fallback) then TAPE (Airwindows Tape, one knob), each with its own switch; the block moves with Strip Mode | Yes        |
@@ -31,7 +31,7 @@ User can run only EQ, only NAM, EQ + NAM, or any combination. No stage is mandat
 - **Channel:** Input → **Drive** → Filters + EQ (with the 4K saturation as its last step) → Compression → Limiter → Gate → Output. Preamp or capture and the multitrack machine come before the console.
 - **Mix bus:** Input → Filters + EQ (with the 4K saturation) → Compression → **Drive** → Limiter → Gate → Output. The 2-track mixdown machine comes after the bus processing and before the limiter.
 
-Gain staging (optional, **Channel mode only**, not implemented) would sit at one end of the chain. Gain staging is **Channel mode only**. **EQ stage:** **4K-EQ** is used in **both** modes; EQ type (Brown/Black) is **automatic** — **Channel** = Black (G-series, tighter Q), **Mix bus** = Brown (E-series, wider curves). **LP/HP** (from 4K-EQ HPF/LPF) remain active in both modes.
+Gain staging (optional, **Channel mode only**, not implemented) would sit at one end of the chain. Gain staging is **Channel mode only**. **EQ stage:** **4K-EQ** is used in **both** modes; EQ type (Brown/Black) is **automatic** — **Channel** = Black (G-series, tighter Q), **Mix bus** = Brown (E-series, wider curves). **LP/HP** (from 4K-EQ HPF/LPF) remain active in both modes and follow only their own IN: with the EQ's IN off they keep working (filters only: bands, Brown phase shift and SATURATE out). The EQ clip LED measures the line after both and lights while either is in (2026-11-02).
 
 **EQ stage: which controls are active per mode.** **4K-EQ** controls (bands + HPF/LPF) are **active in both modes**. The EQ **type** (Brown = E-series / Black = G-series) is **derived automatically** from Strip Mode — no user-facing selector (kEqType parameter removed). **Channel** = Black (G-series, tighter Q, more precise for channel work). **Mix bus** = Brown (E-series, wider curves, musical, better for bus glue). LP/HP active in both modes.
 
@@ -327,7 +327,7 @@ Review of `Airwindopedia.txt` and `what.txt` in the cloned repo:
 | Stage | Parameters in the source | Exposed in The Stripper |
 |-------|--------------------------|-------------------------|
 | **Limiter** (BlockParty) | Pound, Dry/Wet | **Pound** (`kLimiterPound`); Dry/Wet fixed at 1.0 |
-| **Gate** (DeNoise) | six band thresholds (High, HMid, Mid, LMid, Bass, Sub), Speed, Dry/Wet | one **Threshold** (`kGateThreshold`) applied to all six bands; Speed fixed at 0.25, Dry/Wet at 1.0 |
+| **Gate** (DeNoise) | six band thresholds (High, HMid, Mid, LMid, Bass, Sub), Speed, Dry/Wet | one **Threshold** (`kGateThreshold`) applied to all six bands; Speed fixed at 0.25, Dry/Wet at 1.0. The threshold is `(v/4)^4` in amplitude, shown as `80·log10(v/4)` dB: -inf at 0, -72 dB at 0.5, about -48 dBFS at 1 (2026-11-02; the text used to say -72…0 dB) |
 | **TAPE** (Tape) | Slam, Bump | one **Tape** knob (`kDriveTapeAmount`) driving both; curve from Strip Mode ([DRIVE_STAGE_PARAMS.md](DRIVE_STAGE_PARAMS.md) Part B) |
 | **Compression** (Multi-Comp) | many per engine (threshold, ratio, attack, release, ...) | **Amount** and **Mix**, plus the engine choice (`kCompressorMode`, Channel only) |
 

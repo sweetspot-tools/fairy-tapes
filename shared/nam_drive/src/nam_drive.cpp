@@ -5,9 +5,10 @@
  *   1. GPU (custom CUDA via shared/gpu_nam) — if available and model supported.
  *   2. CPU (NeuralAmpModelerCore) — automatic fallback.
  *
- * Stereo signal is converted to mono (mid = (L+R)/2), processed through the
- * NAM model (GPU or CPU), then auto-compensated via RMS tracking to maintain
- * perceived loudness. Always 100% wet.
+ * Stereo (2026-11-02): dual mono. Two instances of the model, one per channel (before: L+R summed to mono and the
+ * same signal written to both sides). Bit-identical channels run the L instance only and copy its output; the R
+ * instance is kept in step as described in nam_drive.h (process). The output is auto-compensated via RMS tracking,
+ * linked over both channels (for a mono source exactly the old behaviour). Always 100% wet.
  */
 
 #include "nam_drive.h"
@@ -46,16 +47,20 @@ static float blockRms(const float* buf, int n) {
 }
 
 struct NamDrive::Loaded {
-  std::unique_ptr<nam::DSP> cpu;
+  std::unique_ptr<nam::DSP> cpu[2];        // L and R instances (CPU path)
   bool gpu = false;
-  GpuNam::ModelHandle gpu_model = GpuNam::kInvalidModel;
-  GpuNam::InstanceId gpu_instance = GpuNam::kInvalidInstance;
+  GpuNam::ModelHandle gpu_model = GpuNam::kInvalidModel;   // one model on the GPU (loaded once) ...
+  GpuNam::InstanceId gpu_instance[2] = {GpuNam::kInvalidInstance, GpuNam::kInvalidInstance};   // ... two instance states
   double expected_sr = -1.0;
-  bool valid() const { return gpu || cpu != nullptr; }
+  double built_sr = 0.0;                   // rate the instances were reset at
+  int catch_up = NamDrive::kHistory;       // samples a skipped R instance replays to match L again (the model's memory)
+  bool valid() const { return gpu || cpu[0] != nullptr; }
   ~Loaded() {
     if (gpu) {
       auto& mgr = GpuNam::GpuNamManager::instance();
-      mgr.unregisterInstance(gpu_model, gpu_instance);
+      for (auto id : gpu_instance)
+        if (id != GpuNam::kInvalidInstance)
+          mgr.unregisterInstance(gpu_model, id);
       mgr.unloadModel(gpu_model);
     }
   }
@@ -67,7 +72,21 @@ static std::string toUtf8(const std::filesystem::path& p) {
   return std::string(u.begin(), u.end());
 }
 
-NamDrive::NamDrive() = default;
+NamDrive::NamDrive() {
+  for (int c = 0; c < 2; ++c) {
+    in_[c].assign(kMaxBlock, 0.0f);
+    out_[c].assign(kMaxBlock, 0.0f);
+  }
+  hist_.assign(kHistory, 0.0f);
+  catch_in_.assign(kHistory, 0.0f);
+  catch_out_.assign(kHistory, 0.0f);
+}
+
+void NamDrive::resyncChannels() {
+  r_skipping_ = true;   // both instances hold the same state: R can wait until the channels differ
+  identical_run_ = 0;
+  r_lag_ = 0;
+}
 
 NamDrive::~NamDrive() {
   {
@@ -86,9 +105,18 @@ void NamDrive::setSampleRate(double sr) {
   if (sr <= 0.0)
     return;
   sample_rate_ = sr;
+  // The processor calls this every block: only a real change of rate resets the model. (Until 2026-11-02 every call
+  // ran nam::DSP::Reset, which wipes the model's history and prewarms: a discontinuity and a large prewarm every block.)
   Loaded* m = active_.load(std::memory_order_acquire);
-  if (m && m->cpu)
-    m->cpu->Reset(sr, max_block_size_);
+  if (!m || m->built_sr == sr)
+    return;
+  m->built_sr = sr;
+  if (!m->gpu) {
+    for (auto& c : m->cpu)
+      if (c)
+        c->Reset(sr, max_block_size_);
+    resyncChannels();
+  }
   // GPU engine sample rate is set at load time; changing it requires
   // a full reload (handled by the host calling loadModel/requestLoad again).
 }
@@ -97,18 +125,20 @@ void NamDrive::reset() {
   drive_ = 0.0f;
   input_rms_smooth_ = 0.0f;
   output_rms_smooth_ = 0.0f;
-  mono_in_.clear();
-  mono_out_.clear();
 
   Loaded* m = active_.load(std::memory_order_acquire);
   if (!m)
     return;
   if (m->gpu) {
     auto& mgr = GpuNam::GpuNamManager::instance();
-    mgr.resetInstance(m->gpu_model, m->gpu_instance);
-  } else if (m->cpu) {
-    m->cpu->ResetAndPrewarm(sample_rate_, max_block_size_);
+    for (auto id : m->gpu_instance)
+      mgr.resetInstance(m->gpu_model, id);
+  } else {
+    for (auto& c : m->cpu)
+      if (c)
+        c->ResetAndPrewarm(sample_rate_, max_block_size_);
   }
+  resyncChannels();
 }
 
 void NamDrive::setDrive(float drive) {
@@ -125,21 +155,30 @@ std::unique_ptr<NamDrive::Loaded> NamDrive::build(const std::filesystem::path& p
   }
 
   // ---- Try GPU path first ----
+  // One model in the manager (loaded once), two registered instances: each instance has its own state on the GPU.
+  // If the second instance cannot be registered, both channels go to the CPU (never L on the GPU and R on the CPU).
   auto& mgr = GpuNam::GpuNamManager::instance();
   if (mgr.isAvailable()) {
     GpuNam::ModelHandle mh;
     auto r = mgr.loadModel(path, sr, blockSize, mh);
     if (r == GpuNam::GpuNamResult::Ok) {
-      GpuNam::InstanceId iid;
-      r = mgr.registerInstance(mh, iid);
+      GpuNam::InstanceId iid[2] = {GpuNam::kInvalidInstance, GpuNam::kInvalidInstance};
+      r = mgr.registerInstance(mh, iid[0]);
       if (r == GpuNam::GpuNamResult::Ok) {
-        auto m = std::make_unique<Loaded>();
-        m->gpu = true;
-        m->gpu_model = mh;
-        m->gpu_instance = iid;
-        m->expected_sr = mgr.modelSampleRate(mh);
-        std::cout << "[NamDrive] model loaded on GPU\n";
-        return m;
+        r = mgr.registerInstance(mh, iid[1]);
+        if (r == GpuNam::GpuNamResult::Ok) {
+          auto m = std::make_unique<Loaded>();
+          m->gpu = true;
+          m->gpu_model = mh;
+          m->gpu_instance[0] = iid[0];
+          m->gpu_instance[1] = iid[1];
+          m->expected_sr = mgr.modelSampleRate(mh);
+          m->built_sr = sr;
+          m->catch_up = kHistory;   // the GPU engine does not report the model's memory: replay all we keep
+          std::cout << "[NamDrive] model loaded on GPU (2 instances)\n";
+          return m;
+        }
+        mgr.unregisterInstance(mh, iid[0]);
       }
       mgr.unloadModel(mh);
     }
@@ -149,17 +188,23 @@ std::unique_ptr<NamDrive::Loaded> NamDrive::build(const std::filesystem::path& p
 
   // ---- CPU fallback ----
   try {
-    auto dsp = nam::get_dsp(path);
-    if (!dsp) {
-      error = "Unsupported model";
-      return nullptr;
-    }
-    dsp->Reset(sr, blockSize);
-    dsp->prewarm();
     auto m = std::make_unique<Loaded>();
-    m->expected_sr = dsp->GetExpectedSampleRate();
-    m->cpu = std::move(dsp);
-    std::cout << "[NamDrive] model loaded on CPU\n";
+    for (auto& c : m->cpu) {   // two independent instances of the same file (L and R)
+      auto dsp = nam::get_dsp(path);
+      if (!dsp) {
+        error = "Unsupported model";
+        return nullptr;
+      }
+      dsp->Reset(sr, blockSize);
+      dsp->prewarm();   // both instances start in the same state
+      c = std::move(dsp);
+    }
+    m->expected_sr = m->cpu[0]->GetExpectedSampleRate();
+    m->built_sr = sr;
+    // The model's memory as NAM reports it (WaveNet: its receptive field); 0 (e.g. Linear) means "unknown": replay all we keep.
+    const int prewarm = m->cpu[0]->GetPrewarmSamples();
+    m->catch_up = prewarm > 0 ? std::min(prewarm, static_cast<int>(kHistory)) : static_cast<int>(kHistory);
+    std::cout << "[NamDrive] model loaded on CPU (2 instances)\n";
     return m;
   } catch (const std::exception& e) {
     error = e.what();
@@ -208,6 +253,7 @@ bool NamDrive::loadModel(const std::filesystem::path& path) {
   collectGarbage();
   input_rms_smooth_ = 0.0f;
   output_rms_smooth_ = 0.0f;
+  resyncChannels();
   if (!m) {
     setInfo(LoadState::Failed, "", err);
     return false;
@@ -318,6 +364,7 @@ void NamDrive::adoptPending() {
     graveyard_[free_slot[k++]].store(old, std::memory_order_release);
   input_rms_smooth_ = 0.0f;
   output_rms_smooth_ = 0.0f;
+  resyncChannels();
 }
 
 bool NamDrive::isModelLoaded() const {
@@ -329,6 +376,10 @@ bool NamDrive::isGpuActive() const {
   return m && m->gpu;
 }
 
+std::uint64_t NamDrive::instanceSamples(int channel) const {
+  return (channel == 0 || channel == 1) ? runs_[channel].load(std::memory_order_relaxed) : 0;
+}
+
 double NamDrive::modelExpectedSampleRate() const {
   Loaded* m = active_.load(std::memory_order_acquire);
   return m ? m->expected_sr : -1.0;
@@ -337,55 +388,121 @@ double NamDrive::modelExpectedSampleRate() const {
 void NamDrive::process(float* left, float* right, int numSamples) {
   adoptPending();
   Loaded* model = active_.load(std::memory_order_acquire);
-  if (numSamples <= 0 || !model)
+  if (numSamples <= 0 || !model || !left || !right)
     return;
+  // Buffers are fixed (allocated in the constructor): a longer host block is processed in pieces.
+  for (int off = 0; off < numSamples; off += kMaxBlock)
+    processChunk(*model, left + off, right + off, std::min(static_cast<int>(kMaxBlock), numSamples - off));
+}
 
-  const size_t n = static_cast<size_t>(numSamples);
-
-  if (mono_in_.size() < n) {
-    mono_in_.resize(n);
-    mono_out_.resize(n);
-  }
-
-  const float drive_lin = static_cast<float>(std::pow(10.0f, drive_));
-
-  // The compensation reference is the signal *before* the drive gain, so the output keeps the input's loudness
-  // whatever the Drive setting: the knob changes how hard the model is hit, not how loud the stage is.
-  float dry_sum_sq = 0.0f;
-  for (size_t i = 0; i < n; ++i) {
-    const float mid = (left[i] + right[i]) * 0.5f;
-    dry_sum_sq += mid * mid;
-    mono_in_[i] = std::clamp(mid * drive_lin, -10.0f, 10.0f);
-  }
-
-  const float in_rms = std::sqrt(dry_sum_sq / static_cast<float>(numSamples));
-
-  // ---- Inference (GPU or CPU) ----
-  if (model->gpu) {
+void NamDrive::runInstance(Loaded& m, int ch, float* in, float* out, int n) {
+  runs_[ch].fetch_add(static_cast<std::uint64_t>(n), std::memory_order_relaxed);
+  if (m.gpu) {
     auto& mgr = GpuNam::GpuNamManager::instance();
-    auto r = mgr.process(model->gpu_model, model->gpu_instance,
-                         mono_in_.data(), mono_out_.data(), numSamples);
-    if (r != GpuNam::GpuNamResult::Ok) {
-      std::fill(mono_out_.begin(), mono_out_.begin() + n, 0.0f);
-    }
+    if (mgr.process(m.gpu_model, m.gpu_instance[ch], in, out, n) != GpuNam::GpuNamResult::Ok)
+      std::fill(out, out + n, 0.0f);
   } else {
-    NAM_SAMPLE* in_ptr  = mono_in_.data();
-    NAM_SAMPLE* out_ptr = mono_out_.data();
-    NAM_SAMPLE* in_ptrs[1]  = {in_ptr};
-    NAM_SAMPLE* out_ptrs[1] = {out_ptr};
-    model->cpu->process(in_ptrs, out_ptrs, numSamples);
+    NAM_SAMPLE* in_ptrs[1] = {in};
+    NAM_SAMPLE* out_ptrs[1] = {out};
+    m.cpu[ch]->process(in_ptrs, out_ptrs, n);
+  }
+}
+
+/// The R instance was skipped for r_lag_ identical samples: run it on the last of them (L's input, the same signal) so
+/// its state matches L's again. Exact when the gap is shorter than the replay; otherwise exact for models whose memory
+/// fits in the replay (WaveNet, ConvNet, Linear up to kHistory taps), close for LSTM (a fading memory).
+void NamDrive::catchUpRight(Loaded& m) {
+  const int len = std::min(r_lag_, m.catch_up);
+  r_lag_ = 0;
+  if (len <= 0)
+    return;
+  int src = hist_pos_ - len;
+  if (src < 0)
+    src += kHistory;
+  for (int i = 0; i < len; ++i) {
+    catch_in_[i] = hist_[src];
+    if (++src == kHistory)
+      src = 0;
+  }
+  runInstance(m, 1, catch_in_.data(), catch_out_.data(), len);   // the output is not used
+}
+
+void NamDrive::processChunk(Loaded& m, float* left, float* right, int n) {
+  const float drive_lin = static_cast<float>(std::pow(10.0f, drive_));
+  const size_t bytes = static_cast<size_t>(n) * sizeof(float);
+  const bool identical = std::memcmp(left, right, bytes) == 0;
+  bool silent = identical;
+  for (int i = 0; silent && i < n; ++i)
+    silent = left[i] == 0.0f;
+
+  // The compensation reference is the signal *before* the drive gain, so the output keeps the input's loudness whatever
+  // the Drive setting. Linked over both channels: for a mono source this is exactly the old (L+R)/2 reference.
+  float dry_sum_sq = 0.0f;
+  for (int i = 0; i < n; ++i) {
+    dry_sum_sq += left[i] * left[i];
+    in_[0][i] = std::clamp(left[i] * drive_lin, -10.0f, 10.0f);
+  }
+  if (identical) {
+    dry_sum_sq *= 2.0f;
+  } else {
+    for (int i = 0; i < n; ++i) {
+      dry_sum_sq += right[i] * right[i];
+      in_[1][i] = std::clamp(right[i] * drive_lin, -10.0f, 10.0f);
+    }
+  }
+  const float in_rms = std::sqrt(dry_sum_sq / static_cast<float>(2 * n));
+
+  // Does the R instance run? Different channels: always. Identical: not while it is already skipped; while it still runs,
+  // it stops after kMonoEntrySamples identical non-silent samples (digital silence never stops it: a stereo source with
+  // gaps would otherwise stop and catch up at every phrase).
+  bool run_r = true;
+  if (!identical) {
+    r_skipping_ = false;
+    identical_run_ = 0;
+  } else if (r_skipping_) {
+    run_r = false;
+  } else {
+    if (!silent)
+      identical_run_ += n;
+    if (identical_run_ >= kMonoEntrySamples) {
+      r_skipping_ = true;
+      run_r = false;
+    }
   }
 
-  for (size_t i = 0; i < n; ++i) {
-    float s = mono_out_[i];
-    if (!std::isfinite(s))
-      s = 0.0f;
-    mono_out_[i] = std::clamp(s, -10.0f, 10.0f);
+  runInstance(m, 0, in_[0].data(), out_[0].data(), n);
+  if (run_r) {
+    if (r_lag_ > 0)
+      catchUpRight(m);
+    if (identical)
+      std::memcpy(in_[1].data(), in_[0].data(), bytes);
+    runInstance(m, 1, in_[1].data(), out_[1].data(), n);
+  } else {
+    r_lag_ = std::min(r_lag_ + n, static_cast<int>(kHistory));
   }
 
-  const float out_rms = blockRms(mono_out_.data(), numSamples);
+  // L's driven input into the ring (what R would have seen in an identical block)
+  for (int i = 0; i < n; ++i) {
+    hist_[hist_pos_] = in_[0][i];
+    if (++hist_pos_ == kHistory)
+      hist_pos_ = 0;
+  }
 
-  const float alpha = computeRmsAlpha(sample_rate_, numSamples);
+  const int channels = run_r ? 2 : 1;
+  float out_sum_sq = 0.0f;
+  for (int c = 0; c < channels; ++c) {
+    for (int i = 0; i < n; ++i) {
+      float v = out_[c][i];
+      if (!std::isfinite(v))
+        v = 0.0f;
+      v = std::clamp(v, -10.0f, 10.0f);
+      out_[c][i] = v;
+      out_sum_sq += v * v;
+    }
+  }
+  const float out_rms = std::sqrt(out_sum_sq / static_cast<float>(channels * n));
+
+  const float alpha = computeRmsAlpha(sample_rate_, n);
   input_rms_smooth_  += alpha * (in_rms  - input_rms_smooth_);
   output_rms_smooth_ += alpha * (out_rms - output_rms_smooth_);
 
@@ -397,10 +514,10 @@ void NamDrive::process(float* left, float* right, int numSamples) {
     compensation = std::clamp(compensation, min_lin, max_lin);
   }
 
-  for (size_t i = 0; i < n; ++i) {
-    const float processed = mono_out_[i] * compensation;
-    left[i]  = processed;
-    right[i] = processed;
+  const float* out_r = run_r ? out_[1].data() : out_[0].data();   // skipped: R is L's result
+  for (int i = 0; i < n; ++i) {
+    left[i]  = out_[0][i] * compensation;
+    right[i] = out_r[i] * compensation;
   }
 }
 

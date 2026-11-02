@@ -15,8 +15,8 @@ Elenco di **tutti i parametri** esposti al host. Il plugin ha un editor VSTGUI (
 | 2 | `kInputGain` | Input Gain | dB | Trim ingresso (−20 … +20 dB). |
 | 3 | `kOutputGain` | Output Gain | dB | Trim uscita (−20 … +20 dB). |
 | 4 | `kBypassGainStaging` | Gain Staging Bypass | On/Off | Gain staging: **inerte** (fuori scopo nella versione 1), nessun controllo nell'editor. |
-| 5 | `kBypassLPHP` | LP/HP Bypass | On/Off | Bypass HPF/LPF del 4K-EQ, in entrambe le modalità (pulsante IN dei FILTERS, polarità invertita). I filtri stanno dentro lo stadio EQ: con l'EQ in bypass sono fuori anche loro. |
-| 6 | `kBypassEQ` | EQ Bypass | On/Off | Bypass dello stadio EQ (4K-EQ in entrambe le modalità: bande, filtri e saturazione). |
+| 5 | `kBypassLPHP` | LP/HP Bypass | On/Off | Bypass HPF/LPF del 4K-EQ, in entrambe le modalità (pulsante IN dei FILTERS, polarità invertita). Dal 2026-11-02 i filtri seguono solo questo IN: con l'EQ in bypass e i filtri accesi l'HPF e l'LPF lavorano ancora (bande e SATURATE restano spente con l'EQ). |
+| 6 | `kBypassEQ` | EQ Bypass | On/Off | Bypass dello stadio EQ (4K-EQ in entrambe le modalità: bande, sfasatore del Brown e saturazione). I filtri non dipendono da questo bypass (2026-11-02). |
 | 7 | `kBypassCompression` | Compression Bypass | On/Off | Bypass compressione (Multi-Comp: Opto/FET/VCA in Channel, Bus in Mix bus). |
 | 8 | `kBypassDrive` | Drive Bypass | On/Off | Bypass dell'intero blocco Drive (NAM e TAPE). |
 | 9 | `kBypassLimiter` | Limiter Bypass | On/Off | Bypass limiter (BlockParty). |
@@ -44,7 +44,7 @@ Elenco di **tutti i parametri** esposti al host. Il plugin ha un editor VSTGUI (
 | 31 | `kEqSaturation` | EQ Saturation | % | Saturazione console 4K (0…100%), **ultimo passo dell'EQ** (manopola SATURATE; serie G in Channel, E in Mix bus; si spegne con l'IN dell'EQ). Dal 2026-10-14 al 2026-10-24 era il motore alternativo del Drive. |
 | 32 | `kDriveAmount` | Drive | 0…100 % | Quantità del Drive con il NAM acceso: 0 = unità (solo la colorazione del modello), 1 = +20 dB nel modello; uscita compensata. Senza modello il NAM è in passthrough. Default 0 %. |
 | 33 | `kLimiterPound` | Limiter Pound | 0…10 | Quantità del limiter (BlockParty "pound", normalizzato 0…1, mostrato 0…10). Default 0.5 (5.0). |
-| 34 | `kGateThreshold` | Gate Threshold | dB (−72…0 mostrati) | Soglia del gate (DeNoise, uguale per le sue 6 bande). Default 0.0 = gate aperto. L'host la mostra come −72…0 dB, ma è una scala nominale: nel DSP la soglia è `(t/4)^4` (al massimo circa −48 dB). |
+| 34 | `kGateThreshold` | Gate Threshold | dB (−∞…−48) | Soglia del gate (DeNoise, uguale per le sue 6 bande). Default 0.0 = gate aperto. Nel DSP la soglia è `(t/4)^4` in ampiezza; host ed editor mostrano lo stesso valore, `80·log10(t/4)` dB: `-inf dB` a 0, −72 dB a 0,5, −48 dB a 1 (dal 2026-11-02; prima la scritta diceva −72…0 dB). Serigrafia −∞…−48. |
 | 35 | `kDriveNamOn` | Drive NAM | On / Off | Motore NAM del Drive acceso (1) o saltato (0), pulsante NAM. Default 1. Fino al 2026-10-24: 1 = NAM, 0 = saturazione 4K. |
 | 36 | `kDriveTapeOn` | Drive Tape | On / Off | Motore TAPE del Drive acceso (1) o saltato (0), pulsante TAPE. Default 1; spento negli stati salvati prima della v12. |
 | 37 | `kDriveTapeAmount` | Tape | 0…10 | Una manopola sopra slam e head bump (Airwindows Tape); voicing Tracking in Channel, Mixdown in Mix bus; uscita compensata. Default 0. |

@@ -55,6 +55,10 @@ Steinberg::tresult PLUGIN_API Processor::setActive(Steinberg::TBool state) {
   if (state) {
     scratch_[0].resize(kMaxBlockSize);
     scratch_[1].resize(kMaxBlockSize);
+    // A new rate resets the NAM model (it allocates): do it here, not on the audio thread (process() repeats the call,
+    // which is free while the rate is unchanged).
+    if (processSetup.sampleRate > 0.0)
+      namDrive_.setSampleRate(processSetup.sampleRate);
   } else {
     scratch_[0].clear();
     scratch_[1].clear();

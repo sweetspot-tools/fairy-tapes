@@ -54,7 +54,7 @@ Instead of a manual output trim or a "Match level" button, the Drive stage measu
 
 ### Algorithm
 
-1. **Block RMS** of the mono input **before the drive gain** and of the model output (after sanitization) are computed each process block. Measuring the input before the gain is what keeps the loudness constant across the Drive range (fixed 2026-10-24: before, the reference was taken after the gain and the output stayed up to +20 dB louder at full Drive).
+1. **Block RMS** of the input **before the drive gain** and of the model output (after sanitization) are computed each process block, **linked over both channels** (one RMS for L and R together, one gain for both: since 2026-11-02; for a mono source this is exactly the old mono reference). Measuring the input before the gain is what keeps the loudness constant across the Drive range (fixed 2026-10-24: before, the reference was taken after the gain and the output stayed up to +20 dB louder at full Drive).
 2. Both values are **smoothed** with a one-pole filter (time constant ≈ 100 ms) to avoid pumping.
 3. **Compensation gain** = `smoothed_input_rms / smoothed_output_rms`, clamped to -40..+20 dB (linear 0.01 to 10.0): the drive gain alone needs up to -20 dB, and the model can add its own gain on top.
 4. If either RMS is below a noise floor (1e-6), compensation is held at unity to avoid amplifying silence.
@@ -72,32 +72,35 @@ Instead of a manual output trim or a "Match level" button, the Drive stage measu
 ## 4. Signal flow
 
 ```
-Stereo in (L, R)
+Stereo in (L, R), in chunks of at most 8192 samples (fixed buffers, no allocation)
   │
-  ├─ Convert to mono: mid = (L + R) / 2
+  ├─ L and R bit-identical in this block?  (memcmp)
   │
-  ├─ Measure input RMS (of mid, before the drive gain)
+  ├─ Measure input RMS (L and R together, before the drive gain)
   │
-  ├─ Apply drive gain: mid × 10^(drive_norm)
+  ├─ Apply drive gain: x × 10^(drive_norm), clamp to ±10.0
   │
-  ├─ Clamp to safe range (±10.0)
+  ├─ L instance: model inference on L (always)
+  ├─ R instance: model inference on R when R differs from L
+  │              (identical: skipped, R output = L output; see below)
   │
-  ├─ NAM model inference (mono in → mono out)
+  ├─ Sanitize outputs (NaN/Inf → 0, clamp ±10.0)
   │
-  ├─ Sanitize output (NaN/Inf → 0, clamp ±10.0)
+  ├─ Measure output RMS (both channels), smooth both RMS values (one-pole, τ ≈ 100ms)
   │
-  ├─ Measure output RMS
+  ├─ Compute compensation = input_rms_smooth / output_rms_smooth (one gain, linked)
   │
-  ├─ Smooth both RMS values (one-pole, τ ≈ 100ms)
-  │
-  ├─ Compute compensation = input_rms_smooth / output_rms_smooth
-  │
-  ├─ Apply: out = model_output × compensation
-  │
-  └─ Write to both L and R (100% wet, mono output)
+  └─ Apply: out_L = model_L × compensation, out_R = model_R × compensation (100% wet)
 ```
 
-**Note:** The current implementation outputs a mono signal to both channels: while the NAM is on, the stereo image of the input is lost (relevant in Mix bus, where the block processes the whole mix). TAPE stays stereo. Future versions may process L/R or mid/side separately if stereo preservation becomes a priority.
+**Dual mono (2026-11-02, spec §11).** Two instances of the model, one per channel, in CHAN and in BUS (before: `mid = (L + R) / 2` through one instance, the same signal on both sides, stereo image lost and a side-only signal cancelled). When the two channels of a block are bit-identical only the L instance runs and its output is copied to R, so a mono source costs one instance, as before. Keeping the skipped R instance in step:
+
+- A fresh or reset model starts with R skipped (both instances are in the same state).
+- When the channels differ, R runs. Identical blocks stop it again only after **16384 identical non-silent samples** in a row (`kMonoEntrySamples`, about 0.34 s at 48 kHz): by then R has seen the same input as L for longer than the model's memory, so the two states match. **Digital silence** (all zeros on both sides) never stops R: a stereo source with gaps would otherwise stop and restart at every phrase.
+- When the channels differ again after R was skipped, R first **replays the samples it missed** (L's driven input, kept in an 8192-sample ring) before the block: the whole gap if it is shorter, otherwise the model's memory (`GetPrewarmSamples()`, the receptive field for WaveNet; 8192 when the model does not report it, e.g. Linear, and on the GPU). Exact for WaveNet, ConvNet and Linear models up to 8192 taps; close for LSTM (fading memory). No click; the price is one larger block at that moment. Measured on the development VM with the standard WaveNet (`wavenet_a1_standard.nam`, 256-sample blocks): mono source 27.6% of one core, true stereo 53.6%, the block that brings R back after a long mono stretch ≈ 25 ms instead of ≈ 2.7 ms.
+- **Linked compensation** (decided 2026-11-02): one gain for both channels keeps the stereo image steady (independent gains would make the image wander like unlinked compressors) and keeps today's loudness behaviour exactly for a mono source. It does not undo a level difference the model itself makes between two different channels.
+- **GPU (unverified, CUDA not built here):** the model is loaded once in `GpuNamManager` and **two instances** are registered (each has its own state on the GPU); if the second cannot be registered, both channels run on the CPU (never L on the GPU and R on the CPU). Each Stripper with a model now takes two of the manager's 256 instance slots.
+- **Rate changes:** `setSampleRate` resets the model only when the rate really changes (the processor calls it every block and from `setActive`). Until 2026-11-02 every call ran `nam::DSP::Reset`, which wiped the model's history and prewarmed it **every block**: a discontinuity at each block start and, with a standard WaveNet, an extra 8192-sample run per block.
 
 ---
 
