@@ -73,6 +73,17 @@ def test_header_is_deterministic_and_well_formed(tmp_path):
     assert "SIL Open Font License 1.1" in a and "Apache License 2.0" in a
 
 
+def test_header_states_that_the_zeyada_outlines_stay_under_the_ofl():
+    converted = {k: g.convert_font(tiny_font()) for k, *_ in g.FONTS}
+    a = g.render_header(converted)
+    # the comment text with the line breaks and the // markers taken out
+    text = " ".join(line[2:].strip() for line in a.splitlines() if line.startswith("//"))
+    # the outlines are a modified version of Zeyada: only they are OFL, the rest of the project is GPL-3.0
+    assert "The Zeyada outlines in this file are a modified version of the font" in text
+    assert "remain under the SIL Open Font License 1.1" in text and "GPL-3.0" in text
+    assert "declares no Reserved Font Name" in text
+
+
 def test_header_is_plugin_independent():
     converted = {k: g.convert_font(tiny_font()) for k, *_ in g.FONTS}
     a = g.render_header(converted)

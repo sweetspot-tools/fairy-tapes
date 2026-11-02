@@ -79,6 +79,14 @@ Embedded as vector outlines by `shared/ui/tools/gen_tape_fonts.py`; sources, has
 | Rock Salt | Font Diner (Sideshow) | Apache-2.0 |
 | Homemade Apple | Font Diner | Apache-2.0 |
 
+**The Zeyada outlines remain under the SIL Open Font License 1.1.** The glyph outlines in
+`shared/ui/include/fairy_ui/tape_glyphs.h` are a modified version of the fonts (a conversion to vector paths). The Zeyada
+part of that file stays under the OFL 1.1 and is not relicensed under the GPL-3.0 of the rest of the project; Zeyada
+declares no Reserved Font Name, and its licence text and copyright notice are kept in
+[shared/ui/assets/fonts/](shared/ui/assets/fonts/README.md) and shown in each plug-in's Credits. Rock Salt and Homemade
+Apple are Apache-2.0, which is compatible with the GPL-3.0. Whether the OFL part and the GPL-3.0 code can share one binary
+is not settled by the licence texts and has not been checked with a lawyer: recheck it before any publication.
+
 ## Not in this repository
 
 - **Brand** (logo, avatar, favicon): [sweetspot-tools/brand](https://github.com/sweetspot-tools/brand), folder
