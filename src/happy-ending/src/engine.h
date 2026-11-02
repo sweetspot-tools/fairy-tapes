@@ -29,6 +29,10 @@
  *  - Clip LEDs: a sample with |x| >= 1.0 at the output of a stage lights its LED for
  *    kClipHoldSeconds of audio time (or until clearClips()). Zone-B stages are checked at the
  *    oversampled rate. IN is after the INPUT gain, OUT is the plug-in output.
+ *  - Stage input peaks (Meters::stageInDb, for the screen): the largest |sample| of both channels at the
+ *    input of GLUE (base rate), CLIP, LIMIT and FINAL (zone B, oversampled rate), over the process() call;
+ *    -120 while the stage is off. Meters::glueGrDb is the compressor's reduction before MIX and
+ *    Meters::limitThreshDb the LIMIT threshold in force now (LOUDNESS push and SET included).
  *  - Non-finite input samples are replaced by 0 at the entry. FTZ / DAZ are set for the duration of
  *    process() (ScopedNoDenormals). No allocation in set() or process().
  *
@@ -154,6 +158,9 @@ EngineSettings mapParams(const double* norm, int listenBand, bool setActive);
 enum ClipLed { kLedIn = 0, kLedFeq, kLedVeq, kLedGlu, kLedClp, kLedLim, kLedFin, kLedMtl, kLedOut, kNumLeds };
 enum GrRow { kGrGlue = 0, kGrClip, kGrLimit, kGrFinal, kGrMetal, kNumGrRows };
 
+// Index into Meters::stageInDb: the stages whose input level the screen shows.
+enum StageIn { kStageInGlue = 0, kStageInLimit, kStageInClip, kStageInFinal, kNumStageIns };
+
 struct Meters {
   float inPeakDb[2] = {-120.0f, -120.0f};   // after the INPUT gain, over the last process() call
   float outPeakDb[2] = {-120.0f, -120.0f};  // the plug-in output, over the last process() call
@@ -162,6 +169,10 @@ struct Meters {
   double lufsShort = -std::numeric_limits<double>::infinity();  // -inf until 3 s are in
   double lufsIntegrated = -std::numeric_limits<double>::infinity();
   float dynLow = 0.0f, dynAir = 0.0f;       // VIBE DYN pull-back, 0..1
+  // For the editor's screen
+  float stageInDb[kNumStageIns] = {-120.0f, -120.0f, -120.0f, -120.0f};  // peak at the input of GLUE (base rate), LIMIT, CLIP, FINAL (oversampled), over the last process() call; -120 while the stage is off
+  float glueGrDb = 0.0f;                    // the compressor's own reduction before MIX (Glue::grDb()), dB >= 0
+  float limitThreshDb = 0.0f;               // the LIMIT threshold in force now: THRESH + LOUDNESS push, glide to the SET value
 };
 
 class Engine {
@@ -204,7 +215,7 @@ private:
   };
 
   void apply(const EngineSettings& s, bool force);
-  void processChunk(float* left, float* right, int n, double* inPeak, double* outPeak);
+  void processChunk(float* left, float* right, int n, double* inPeak, double* outPeak, double* stagePeak);
   void markClip(int led, const float* l, const float* r, int n, bool* hit) const;
 
   double sampleRate_ = 48000.0;
@@ -243,6 +254,7 @@ private:
   // gains, bypass, CLIP on/off crossfade
   Ramp inGain_, outGain_, bypassMix_;  // bypassMix_: 1 = the delayed input
   double clipMix_ = 1.0, clipMixTarget_ = 1.0, clipMixStep_ = 1.0;
+  bool clipRan_ = true;  // CLIP processed in the last chunk (not fully off): its input peak is meaningful
   bool guardOn_ = true;
   float ceilLin_ = 1.0f;
   double preGuardPeak_ = 0.0;

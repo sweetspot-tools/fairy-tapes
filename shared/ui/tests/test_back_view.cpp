@@ -4,6 +4,8 @@
 #include "fairy_ui/back_widgets.h"
 #include "fairy_ui/flip_view.h"
 
+#include "wide_back_layout.h"
+
 #include "vstgui/lib/cviewcontainer.h"
 
 #include <cstdio>
@@ -21,6 +23,18 @@ const CButtonState kLeft(kLButton);
 void click(CView* v, double x, double y) {
   CPoint p(x, y);
   v->onMouseDown(p, kLeft);
+}
+
+// A click on a container at (x, y): the topmost visible child that contains the point gets it (a stand-in for the frame's
+// dispatch, which needs a window). Returns false when no child is there.
+bool clickAt(CViewContainer* c, double x, double y) {
+  for (int i = static_cast<int>(c->getNbViews()) - 1; i >= 0; --i) {
+    CView* child = c->getView(static_cast<uint32_t>(i));
+    if (!child->isVisible() || !child->getViewSize().pointInside(CPoint(x, y))) continue;
+    click(child, x, y);   // children take the coordinates of their parent, as in the other tests
+    return true;
+  }
+  return false;
 }
 
 void test_segment_row_reports_changes_only() {
@@ -105,6 +119,50 @@ void test_back_view_items_and_tabs() {
   v->forget();
 }
 
+// A plug-in with its own panel size passes its layout: the links and the controls go where that layout says.
+void test_back_view_uses_given_layout() {
+  const BackLayout L = wideBackLayout();
+  BackContent c;
+  c.headerLine = "SAMPLE";
+  c.tabs = {{"SETTINGS", BackTabKind::Settings}, {"CREDITS", BackTabKind::Credits}};
+  int selected = -1, backs = 0, tabs = -1;
+  c.items.push_back(choiceItem(1, BackColumn::Behaviour, "MODE", "", {"A", "B", "C"}, 0));
+  c.items.back().onChange = [&](int i) { selected = i; };
+  c.credits = {"SAMPLE", "Version 1", {}, {{"VSTGUI", "Steinberg Media Technologies", "BSD-3-Clause"}}, {}};
+  BackView::Callbacks cb;
+  cb.back = [&] { ++backs; };
+  cb.tabChanged = [&](int t) { tabs = t; };
+  auto* v = new BackView(CRect(0, 0, 1280, 628), nullptr, c, cb, 0, L);
+  CHECK(v->layout().width == 1280 && v->layout().headerRight == 1246 && v->layout().lastTabRight == 1160);
+
+  // children: wear, two tab links, "<- BACK", the item
+  const BackBox credits = tabLinkBox(1, 2, L), home = backLinkBox(L), settings = tabLinkBox(0, 2, L);
+  // the click goes to the child under the point, so the place decides which link (if any) takes them
+  clickAt(v, 870, 70);                                   // where the 1000 px template had CREDITS: nothing here
+  CHECK(tabs == -1 && v->tab() == 0);
+  clickAt(v, credits.x + credits.w - 10, credits.y + 5);   // its new place
+  CHECK(tabs == 1 && v->tab() == 1);
+  clickAt(v, settings.x + settings.w - 10, settings.y + 5);
+  CHECK(tabs == 0 && v->tab() == 0);
+  clickAt(v, 950, 70);                                   // the old "<- BACK" place
+  CHECK(backs == 0);
+  clickAt(v, home.x + home.w - 10, home.y + 5);
+  CHECK(backs == 1);
+  CHECK(v->getView(2)->getViewSize().right == credits.x + credits.w && v->getView(3)->getViewSize().right == 1246);
+
+  // the control sits in the wide BEHAVIOUR column (x 654 + 176), 3 x 84 px
+  const CRect r = v->getView(4)->getViewSize();
+  CHECK(r.left == 654 + Back::kControlInset && r.getWidth() == 3 * 84 && r.top == L.firstRowY);
+  clickAt(v, 654 + Back::kControlInset + 200, L.firstRowY + 5);   // the third cell
+  CHECK(selected == 2);
+  v->forget();
+
+  // without a layout: the one of the view's height, as before
+  auto* classic = new BackView(CRect(0, 0, 1000, 470), nullptr, c, cb, 0);
+  CHECK(classic->layout().height == 470 && classic->layout().width == 1000 && classic->layout().lastTabRight == 880);
+  classic->forget();
+}
+
 void test_text_link_alignment() {
   TextLink link(CRect(0, 0, 100, 20), "Powered by");
   CHECK(!link.leftAligned());                       // right-aligned like the tab links by default
@@ -134,6 +192,7 @@ int main() {
   test_segment_row_reports_changes_only();
   test_stepper_and_button();
   test_back_view_items_and_tabs();
+  test_back_view_uses_given_layout();
   test_text_link_alignment();
   test_panel_flip_refuses_without_views();
   if (g_failed) { std::fprintf(stderr, "%d check(s) failed\n", g_failed); return 1; }

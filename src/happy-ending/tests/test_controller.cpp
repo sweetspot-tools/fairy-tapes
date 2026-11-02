@@ -7,10 +7,14 @@
 #include "controller.h"
 #include "display.h"
 #include "loudness_macro.h"
+#include "messages.h"
 #include "state.h"
 #include "tuning.h"
+#include "ui/readouts.h"
+#include "ui/value_text.h"
 #include "pluginterfaces/base/ibstream.h"
 #include "pluginterfaces/vst/ivsteditcontroller.h"
+#include "pluginterfaces/vst/ivstmessage.h"
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -74,6 +78,50 @@ struct VecStream : Steinberg::IBStream {
   Steinberg::tresult PLUGIN_API tell(Steinberg::int64* p) override { if (p) *p = pos; return Steinberg::kResultOk; }
 };
 
+// A minimal IMessage: only the id and one binary attribute (what the "Decor" message uses).
+struct FakeAttrs : Steinberg::Vst::IAttributeList {
+  std::vector<uint8_t> blob;
+  bool has = false;
+  Steinberg::tresult PLUGIN_API queryInterface(const Steinberg::TUID, void** o) override { *o = nullptr; return Steinberg::kNoInterface; }
+  Steinberg::uint32 PLUGIN_API addRef() override { return 1; }
+  Steinberg::uint32 PLUGIN_API release() override { return 1; }
+  Steinberg::tresult PLUGIN_API setInt(AttrID, Steinberg::int64) override { return Steinberg::kResultFalse; }
+  Steinberg::tresult PLUGIN_API getInt(AttrID, Steinberg::int64&) override { return Steinberg::kResultFalse; }
+  Steinberg::tresult PLUGIN_API setFloat(AttrID, double) override { return Steinberg::kResultFalse; }
+  Steinberg::tresult PLUGIN_API getFloat(AttrID, double&) override { return Steinberg::kResultFalse; }
+  Steinberg::tresult PLUGIN_API setString(AttrID, const Steinberg::Vst::TChar*) override { return Steinberg::kResultFalse; }
+  Steinberg::tresult PLUGIN_API getString(AttrID, Steinberg::Vst::TChar*, Steinberg::uint32) override { return Steinberg::kResultFalse; }
+  Steinberg::tresult PLUGIN_API setBinary(AttrID id, const void* d, Steinberg::uint32 n) override {
+    if (std::strcmp(id, "decor") != 0) return Steinberg::kResultFalse;
+    blob.assign(static_cast<const uint8_t*>(d), static_cast<const uint8_t*>(d) + n);
+    has = true;
+    return Steinberg::kResultOk;
+  }
+  Steinberg::tresult PLUGIN_API getBinary(AttrID id, const void*& d, Steinberg::uint32& n) override {
+    if (std::strcmp(id, "decor") != 0 || !has) return Steinberg::kResultFalse;
+    d = blob.data();
+    n = static_cast<Steinberg::uint32>(blob.size());
+    return Steinberg::kResultOk;
+  }
+};
+struct FakeMessage : Steinberg::Vst::IMessage {
+  std::string id;
+  FakeAttrs attrs;
+  Steinberg::tresult PLUGIN_API queryInterface(const Steinberg::TUID, void** o) override { *o = nullptr; return Steinberg::kNoInterface; }
+  Steinberg::uint32 PLUGIN_API addRef() override { return 1; }
+  Steinberg::uint32 PLUGIN_API release() override { return 1; }
+  Steinberg::FIDString PLUGIN_API getMessageID() override { return id.c_str(); }
+  void PLUGIN_API setMessageID(Steinberg::FIDString s) override { id = s; }
+  Steinberg::Vst::IAttributeList* PLUGIN_API getAttributes() override { return &attrs; }
+};
+
+bool sameDecor(const Decor& a, const Decor& b) {
+  if (a.seed != b.seed || a.tapeTexts != b.tapeTexts) return false;
+  for (int i = 0; i < kNumScrews; ++i)
+    if (a.screwAngles[i] != b.screwAngles[i]) return false;
+  return true;
+}
+
 struct Fixture {
   Controller c;
   Handler h;
@@ -114,7 +162,7 @@ void testParameterStrings() {
 }
 
 // LIMIT RELEASE is a trim around the style's own release (spec 5.5): the host shows the real milliseconds of the current
-// style, base * 2^((index - 4) / 3); DYN adds "prog." because the program moves it. Typed numbers pick the nearest step.
+// style, base * 2^((index - 4) / 3), the text the panel prints under the knob. Typed numbers pick the nearest step.
 void testLimitReleaseShowsTheStyleMilliseconds() {
   Fixture f;
   const auto ms = [](int style, int index) {
@@ -125,8 +173,8 @@ void testLimitReleaseShowsTheStyleMilliseconds() {
   for (int style = 0; style < 3; ++style) {
     f.setIndex(kLimitStyle, style);
     for (int i : {0, 4, 7, 8}) {
-      const std::string want = ms(style, i) + (style == 2 ? " prog." : "");
-      ASSERT_TRUE(f.text(kLimitRelease, i) == want);
+      ASSERT_TRUE(f.text(kLimitRelease, i) == ms(style, i));
+      ASSERT_TRUE(f.text(kLimitRelease, i) == Ui::releaseText(style, i));   // the same text as under the knob
     }
   }
   f.setIndex(kLimitStyle, 1);
@@ -237,7 +285,7 @@ void testComponentStateLoadsParamsAndResetsSessionParameters() {
   norm[kCeiling] = normFromIndex(kCeiling, 3);
   norm[kOversampling] = normFromIndex(kOversampling, 2);
   VecStream s;
-  serializeState(norm, s.data);
+  serializeState(norm, Decor{}, s.data);
   ASSERT_TRUE(f.c.setComponentState(&s) == Steinberg::kResultOk);
   ASSERT_TRUE(f.index(kCeiling) == 3 && f.index(kOversampling) == 2);
   ASSERT_TRUE(listenFromNorm(f.c.getParamNormalized(kListenBand)) == -1);
@@ -257,7 +305,7 @@ void testStateLoadRestartsOnlyWhenOversamplingDiffers() {
   loadDefaults(norm);
   norm[kOversampling] = normFromIndex(kOversampling, 2);
   VecStream s;
-  serializeState(norm, s.data);
+  serializeState(norm, Decor{}, s.data);
   ASSERT_TRUE(f.c.setComponentState(&s) == Steinberg::kResultOk);
   ASSERT_TRUE(f.h.restarts.size() == 1 && f.h.restarts[0] == Steinberg::Vst::kLatencyChanged);  // exactly once
   s.pos = 0;
@@ -265,12 +313,12 @@ void testStateLoadRestartsOnlyWhenOversamplingDiffers() {
   ASSERT_TRUE(f.h.restarts.size() == 1);
   norm[kCeiling] = normFromIndex(kCeiling, 2);                                                   // other change, same OVERSAMPLING
   VecStream t;
-  serializeState(norm, t.data);
+  serializeState(norm, Decor{}, t.data);
   ASSERT_TRUE(f.c.setComponentState(&t) == Steinberg::kResultOk);
   ASSERT_TRUE(f.h.restarts.size() == 1);
   norm[kOversampling] = normFromIndex(kOversampling, 1);
   VecStream u;
-  serializeState(norm, u.data);
+  serializeState(norm, Decor{}, u.data);
   ASSERT_TRUE(f.c.setComponentState(&u) == Steinberg::kResultOk);
   ASSERT_TRUE(f.h.restarts.size() == 2);
 }
@@ -296,6 +344,140 @@ void testNoRestartWithoutHandler() {
   c.terminate();
 }
 
+void testDecorArrivesThroughNotify() {
+  Fixture f;
+  ASSERT_TRUE(f.c.decor().seed == 0 && f.c.decorRevision() == 0);   // nothing yet: the processor or a state provides it
+  Decor sent;
+  sent.seed = 4242;
+  sent.screwAngles[1] = 33.f;
+  sent.tapeTexts = {"IN", "OUT"};
+  FakeMessage m;
+  encodeDecorMessage(&m, sent);
+  ASSERT_TRUE(f.c.notify(&m) == Steinberg::kResultOk);
+  ASSERT_TRUE(sameDecor(f.c.decor(), sent));
+  const std::uint32_t rev = f.c.decorRevision();
+  ASSERT_TRUE(rev != 0);
+
+  // a message with seed 0 never clears the seed; the other fields are taken
+  Decor noSeed = sent;
+  noSeed.seed = 0;
+  noSeed.tapeTexts = {"B"};
+  FakeMessage m2;
+  encodeDecorMessage(&m2, noSeed);
+  ASSERT_TRUE(f.c.notify(&m2) == Steinberg::kResultOk);
+  ASSERT_TRUE(f.c.decor().seed == 4242 && f.c.decor().tapeTexts == std::vector<std::string>{"B"});
+  ASSERT_TRUE(f.c.decorRevision() != rev);
+
+  // another message, or a corrupt decor, changes nothing
+  const std::uint32_t rev2 = f.c.decorRevision();
+  FakeMessage other;
+  other.id = "Oversampling";
+  f.c.notify(&other);
+  FakeMessage corrupt;
+  encodeDecorMessage(&corrupt, sent);
+  corrupt.attrs.blob.resize(corrupt.attrs.blob.size() - 1);
+  f.c.notify(&corrupt);
+  ASSERT_TRUE(f.c.decor().tapeTexts == std::vector<std::string>{"B"} && f.c.decorRevision() == rev2);
+}
+
+void testEditDecorKeepsSanitisesAndBumpsRevision() {
+  Fixture f;
+  Decor base;
+  base.seed = 99;
+  FakeMessage m;
+  encodeDecorMessage(&m, base);
+  f.c.notify(&m);
+  const std::uint32_t rev = f.c.decorRevision();
+  Decor edit;   // seed 0: keep the current one
+  edit.screwAngles[0] = 400.f;
+  edit.tapeTexts = {"  a very long tape text  ", "b"};
+  f.c.editDecor(edit);
+  const Decor got = f.c.decor();
+  ASSERT_TRUE(got.seed == 99 && got.screwAngles[0] == 40.f);
+  ASSERT_TRUE(got.tapeTexts.size() == 2 && got.tapeTexts[0] == "a very long ta" && got.tapeTexts[1] == "b");
+  ASSERT_TRUE(f.c.decorRevision() != rev);
+
+  Controller bare;   // no seed known: an edit gives it one
+  bare.initialize(nullptr);
+  bare.editDecor(Decor{});
+  ASSERT_TRUE(bare.decor().seed != 0);
+  bare.terminate();
+}
+
+void testComponentStateAdoptsTheDecor() {
+  Fixture f;
+  double norm[kNumParams];
+  loadDefaults(norm);
+  Decor d;
+  d.seed = 777;
+  d.screwAngles[2] = 90.f;
+  d.tapeTexts = {"VOX"};
+  VecStream s;
+  serializeState(norm, d, s.data);
+  ASSERT_TRUE(f.c.setComponentState(&s) == Steinberg::kResultOk);
+  ASSERT_TRUE(sameDecor(f.c.decor(), d));
+
+  // a v1 state (no seed) keeps the seed already known but drops the old texts and angles
+  std::vector<uint8_t> v1;
+  detail::putLE(v1, 1u, 4);
+  for (int i = 0; i < kNumParams; ++i) {
+    std::uint64_t bits;
+    std::memcpy(&bits, &norm[i], sizeof bits);
+    detail::putLE(v1, bits, 8);
+  }
+  VecStream s1;
+  s1.data = v1;
+  ASSERT_TRUE(f.c.setComponentState(&s1) == Steinberg::kResultOk);
+  ASSERT_TRUE(f.c.decor().seed == 777 && f.c.decor().tapeTexts.empty() && f.c.decor().screwAngles[2] == 0.f);
+
+  // a decor-corrupt v2 state still loads the parameters
+  norm[kCeiling] = normFromIndex(kCeiling, 3);
+  VecStream bad;
+  serializeState(norm, d, bad.data);
+  bad.data.resize(bad.data.size() - 1);
+  ASSERT_TRUE(f.c.setComponentState(&bad) == Steinberg::kResultOk);
+  ASSERT_TRUE(f.index(kCeiling) == 3 && f.c.decor().seed == 777 && f.c.decor().tapeTexts.empty());
+
+  // a controller that knows no seed generates one for a v1 state
+  Fixture g;
+  VecStream s2;
+  s2.data = v1;
+  ASSERT_TRUE(g.c.setComponentState(&s2) == Steinberg::kResultOk);
+  ASSERT_TRUE(g.c.decor().seed != 0);
+}
+
+// The texts under the editor's controls (ui/value_text.h) are the host's: same string for every parameter, every step and
+// both HI PASS scales, and the same position for every typed text.
+void test_value_text_matches_controller() {
+  Fixture f;
+  for (int ms = 0; ms < 3; ++ms) {
+    f.setIndex(kHpMs, ms);
+    double all[kNumParams];
+    loadDefaults(all);
+    all[kHpMs] = normFromIndex(kHpMs, ms);
+    for (int i = 0; i < static_cast<int>(kNumParams); ++i) {
+      const auto id = static_cast<ParamID>(i);
+      for (int s = 0; s < kParams[id].steps; ++s) {
+        const std::string host = f.text(id, s);
+        ASSERT_TRUE(!host.empty());
+        ASSERT_TRUE(Ui::formatValue(id, normFromIndex(id, s), all) == host);
+        // typing what the host prints, and a bare number, lands on the same step through both parsers
+        for (const std::string& typed : {host, std::to_string(s - 5), std::to_string(s * 0.7)}) {
+          Steinberg::Vst::TChar t[64];
+          int k = 0;
+          for (; k < 63 && typed[k]; ++k) t[k] = static_cast<Steinberg::Vst::TChar>(typed[k]);
+          t[k] = 0;
+          double viaHost = -1.0, viaText = -2.0;
+          const bool okHost = f.c.getParamValueByString(id, t, viaHost) == Steinberg::kResultOk;
+          const bool okText = Ui::parseValue(id, typed, all, viaText);
+          ASSERT_TRUE(okHost == okText);
+          if (okHost) ASSERT_TRUE(viaHost == viaText);
+        }
+      }
+    }
+  }
+}
+
 } // namespace
 
 int main() {
@@ -303,6 +485,7 @@ int main() {
   RUN_TEST(testLimitReleaseShowsTheStyleMilliseconds);
   RUN_TEST(testHiPassFrequencyFollowsItsMsPosition);
   RUN_TEST(testTypedValues);
+  RUN_TEST(test_value_text_matches_controller);
   RUN_TEST(testParametersReadBackAtTheSameIndex);
   RUN_TEST(testMatchMovesLoudnessOnceAsOneHostEdit);
   RUN_TEST(testMatchDoesNothingWithoutMeasurementOrWhenCentred);
@@ -311,6 +494,9 @@ int main() {
   RUN_TEST(testStateLoadRestartsOnlyWhenOversamplingDiffers);
   RUN_TEST(testOversamplingChangeAsksForALatencyRestart);
   RUN_TEST(testNoRestartWithoutHandler);
+  RUN_TEST(testDecorArrivesThroughNotify);
+  RUN_TEST(testEditDecorKeepsSanitisesAndBumpsRevision);
+  RUN_TEST(testComponentStateAdoptsTheDecor);
   std::printf("\n%d passed, %d failed\n", g_passed, g_failed);
   return g_failed ? 1 : 0;
 }

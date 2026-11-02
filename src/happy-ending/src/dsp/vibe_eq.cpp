@@ -423,10 +423,15 @@ void VibeEq::processTube(float* left, float* right, int n) {
 }
 
 double VibeEq::magnitudeDb(double hz, bool staticSetting) const {
+  const float lowAmount = staticSetting ? 0.0f : dynLow_.load(std::memory_order_relaxed);
+  const float airAmount = staticSetting ? 0.0f : dynAir_.load(std::memory_order_relaxed);
+  return magnitudeDb(hz, lowAmount, airAmount);
+}
+
+double VibeEq::magnitudeDb(double hz, float pullLow, float pullAir) const {
   if (!settings_.on) return 0.0;
-  const double lowPull = staticSetting ? 0.0 : dynLow_.load(std::memory_order_relaxed) * Tuning::kDynMaxPullback;
-  const double airPull = staticSetting ? 0.0 : dynAir_.load(std::memory_order_relaxed) * Tuning::kDynMaxPullback;
-  const Network n = designNetwork(lowPull, airPull, false);
+  const auto share = [](float amount) { return (amount > 0.0f ? std::min(amount, 1.0f) : 0.0f) * Tuning::kDynMaxPullback; };
+  const Network n = designNetwork(share(pullLow), share(pullAir), false);
   return n.peak.magnitudeDb(hz, sampleRate_) + n.dip.magnitudeDb(hz, sampleRate_) +
          n.air.magnitudeDb(hz, sampleRate_) + n.tiltLow.magnitudeDb(hz, sampleRate_) +
          n.tiltHigh.magnitudeDb(hz, sampleRate_);

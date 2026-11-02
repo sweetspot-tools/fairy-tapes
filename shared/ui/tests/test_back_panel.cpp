@@ -5,6 +5,7 @@
  * Stripper's test is about its own help and preferences and stays there.
  */
 #include "fairy_ui/back_panel.h"
+#include "wide_back_layout.h"
 
 #include <cstdio>
 #include <set>
@@ -65,6 +66,68 @@ void test_header_links_follow_the_template() {
       CHECK(tabLinkBox(i, n).x > 400);   // clear of the big title
     }
   CHECK(frontBackLinkBox().x + frontBackLinkBox().w == Back::kHeaderRight);   // "BACK ->" on the front, same place
+}
+
+// kTall and kShort carry the numbers the horizontal constants had: the existing plug-ins do not move.
+void test_back_layouts_unchanged() {
+  for (const BackLayout* L : {&Back::kTall, &Back::kShort}) {
+    CHECK(L->width == 1000 && L->width == Back::kWidth);
+    CHECK(L->headerRight == Back::kHeaderRight && L->headerRight == 966);
+    CHECK(L->lastTabRight == Back::kLastTabRight && L->lastTabRight == 880);
+    CHECK(L->tabSpacing == Back::kTabSpacing && L->tabSpacing == 90);
+    CHECK(L->creditNameX == Back::kCreditNameX && L->creditAuthorX == Back::kCreditAuthorX);
+    CHECK(L->creditLicenseRight == Back::kCreditLicenseRight);
+    CHECK(L->appearance.x == 24 && L->appearance.w == 462 && L->behaviour.x == 514 && L->behaviour.w == 462);
+    for (const BackBox& b : {L->notes, L->creditsTitle, L->components, L->notices, L->custom, L->flow, L->legend})
+      CHECK(b.x == 24 && b.w == 952);
+  }
+  CHECK(Back::kTall.height == 628 && Back::kShort.height == 470);
+  // the old signatures give the kTall places, the new ones agree with them for kTall and kShort
+  for (int n = 1; n <= Back::kMaxTabs; ++n)
+    for (int i = 0; i < n; ++i) {
+      const BackBox a = tabLinkBox(i, n), b = tabLinkBox(i, n, Back::kTall), c = tabLinkBox(i, n, Back::kShort);
+      CHECK(a.x == b.x && a.y == b.y && a.w == b.w && a.h == b.h && a.x == c.x);
+    }
+  CHECK(backLinkBox().x == backLinkBox(Back::kTall).x && backLinkBox().x == 966 - Back::kLinkWidth);
+  CHECK(labelX(BackColumn::Behaviour) == labelX(BackColumn::Behaviour, Back::kShort));
+}
+
+// A layout of any width: the header links, the columns and the credit columns come from its own fields.
+void test_back_layout_any_width() {
+  const BackLayout L = wideBackLayout();
+  const BackBox back = backLinkBox(L);
+  CHECK(back.x + back.w == 1246 && back.y == Back::kLinkTop && back.w == Back::kLinkWidth);
+  CHECK(frontBackLinkBox(L).x == back.x && frontBackLinkBox().x == 966 - Back::kLinkWidth);
+  CHECK(tabLinkBox(1, 2, L).x + tabLinkBox(1, 2, L).w == 1160 && tabLinkBox(0, 2, L).x + tabLinkBox(0, 2, L).w == 1060);
+  CHECK(tabLinkBox(0, 4, L).x + tabLinkBox(0, 4, L).w == 860);
+  for (int n = 1; n <= Back::kMaxTabs; ++n)
+    for (int i = 0; i < n; ++i) {
+      const BackBox t = tabLinkBox(i, n, L);
+      CHECK(disjoint(t, back) && t.x > 400 && t.x + t.w <= L.width);
+      if (i > 0) CHECK(disjoint(t, tabLinkBox(i - 1, n, L)));
+    }
+  CHECK(labelX(BackColumn::Appearance, L) == 24 + Back::kLabelInset && labelX(BackColumn::Behaviour, L) == 654 + Back::kLabelInset);
+  CHECK(columnBox(BackColumn::Behaviour, L).w == 602);
+  // the boxes stay inside the panel and the columns do not overlap
+  const BackBox panel{0, 0, L.width, L.height};
+  for (const BackBox& b : {L.appearance, L.behaviour, L.notes, L.creditsTitle, L.components, L.notices, L.custom, L.flow, L.legend})
+    CHECK(inside(b, panel) && b.x >= 24 && b.x + b.w <= L.width - 24);
+  CHECK(disjoint(L.appearance, L.behaviour));
+  // the controls of an item follow the wider column; a control that was too wide for 462 px fits in 602
+  const BackContent c = sample();
+  CHECK(itemControlBox(c.items[0], 0, L).x == 24 + Back::kControlInset);
+  BackContent wide = c;
+  wide.items.push_back(choiceItem(9, BackColumn::Behaviour, "WIDE", "", {"A", "B", "C", "D"}, 0, 84));   // 336 px
+  CHECK(itemControlBox(wide.items.back(), 0, L).x == 654 + Back::kControlInset);
+  bool leaves = false;
+  for (const auto& p : backContentProblems(wide, L)) leaves = leaves || p.find("leaves its box") != std::string::npos;
+  CHECK(!leaves);
+  leaves = false;
+  for (const auto& p : backContentProblems(wide, Back::kTall)) leaves = leaves || p.find("leaves its box") != std::string::npos;
+  CHECK(leaves);
+  CHECK(backContentProblems(c, L).empty());
+  // credits: the columns of the layout
+  CHECK(L.creditAuthorX > L.creditNameX && L.creditLicenseRight <= L.width && L.creditLicenseRight <= L.components.x + L.components.w);
 }
 
 void test_rows_and_controls_stay_in_their_column() {
@@ -211,6 +274,8 @@ void test_word_wrap() {
 
 int main() {
   test_header_links_follow_the_template();
+  test_back_layouts_unchanged();
+  test_back_layout_any_width();
   test_rows_and_controls_stay_in_their_column();
   test_problems_are_reported();
   test_routing_is_mandatory_and_inside_its_box();

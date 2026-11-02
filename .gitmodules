@@ -12,3 +12,6 @@
 [submodule "vendors/NeuralAmpModelerCore"]
 	path = vendors/NeuralAmpModelerCore
 	url = https://github.com/sdatkinson/NeuralAmpModelerCore.git
+[submodule "tools/license-compliance-checker"]
+	path = tools/license-compliance-checker
+	url = https://github.com/swolley/license-compliance-checker

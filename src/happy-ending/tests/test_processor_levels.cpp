@@ -14,6 +14,7 @@
 #include "engine.h"
 #include "params.h"
 #include "state.h"
+#include "tuning.h"
 #include "pluginterfaces/base/ibstream.h"
 #include "pluginterfaces/base/ipluginbase.h"
 #include "pluginterfaces/vst/ivstaudioprocessor.h"
@@ -244,8 +245,50 @@ void test_input_peaks_map_to_display_norm_and_only_display_ids_are_written() {
   for (const auto& kv : h.published) { CHECK(kv.first >= kDisplayBase && kv.first < kNumDisplayIDs); ids.insert(kv.first); }
   // every read-only display parameter is written; the two writable triggers only when acknowledging
   for (PID id = kDisplayBase; id < kClearClips; ++id) CHECK(ids.count(id) == 1);
+  for (PID id = kDispGlueIn; id < kNumDisplayIDs; ++id) CHECK(ids.count(id) == 1);
   CHECK(h.published.count(kClearClips) == 0 && h.published.count(kResetIntegrated) == 0);
   CHECK(std::fabs(h.last(kDispLatency) - normFromLatency(expectedLatency(2))) < 1e-9);
+  h.close();
+}
+
+// The six values for the screen are written with the others at the 33 ms pace (about 30 times a second),
+// normalized as in display.h, in the values the engine reports.
+void test_stage_display_values_are_published_at_the_display_pace() {
+  Host h; CHECK(h.open());
+  MockChanges setup;   // GLUE threshold 0, no VIBE colour: a -6 dBFS sine reads -6 dB at every stage input
+  setup.set(kGlueThresh, normFromIndex(kGlueThresh, 20));
+  setup.set(kTube, normFromIndex(kTube, 0));
+  setup.set(kLimitThresh, normFromIndex(kLimitThresh, 0));
+  setup.set(kClipDrive, normFromIndex(kClipDrive, 0));
+  setup.set(kCeiling, normFromIndex(kCeiling, 0));   // -0.1 dB: the LIMIT moves the level by 0.1 dB only
+  h.block(sine(1000.0, 0.5), &setup);
+  h.blocks(1000, sine(1000.0, 0.5));   // 1.33 s
+  const PID ids[6] = {kDispGlueIn, kDispGlueGr, kDispLimitIn, kDispLimitThresh, kDispClipIn, kDispFinalIn};
+  for (PID id : ids) {
+    const size_t writes = h.published[id].size();
+    CHECK(writes >= 38 && writes <= 42);          // 1.33 s / 33 ms, the same pace as the peaks
+    CHECK(writes == h.published[kDispInL].size());
+  }
+  for (PID id : {kDispGlueIn, kDispLimitIn, kDispClipIn, kDispFinalIn})
+    CHECK(std::fabs(h.last(id) - normFromStageDb(-6.02)) < 0.5 / 72.0);
+  CHECK(h.last(kDispGlueGr) >= 0.0 && h.last(kDispGlueGr) < 0.1);
+  CHECK(std::fabs(h.last(kDispLimitThresh) - normFromThreshDb(0.0)) < 1e-6);   // THRESH at 0 dB
+
+  // LOUDNESS lowers the threshold, SET pulls it to -8 dB; CLIP off reads 0 at its input
+  MockChanges more;
+  more.set(kLoudness, normFromIndex(kLoudness, 10));   // 5.0
+  more.set(kClipOn, 0.0);
+  h.block(sine(1000.0, 0.5), &more);
+  h.blocks(400, sine(1000.0, 0.5));
+  const double lowered = -0.5 * -FairyTapes::HappyEnding::Tuning::kLoudCurve.limitDb;
+  CHECK(std::fabs(h.last(kDispLimitThresh) - normFromThreshDb(lowered)) < 0.002);
+  CHECK(h.last(kDispClipIn) == 0.0);
+  CHECK(h.last(kDispGlueIn) > normFromStageDb(-7.0));
+  MockChanges set;
+  set.set(kSetActive, 1.0);
+  h.block(sine(1000.0, 0.5), &set);
+  h.blocks(400, sine(1000.0, 0.5));
+  CHECK(std::fabs(h.last(kDispLimitThresh) - normFromThreshDb(-8.0)) < 0.002);
   h.close();
 }
 
@@ -388,7 +431,7 @@ void test_set_state_with_other_oversampling_applies_at_the_next_activation() {
   loadDefaults(norm);
   norm[kOversampling] = normFromIndex(kOversampling, 2);   // 4x
   VecStream s;
-  serializeState(norm, s.data);
+  serializeState(norm, Decor{}, s.data);
   h.blocks(5, kSilence);
   CHECK(h.comp->setState(&s) == kResultOk);
   h.blocks(5, kSilence);                                  // still running: the engine is not rebuilt
@@ -413,9 +456,10 @@ void test_state_round_trip_and_session_parameters_not_stored() {
 
   VecStream s;
   CHECK(h.comp->getState(&s) == kResultOk);
-  CHECK(s.data.size() == kStateBytes);
+  CHECK(s.data.size() == kStateSizeV1 + 4 + 4 * kNumScrews + 4);   // parameters, seed, angles, no texts: nothing for LISTEN / SET
   double norm[kNumParams];
-  CHECK(deserializeState(s.data.data(), s.data.size(), norm));
+  Decor decor;
+  CHECK(deserializeState(s.data.data(), s.data.size(), norm, decor));
   CHECK(indexFromNorm(kCeiling, norm[kCeiling]) == 3);
   CHECK(indexFromNorm(kLoudness, norm[kLoudness]) == 12);
   CHECK(indexFromNorm(kOversampling, norm[kOversampling]) == 2);
@@ -436,7 +480,8 @@ void test_state_round_trip_and_session_parameters_not_stored() {
   VecStream s3;
   CHECK(g.comp->getState(&s3) == kResultOk);
   double after[kNumParams], defaults[kNumParams];
-  CHECK(deserializeState(s3.data.data(), s3.data.size(), after));
+  Decor decor3;
+  CHECK(deserializeState(s3.data.data(), s3.data.size(), after, decor3));
   loadDefaults(defaults);
   CHECK(after[kLoudness] == defaults[kLoudness] && after[kOversampling] == defaults[kOversampling]);
   g.close(); h.close();
@@ -510,6 +555,7 @@ int main() {
     return kSkip;
   }
   test_input_peaks_map_to_display_norm_and_only_display_ids_are_written();
+  test_stage_display_values_are_published_at_the_display_pace();
   test_display_hold_keeps_transient_between_writes();
   test_clip_is_held_then_cleared_on_request_with_ack();
   test_lufs_published_and_integrated_reset_acknowledged();

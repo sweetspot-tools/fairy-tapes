@@ -2,7 +2,7 @@
 
 **Data:** 2026-10-21
 **Stato:** decisioni chiuse il 2026-10-24 (brainstorming dal 2026-10-15); motore audio e plugin VST3 realizzati
-**Avanzamento:** motore audio e plugin VST3 fatti (Task 1-13 e 15 del piano `docs/superpowers/plans/2026-10-24-happy-ending.md`); taratura a orecchio in attesa dell'utente (Task 14); editor con piano a parte.
+**Avanzamento:** motore audio e plugin VST3 fatti (Task 1-13 e 15 del piano `docs/superpowers/plans/2026-10-24-happy-ending.md`); taratura a orecchio in attesa dell'utente (Task 14); editor: piano `docs/superpowers/plans/2026-10-31-happy-ending-editor.md` scritto il 2026-10-31, in corso.
 **Suite:** Fairy Tapes (catena di mastering "tutto dentro")
 **Nome:** Happy Ending (deciso il 2026-10-21); cartella `src/happy-ending/`, bundle `HappyEnding.vst3`
 **Preview:** `src/happy-ending/docs/mockups/happy_ending_rack.html` (anche nella pagina `docs/mockups/index.html`)
@@ -179,10 +179,25 @@ Nessuna decisione di progetto aperta (chiuse il 2026-10-24: LOUDNESS sopra i com
 - **Taratura a orecchio** (§9, Task 14 del piano): soglia e tempi del DYN, basi di release degli stili, soglia di SET, curva della LOUDNESS, passo di MATCH, ascolto finale di FINE EQ e GLUE con tutta la catena, in un host. Tocca all'utente; i valori di `tuning.h` sono quelli di partenza.
 - **Verifica della latenza in un host reale** (REAPER, Bitwig): che la compensazione di ritardo dichiarata (69/76 campioni di oversampler più i look-ahead) allinei davvero la traccia, anche cambiando OVERSAMPLING; finora provata solo con i test del motore e del processor.
 - **Licenze:** i file `LICENSE` dei progetti d'origine ai commit fissati sono stati controllati il 2026-11-02 (Dusk Audio GPL-3.0, Airwindows MIT, ZLInflator GPL-3.0, VST 3 SDK MIT); l'elenco va ripreso nei CREDITS dell'editor (piano a parte).
-- **Valore mostrato da RELEASE (deciso dall'utente e fatto il 2026-11-02):** la scala resta relativa (FAST…SLOW, 9 scatti attorno alla release dello stile); il valore mostra i ms reali dello stile corrente, base × 2^((k − 4)/3), con "prog." in DYN perché il programma la sposta. Il controller accetta anche un numero scritto (lo scatto più vicino). Test `testLimitReleaseShowsTheStyleMilliseconds`.
-- **Scheda ROUTING della preview allineata al motore (2026-11-02):** rilevatore di GLUE in feedback (uscita compressa, SC HPF), cornice di FINAL raggiunta da LOUDNESS e CEILING (INFLATE compreso), zona di oversampling tratteggiata (più "TUBE OVERSAMPLED" nel VIBE EQ), blocco SAFETY (limiter di sicurezza e guardia del tetto) dopo OUTPUT con CEILING. Da riportare nell'editor quando si scriverà il suo piano.
-- **Editor grafico:** piano a parte, da scrivere.
+- **Valore mostrato da RELEASE (deciso dall'utente e fatto il 2026-11-02):** la scala resta relativa (FAST…SLOW, 9 scatti attorno alla release dello stile); il valore mostra i ms reali dello stile corrente, base × 2^((k − 4)/3), lo stesso testo che l'editor stampa sotto la manopola (`releaseText` di `ui/readouts.h`, usato anche da `ui/value_text.h` per l'host). Il controller accetta anche un numero scritto (lo scatto più vicino). Test `testLimitReleaseShowsTheStyleMilliseconds`.
+- **Scheda ROUTING della preview allineata al motore (2026-11-02):** rilevatore di GLUE in feedback (uscita compressa, SC HPF), cornice di FINAL raggiunta da LOUDNESS e CEILING (INFLATE compreso), zona di oversampling tratteggiata (più "TUBE OVERSAMPLED" nel VIBE EQ), blocco SAFETY (limiter di sicurezza e guardia del tetto) dopo OUTPUT con CEILING. Da riportare nella scheda ROUTING dell'editor (piano `2026-10-31-happy-ending-editor.md`).
+- **Editor grafico:** piano `docs/superpowers/plans/2026-10-31-happy-ending-editor.md` (Task 1-16), scelte tecniche nel §13; in corso.
 
 ## 12. Storia del brainstorming
 
 Punto 0 (2026-10-15) e riepilogo: `.superpowers/brainstorm/mastering/` (fuori da git). Le scelte successive sono in questa spec.
+
+## 13. Editor: scelte tecniche (2026-10-31)
+
+Approvate dall'utente il 2026-10-31 con il piano dell'editor (SIZE e retro corretti da lui: ogni plugin ha la sua dimensione).
+
+- **SIZE di ciascun plugin (decisione dell'utente, 2026-10-31):** ogni plugin ha la sua dimensione: SIZE si salva nel file di preferenze del plugin (`HappyEnding.prefs`, chiave `size=75|90|100|125`, default 100), non in un file comune. La finestra è 1280 × 890 × fattore dell'host × SIZE. Cambiata dal retro si applica subito chiedendo all'host di ridimensionare; se l'host rifiuta, vale alla prossima apertura. `shared/ui` dà solo la matematica (fattori, dimensione in pixel, zoom).
+- **Retro con la dimensione del plugin:** anche il retro ha la dimensione di ciascun plugin. Il template comune (`shared/ui`) prende la geometria orizzontale e verticale dal layout che il plugin gli passa; quello di Happy Ending (1280 × 890, numeri della preview) sta nel plugin. I layout degli altri plugin non cambiano.
+- **Dati dello schermo:** il motore pubblica altri sei valori di visualizzazione, dopo quelli esistenti: picco all'ingresso di GLUE, LIMIT, CLIP e FINAL (−60…+12 dB), riduzione del compressore della colla prima del MIX e soglia effettiva del LIMIT (con la spinta della LOUDNESS e SET).
+- **Curve EQ:** le calcola l'editor con copie proprie di FINE EQ e VIBE EQ a 48 kHz, impostate dai parametri come il motore (mai sull'audio); la curva del VIBE con il ritiro del DYN usa il valore pubblicato.
+- **Vista dello schermo** (EQ, GLUE, CLIP, LIMIT, FINAL): stato dell'editor, ricordato finché vive l'istanza, non salvato nel progetto; all'apertura di un progetto è EQ.
+- **Stato v2:** come Deep Throat, i parametri più il decor (seme, angoli delle quattro viti, fino a sei scritte sul nastro); un progetto v1 si apre con il decor di default.
+- **Preferenze del plugin:** `HappyEnding.prefs` con le chiavi degli altri plugin (wear, notes, tapeFont, valuesFont).
+- **LISTEN e SET alla chiusura dell'editor:** l'editor li spegne con una modifica unica ciascuno (sono parametri di sessione nascosti; il motore non li salva già oggi).
+- **Comandi del pannello (Task 9 del piano dell'editor):** il valore sotto le manopole si stampa a R + 36 dal centro del cappuccio come nella preview (la serigrafia comune lo mette a R + 39,5, dove sotto le manopole basse del FINE EQ tocca le etichette dei pulsanti); nomi a R + 24 (preview R + 22) ed etichette dei pulsanti a 11 px (preview 10) restano quelli comuni. I selettori M/S stampano i testi di `formatValue` (Stereo / Mid / Side, come l'host), non le sigle della preview (ST / MID / SIDE). LIMIT RELEASE stampa il tempo vero in ms; il suo campo di testo usa i testi dell'host (Style, −4…+4). I pulsanti delle viste sono una sola scelta a faccia accesa con facce 34 × 20 (preview 34 × 18). I LED di LISTEN mostrano la campana davvero ascoltata (spenti con la banda o il FINE EQ spenti).
+- **Parametri a scelta per l'host:** restano parametri a passi con i testi dati da `getParamStringByValue` (niente `StringListParameter`): l'editor mostra comunque i valori, e gli host leggono già i testi.

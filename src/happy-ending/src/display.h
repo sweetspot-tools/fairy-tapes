@@ -6,10 +6,12 @@
  * that falls between two UI ticks is still seen:
  *  - peaks and GR rows: the maximum since the last write;
  *  - clip LEDs: lit if lit at any point since the last write (the engine already holds them 2 s);
- *  - LUFS and DYN: the latest value.
+ *  - LUFS and DYN: the latest value;
+ *  - stage inputs and the GLUE reduction: the maximum since the last write; the LIMIT threshold: the latest.
  * Normalizations (the editor reads them back with the inverse functions):
  *  - peaks: dB over -60..0 (the suite's LEVEL scale), GR: dB over 0..12 (the five GR rows);
  *  - LUFS: over -60..0, "no measurement yet" (-inf, below -60) is 0;
+ *  - stage inputs: dB over -60..+12, the LIMIT threshold: dB over -12..0 (the stage off, -120, is 0);
  *  - latency: samples over 0..kLatencyDisplayMax.
  */
 
@@ -25,6 +27,8 @@ namespace FairyTapes::HappyEnding {
 constexpr double kDisplayIntervalMs = 33.0;  // ~30 writes per second
 constexpr double kPeakDisplayMinDb = -60.0, kPeakDisplayMaxDb = 0.0;
 constexpr double kGrDisplayMaxDb = 12.0;
+constexpr double kStageDisplayMinDb = -60.0, kStageDisplayMaxDb = 12.0;  // stage inputs: headroom above 0 dBFS (LOUDNESS, drive)
+constexpr double kThreshDisplayMinDb = -12.0, kThreshDisplayMaxDb = 0.0;  // LIMIT threshold: THRESH 0..-4, LOUDNESS push, SET -8
 constexpr double kLufsDisplayMin = -60.0, kLufsDisplayMax = 0.0;
 constexpr double kLatencyDisplayMax = 16384.0;
 
@@ -40,6 +44,21 @@ inline double normFromGrDb(double db) {
   return std::min(1.0, db / kGrDisplayMaxDb);
 }
 inline double grDbFromNorm(double n) { return std::clamp(n, 0.0, 1.0) * kGrDisplayMaxDb; }
+
+inline double normFromStageDb(double db) {
+  if (!(db > kStageDisplayMinDb)) return 0.0;  // also NaN and -120 (stage off)
+  return std::min(1.0, (db - kStageDisplayMinDb) / (kStageDisplayMaxDb - kStageDisplayMinDb));
+}
+inline double stageDbFromNorm(double n) {
+  return kStageDisplayMinDb + std::clamp(n, 0.0, 1.0) * (kStageDisplayMaxDb - kStageDisplayMinDb);
+}
+inline double normFromThreshDb(double db) {
+  if (!(db > kThreshDisplayMinDb)) return 0.0;  // also NaN
+  return std::min(1.0, (db - kThreshDisplayMinDb) / (kThreshDisplayMaxDb - kThreshDisplayMinDb));
+}
+inline double threshDbFromNorm(double n) {
+  return kThreshDisplayMinDb + std::clamp(n, 0.0, 1.0) * (kThreshDisplayMaxDb - kThreshDisplayMinDb);
+}
 
 inline double normFromLufs(double lufs) {
   if (!(lufs > kLufsDisplayMin)) return 0.0;  // -inf, NaN and anything at or below the floor
@@ -86,6 +105,9 @@ struct DisplayFrame {
   double lufsShort = -std::numeric_limits<double>::infinity();
   double lufsIntegrated = -std::numeric_limits<double>::infinity();
   float dynLow = 0.0f, dynAir = 0.0f;
+  float stageInDb[kNumStageIns] = {-120.0f, -120.0f, -120.0f, -120.0f};
+  float glueGrDb = 0.0f;
+  float limitThreshDb = 0.0f;
 };
 
 class MeterHold {
@@ -102,6 +124,9 @@ public:
     f_.lufsIntegrated = std::isfinite(m.lufsIntegrated) ? m.lufsIntegrated + lufsOffsetDb : m.lufsIntegrated;
     f_.dynLow = m.dynLow;
     f_.dynAir = m.dynAir;
+    for (int k = 0; k < kNumStageIns; ++k) f_.stageInDb[k] = std::max(f_.stageInDb[k], m.stageInDb[k]);
+    f_.glueGrDb = std::max(f_.glueGrDb, m.glueGrDb);
+    f_.limitThreshDb = m.limitThreshDb;
   }
   // Returns what was held and restarts the hold (the latest LUFS / DYN are kept for the next write).
   DisplayFrame take() {
@@ -111,6 +136,7 @@ public:
     fresh.lufsIntegrated = f_.lufsIntegrated;
     fresh.dynLow = f_.dynLow;
     fresh.dynAir = f_.dynAir;
+    fresh.limitThreshDb = f_.limitThreshDb;
     f_ = fresh;
     return out;
   }

@@ -90,7 +90,8 @@ inline int listenFromNorm(double norm) {
 }
 
 // Display parameters (processor -> editor): hidden, read-only, outside the stored table. Values are
-// normalized as in display.h (peaks over -60..0 dB, GR over 0..12 dB, LUFS over -60..0, clip 0/1).
+// normalized as in display.h (peaks over -60..0 dB, GR over 0..12 dB, LUFS over -60..0, clip 0/1; the
+// stage inputs over -60..+12 dB, the LIMIT threshold over -12..0 dB).
 // kClearClips and kResetIntegrated are the only writable ones: the editor sets 1, the processor does
 // the action on the audio thread and writes 0 back (the acknowledgement).
 inline constexpr Steinberg::Vst::ParamID kDisplayBase = 1000;
@@ -104,6 +105,13 @@ enum DisplayID : Steinberg::Vst::ParamID {
   kDispLatency,                                              // samples, normalized over 0..kLatencyDisplayMax
   kClearClips,
   kResetIntegrated,
+  // Stage values for the editor's screen (appended: the ids above keep their numbers)
+  kDispGlueIn,                                               // peak at the input of GLUE, over -60..+12 dB
+  kDispGlueGr,                                               // GLUE compressor reduction before MIX, over 0..12 dB
+  kDispLimitIn,                                              // peak at the input of LIMIT
+  kDispLimitThresh,                                          // LIMIT threshold in force now, over -12..0 dB
+  kDispClipIn,                                               // peak at the input of CLIP
+  kDispFinalIn,                                              // peak at the input of FINAL
   kNumDisplayIDs
 };
 

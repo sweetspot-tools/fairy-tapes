@@ -15,6 +15,10 @@
  *    setupProcessing) are all preallocated.
  *  - LISTEN and SET live only in this object (atomics), never in the state; setState puts them back
  *    to off.
+ *  - The instance decor (state v2: wear seed, screw angles, tape texts) is saved here, under decor_mutex_
+ *    (setState / getState / notify may come from different threads, never the audio thread), and exchanged with
+ *    the controller through "Decor" messages: sent after setState and on connect, adopted when the controller sends
+ *    one. A fresh instance, a v1 state and a state without a seed all get a seed generated outside process().
  *  - MONO: the chain is stereo, so a mono bus is processed as a dual-mono pair (the channel plus a
  *    scratch copy); the LUFS it reads are 3.01 LU above the BS.1770 value of the mono channel and are
  *    published corrected by kDualMonoLufsOffsetDb.
@@ -26,9 +30,11 @@
 #include "display.h"
 #include "engine.h"
 #include "params.h"
+#include "state.h"
 #include "public.sdk/source/vst/vstaudioeffect.h"
 #include <array>
 #include <atomic>
+#include <mutex>
 #include <vector>
 
 namespace FairyTapes::HappyEnding {
@@ -50,16 +56,21 @@ public:
   Steinberg::tresult PLUGIN_API setState(Steinberg::IBStream* state) override;
   Steinberg::tresult PLUGIN_API getState(Steinberg::IBStream* state) override;
   Steinberg::tresult PLUGIN_API notify(Steinberg::Vst::IMessage* message) override;
+  Steinberg::tresult PLUGIN_API connect(Steinberg::Vst::IConnectionPoint* other) override;
 
 private:
   void prepareEngine();
   int oversamplingFactor() const;
   void readParameterChanges(Steinberg::Vst::IParameterChanges* changes);
   void publishDisplay(Steinberg::Vst::ProcessData& data, bool dualMono);
+  void sendDecor();
 
   std::array<std::atomic<double>, kNumParams> param_;  // normalized, ParamID order
   std::atomic<int> listen_{-1};                         // -1 off, 0..2 the bells (not stored)
   std::atomic<bool> setActive_{false};                  // SET (not stored)
+
+  std::mutex decor_mutex_;   // setState / getState / notify (never process())
+  Decor decor_;              // seed generated in the constructor or when a state has none
 
   Engine engine_;
   DisplayRateLimiter display_limiter_;

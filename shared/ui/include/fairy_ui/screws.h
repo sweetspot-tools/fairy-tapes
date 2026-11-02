@@ -24,8 +24,18 @@ struct ScrewPoint {
 };
 using ScrewPositions = std::array<ScrewPoint, kScrewCount>;
 
-// The corners of the 1000 x 628 rack panel, 18 px in (top left, top right, bottom left, bottom right).
-inline constexpr ScrewPositions kRackScrewPositions{{{18, 18}, {982, 18}, {18, 610}, {982, 610}}};
+constexpr double kScrewInset = 18;   // distance of the screw centres from the panel edges
+
+// The corners of a rack panel of any size, 18 px in (top left, top right, bottom left, bottom right).
+constexpr ScrewPositions screwPositions(double panelWidth, double panelHeight) {
+  return {{{kScrewInset, kScrewInset},
+           {panelWidth - kScrewInset, kScrewInset},
+           {kScrewInset, panelHeight - kScrewInset},
+           {panelWidth - kScrewInset, panelHeight - kScrewInset}}};
+}
+
+// The corners of the 1000 x 628 rack panel (the panel of the first plug-ins).
+inline constexpr ScrewPositions kRackScrewPositions = screwPositions(1000, 628);
 
 struct ScrewSpec {
   double x = 0, y = 0;       // centre, editor px

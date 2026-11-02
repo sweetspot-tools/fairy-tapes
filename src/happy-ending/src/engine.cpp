@@ -292,10 +292,10 @@ void Engine::markClip(int led, const float* l, const float* r, int n, bool* hit)
 void Engine::process(float* left, float* right, int n) {
   if (!prepared_ || n <= 0) return;
   ScopedNoDenormals noDenormals;
-  double inPeak[2] = {0.0, 0.0}, outPeak[2] = {0.0, 0.0};
+  double inPeak[2] = {0.0, 0.0}, outPeak[2] = {0.0, 0.0}, stagePeak[kNumStageIns] = {};
   for (int pos = 0; pos < n; pos += maxBlock_) {
     const int len = std::min(maxBlock_, n - pos);
-    processChunk(left + pos, right + pos, len, inPeak, outPeak);
+    processChunk(left + pos, right + pos, len, inPeak, outPeak, stagePeak);
   }
   for (int c = 0; c < 2; ++c) {
     meters_.inPeakDb[c] = peakDb(inPeak[c]);
@@ -305,9 +305,15 @@ void Engine::process(float* left, float* right, int n) {
   meters_.lufsIntegrated = loud_.integratedLufs();
   meters_.dynLow = vibe_.dynLowAmount();
   meters_.dynAir = vibe_.dynAirAmount();
+  // a stage that is off reads -120; the chunks ran with the settings applied now
+  const bool stageOn[kNumStageIns] = {applied_.glue.on, applied_.limitOn, clipRan_, applied_.finalOn};
+  for (int k = 0; k < kNumStageIns; ++k)
+    meters_.stageInDb[k] = stageOn[k] ? peakDb(stagePeak[k]) : static_cast<float>(kPeakFloorDb);
+  meters_.glueGrDb = applied_.glue.on ? glue_.grDb() : 0.0f;
+  meters_.limitThreshDb = limiter_.effectiveThreshDb();
 }
 
-void Engine::processChunk(float* l, float* r, int n, double* inPeak, double* outPeak) {
+void Engine::processChunk(float* l, float* r, int n, double* inPeak, double* outPeak, double* stagePeak) {
   bool hit[kNumLeds] = {};
 
   // entry: non-finite samples become 0; the bypass path is this input delayed by the latency
@@ -358,6 +364,7 @@ void Engine::processChunk(float* l, float* r, int n, double* inPeak, double* out
   markClip(kLedVeq, l, r, n, hit);
 
   // GLUE
+  stagePeak[kStageInGlue] = std::max(stagePeak[kStageInGlue], std::max(blockPeak(l, n), blockPeak(r, n)));
   glue_.process(l, r, n);
   markClip(kLedGlu, l, r, n, hit);
 
@@ -373,6 +380,8 @@ void Engine::processChunk(float* l, float* r, int n, double* inPeak, double* out
 
   // CLIP has no off state of its own: the engine crossfades it with the dry signal (zero latency)
   const bool clipRan = clipMix_ > 0.0 || clipMixTarget_ > 0.0;
+  clipRan_ = clipRan;
+  stagePeak[kStageInClip] = std::max(stagePeak[kStageInClip], std::max(blockPeak(zl, nOs), blockPeak(zr, nOs)));
   if (clipRan) {
     if (clipMix_ >= 1.0 && clipMixTarget_ >= 1.0) {
       clip_.process(zl, zr, nOs);
@@ -394,8 +403,10 @@ void Engine::processChunk(float* l, float* r, int n, double* inPeak, double* out
   }
   markClip(kLedClp, zl, zr, nOs, hit);
 
+  stagePeak[kStageInLimit] = std::max(stagePeak[kStageInLimit], std::max(blockPeak(zl, nOs), blockPeak(zr, nOs)));
   limiter_.process(zl, zr, nOs);
   markClip(kLedLim, zl, zr, nOs, hit);
+  stagePeak[kStageInFinal] = std::max(stagePeak[kStageInFinal], std::max(blockPeak(zl, nOs), blockPeak(zr, nOs)));
   final_.process(zl, zr, nOs);
   markClip(kLedFin, zl, zr, nOs, hit);
   metal_.process(zl, zr, nOs);

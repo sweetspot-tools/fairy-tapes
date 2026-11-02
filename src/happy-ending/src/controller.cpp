@@ -8,14 +8,13 @@
 #include "messages.h"
 #include "state.h"
 #include "state_stream.h"
-#include "tuning.h"
+#include "ui/value_text.h"
 #include "pluginterfaces/base/ibstream.h"
 #include "public.sdk/source/vst/vstparameters.h"
-#include <algorithm>
-#include <cctype>
-#include <cmath>
-#include <cstdio>
-#include <cstdlib>
+#if HAPPY_ENDING_WITH_EDITOR
+#include "ui/editor.h"
+#endif
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -37,88 +36,11 @@ void asciiToStr128(const std::string& src, Steinberg::Vst::String128 dst) {
   dst[i] = 0;
 }
 
-std::string fmt(const char* f, double v) {
-  char buf[64];
-  std::snprintf(buf, sizeof buf, f, v);
-  return buf;
-}
-
-std::string freqText(double hz) {
-  if (hz < 1000.0) return fmt("%g Hz", hz);
-  return fmt("%g kHz", hz / 1000.0);
-}
-
-bool isSwitch(ParamID id) { return kParams[id].steps == 2 && id != kFinalMode; }
-
-// LIMIT RELEASE in ms: the style's base release trimmed by 2^((index - 4) / 3) (dsp/limiter.cpp, spec 5.5).
-double limitReleaseMs(int style, int index) {
-  style = std::clamp(style, 0, 2);
-  return Tuning::kLimitReleaseBaseMs[style] * std::pow(2.0, (index - 4) / 3.0);
-}
-
-// The text of position `index`. hpMs: the current HI PASS M/S position (SIDE reads the mono-bass scale); limitStyle: the
-// current LIMIT style (RELEASE shows that style's milliseconds).
-std::string paramText(ParamID id, int index, int hpMs, int limitStyle) {
-  const int last = kParams[id].steps - 1;
-  index = std::clamp(index, 0, last);
-  if (isSwitch(id)) return index ? "On" : "Off";
-  const ValueTable t = valueTable(id);
-  const double v = t.size ? t.data[index] : 0.0;
-  switch (id) {
-    case kInputGain: case kOutputGain:
-    case kLsGain: case kLmGain: case kMidGain: case kHmGain: case kHsGain:
-    case kTilt:
-      return fmt("%+.1f dB", v);
-    case kCeiling: case kGlueMakeup: case kClipDrive: case kLimitThresh: case kFinalDrive: case kPush:
-      return fmt("%.1f dB", v);
-    case kGlueThresh:
-      return fmt("%.0f dB", v);
-    case kLoudness:
-      return fmt("%.1f", v);
-    case kLow: case kAir: case kTube:
-      return fmt("%.0f", v);
-    case kTarget:
-      return fmt("%.0f LUFS", v);
-    case kOversampling: {
-      static const char* const names[3] = {"Off", "2x", "4x"};
-      return names[index];
-    }
-    case kHpMs: case kLsMs: case kLmMs: case kMidMs: case kHmMs: case kHsMs: {
-      static const char* const names[3] = {"Stereo", "Mid", "Side"};
-      return names[index];
-    }
-    case kHpFreq: {
-      const double hz = hpFreqHz(hpMs == 2, index);
-      return hz <= 0.0 ? "Off" : freqText(hz);
-    }
-    case kLsFreq: case kLmFreq: case kMidFreq: case kHmFreq: case kHsFreq:
-    case kLowFreq: case kAirFreq:
-      return freqText(v);
-    case kLmQ: case kMidQ: case kHmQ: {
-      static const char* const names[4] = {"Wide", "Medium", "Narrow", "Surgical"};
-      return names[index];
-    }
-    case kGlueAttack:  return fmt("%g ms", v);
-    case kGlueRelease: return v <= 0.0 ? "Auto" : fmt("%g s", v);
-    case kGlueRatio:   return fmt("%g:1", v);
-    case kGlueMix: case kFinalEffect: case kFinalCurve:
-      return fmt("%.0f %%", v);
-    case kGlueScHpf:   return v <= 0.0 ? "Off" : freqText(v);
-    case kLimitStyle: {
-      static const char* const names[3] = {"Modern", "Punch", "Dyn"};
-      return names[index];
-    }
-    case kLimitRelease:   // DYN moves around this value with the program
-      return fmt("%.0f ms", limitReleaseMs(limitStyle, index)) + (limitStyle == 2 ? " prog." : "");
-    case kFinalMode:   return index ? "Clip" : "Inflate";
-    default:           return fmt("%.0f", static_cast<double>(index));
-  }
-}
-
-std::string lowered(std::string s) {
-  s.erase(std::remove_if(s.begin(), s.end(), [](unsigned char c) { return std::isspace(c); }), s.end());
-  for (char& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-  return s;
+// The whole table of normalized values with the current HI PASS M/S and LIMIT STYLE (the only ones the texts read).
+void textNorms(Steinberg::Vst::EditController& c, double* all) {
+  loadDefaults(all);
+  all[kHpMs] = c.getParamNormalized(kHpMs);
+  all[kLimitStyle] = c.getParamNormalized(kLimitStyle);
 }
 } // namespace
 
@@ -165,8 +87,27 @@ Steinberg::tresult PLUGIN_API Controller::initialize(Steinberg::FUnknown* contex
   // Writable (no kIsReadOnly): the editor sets 1, the processor acts and writes 0 back.
   parameters.addParameter(STR16("Clear Clips"), nullptr, 1, 0.0, ParameterInfo::kIsHidden, kClearClips);
   parameters.addParameter(STR16("Reset Integrated"), nullptr, 1, 0.0, ParameterInfo::kIsHidden, kResetIntegrated);
+  // Stage values for the screen (read-only, after the triggers: the ids above keep their numbers)
+  addDisplay("Display Glue In", 0, kDispGlueIn);
+  addDisplay("Display Glue GR Before Mix", 0, kDispGlueGr);
+  addDisplay("Display Limit In", 0, kDispLimitIn);
+  addDisplay("Display Limit Threshold", 0, kDispLimitThresh);
+  addDisplay("Display Clip In", 0, kDispClipIn);
+  addDisplay("Display Final In", 0, kDispFinalIn);
 
   return Steinberg::kResultOk;
+}
+
+// The editor for ViewType::kEditor; nullptr for any other name. Built without the editor (the controller tests, which
+// link no VSTGUI) there is none either: the host then shows its generic UI.
+Steinberg::IPlugView* PLUGIN_API Controller::createView(Steinberg::FIDString name) {
+#if HAPPY_ENDING_WITH_EDITOR
+  if (name && std::strcmp(name, Steinberg::Vst::ViewType::kEditor) == 0)
+    return new Ui::Editor(this);
+#else
+  (void)name;
+#endif
+  return nullptr;
 }
 
 Steinberg::tresult PLUGIN_API Controller::setComponentState(Steinberg::IBStream* state) {
@@ -174,7 +115,8 @@ Steinberg::tresult PLUGIN_API Controller::setComponentState(Steinberg::IBStream*
   if (!readStateBytes(state, bytes))
     return Steinberg::kResultFalse;
   double norm[kNumParams];
-  if (!deserializeState(bytes.data(), bytes.size(), norm))
+  Decor stored;
+  if (!deserializeState(bytes.data(), bytes.size(), norm, stored))
     return Steinberg::kResultFalse;
   const int osBefore = indexFromNorm(kOversampling, getParamNormalized(kOversampling));
   loadingState_ = true;  // one restart request after the whole load, not one per parameter
@@ -187,7 +129,68 @@ Steinberg::tresult PLUGIN_API Controller::setComponentState(Steinberg::IBStream*
   const int osAfter = indexFromNorm(kOversampling, getParamNormalized(kOversampling));
   if (osAfter != osBefore)
     oversamplingChanged(osAfter);
+
+  // The decor: no seed in the state (v1, or a corrupt decor part): keep the one already known (usually the
+  // processor's, sent from its setState); with none, generate one and tell the processor.
+  Decor copy;
+  bool generated = false;
+  {
+    std::lock_guard<std::mutex> lk(decorMutex_);
+    if (stored.seed == 0)
+      stored.seed = decor_.seed;
+    generated = ensureSeed(stored);
+    decor_ = std::move(stored);
+    copy = decor_;
+  }
+  ++decorRevision_;
+  if (generated)
+    sendDecor(copy);
   return Steinberg::kResultOk;
+}
+
+Steinberg::tresult PLUGIN_API Controller::notify(Steinberg::Vst::IMessage* message) {
+  Decor d;
+  if (!decodeDecorMessage(message, d))
+    return EditController::notify(message);
+  {
+    std::lock_guard<std::mutex> lk(decorMutex_);
+    if (d.seed == 0)
+      d.seed = decor_.seed;   // never clears the seed
+    decor_ = std::move(d);
+  }
+  ++decorRevision_;
+  return Steinberg::kResultOk;
+}
+
+Decor Controller::decor() const {
+  std::lock_guard<std::mutex> lk(decorMutex_);
+  return decor_;
+}
+
+void Controller::editDecor(Decor d) {
+  sanitizeDecor(d);
+  {
+    std::lock_guard<std::mutex> lk(decorMutex_);
+    if (d.seed == 0)
+      d.seed = decor_.seed;
+    ensureSeed(d);
+    decor_ = d;
+  }
+  ++decorRevision_;
+  sendDecor(d);
+  // Not a parameter: tell the host the project changed so the new decor gets saved.
+  if (Steinberg::FUnknownPtr<Steinberg::Vst::IComponentHandler2> handler2{componentHandler})
+    handler2->setDirty(true);
+}
+
+void Controller::sendDecor(const Decor& d) {
+  if (!getPeer())
+    return;
+  if (Steinberg::Vst::IMessage* msg = allocateMessage()) {
+    encodeDecorMessage(msg, d);
+    sendMessage(msg);
+    msg->release();
+  }
 }
 
 Steinberg::tresult PLUGIN_API Controller::setParamNormalized(Steinberg::Vst::ParamID tag, Steinberg::Vst::ParamValue value) {
@@ -232,10 +235,9 @@ Steinberg::tresult PLUGIN_API Controller::getParamStringByValue(Steinberg::Vst::
     Steinberg::Vst::ParamValue v, Steinberg::Vst::String128 string) {
   if (tag >= kNumParams)
     return EditController::getParamStringByValue(tag, v, string);
-  const auto id = static_cast<ParamID>(tag);
-  const int hpMs = indexFromNorm(kHpMs, getParamNormalized(kHpMs));
-  const int style = indexFromNorm(kLimitStyle, getParamNormalized(kLimitStyle));
-  asciiToStr128(paramText(id, indexFromNorm(id, v), hpMs, style), string);
+  double all[kNumParams];
+  textNorms(*this, all);
+  asciiToStr128(Ui::formatValue(static_cast<ParamID>(tag), v, all), string);
   return Steinberg::kResultOk;
 }
 
@@ -243,36 +245,11 @@ Steinberg::tresult PLUGIN_API Controller::getParamValueByString(Steinberg::Vst::
     Steinberg::Vst::TChar* string, Steinberg::Vst::ParamValue& valueNormalized) {
   if (tag >= kNumParams || !string)
     return EditController::getParamValueByString(tag, string, valueNormalized);
-  const auto id = static_cast<ParamID>(tag);
   std::string typed;
   for (const Steinberg::Vst::TChar* c = string; *c; ++c) typed.push_back(*c < 128 ? static_cast<char>(*c) : '?');
-  const std::string want = lowered(typed);
-  const int hpMs = indexFromNorm(kHpMs, getParamNormalized(kHpMs));
-  const int style = indexFromNorm(kLimitStyle, getParamNormalized(kLimitStyle));
-  const int steps = kParams[id].steps;
-  for (int i = 0; i < steps; ++i)
-    if (lowered(paramText(id, i, hpMs, style)) == want) {
-      valueNormalized = normFromIndex(id, i);
-      return Steinberg::kResultOk;
-    }
-  // A bare number picks the nearest value of the table (e.g. "-3" for a gain)
-  const ValueTable t = valueTable(id);
-  char* end = nullptr;
-  const double num = std::strtod(typed.c_str(), &end);
-  if ((t.size || id == kLimitRelease) && end != typed.c_str()) {
-    // HI PASS FREQ is read on the scale of the current HI PASS M/S (SIDE has the mono-bass scale); LIMIT RELEASE in the ms
-    // of the current style
-    const auto valueAt = [&](int i) {
-      if (id == kLimitRelease) return limitReleaseMs(style, i);
-      return id == kHpFreq ? hpFreqHz(hpMs == 2, i) : t.data[i];
-    };
-    int best = 0;
-    for (int i = 1; i < steps; ++i)
-      if (std::fabs(valueAt(i) - num) < std::fabs(valueAt(best) - num)) best = i;
-    valueNormalized = normFromIndex(id, best);
-    return Steinberg::kResultOk;
-  }
-  return Steinberg::kResultFalse;
+  double all[kNumParams];
+  textNorms(*this, all);
+  return Ui::parseValue(static_cast<ParamID>(tag), typed, all, valueNormalized) ? Steinberg::kResultOk : Steinberg::kResultFalse;
 }
 
 } // namespace FairyTapes::HappyEnding

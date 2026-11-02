@@ -11,8 +11,10 @@
  * Header-only and free of VSTGUI so it is unit tested (tests/test_back_panel.cpp). Generalised from The Stripper's back
  * (src/the-stripper/src/ui/back_panel.h, back_view.cpp): same geometry, word wrapping ported as is. All visible text is
  * English. Coordinates are editor px of the rack panel: 1000 x 628 (Back::kTall, the constants below) or 1000 x 470
- * (Back::kShort, Pillow Talk since 2026-10-21: the same template with lower boxes). BackView picks the layout from its
- * height (backLayoutFor). Every back has a ROUTING tab (2026-10-23): the diagram comes from the plug-in (fairy_ui/routing.h).
+ * (Back::kShort, Pillow Talk since 2026-10-21: the same template with lower boxes). Every plug-in has its own panel size,
+ * the back too (2026-10-31): all the geometry, horizontal as well as vertical, is in the BackLayout the plug-in passes to
+ * BackView; without one BackView picks kTall or kShort from its height (backLayoutFor). Every back has a ROUTING tab
+ * (2026-10-23): the diagram comes from the plug-in (fairy_ui/routing.h).
  */
 #pragma once
 
@@ -69,9 +71,12 @@ constexpr BackBox kFlowBox{24, 102, 952, 388}, kLegendBox{24, 508, 952, 102};   
 constexpr double kLegendSymbolY = 552, kLegendNoteBaseline = 592;
 } // namespace Back
 
-// The vertical layout of the template for one panel height (the horizontal one never changes).
+// The geometry of the template for one panel size: height and width, the header links, the boxes (a BackBox carries its
+// own x and width, so the columns and the full-width boxes of any panel width are just numbers here), the credit columns.
+// Text that hangs on the left edge (title, brand, label inset) keeps the Back:: constants.
 struct BackLayout {
   double height;
+  double width;
   BackBox appearance, behaviour, notes;
   double subtitleBaseline, firstRowY, rowStep;
   int maxRows;
@@ -84,38 +89,46 @@ struct BackLayout {
   double noticesFirstBaseline, noticesStep;
   BackBox custom, flow, legend;
   double legendSymbolY, legendNoteBaseline;
+  double headerRight;                                        // right edge of the "PLUGIN · DESCRIPTION" line and "<- BACK"
+  double lastTabRight, tabSpacing;                           // right edge of the last tab link, step between the links
+  double creditNameX, creditAuthorX, creditLicenseRight;     // COMPONENTS AND LICENSES columns (the last is right-aligned)
 };
 
 namespace Back {
 // 1000 x 628 (stripper_rack.html)
-constexpr BackLayout kTall{kHeight,
+constexpr BackLayout kTall{kHeight, kWidth,
                            kAppearanceBox, kBehaviourBox, kNotesBox,
                            kSubtitleBaseline, kFirstRowY, kRowStep, kMaxRows, kNotesFirstBaseline, kNotesStep,
                            kCreditsTitleBox, kVersionBaseline, kLicenseFirstBaseline, kLicenseStep,
                            kComponentsBox, kCreditFirstBaseline, kCreditMaxStep, kCreditLastBaseline,
                            kNoticesBox, kNoticesFirstBaseline, kNoticesStep,
-                           kCustomBox, kFlowBox, kLegendBox, kLegendSymbolY, kLegendNoteBaseline};
+                           kCustomBox, kFlowBox, kLegendBox, kLegendSymbolY, kLegendNoteBaseline,
+                           kHeaderRight, kLastTabRight, kTabSpacing, kCreditNameX, kCreditAuthorX, kCreditLicenseRight};
 // 1000 x 470 (pillow_rack.html, 2026-10-21): CREDITS with rows of 22 px, SETTINGS with a row every 40 px, NOTES under them
-constexpr BackLayout kShort{470,
+constexpr BackLayout kShort{470, kWidth,
                             {24, 102, 462, 234}, {514, 102, 462, 234}, {24, 350, 952, 98},
                             130, 140, 40, 5, 376, 18,
                             {24, 102, 952, 92}, 132, 150, 16,
                             {24, 210, 952, 140}, 238, 22, 330,
                             {24, 366, 952, 82}, 394, 18,
-                            {24, 102, 952, 346}, {24, 102, 952, 250}, {24, 366, 952, 82}, 398, 434};
+                            {24, 102, 952, 346}, {24, 102, 952, 250}, {24, 366, 952, 82}, 398, 434,
+                            kHeaderRight, kLastTabRight, kTabSpacing, kCreditNameX, kCreditAuthorX, kCreditLicenseRight};
 } // namespace Back
 
 inline const BackLayout& backLayoutFor(double panelHeight) { return panelHeight < 550 ? Back::kShort : Back::kTall; }
 
-// The link of tab `index` of `count` (right-aligned text), and "<- BACK" at the right edge.
-inline BackBox tabLinkBox(int index, int count) {
-  const double right = Back::kLastTabRight - Back::kTabSpacing * (count - 1 - index);
+// The link of tab `index` of `count` (right-aligned text), and "<- BACK" at the right edge. Without a layout: kTall's.
+inline BackBox tabLinkBox(int index, int count, const BackLayout& L) {
+  const double right = L.lastTabRight - L.tabSpacing * (count - 1 - index);
   return {right - Back::kLinkWidth, Back::kLinkTop, Back::kLinkWidth, Back::kLinkHeight};
 }
-inline BackBox backLinkBox() {
-  return {Back::kHeaderRight - Back::kLinkWidth, Back::kLinkTop, Back::kLinkWidth, Back::kLinkHeight};
+inline BackBox tabLinkBox(int index, int count) { return tabLinkBox(index, count, Back::kTall); }
+inline BackBox backLinkBox(const BackLayout& L) {
+  return {L.headerRight - Back::kLinkWidth, Back::kLinkTop, Back::kLinkWidth, Back::kLinkHeight};
 }
+inline BackBox backLinkBox() { return backLinkBox(Back::kTall); }
 // "BACK ->" on the front panel: the same place as "<- BACK" on the back (one link only, DESIGN_SYSTEM.md).
+inline BackBox frontBackLinkBox(const BackLayout& L) { return backLinkBox(L); }
 inline BackBox frontBackLinkBox() { return backLinkBox(); }
 
 // ---- What a plug-in supplies -----------------------------------------------------------------------------------------
@@ -203,7 +216,7 @@ struct BackContent {
 inline const BackBox& columnBox(BackColumn c, const BackLayout& L = Back::kTall) {
   return c == BackColumn::Behaviour ? L.behaviour : L.appearance;
 }
-inline double labelX(BackColumn c) { return columnBox(c).x + Back::kLabelInset; }
+inline double labelX(BackColumn c, const BackLayout& L = Back::kTall) { return columnBox(c, L).x + Back::kLabelInset; }
 inline double itemRowY(int row, const BackLayout& L = Back::kTall) { return L.firstRowY + L.rowStep * row; }
 
 // The row of items[index] within its column (items are laid out in order, one row each).

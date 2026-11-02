@@ -2,11 +2,11 @@
 
 Happy Ending is a mastering chain for the master bus, in VST3 format. It puts the usual finishing tools in one fixed order: a fine EQ, a Pultec-style EQ, a bus compressor, a clipper, a limiter and a final loudness stage, all under one output ceiling. Every control is stepped, the ranges are narrow and the starting values already suit a master, so a few moves are enough to turn a finished mix into a clean, loud master.
 
-**Status:** the audio engine and the VST3 plug-in are done, with their tests (plan Tasks 1-13 and 15). The by-ear tuning of the starting values (Task 14) is still to do, and the delay compensation has been checked by the tests but not yet in a host. The graphic editor has its own plan and is not built yet: the host shows its generic parameter list, so the meters, the LUFS readout and the MATCH, LISTEN and SET buttons are not reachable for now.
+**Status:** the audio engine and the VST3 plug-in are done, with their tests (plan Tasks 1-13 and 15). The by-ear tuning of the starting values (Task 14) is still to do, and the delay compensation has been checked by the tests but not yet in a host. The graphic editor is being built (plan `docs/superpowers/plans/2026-10-31-happy-ending-editor.md`); the picture below is the HTML preview it reproduces.
 
 ![Happy Ending panel](docs/images/panel.png)
 
-*The panel as drawn by the HTML preview. The editor is not built yet; the host shows its generic parameter list.*
+*The panel, from the HTML preview the editor reproduces (the editor is still being built).*
 
 ## When to use it
 
@@ -165,7 +165,7 @@ Each oversampler adds 69 samples at 2× and 76 at 4× (at the base rate), and th
 
 ## Bypass
 
-BYPASS crossfades over 64 samples to the input delayed by the reported latency, so it is sample-exact once settled and stays aligned with the other tracks. The chain keeps running behind it, so the meters and the LUFS reading stay live. LISTEN and SET are never saved in the state and always start off.
+BYPASS crossfades over 64 samples to the input delayed by the reported latency, so it is sample-exact once settled and stays aligned with the other tracks. The chain keeps running behind it, so the meters and the LUFS reading stay live. LISTEN and SET are never saved in the state and always start off. The state is versioned: v2 adds the instance decor (wear seed, screw angles, tape texts); v1 projects load with a fresh decor, and a v2 whose decor part is damaged still loads its parameters.
 
 ## Install and build
 
@@ -188,11 +188,11 @@ cmake --build /tmp/he-build --target happy_ending_params_tests happy_ending_fine
   happy_ending_clip_tests happy_ending_limiter_tests happy_ending_final_tests \
   happy_ending_loudness_tests happy_ending_loudness_macro_tests happy_ending_engine_tests \
   happy_ending_state_tests happy_ending_display_tests happy_ending_controller_tests \
-  happy_ending_factory_test happy_ending_processor_level_test -j2
+  happy_ending_factory_test happy_ending_processor_level_test happy_ending_state_module_test -j2
 ctest --test-dir /tmp/he-build -R happy_ending --output-on-failure
 ```
 
-One executable per block, with the `RUN_TEST` / `ASSERT_TRUE` harness and synthetic signals. The two module tests (`factory`, `processor_level`) load `dist/HappyEnding.vst3`: build `happy_ending` first, or they are skipped (exit 77). They are not built on Windows. The others link the code directly. The tests cover the parameter table, every DSP block (curves against analog prototypes, M/S, LISTEN, DYN, GLUE reduction and MIX, level-matched CLIP, ceiling guarantees for every LIMIT style, SET, FINAL and METALHEAD, oversampler latency and flatness, BS.1770 reference loudness, LOUDNESS and MATCH), the engine (BYPASS, latency per oversampling, the safety limiter, all-max never above the ceiling, silence after the tail, no allocation in `process`), the saved state and the processor. All tuning values are read from `src/tuning.h`, never copied.
+One executable per block, with the `RUN_TEST` / `ASSERT_TRUE` harness and synthetic signals. The three module tests (`factory`, `processor_level`, `state_module`) load `dist/HappyEnding.vst3`: build `happy_ending` first, or they are skipped (exit 77). They are not built on Windows. The others link the code directly. The tests cover the parameter table, every DSP block (curves against analog prototypes, M/S, LISTEN, DYN, GLUE reduction and MIX, level-matched CLIP, ceiling guarantees for every LIMIT style, SET, FINAL and METALHEAD, oversampler latency and flatness, BS.1770 reference loudness, LOUDNESS and MATCH), the engine (BYPASS, latency per oversampling, the safety limiter, all-max never above the ceiling, silence after the tail, no allocation in `process`), the saved state (v2: parameters plus the instance decor: wear seed, screw angles, tape texts), the processor and the editor (layout, value texts, screen model, preferences, decor). All tuning values are read from `src/tuning.h`, never copied.
 
 ## Tuning
 
