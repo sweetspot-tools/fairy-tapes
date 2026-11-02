@@ -1,8 +1,9 @@
 // Happy Ending GUI: the plugin editor (1280 x 890 rack panel, views built in code, no .uidesc).
 // Layers from the bottom (docs/DESIGN_SYSTEM.md): panel (PanelView: body, grain, boxes with their titles on the bottom
 // border, the screen's untitled box, the LUFS screen's box, header lines, printed texts, engine tags), the silkscreen, the
-// controls, the LEVEL views and the shared screen; wear, paper tapes, screws and the back come with the later tasks of the
-// editor plan (docs/superpowers/plans/2026-10-31-happy-ending-editor.md, Tasks 12-14).
+// controls, the LEVEL views and the shared screen; wear, paper tapes and screws (below) lie between the silkscreen and the
+// screen; the back comes with the later tasks of the editor plan (docs/superpowers/plans/2026-10-31-happy-ending-editor.md,
+// Tasks 13-14).
 // Window: 1280 x 890 logical px times the host's content scale factor (IPlugViewContentScaleSupport) times the SIZE of
 // this plug-in's preferences (ui/prefs.h, HappyEnding.prefs, key size=75|90|100|125), read when the view is made and
 // again when it opens; the frame is zoomed by the same factor, so the views keep their logical coordinates.
@@ -29,8 +30,21 @@
 // SCREEN (Task 11, ui/screen_view.h): one view on kScreenRect for the five views EQ, GLUE, CLIP, LIMIT and FINAL (the view
 // buttons pick it; the controller keeps it). refreshFromController() hands it the stored table and the UiState, the timer
 // run the display parameters (both histories grow on every run); it dims with BYPASS only.
-// Controller::decor() has seed 0 until the processor, a state or an edit gives one: the seeded parts (wear, tapes,
-// screws, Task 12) wait for a decor revision with a seed; the panel layer does not depend on it.
+// WEAR, TAPES, SCREWS (Task 12; layers between the silkscreen and the screen / controls): the wear marks (FairyTapes::Ui::
+// WearView, lets clicks through), the paper tapes (TapeView, writable) and the four corner screws (FairyTapes::Ui::ScrewView,
+// turnable). The seed, the tape texts and the screw rotations are the instance decor (Controller::decor, saved with the
+// project); the Wear level, the tape font and the values font are the user's preferences (ui/prefs.h, read when the
+// editor is made and when it opens; a missing or bad file gives Light / Zeyada / handwritten values). Controller::decor() has
+// seed 0 until the processor, a state or an edit gives one: seed 0 means "decor not ready" and nothing seeded is drawn (no
+// marks, no tape, no screw; the values still use the tape font, with a fixed variation seed); the timer builds them when
+// Controller::decorRevision changes to a decor with a seed, and applies a changed decor (state recall, undo, another
+// editor) only then. A click on a tape opens a text field over it (Enter or leaving it confirms, Escape cancels; printable
+// ASCII, at most 14 characters, through one Controller::editDecor); the end of a screw drag stores its rotation (one
+// editDecor per gesture). reroll() gives the instance a new seed, screw rotations 0 and blank tapes.
+// Values font: the yellow values under the knobs and the cycling selectors are drawn in the tape font with the
+// normalized digit height (fairy_ui/tape_font.h) while "handwritten values" is on (the default); the LUFS screen is an
+// instrument readout, not a printed value, and stays in the standard font (as the preview: it only writes the knob and
+// selector values by hand).
 #pragma once
 
 #include "params.h"
@@ -39,6 +53,8 @@
 #include "ui/prefs.h"
 
 #include "fairy_ui/skin.h"
+#include "fairy_ui/tape_font.h"
+#include "fairy_ui/wear.h"
 
 #include "public.sdk/source/vst/vstguieditor.h"
 #include "public.sdk/source/vst/vstparameters.h"
@@ -49,7 +65,9 @@
 #include <array>
 #include <atomic>
 #include <filesystem>
+#include <cstdint>
 #include <string>
+#include <vector>
 
 namespace VSTGUI {
 class CTextEdit;
@@ -59,7 +77,9 @@ class CViewContainer;
 namespace FairyTapes::Ui {
 class ClipLed;
 class NormalizedControl;
+class ScrewView;
 class SilkscreenView;
+class WearView;
 }
 
 namespace FairyTapes::HappyEnding {
@@ -74,6 +94,7 @@ class LevelBar;
 class LufsView;
 class PanelView;
 class ScreenDisplayView;
+class TapeView;
 struct EditorPreview;   // offscreen render tool (tools/render_editor.cpp)
 struct EditorTest;      // headless editor tests (tests/test_editor.cpp)
 
@@ -84,6 +105,7 @@ public:
   // Logical size; the window is this times the host's content scale factor times SIZE.
   static constexpr int kWidth = kEditorWidth;
   static constexpr int kHeight = kEditorHeight;
+  static constexpr int kNumScrewViews = 4;   // one per kScrewPos (checked against the state in editor.cpp)
 
   // Reads SIZE from the user's preferences (a missing or bad file: 100 %), so the host's first getSize is right.
   explicit Editor(Steinberg::Vst::EditController* controller);
@@ -95,6 +117,20 @@ public:
   // Edits are reported by the control listener below, not through the frame.
   void beginEdit(int32_t) override {}
   void endEdit(int32_t) override {}
+
+  // Wear level: the marks and the tapes for the level (Off: no mark and no tape; the screws stay).
+  void setWearLevel(WearLevel level);
+  WearLevel wearLevel() const { return wearLevel_; }
+  // Tape font: the writing on the tapes and the handwritten values.
+  void setTapeFont(TapeFont font);
+  TapeFont tapeFont() const { return tapeFont_; }
+  // Values font: the yellow values in the tape font (true) or in plain text.
+  void setValuesFont(bool handwritten);
+  bool valuesHandwritten() const { return valuesHandwritten_; }
+  // RE-ROLL: a new seed for the instance (new wear, tapes and screws), screw rotations back to 0, tapes blank.
+  void reroll();
+  // The seed the decor is drawn with; 0 while the decor is not ready.
+  std::uint32_t wearSeed() const { return seed_; }
 
   // IPlugView: fixed size (logical x host factor x SIZE).
   Steinberg::tresult PLUGIN_API isPlatformTypeSupported(Steinberg::FIDString type) override;
@@ -153,7 +189,28 @@ private:
   void closeValueEdit(bool confirm);
   void commitTypedValue(Steinberg::Vst::ParamID id, const std::string& typed);
 
-  // Reads the preferences in `file` (any problem: the defaults) and applies them: for now SIZE (the window).
+  // The controller's decor when its revision changed: seed (wear, tapes, screws), tape texts, screw rotations.
+  void refreshDecor();
+  const std::vector<FairyTapes::Ui::WearMark>& wearMarks(std::uint32_t seed, WearLevel level);
+  // Marks, tapes and the handwriting for the current seed and level (nothing seeded while the seed is 0).
+  void applyWear();
+  // The silkscreen again after a change of the values font or of the seed (the handwriting varies with it).
+  void applyHandwriting();
+  // Tape views for the current seed and level (removed and created again), texts from tapeTexts_.
+  void rebuildTapes();
+  void refreshTapeTexts();
+  // A click on a tape: a text field over it with what is written.
+  void editTape(TapeView* tape);
+  void commitTapeText(int slot, const std::string& typed);
+  // Removes the tape's text field; without `confirm` what was typed is dropped (Escape).
+  void closeTapeEdit(bool confirm);
+  // Screw views for the current seed and the decor's rotations (created once, then updated in place).
+  void placeScrews();
+  // The end of a drag on screw `index`, which now shows `shownDeg`.
+  void screwTurned(int index, double shownDeg);
+
+  // Reads the preferences in `file` (any problem: the defaults) and applies them: SIZE (the window), Wear, tape font, values
+  // font.
   void loadAppearance(const std::filesystem::path& file);
   // The window for the host factor and SIZE: the reported size (setRect), the frame's zoom and, while the views are
   // shown, a request to the host (IPlugFrame::resizeView).
@@ -176,12 +233,33 @@ private:
   std::array<FairyTapes::Ui::ClipLed*, 9> clips_{};
   GrTags* grTags_ = nullptr;
   LufsView* lufs_ = nullptr;
+  FairyTapes::Ui::WearView* wear_ = nullptr;
+  std::vector<TapeView*> tapes_;                                         // layoutFromSeed order
+  std::array<FairyTapes::Ui::ScrewView*, kNumScrewViews> screws_{};      // kScrewPos order
   ScreenDisplayView* screen_ = nullptr;   // the shared screen (Task 11)
   std::array<ActLed*, 2> actLeds_{};
   UiState state_{};   // as last read from the controller (dims the GR rows, the clip LEDs and the ACT LEDs)
   VSTGUI::CTextEdit* valueEdit_ = nullptr;               // the open typed value field, if any
   Steinberg::Vst::ParamID valueEditId_ = kNumParams;
   bool valueEditReported_ = false;                       // the field already reported what was typed
+  VSTGUI::CTextEdit* tapeEdit_ = nullptr;                // the tape's text field, while open
+  int tapeEditSlot_ = -1;
+  bool tapeEditReported_ = false;                        // the field already sent its text (Enter or focus lost)
+
+  // Appearance: the user's preferences as applied, and the instance decor as last seen.
+  WearLevel wearLevel_ = WearLevel::Light;
+  TapeFont tapeFont_ = TapeFont::Zeyada;
+  bool valuesHandwritten_ = true;                       // the yellow values in the tape font
+  FairyTapes::Ui::TapeFontId valuesFont_ = FairyTapes::Ui::TapeFontId::Zeyada;   // tapeFontIdOf(tapeFont_)
+  std::uint32_t seed_ = 0;                              // the decor's seed; 0 = not ready, nothing seeded is drawn
+  std::uint32_t decorRevision_ = 0;
+  bool decorKnown_ = false;
+  std::vector<std::string> tapeTexts_;
+  std::array<float, kNumScrewViews> screwAngles_{};
+  std::vector<FairyTapes::Ui::WearMark> marks_;         // cache of the last generated marks
+  std::uint32_t marksSeed_ = 0;
+  WearLevel marksLevel_ = WearLevel::Off;
+  bool marksValid_ = false;
 
   // The watched parameters: the stored table, then LISTEN and SET.
   static constexpr int kNumWatched = static_cast<int>(kNumParams) + 2;

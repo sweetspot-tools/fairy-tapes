@@ -11,6 +11,9 @@
 #include "ui/readouts.h"
 #include "ui/screen_model.h"
 #include "ui/screen_view.h"
+#include "ui/screw_angles.h"
+#include "ui/tape_view.h"
+#include "ui/tapes.h"
 #include "ui/value_text.h"
 
 #include "fairy_ui/draw_util.h"
@@ -18,7 +21,10 @@
 #include "fairy_ui/meters.h"
 #include "fairy_ui/rack_controls.h"
 #include "fairy_ui/sanitize.h"
+#include "fairy_ui/screw_view.h"
 #include "fairy_ui/silkscreen_view.h"
+#include "fairy_ui/tape_draw.h"
+#include "fairy_ui/wear_view.h"
 
 #include "base/source/updatehandler.h"
 #include "vstgui/lib/cdrawcontext.h"
@@ -36,6 +42,7 @@
 #include "vstgui/lib/platform/platformfactory.h"
 #endif
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <functional>
@@ -52,7 +59,11 @@ using FairyTapes::Ui::RackKnob;
 using FairyTapes::Ui::RackLed;
 using FairyTapes::Ui::RackLitChoice;
 using FairyTapes::Ui::RackToggle;
+using FairyTapes::Ui::ScrewView;
 using FairyTapes::Ui::SilkscreenView;
+using FairyTapes::Ui::TapeAlign;
+using FairyTapes::Ui::WearMark;
+using FairyTapes::Ui::WearView;
 using Steinberg::Vst::ParamID;
 
 namespace {
@@ -61,7 +72,14 @@ constexpr uint32_t kTimerMs = 30;
 constexpr double kTimerSeconds = kTimerMs / 1000.0;   // the step of the meters' peak hold
 constexpr CColor kFrameBackground(0x16, 0x16, 0x17);
 // Tags of the views that are not a parameter (outside every parameter, hidden and display id).
+constexpr int32_t kTapeEditTag = 9000;   // + slot
 constexpr int32_t kValueEditTag = 9100, kMatchTag = 9200, kViewsTag = 9300;
+constexpr CCoord kTapeEditMinWidth = 120, kTapeEditHeight = 24;
+static_assert(kMaxTapeTexts == kNumTapeSlots, "one stored tape text per tape slot");
+static_assert(Editor::kNumScrewViews == kNumScrews, "one view per stored screw angle");
+static_assert(kNumScrews == static_cast<int>(sizeof(kScrewPos) / sizeof(kScrewPos[0])), "one stored angle per screw");
+// The seed that varies the handwritten values while the decor has none yet.
+constexpr std::uint32_t kFallbackHandSeed = FairyTapes::Ui::kDefaultWearSeed;
 constexpr int kNumViews = 5;   // ScreenView: EQ, GLUE, CLIP, LIMIT, FINAL (kActions[1..5])
 static_assert(static_cast<int>(ScreenView::Final) == kNumViews - 1, "one view button per screen view");
 
@@ -116,7 +134,18 @@ std::string valueText(ParamID id, const double* norm) {
   return formatValue(static_cast<FairyTapes::HappyEnding::ParamID>(id), norm[id], norm);
 }
 
-// The text field of a typed value (The Stripper's pattern): Escape cancels, Enter or leaving the field confirms.
+// RE-ROLL: the decor with a new seed (new wear, tapes and screws), the screws' rotations back to 0 and the tapes blank.
+// A seed of 0 or equal to the current one is replaced by another one (as Pillow Talk's rerolledDecor).
+Decor rerolledDecor(Decor d, std::uint32_t newSeed) {
+  if (newSeed == 0 || newSeed == d.seed) newSeed = (d.seed ^ 0x9E3779B9u) * 2654435761u + 0x7F4A7C15u;
+  if (newSeed == 0 || newSeed == d.seed) newSeed = d.seed + 1u ? d.seed + 1u : 1u;
+  d.seed = newSeed;
+  for (float& a : d.screwAngles) a = 0.f;
+  d.tapeTexts.clear();
+  return d;
+}
+
+// The text field of a typed value or of a tape (The Stripper's pattern): Escape cancels, Enter or leaving the field confirms.
 // CTextEdit itself would still report the typed text when Escape comes through the platform field.
 class ValueEdit : public CTextEdit {
 public:
@@ -303,6 +332,7 @@ void PLUGIN_API Editor::close() {
   }
   unwatchParameters();
   closeValueEdit(true);   // what was typed is kept, as when the field loses the focus
+  closeTapeEdit(true);
   if (frame) {
     // Removing the views closes any open knob gesture (controlEndEdit -> endEdit).
     frame->removeAll(true);
@@ -319,6 +349,9 @@ void Editor::resetViewPointers() {
   root_ = nullptr;
   panel_ = nullptr;
   silk_ = nullptr;
+  wear_ = nullptr;
+  tapes_.clear();
+  screws_.fill(nullptr);
   controls_.fill(nullptr);
   match_ = nullptr;
   views_ = nullptr;
@@ -331,11 +364,14 @@ void Editor::resetViewPointers() {
   actLeds_.fill(nullptr);
   valueEdit_ = nullptr;
   valueEditId_ = kNumParams;
+  tapeEdit_ = nullptr;
+  tapeEditSlot_ = -1;
 }
 
 void Editor::createViews(CViewContainer* parent) {
   auto* ctl = getController();
   const CRect all(0, 0, kWidth, kHeight);
+  refreshDecor();   // the instance seed, tape texts and screw rotations (no views yet; seed 0 = not ready)
   root_ = parent;
 
   // 1-2: panel body, grain, boxes, header lines, printed texts and engine tags.
@@ -344,27 +380,44 @@ void Editor::createViews(CViewContainer* parent) {
 
   // 3: the silkscreen: names, scales, values and button labels of the controls (clicks go through).
   silk_ = new SilkscreenView(all, silkscreenItems());
-  // The knob values at the preview's place (kKnobValueBaselineBelowCap), with the silkscreen's value look; the values
+  // The values: in the tape font with the normalized digit height while the values are handwritten (the default), else in the
+  // silkscreen's value look. The knob values stand at the preview's place (kKnobValueBaselineBelowCap) either way; the values
   // of the cycling selectors stay where the silkscreen puts them.
   silk_->setValueDrawer([this](CDrawContext* ctx, const FairyTapes::Ui::PrintText& t, const CPoint& origin, std::size_t item) {
     static const SharedPointer<CFontDesc> font = makeOwned<CFontDesc>("Arial", FairyTapes::Ui::kSilkValueSize, kBoldFace);
     if (!silk_) return false;
     const FairyTapes::Ui::PrintedItem& it = silk_->model().item(item);
-    if (it.kind != FairyTapes::Ui::PrintKind::Knob) return false;
+    const bool knob = it.kind == FairyTapes::Ui::PrintKind::Knob;
+    const CCoord baseline = knob ? origin.y + it.cy + it.capRadius + kKnobValueBaselineBelowCap : origin.y + t.y;
+    if (valuesHandwritten_) {
+      const TapeAlign align = t.align == FairyTapes::Ui::TextAlign::Left    ? TapeAlign::Left
+                              : t.align == FairyTapes::Ui::TextAlign::Right ? TapeAlign::Right
+                                                                            : TapeAlign::Center;
+      FairyTapes::Ui::drawTapeText(ctx, valuesFont_, t.text, CPoint(origin.x + t.x, baseline),
+                                   FairyTapes::Ui::normalizedFontSize(valuesFont_, FairyTapes::Ui::kSilkValueSize),
+                                   FairyTapes::Ui::kAmber, (seed_ ? seed_ : kFallbackHandSeed) + static_cast<std::uint32_t>(it.id) * 131u,
+                                   0.5, align);
+      return true;
+    }
+    if (!knob) return false;
     ctx->setFont(font);
     ctx->setFontColor(FairyTapes::Ui::kAmber);
     const CCoord w = ctx->getStringWidth(t.text.c_str());
-    ctx->drawString(t.text.c_str(), CPoint(origin.x + FairyTapes::Ui::alignedLeft(t.x, w, t.align),
-                                           origin.y + it.cy + it.capRadius + kKnobValueBaselineBelowCap));
+    ctx->drawString(t.text.c_str(), CPoint(origin.x + FairyTapes::Ui::alignedLeft(t.x, w, t.align), baseline));
     return true;
   });
   parent->addView(silk_);
 
-  // The shared screen (clicks go through): the view the controller remembers; its data comes from watchParameters() below and
-  // from the timer.
+  // 4-6: wear, paper tapes, screws (the wear lets clicks through; only the tapes and the screws catch them), then the shared
+  // screen (clicks go through) and the controls: the screws and the tapes are inserted before the screen. The screen shows
+  // the view the controller remembers; its data comes from watchParameters() below and from the timer.
+  wear_ = new WearView(all, wearMarks(seed_, wearLevel_));
+  parent->addView(wear_);
   screen_ = new ScreenDisplayView();
   if (owner_) screen_->setView(owner_->screenView());
   parent->addView(screen_);
+  placeScrews();    // inserted before the screen
+  rebuildTapes();   // inserted before the screws
 
   // The controls, one view per ControlSpec (the three LISTEN buttons share kListenBand as their tag).
   for (int i = 0; i < kNumControls; ++i) {
@@ -480,8 +533,10 @@ void PLUGIN_API Editor::update(Steinberg::FUnknown*, Steinberg::int32 message) {
 void Editor::onTimer() {
   if (pending_.exchange(false)) refreshFromController();
   updateDisplays();
+  refreshDecor();   // only when the controller's decor revision changed
   // The field reported what was typed when it lost the focus (Enter, a click elsewhere): it is done.
   if (valueEdit_ && frame && frame->getFocusView() != valueEdit_) closeValueEdit(false);
+  if (tapeEdit_ && frame && frame->getFocusView() != tapeEdit_) closeTapeEdit(false);
 }
 
 // The display parameters (hidden, written by the processor about every 33 ms) to the LEVEL views. A GR row that is
@@ -595,6 +650,11 @@ void Editor::valueChanged(CControl* control) {
     if (!static_cast<ValueEdit*>(valueEdit_)->cancelled) commitTypedValue(valueEditId_, valueEdit_->getText().getString());
     return;
   }
+  if (control == tapeEdit_) {   // the writing on a tape: stored unless Escape was pressed
+    tapeEditReported_ = true;
+    if (!static_cast<ValueEdit*>(tapeEdit_)->cancelled) commitTapeText(tapeEditSlot_, tapeEdit_->getText().getString());
+    return;
+  }
   if (control == views_) {   // editor state, not a parameter: the controller keeps it while the instance lives
     const auto view = static_cast<ScreenView>(FairyTapes::Ui::choiceIndexFromNorm(control->getValueNormalized(), kNumViews));
     if (owner_) owner_->setScreenView(view);
@@ -651,7 +711,7 @@ void Editor::switchSessionParametersOff() {
 
 // ---- Typed values ---------------------------------------------------------------------------------------------------
 void Editor::editValue(ParamID id) {
-  if (!root_ || valueEdit_ || id >= kNumParams) return;
+  if (!root_ || valueEdit_ || tapeEdit_ || id >= kNumParams) return;
   RackKnob* knob = nullptr;
   for (int i = 0; i < kNumControls && !knob; ++i)
     if (kControls[i].id == id) knob = dynamic_cast<RackKnob*>(controls_[static_cast<std::size_t>(i)]);
@@ -706,8 +766,191 @@ void Editor::loadAppearance(const std::filesystem::path& file) {
   } catch (...) {
     p = Prefs{};
   }
-  prefs_ = p;
+  prefs_ = p;   // the fields the editor does not show (notes) are kept for the next save
+  setWearLevel(p.wear);
+  setTapeFont(p.tapeFont);
+  setValuesFont(p.handwrittenValues);
   applyWindowSize();
 }
 
+// ---- Appearance and instance decor: wear, paper tapes, screws ------------------------------------------------------
+// The marks of the seed at the level; none while the seed is 0 (the decor is not ready).
+const std::vector<WearMark>& Editor::wearMarks(std::uint32_t seed, WearLevel level) {
+  static const std::vector<WearMark> none;
+  if (seed == 0) return none;
+  if (!marksValid_ || seed != marksSeed_ || level != marksLevel_) {
+    marks_ = FairyTapes::Ui::generateWear(seed, level, kWidth, kHeight);
+    marksSeed_ = seed;
+    marksLevel_ = level;
+    marksValid_ = true;
+  }
+  return marks_;
+}
+
+void Editor::refreshDecor() {
+  if (!owner_) return;
+  if (decorKnown_ && owner_->decorRevision() == decorRevision_) return;
+  const Decor d = owner_->decor();
+  decorRevision_ = owner_->decorRevision();
+  decorKnown_ = true;
+  const bool textsChanged = d.tapeTexts != tapeTexts_;
+  tapeTexts_ = d.tapeTexts;
+  for (int i = 0; i < kNumScrewViews; ++i) screwAngles_[static_cast<std::size_t>(i)] = d.screwAngles[i];
+  if (d.seed != 0 && d.seed != seed_) {
+    seed_ = d.seed;
+    applyWear();   // new marks and tapes (with the new texts), the handwriting of the new seed
+  } else if (textsChanged) {
+    refreshTapeTexts();
+  }
+  placeScrews();   // a new seed or new rotations (state recall, undo, re-roll); nothing while the seed is 0
+}
+
+void Editor::setWearLevel(WearLevel level) {
+  prefs_.wear = level;
+  if (level == wearLevel_) return;
+  wearLevel_ = level;
+  applyWear();
+}
+
+void Editor::setTapeFont(TapeFont font) {
+  prefs_.tapeFont = font;
+  if (font == tapeFont_) return;
+  tapeFont_ = font;
+  valuesFont_ = tapeFontIdOf(font);
+  for (TapeView* t : tapes_) t->setFont(valuesFont_);
+  applyHandwriting();
+}
+
+void Editor::setValuesFont(bool handwritten) {
+  prefs_.handwrittenValues = handwritten;
+  if (handwritten == valuesHandwritten_) return;
+  valuesHandwritten_ = handwritten;
+  applyHandwriting();
+}
+
+void Editor::applyWear() {
+  if (wear_) wear_->setMarks(wearMarks(seed_, wearLevel_));
+  rebuildTapes();
+  applyHandwriting();   // the handwriting varies with the seed
+}
+
+void Editor::applyHandwriting() {
+  if (silk_) silk_->invalid();
+}
+
+void Editor::reroll() {
+  if (!owner_) return;
+  closeTapeEdit(true);
+  owner_->editDecor(rerolledDecor(owner_->decor(), newRandomSeed()));
+  refreshDecor();   // the new revision: new wear, tapes and screws
+}
+
+void Editor::rebuildTapes() {
+  if (!root_) return;
+  closeTapeEdit(true);
+  for (TapeView* t : tapes_) root_->removeView(t, true);
+  tapes_.clear();
+  if (seed_ == 0) return;   // the decor is not ready
+  const WearLayout layout = layoutFromSeed(seed_, wearLevel_, Rect{0.f, 0.f, static_cast<float>(kWidth), static_cast<float>(kHeight)});
+  CView* above = screen_;   // above the wear, below the screws, the screen and the controls
+  for (ScrewView* s : screws_)
+    if (s) {
+      above = s;
+      break;
+    }
+  for (const TapePlacement& p : layout.tapes) {
+    auto* view = new TapeView(p, valuesFont_, seed_);
+    view->setText(p.slot < static_cast<int>(tapeTexts_.size()) ? tapeTexts_[static_cast<std::size_t>(p.slot)] : std::string());
+    view->onClick = [this](TapeView* t) { editTape(t); };
+    if (above) root_->addView(view, above);
+    else root_->addView(view);
+    tapes_.push_back(view);
+  }
+}
+
+void Editor::refreshTapeTexts() {
+  for (TapeView* t : tapes_) {
+    const int slot = t->slot();
+    t->setText(slot < static_cast<int>(tapeTexts_.size()) ? tapeTexts_[static_cast<std::size_t>(slot)] : std::string());
+  }
+}
+
+// A click on a tape: a text field over it with what is written; Enter or leaving it confirms, Escape cancels.
+void Editor::editTape(TapeView* tape) {
+  if (!root_ || !tape || tapeEdit_ || valueEdit_) return;
+  CRect box = tape->tapeRect();
+  const CPoint c = box.getCenter();
+  const CCoord w = std::max(box.getWidth() + 8, kTapeEditMinWidth);
+  box = CRect(c.x - w / 2, c.y - kTapeEditHeight / 2, c.x + w / 2, c.y + kTapeEditHeight / 2);
+  if (box.left < 0) box.offset(-box.left, 0);   // stays in the window
+  if (box.right > kWidth) box.offset(kWidth - box.right, 0);
+  auto* edit = new ValueEdit(box, this, kTapeEditTag + tape->slot(), tape->text().c_str());
+  edit->setFont(makeOwned<CFontDesc>("Arial", 13, kBoldFace));
+  edit->setFontColor(CColor(0x2b, 0x26, 0x20));
+  edit->setBackColor(CColor(0xd9, 0xcf, 0xa6));
+  edit->setFrameColor(CColor(0x8f, 0x85, 0x60));
+  edit->setHoriAlign(kCenterText);
+  tapeEdit_ = edit;
+  tapeEditSlot_ = tape->slot();
+  tapeEditReported_ = false;
+  root_->addView(edit);
+  if (frame) frame->setFocusView(edit);   // starts the editing
+}
+
+void Editor::commitTapeText(int slot, const std::string& typed) {
+  if (!owner_) return;
+  const Decor current = owner_->decor();
+  const Decor d = withTapeText(current, slot, typed);   // printable ASCII, at most 14 characters
+  if (d.tapeTexts == current.tapeTexts) return;          // nothing new: no edit, no dirty mark
+  tapeTexts_ = d.tapeTexts;
+  owner_->editDecor(d);
+  decorRevision_ = owner_->decorRevision();
+  refreshTapeTexts();
+}
+
+void Editor::closeTapeEdit(bool confirm) {
+  if (!tapeEdit_) return;
+  CTextEdit* edit = tapeEdit_;
+  if (!confirm) static_cast<ValueEdit*>(edit)->cancelled = true;
+  if (frame && frame->getFocusView() == edit) {
+    frame->setFocusView(nullptr);   // the field reports unless cancelled
+  } else if (confirm && !tapeEditReported_ && !static_cast<ValueEdit*>(edit)->cancelled) {
+    commitTapeText(tapeEditSlot_, edit->getText().getString());   // no focus to lose (no window yet): confirmed here
+  }
+  tapeEdit_ = nullptr;
+  tapeEditSlot_ = -1;
+  if (root_ && root_->isChild(edit)) root_->removeView(edit, true);
+}
+
+void Editor::placeScrews() {
+  if (!root_ || seed_ == 0) return;   // not before the decor has a seed
+  const auto specs = screwSpecs(seed_);
+  for (int i = 0; i < kNumScrewViews; ++i) {
+    const auto k = static_cast<std::size_t>(i);
+    const double shown = shownScrewAngle(specs[k].initialAngle, screwAngles_[k]);
+    if (ScrewView* v = screws_[k]) {
+      if (v->spec().cross != specs[k].cross || v->spec().missing != specs[k].missing ||
+          v->spec().initialAngle != specs[k].initialAngle)
+        v->setScrew(specs[k], shown);   // another seed: another screw
+      else
+        v->setAngle(shown);   // left alone while the user is turning it
+      continue;
+    }
+    auto* view = new ScrewView(specs[k], shown);
+    view->onTurned = [this, i](double angle) { screwTurned(i, angle); };
+    if (screen_) root_->addView(view, screen_);   // over the wear and the tapes, below the screen and the controls
+    else root_->addView(view);
+    screws_[k] = view;
+  }
+}
+
+// The end of a drag: the rotation from the seeded angle goes to the instance decor (one edit, one dirty mark).
+void Editor::screwTurned(int index, double shownDeg) {
+  if (!owner_ || index < 0 || index >= kNumScrews || !screws_[static_cast<std::size_t>(index)]) return;
+  const float user = userScrewAngle(shownDeg, screws_[static_cast<std::size_t>(index)]->spec().initialAngle);
+  const Decor d = withScrewAngle(owner_->decor(), index, user);
+  screwAngles_[static_cast<std::size_t>(index)] = d.screwAngles[index];
+  owner_->editDecor(d);
+  decorRevision_ = owner_->decorRevision();
+}
 } // namespace FairyTapes::HappyEnding::Ui

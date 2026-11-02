@@ -40,12 +40,14 @@ set(HAPPY_ENDING_ENGINE_SOURCES
 # the screen's model computes its EQ curves on). They build with HAPPY_ENDING_WITH_EDITOR
 # (Controller::createView gives the editor only then: the controller tests compile controller.cpp without VSTGUI).
 set(HAPPY_ENDING_EDITOR_SOURCES
+  src/ui/decor.cpp
   src/ui/editor.cpp
   src/ui/level_views.cpp
   src/ui/panel_view.cpp
   src/ui/prefs.cpp
   src/ui/screen_model.cpp
   src/ui/screen_view.cpp
+  src/ui/tape_view.cpp
 )
 
 # The shared assets (panel grain tile), for the tools and tests that run outside the bundle.

@@ -249,11 +249,11 @@ Note dell'esecuzione (2026-11-02): le righe di picco hanno 15 LED sulla scala �
 - Consumes: `Decor`, `Controller::decor/editDecor/decorRevision` (Task 3), `layoutFromSeed`, `Prefs` (Task 7), `WearView`, `ScrewView`, `TapeView` (modello Deep Throat).
 - Produces (come Deep Throat, Task 10): usura tra serigrafia e viti, nastri scrivibili (14 caratteri, invio o uscita confermano, Esc annulla, il testo va a `editDecor`), viti girevoli (una `editDecor` a fine trascinamento), `setWearLevel`, `setTapeFont`, `setValuesFont`, `reroll()`; il timer ridisegna il decor solo se `decorRevision()` cambia.
 
-- [ ] **Step 1: Scrivere i test:** `test_wear_off_has_no_marks_and_no_tapes`, `test_wear_level_change_redraws_without_rebuild`, `test_tape_text_edit_goes_to_decor`, `test_screw_drag_stores_angle_once`, `test_reroll_changes_seed_and_clears_decor`, `test_prefs_missing_file_opens_with_defaults`, `test_missing_grain_asset_draws_plain_panel`.
-- [ ] **Step 2: Eseguire e vedere fallire.**
-- [ ] **Step 3: Implementare** sul modello di Deep Throat.
-- [ ] **Step 4: Eseguire** build e test → PASS; render con Wear Off, Light e Heavy, controllo a occhio che nastri e viti non coprano comandi, schermo e LED.
-- [ ] **Step 5: Commit:** `feat(happy-ending): wear, paper tapes and screws with user preferences`.
+- [x] **Step 1: Scrivere i test:** `test_wear_off_has_no_marks_and_no_tapes`, `test_wear_level_change_redraws_without_rebuild`, `test_tape_text_edit_goes_to_decor`, `test_screw_drag_stores_angle_once`, `test_reroll_changes_seed_and_clears_decor`, `test_prefs_missing_file_opens_with_defaults`, `test_missing_grain_asset_draws_plain_panel`.
+- [x] **Step 2: Eseguire e vedere fallire.**
+- [x] **Step 3: Implementare** sul modello di Deep Throat.
+- [x] **Step 4: Eseguire** build e test → PASS; render con Wear Off, Light e Heavy, controllo a occhio che nastri e viti non coprano comandi, schermo e LED.
+- [x] **Step 5: Commit:** `feat(happy-ending): wear, paper tapes and screws with user preferences`.
 
 ---
 

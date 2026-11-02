@@ -2,6 +2,8 @@
 //   happy_ending_render <out-dir> [no-grain] [bypass] [final=inflate|clip] [stage-off=fine|vibe|glue|clip|limit|final|metal]
 //                      [band-off=0..5] [listen=0..2] [set] [meters] [cycles=<n>]
 //                      [view=eq|glue|clip|limit|final] [scope=<n>] [demo] [ms]
+//                      [seed=<n>] [wear=off|light|heavy] [tapefont=zeyada|rocksalt|homemade] [values=tape|standard]
+//                      [tape=<slot>:<text>]
 // Writes <out-dir>/front.png (1280 x 890, logical size: SIZE and the host factor only scale the window). The back of the
 // panel and its tabs come with the editor's back (editor plan, Tasks 13-14): the tool will write back_<tab>.png then.
 // bypass, final=, stage-off=, band-off=, listen= and set go through the controller's parameters, picked up by the
@@ -11,7 +13,10 @@
 // the view buttons do); scope=<n> runs n timer runs of a synthetic programme (a kick every half second and a hat between) through
 // the display parameters of the screen, so the GLUE and LIMIT histories scroll and the dots of CLIP and FINAL move; demo sets
 // FINE EQ bells, shelves and the VIBE amounts so the curves are not flat, ms puts two bells on MID and SIDE (the screen then draws
-// MID and SIDE). cycles=<n> builds and removes the editor's views n times first (for leak checkers).
+// MID and SIDE). seed=<n> gives the instance decor that seed (default 0xC0FFEE; seed=0 renders the editor as it is before
+// the decor is ready: no wear, tape or screw); wear=, tapefont= and values= stand for the user's preferences (the tool does
+// not read the real file: the Wear preference defaults to Light, the fonts to Zeyada and handwritten values); tape=<slot>:<text>
+// writes on a tape. cycles=<n> builds and removes the editor's views n times first (for leak checkers).
 // Used to check the code-drawn GUI against src/happy-ending/docs/mockups/happy_ending_rack.html on a machine without a
 // host.
 #include "controller.h"
@@ -20,6 +25,7 @@
 #include "ui/editor.h"
 #include "ui/layout.h"
 #include "ui/panel_view.h"
+#include "ui/prefs.h"
 #include "ui/screen_model.h"
 
 #include "pluginterfaces/base/ipluginbase.h"
@@ -85,8 +91,17 @@ struct EditorPreview {
     set(kDispFinalIn, normFromStageDb(limitLvl));
   }
 
-  static bool render(Steinberg::Vst::EditController& ctl, const std::string& dir, int scope) {
-    Editor ed(&ctl);   // reads the user's preferences as the plug-in does (SIZE does not change the drawing)
+  struct Look {
+    WearLevel wear = WearLevel::Light;
+    TapeFont tapeFont = TapeFont::Zeyada;
+    bool handwritten = true;
+  };
+
+  static bool render(Steinberg::Vst::EditController& ctl, const std::string& dir, int scope, const Look& look) {
+    Editor ed(&ctl);   // reads the user's preferences as the plug-in does (SIZE does not change the drawing) ...
+    ed.setWearLevel(look.wear);   // ... but not Wear and the fonts: the command line stands for them
+    ed.setTapeFont(look.tapeFont);
+    ed.setValuesFont(look.handwritten);
     auto root = VSTGUI::makeOwned<VSTGUI::CViewContainer>(VSTGUI::CRect(0, 0, Editor::kWidth, Editor::kHeight));
     ed.createViews(root);
     ed.onTimer();   // the controller's state: dimming and the FINAL tag
@@ -130,7 +145,9 @@ int main(int argc, char** argv) {
     std::fprintf(stderr,
                  "usage: %s <out-dir> [no-grain] [bypass] [final=inflate|clip] [stage-off=fine|vibe|glue|clip|limit|final|metal]\n"
                  "       [band-off=0..5] [listen=0..2] [set] [meters] [cycles=<n>]\n"
-                 "       [view=eq|glue|clip|limit|final] [scope=<n>] [demo] [ms]\n",
+                 "       [view=eq|glue|clip|limit|final] [scope=<n>] [demo] [ms]\n"
+                 "       [seed=<n>] [wear=off|light|heavy] [tapefont=zeyada|rocksalt|homemade] [values=tape|standard]\n"
+                 "       [tape=<slot>:<text>]\n",
                  argv[0]);
     return 2;
   }
@@ -156,6 +173,9 @@ int main(int argc, char** argv) {
     Controller ctl;
     ctl.initialize(nullptr);
     int cycles = 0, scope = 0;
+    Ui::EditorPreview::Look look;
+    Decor decor;
+    decor.seed = 0xC0FFEEu;
     auto on = [&](Steinberg::Vst::ParamID id, int index) { ctl.setParamNormalized(id, normFromIndex(static_cast<ParamID>(id), index)); };
     for (int i = 2; i < argc; ++i) {
       const char* a = argv[i];
@@ -190,6 +210,21 @@ int main(int argc, char** argv) {
         static const char* const names[5] = {"eq", "glue", "clip", "limit", "final"};
         for (int v = 0; v < 5; ++v)
           if (!std::strcmp(a + 5, names[v])) ctl.setScreenView(static_cast<Ui::ScreenView>(v));
+      } else if (!std::strncmp(a, "seed=", 5)) {
+        decor.seed = static_cast<std::uint32_t>(std::strtoul(a + 5, nullptr, 0));
+      } else if (!std::strncmp(a, "wear=", 5)) {
+        look.wear = !std::strcmp(a + 5, "off") ? Ui::WearLevel::Off : !std::strcmp(a + 5, "heavy") ? Ui::WearLevel::Heavy : Ui::WearLevel::Light;
+      } else if (!std::strncmp(a, "tapefont=", 9)) {
+        look.tapeFont = !std::strcmp(a + 9, "rocksalt") ? Ui::TapeFont::RockSalt : !std::strcmp(a + 9, "homemade") ? Ui::TapeFont::HomemadeApple : Ui::TapeFont::Zeyada;
+      } else if (!std::strncmp(a, "values=", 7)) {
+        look.handwritten = std::strcmp(a + 7, "standard") != 0;
+      } else if (!std::strncmp(a, "tape=", 5)) {
+        const int slot = std::atoi(a + 5);
+        const char* colon = std::strchr(a + 5, ':');
+        if (slot >= 0 && slot < Ui::kNumTapeSlots && colon) {
+          if (decor.tapeTexts.size() <= static_cast<std::size_t>(slot)) decor.tapeTexts.resize(static_cast<std::size_t>(slot) + 1);
+          decor.tapeTexts[static_cast<std::size_t>(slot)] = sanitizeTapeText(colon + 1);
+        }
       } else if (!std::strcmp(a, "demo")) {
         on(kLsGain, 12);
         on(kMidGain, 11);
@@ -202,8 +237,9 @@ int main(int argc, char** argv) {
         on(kHmMs, 2);   // SIDE
       }
     }
+    if (decor.seed != 0) ctl.editDecor(decor);   // seed=0 leaves the decor not ready
     if (cycles > 0) Ui::EditorPreview::cycle(ctl, cycles);
-    ok = Ui::EditorPreview::render(ctl, argv[1], scope);
+    ok = Ui::EditorPreview::render(ctl, argv[1], scope, look);
     ctl.terminate();
   }
   VSTGUI::exit();
