@@ -233,7 +233,7 @@
 
 ### Dopo il piano: editor
 
-- [ ] **Scheda ROUTING nell'editor** (regola comune del 2026-10-23): schema fisso del percorso del segnale come nella preview `deep_throat_rack.html` (spec §10, voce "Scheda ROUTING"), con il modello di retro comune di `shared/ui`; da fare insieme all'editor.
+- [x] **Scheda ROUTING nell'editor** (regola comune del 2026-10-23): schema fisso del percorso del segnale come nella preview `deep_throat_rack.html` (spec §10, voce "Scheda ROUTING"), con il modello di retro comune di `shared/ui`; fatta nel piano dell'editor (`2026-10-24-deep-throat-gui.md`, Task 12; `src/ui/routing_diagram.h`).
 
 ---
 
@@ -244,3 +244,10 @@
 - **Copertura della spec:** §2-3 catena e scelte → Task 2-10; §4 rilevamento → Task 3-4; §5 tabella modalità → Task 2 (rider), 6 (EQ), 7 (de-esser), 8 (comp), 9 (tone); §6 parametri (25) → Task 1 e 10 (con i sei IN, Breath Sensitivity e Listen, De-ess Freq e Listen, Comp Mix, Ratio, Dist e SC HPF); §10 grafica → fuori da questo piano (piano a parte); §7 struttura → Task 1; §8 test → in ogni task; §9 decisioni aperte → restano aperte: registrazioni di riferimento per tarare Puke, dati per il livello 2.
 - **Coerenza dei tipi:** `Mode`, `Biquad`, `BreathDetector`, `LevelMeter` definiti nei Task 1, 6, 3, 2 e usati dopo con le stesse firme.
 - **Soglie:** tutti i numeri sono valori iniziali scelti per i test sintetici; vanno ritarati con voci reali (growl e scream inclusi).
+
+### Task 12 (2026-11-02): modo LATENCY Mix / Live (spec §9b)
+
+- [x] Test che falliscono: latenza 0 in LIVE e D in MIX, rilevatore a livello in LIVE anche in Speak/Sing, stato v3 con MIX di default per v1/v2, cambio che chiede `kLatencyChanged` (`test_engine_live_*`, `test_state_v3_*`, `test_state_v1_v2_load_as_mix`; `test_processor_latency` e `test_controller_latency_restart` sul modulo; `test_settings_latency_row`, `test_live_detector_text`; `test_latency_setting_on_back_and_front` nell'editor).
+- [x] Motore e processor: look-ahead 0 e rilevatore a livello in LIVE; latenza riportata (applicata in `setupProcessing` / `setActive`).
+- [x] Editor: riga LATENCY in BEHAVIOUR (MIX / LIVE), scritta `LEVEL DETECTOR · LIVE` in ambra nel riquadro MODE (sigla di BREATH `LEVEL`); preview allineata; ROUTING `LOOKAHEAD` / `MIX ONLY` su due righe. Dettagli e scelte nella spec §9b.
+- [x] README, render delle immagini (`routing.png` rigenerata dalla preview; fronte LIVE e retro SETTINGS dal render tool, opzione nuova `latency=mix|live`), test verdi (2026-11-02).

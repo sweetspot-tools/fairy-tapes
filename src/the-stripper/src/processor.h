@@ -2,7 +2,7 @@
  * Fairy Tapes · The Stripper — VST3 Audio Processor.
  * Chain: Gain staging (not implemented) → EQ → Compression → Drive → Limiter → Gate.
  * EQ: 4K-EQ in both modes (Channel=Black/G, Mix bus=Brown/E). Compression: Multi-Comp DSP (Dusk port);
- * Channel = Voice/Drums/Classic, Mix bus = Bus only. No custom UI; host shows standard parameters.
+ * Channel = Voice/Drums/Classic, Mix bus = Bus only.
  */
 
 #pragma once

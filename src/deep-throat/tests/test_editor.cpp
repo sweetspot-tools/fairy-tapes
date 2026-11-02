@@ -256,7 +256,11 @@ public:
     (id < kNumParams ? ends[id] : others) += 1;
     return Steinberg::kResultOk;
   }
-  Steinberg::tresult PLUGIN_API restartComponent(Steinberg::int32) override { return Steinberg::kResultOk; }
+  int latencyRestarts = 0;   // restartComponent(kLatencyChanged)
+  Steinberg::tresult PLUGIN_API restartComponent(Steinberg::int32 flags) override {
+    if (flags & Steinberg::Vst::kLatencyChanged) ++latencyRestarts;
+    return Steinberg::kResultOk;
+  }
   Steinberg::tresult PLUGIN_API queryInterface(const Steinberg::TUID iid, void** obj) override {
     QUERY_INTERFACE(iid, obj, Steinberg::FUnknown::iid, Steinberg::Vst::IComponentHandler)
     QUERY_INTERFACE(iid, obj, Steinberg::Vst::IComponentHandler::iid, Steinberg::Vst::IComponentHandler)
@@ -324,7 +328,9 @@ bool dynamicTextsMatch(const Editor& ed) {
     if (got != want) std::fprintf(stderr, "  readout %d: \"%s\" (expected \"%s\")\n", (int)id, got.c_str(), want.c_str());
     return got == want;
   };
-  return tagIs(kTagModeName, modeTagLine1(m)) && tagIs(kTagModeInfo, modeTagLine2(m)) && tagIs(kTagBreath, detectorTag(m)) &&
+  const LatencyMode latency = g_ctl->decor().behaviour.latency;
+  return tagIs(kTagModeName, modeTagLine1(m)) && tagIs(kTagModeInfo, modeTagLine2(m)) && tagIs(kTagBreath, detectorTag(m, latency)) &&
+         readoutIs(ReadoutId::LiveDetector, liveDetectorText(latency)) &&
          tagIs(kTagDeEss, deEssNote(m)) && readoutIs(ReadoutId::RiderInfo, riderMaxText(m)) &&
          readoutIs(ReadoutId::EqHpf, eqHpfText(m, eq)) && readoutIs(ReadoutId::EqMud, eqMudText(m, eq)) &&
          readoutIs(ReadoutId::ToneMud, toneGainText(m, 0, tone)) && readoutIs(ReadoutId::TonePresence, toneGainText(m, 1, tone)) &&
@@ -740,7 +746,7 @@ bool dimmingMatches(const Editor& ed, const DimState& s) {
   const ReadoutView* r = EditorTest::readouts(ed);
   if (!r) return false;
   for (const Readout& ro : kReadouts)
-    if (r->dimmed(ro.id) != (s.bypass || moduleOut(ro.module, s))) {
+    if (r->dimmed(ro.id) != (ro.module != Module::None && (s.bypass || moduleOut(ro.module, s)))) {   // the MODE text never dims
       std::fprintf(stderr, "  readout %d\n", (int)ro.id);
       return false;
     }
@@ -1896,6 +1902,60 @@ void test_modes_tab_follows_mode() {
 }
 } // namespace
 
+// LATENCY on the back (spec 9b): the BEHAVIOUR row shows the instance's setting; a choice goes to the controller's decor
+// (saved with the project, sent to the processor), asks the host to re-read the latency once per change, and the front
+// shows "LEVEL DETECTOR . LIVE" in amber in MODE and LEVEL as the BREATH tag in every mode (MIX: no text, the mode's
+// tag). A setting that arrives from the host (state recall, another editor) is applied on the next tick, on both sides.
+void test_latency_setting_on_back_and_front() {
+  clearDecor();
+  g_host.clear();
+  g_ctl->setComponentHandler(&g_host);
+  Editor ed(g_ctl);
+  auto root = EditorTest::buildSides(ed);
+  FairyTapes::Ui::BackView* back = EditorTest::back(ed);
+  ASSERT_TRUE(back != nullptr && back->selected(kSetLatency) == 0);
+  ASSERT_TRUE(readout(ed, ReadoutId::LiveDetector).empty() && dynamicTextsMatch(ed));
+  const uint32_t seed = ed.wearSeed();
+  ASSERT_TRUE(chooseOption(back, kSetLatency, 1));
+  ASSERT_TRUE(g_ctl->decor().behaviour.latency == LatencyMode::Live && g_host.latencyRestarts == 1);
+  ASSERT_TRUE(back->selected(kSetLatency) == 1);
+  ASSERT_TRUE(readout(ed, ReadoutId::LiveDetector) == "LEVEL DETECTOR \xC2\xB7 LIVE");
+  ASSERT_TRUE(EditorTest::tag(ed, kTagBreath) && EditorTest::tag(ed, kTagBreath)->text == "LEVEL");
+  ASSERT_TRUE(dynamicTextsMatch(ed) && ed.wearSeed() == seed && g_ctl->decor().seed == seed);   // the decor is kept
+  EditorTest::tick(ed);
+  ASSERT_TRUE(g_host.latencyRestarts == 1 && back->selected(kSetLatency) == 1);
+  for (int i : {2, 1, 0}) {   // every mode: the same LIVE text
+    g_ctl->setParamNormalized(kMode, i / 2.0);
+    EditorTest::tick(ed);
+    ASSERT_TRUE(dynamicTextsMatch(ed) && readout(ed, ReadoutId::LiveDetector) == "LEVEL DETECTOR \xC2\xB7 LIVE");
+  }
+  ASSERT_TRUE(chooseOption(back, kSetLatency, 1));   // the same choice again: nothing to restart
+  ASSERT_TRUE(g_host.latencyRestarts == 1);
+  ASSERT_TRUE(chooseOption(back, kSetLatency, 0));
+  ASSERT_TRUE(g_ctl->decor().behaviour.latency == LatencyMode::Mix && g_host.latencyRestarts == 2);
+  ASSERT_TRUE(readout(ed, ReadoutId::LiveDetector).empty() && dynamicTextsMatch(ed));
+  ASSERT_TRUE(EditorTest::tag(ed, kTagBreath)->text == detectorTag(Mode::Speak));
+  // From the host side: applied on the tick.
+  Decor d = g_ctl->decor();
+  d.behaviour.latency = LatencyMode::Live;
+  g_ctl->editDecor(d);
+  ASSERT_TRUE(g_host.latencyRestarts == 3);
+  ASSERT_TRUE(readout(ed, ReadoutId::LiveDetector).empty());   // not before the timer
+  EditorTest::tick(ed);
+  ASSERT_TRUE(back->selected(kSetLatency) == 1 && readout(ed, ReadoutId::LiveDetector) == "LEVEL DETECTOR \xC2\xB7 LIVE");
+  ASSERT_TRUE(dynamicTextsMatch(ed));
+  // It never dims (MODE), not even with the global Bypass.
+  g_ctl->setParamNormalized(kBreathIn, 0.0);
+  g_ctl->setParamNormalized(kBypass, 1.0);
+  EditorTest::tick(ed);
+  ASSERT_TRUE(!EditorTest::readouts(ed)->dimmed(ReadoutId::LiveDetector));
+  resetParams(g_ctl);
+  EditorTest::destroy(ed, root);
+  clearDecor();   // back to MIX
+  ASSERT_TRUE(g_host.latencyRestarts == 4);
+  g_ctl->setComponentHandler(nullptr);
+}
+
 int main() {
   VSTGUI::init(nullptr);
   setResourcePath(false);
@@ -1951,6 +2011,7 @@ int main() {
   RUN_TEST(test_settings_failed_write_is_ignored);
   RUN_TEST(test_tab_links_order);
   RUN_TEST(test_modes_tab_follows_mode);
+  RUN_TEST(test_latency_setting_on_back_and_front);
   ctl.terminate();
   g_ctl = nullptr;
   VSTGUI::exit();

@@ -141,8 +141,10 @@ Steinberg::tresult PLUGIN_API Controller::setComponentState(Steinberg::IBStream*
     setParamNormalized((Steinberg::Vst::ParamID)i, values[i]);
   bool generated = false;
   Decor copy;
+  LatencyMode before;
   {
     std::lock_guard<std::mutex> lk(decor_mutex_);
+    before = decor_.behaviour.latency;
     // No seed in the state (v1 or 0): keep the one already known (usually the processor's, sent from its setState);
     // with none, generate one and tell the processor.
     if (st.seed == 0) st.seed = decor_.seed;
@@ -152,6 +154,7 @@ Steinberg::tresult PLUGIN_API Controller::setComponentState(Steinberg::IBStream*
   }
   ++decor_revision_;
   if (generated) sendDecor(copy);
+  latencyMaybeChanged(before, copy.behaviour.latency);
   return Steinberg::kResultOk;
 }
 
@@ -159,12 +162,16 @@ Steinberg::tresult PLUGIN_API Controller::notify(Steinberg::Vst::IMessage* messa
   Decor d;
   if (!decodeDecorMessage(message, d))
     return EditController::notify(message);
+  LatencyMode before;
+  const LatencyMode after = d.behaviour.latency;
   {
     std::lock_guard<std::mutex> lk(decor_mutex_);
+    before = decor_.behaviour.latency;
     if (d.seed == 0) d.seed = decor_.seed;
     decor_ = std::move(d);
   }
   ++decor_revision_;
+  latencyMaybeChanged(before, after);   // a state the host gave the processor only
   return Steinberg::kResultOk;
 }
 
@@ -185,17 +192,27 @@ Decor Controller::decor() {
 
 void Controller::editDecor(Decor d) {
   sanitizeDecor(d);
+  LatencyMode before;
   {
     std::lock_guard<std::mutex> lk(decor_mutex_);
+    before = decor_.behaviour.latency;
     if (d.seed == 0) d.seed = decor_.seed;
     ensureSeed(d);
     decor_ = d;
   }
   ++decor_revision_;
-  sendDecor(d);
+  sendDecor(d);   // the processor keeps the new LATENCY for its next preparation
   // Not a parameter: tell the host the project changed so the new decor gets saved.
   if (Steinberg::FUnknownPtr<Steinberg::Vst::IComponentHandler2> handler2{componentHandler})
     handler2->setDirty(true);
+  latencyMaybeChanged(before, d.behaviour.latency);
+}
+
+void Controller::latencyMaybeChanged(LatencyMode before, LatencyMode after) {
+  // The host deactivates the processor, which prepares the engine for the new LATENCY in setActive / setupProcessing,
+  // and reads the latency again.
+  if (before != after && componentHandler)
+    componentHandler->restartComponent(Steinberg::Vst::kLatencyChanged);
 }
 
 void Controller::sendDecor(const Decor& d) {

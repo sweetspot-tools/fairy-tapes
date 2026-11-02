@@ -1,12 +1,14 @@
 /**
  * Fairy Tapes · The Stripper — Parameter IDs and constants.
- * No custom UI: host (e.g. Reaper) shows standard parameter list.
+ * The editor (src/ui/) and the host's generic list show the same parameters.
  */
 
 #pragma once
 
 #include "pluginterfaces/vst/vsttypes.h"
 #include <cmath>
+#include <cstdio>
+#include <string>
 
 namespace FairyTapes::TheStripper {
 
@@ -16,7 +18,7 @@ enum ParamID : Steinberg::Vst::ParamID {
   kInputGain,
   kOutputGain,
   kBypassGainStaging,
-  kBypassLPHP,   // Bypass LP/HP section. Channel: 4K-EQ HPF/LPF. Mix bus: LP/HP active when feasible (same params).
+  kBypassLPHP,   // Bypass LP/HP section: the HPF/LPF of the 4K-EQ, in both strip modes (same params).
   kBypassEQ,
   kBypassCompression,
   kBypassDrive,
@@ -129,6 +131,22 @@ constexpr Steinberg::Vst::ParamValue kDefaultGateThreshold = 0.0;
 constexpr Steinberg::Vst::ParamValue kDefaultDriveNamOn = 1.0;   // NAM on, as before the switch existed
 constexpr Steinberg::Vst::ParamValue kDefaultDriveTapeOn = 1.0;      // TAPE on for a new instance (states saved before v12 load it off)
 constexpr Steinberg::Vst::ParamValue kDefaultDriveTapeAmount = 0.0;  // tape colour only, no slam
+
+// Gate (DeNoise) threshold in dBFS, as the DSP really applies it: DeNoise compares with (v/4)^4 in amplitude, so
+// 20 log10((v/4)^4) = 80 log10(v/4): -inf at 0, -72 dB at 0.5, about -48.2 dB at 1 (2026-11-02; the text used to say
+// -72 + 72 v dB, which put the top at 0 dB). Rising with v, as the bisection of the typed values needs.
+inline double gateThresholdDb(Steinberg::Vst::ParamValue v) {
+  if (!(v > 0.0)) return -INFINITY;
+  return 80.0 * std::log10(v / 4.0);
+}
+// The text of the host and of the yellow value under the knob: "-48 dB" at the top, "-inf dB" at the bottom.
+inline std::string gateThresholdText(Steinberg::Vst::ParamValue v) {
+  const double db = gateThresholdDb(v);
+  if (std::isinf(db)) return "-inf dB";
+  char buf[32];
+  std::snprintf(buf, sizeof(buf), "%.0f dB", db);
+  return buf;
+}
 
 // Gain range in dB for display; normalized 0 = -20 dB, 1 = +20 dB
 constexpr double kGainMinDb = -20.0;

@@ -12,17 +12,20 @@
 namespace FairyTapes::Ui {
 
 // A row of round LEDs lit up to the value, with a peak-hold marker (the hold LED is drawn brighter and
-// always lit, so the held peak stays visible after the level has dropped).
+// always lit, so the held peak stays visible after the level has dropped). `scale` is the dB range the LEDs span (the one
+// the processor normalized the value with): the level colours and the fall of the held peak follow it.
 class MeterBar : public VSTGUI::CView {
 public:
   static constexpr int kDefaultLeds = 15;
 
-  MeterBar(const VSTGUI::CRect& size, MeterKind kind, int ledCount = kDefaultLeds);
+  MeterBar(const VSTGUI::CRect& size, MeterKind kind, int ledCount = kDefaultLeds,
+           MeterScale scale = kDefaultMeterScale);
 
   // Live value, 0..1. Updates the peak hold with `dtSeconds` elapsed since the previous call.
   void setLevel(double norm, double dtSeconds);
   double level() const { return level_; }
   double hold() const { return peak_.hold(); }
+  MeterScale scale() const { return scale_; }
   // User settings of the peak-hold marker: hold seconds (0 = off, 10 or more = until a higher peak) and fall in dB/s.
   void setHoldSettings(double holdSeconds, double fallDbPerSecond);
   // Dims the whole bar (a bypassed section).
@@ -34,6 +37,7 @@ public:
 private:
   MeterKind kind_;
   int count_;
+  MeterScale scale_;
   double level_ = 0.0;
   bool dimmed_ = false;
   PeakHold peak_;

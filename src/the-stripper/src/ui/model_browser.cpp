@@ -45,9 +45,10 @@ constexpr CColor kFieldLine(0x58, 0x58, 0x5c);
 // instance of the process.
 std::vector<std::string> defaultFolders() {
   std::vector<std::string> out;
-  if (const char* home = std::getenv("HOME")) {
+  const std::string home = userHome();
+  if (!home.empty()) {
     for (const char* sub : {"NAM", "Documents/NAM", "Documents/Tone3000"}) {
-      const std::string p = std::string(home) + "/" + sub;
+      const std::string p = home + "/" + sub;
       std::error_code ec;
       if (std::filesystem::is_directory(fromUtf8(p), ec)) out.push_back(p);
     }

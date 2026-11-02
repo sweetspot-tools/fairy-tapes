@@ -3,7 +3,7 @@
  * Chain: Input → [Drive, Channel] → EQ (with the 4K saturation) → Compression → [Drive, Mix bus] → Limiter → Gate → Output.
  * The Drive block (NAM then TAPE) moves with Strip Mode: right after the input in Channel, before the limiter in Mix bus.
  * EQ: 4K-EQ in both modes. Channel = Black (G-series, tight). Mix bus = Brown (E-series, wide/glue).
- * LP/HP active in both modes. Compression: Multi-Comp DSP (Dusk Audio port); Channel = Voice/Drums/Classic, Mix bus = Bus only.
+ * LP/HP active in both modes and independent of the EQ's IN (their own IN only). Compression: Multi-Comp DSP (Dusk Audio port); Channel = Voice/Drums/Classic, Mix bus = Bus only.
  */
 
 #include "processor.h"
@@ -55,6 +55,10 @@ Steinberg::tresult PLUGIN_API Processor::setActive(Steinberg::TBool state) {
   if (state) {
     scratch_[0].resize(kMaxBlockSize);
     scratch_[1].resize(kMaxBlockSize);
+    // A new rate resets the NAM model (it allocates): do it here, not on the audio thread (process() repeats the call,
+    // which is free while the rate is unchanged).
+    if (processSetup.sampleRate > 0.0)
+      namDrive_.setSampleRate(processSetup.sampleRate);
   } else {
     scratch_[0].clear();
     scratch_[1].clear();
@@ -154,11 +158,14 @@ void Processor::processChain(float* const* out, const float* const* in,
   // Gain staging (Channel only): not implemented (design). Params kBypassGainStaging and kGainStagingTrim
   // are kept for future use; no processing applied here.
 
-  // EQ: 4K-EQ in both modes. Channel = Black (G, tight); Mix bus = Brown (E, wide/glue).
+  // FILTERS then EQUALISER, one 4K-EQ object: Channel = Black (G, tight); Mix bus = Brown (E, wide/glue).
+  // HPF and LPF follow only their own IN (2026-11-02): with the EQ's IN off they still run, bands and SATURATE stay out.
   const bool bypass_eq = isBypassStage(param_value_[kBypassEQ]);
   const bool bypass_lphp = isBypassStage(param_value_[kBypassLPHP]);
+  const bool hpf_on = !bypass_lphp && (param_value_[kEqHPFOn] >= 0.5);
+  const bool lpf_on = !bypass_lphp && (param_value_[kEqLPFOn] >= 0.5);
 
-  if (!bypass_eq) {
+  if (!bypass_eq || hpf_on || lpf_on) {
     if (sampleRate != lastEqSampleRate_ || numSamples != lastEqBlockSize_) {
       fourkEq_.prepare(sampleRate, numSamples);
       lastEqSampleRate_ = sampleRate;
@@ -166,9 +173,9 @@ void Processor::processChain(float* const* out, const float* const* in,
     }
     DSP::FourKEQParams eqp;
     eqp.hpfFreq = static_cast<float>(eqNormToHPFFreq(param_value_[kEqHPFFreq]));
-    eqp.hpfEnabled = !bypass_lphp && (param_value_[kEqHPFOn] >= 0.5);
+    eqp.hpfEnabled = hpf_on;
     eqp.lpfFreq = static_cast<float>(eqNormToLPFFreq(param_value_[kEqLPFFreq]));
-    eqp.lpfEnabled = !bypass_lphp && (param_value_[kEqLPFOn] >= 0.5);
+    eqp.lpfEnabled = lpf_on;
     eqp.lfGain = static_cast<float>(eqNormToGainDb(param_value_[kEqLFGain]));
     eqp.lfFreq = static_cast<float>(eqNormToLFFreq(param_value_[kEqLFFreq]));
     eqp.lfBell = param_value_[kEqLFBell] >= 0.5;
@@ -182,23 +189,27 @@ void Processor::processChain(float* const* out, const float* const* in,
     eqp.hfFreq = static_cast<float>(eqNormToHFFreq(param_value_[kEqHFFreq]));
     eqp.hfBell = param_value_[kEqHFBell] >= 0.5;
     eqp.eqTypeBlack = channel_mode; // Channel = Black (G), Mix bus = Brown (E)
+    eqp.bandsEnabled = !bypass_eq;  // EQ out: filters only (the 4K-EQ is linear; the filters keep their state, no click)
     fourkEq_.process(L, R, numSamples, eqp);
-    // The 4K console saturation: last step of the EQ (G series in Channel, E series in Mix bus), out with the EQ's IN.
-    if (sampleRate != saturationRate_) {
-      eqSaturation_.setSampleRate(sampleRate);
-      eqSaturation_.reset();
-      saturationRate_ = sampleRate;
-    }
-    eqSaturation_.setConsoleType(channel_mode ? DSP::SSLSaturation::ConsoleType::GSeries : DSP::SSLSaturation::ConsoleType::ESeries);
-    const float satAmount = static_cast<float>(std::clamp(param_value_[kEqSaturation], 0.0, 1.0));
-    if (satAmount > 0.001f) {
-      for (int i = 0; i < numSamples; ++i) {
-        L[i] = eqSaturation_.processSample(L[i], satAmount, true);
-        R[i] = eqSaturation_.processSample(R[i], satAmount, false);
+    if (!bypass_eq) {
+      // The 4K console saturation: last step of the EQ (G series in Channel, E series in Mix bus), out with the EQ's IN.
+      if (sampleRate != saturationRate_) {
+        eqSaturation_.setSampleRate(sampleRate);
+        eqSaturation_.reset();
+        saturationRate_ = sampleRate;
+      }
+      eqSaturation_.setConsoleType(channel_mode ? DSP::SSLSaturation::ConsoleType::GSeries : DSP::SSLSaturation::ConsoleType::ESeries);
+      const float satAmount = static_cast<float>(std::clamp(param_value_[kEqSaturation], 0.0, 1.0));
+      if (satAmount > 0.001f) {
+        for (int i = 0; i < numSamples; ++i) {
+          L[i] = eqSaturation_.processSample(L[i], satAmount, true);
+          R[i] = eqSaturation_.processSample(R[i], satAmount, false);
+        }
       }
     }
-    clip_[1].process(L, R, numSamples);
+    clip_[1].process(L, R, numSamples);   // CLIP EQ taps the line after FILTERS and EQUALISER (ROUTING): lit while either is in
   } else {
+    fourkEq_.markIdle();                  // both out: the next time one comes in, its filters start from silence
     clip_[1].clear();
   }
 

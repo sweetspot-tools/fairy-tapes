@@ -24,9 +24,9 @@
 ## 4. Cosa cambia per il nostro `DistressorComp` (punti 1-5 recepiti in spec e piano, Task 8; il 6 resta una pratica di taratura)
 
 1. **Rilevatore con passa-alto** (selezionabile OFF, 80 o 150 Hz; 80 Hz a default): oggi il piano non lo prevede e sulla voce serve contro il pompaggio da plosive e fiato.
-2. **Distorsione legata alla riduzione di guadagno e all'attacco**, non a un drive fisso: Dist 2 cresce con la compressione, Dist 3 con risposta ridotta agli estremi.
+2. **Distorsione legata alla riduzione di guadagno e all'attacco**, non a un drive fisso: Dist 2 cresce con la compressione, Dist 3 con risposta ridotta agli estremi. *Nel codice in Dist 3 è limitata in banda (30 Hz - 12 kHz) solo la distorsione aggiunta, non il segnale.*
 3. **Ratio:** aggiungere 20:1 alla lista (oggi: AUTO, 2, 3, 4, 6, 8, 10). Il "Nuke" e il modo Opto 10:1 sono fuori scopo per ora.
-4. **Tempi:** attacco da 0,05 a 30 ms e rilascio da 50 ms a 3,5 s, con la scala che dipende dal rapporto.
+4. **Tempi:** attacco da 0,05 a 30 ms e rilascio da 50 ms a 3,5 s, con la scala che dipende dal rapporto. *Nel codice (`distressor_comp.h`) i tempi sono più stretti:* attacco 6 / rapporto ms (metà in Puke, minimo 0,05 ms), cioè da 0,15 a 3 ms con i rapporti disponibili; rilascio che fonde 50 ms e un rilascio lento di clamp(100 · rapporto, 200, 3500) ms, cioè al massimo 2 s con 20:1.
 5. **Struttura feedforward con rilevatore logaritmico** come da Giannoulis et al. (il piano dice già feedforward e ginocchio morbido di 6 dB).
 6. **Tarare a orecchio e con misure** (rumore rosa in ingresso, attacco misurato) perché le manopole dell'originale non hanno una scala in ms.
 

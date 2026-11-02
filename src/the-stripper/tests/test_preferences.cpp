@@ -175,6 +175,17 @@ void test_default_path_is_per_platform_and_per_plugin() {
   CHECK(p.filename() == "TheStripper.prefs");
   CHECK(p.parent_path().filename() == "FairyTapes");
 }
+
+// The default model folders hang off the user's home: $HOME, or on Windows (where HOME is normally unset) %USERPROFILE%,
+// then %HOMEDRIVE%%HOMEPATH%; empty when none is set.
+void test_user_home_falls_back_to_the_windows_variables() {
+  CHECK(userHomeFrom("/home/u", "C:\\Users\\u", nullptr, nullptr) == "/home/u");
+  CHECK(userHomeFrom(nullptr, "C:\\Users\\u", "D:", "\\x") == "C:\\Users\\u");
+  CHECK(userHomeFrom("", "C:\\Users\\u", nullptr, nullptr) == "C:\\Users\\u");
+  CHECK(userHomeFrom(nullptr, nullptr, "D:", "\\Users\\u") == "D:\\Users\\u");
+  CHECK(userHomeFrom(nullptr, nullptr, "D:", nullptr).empty());
+  CHECK(userHomeFrom(nullptr, nullptr, nullptr, nullptr).empty());
+}
 } // namespace
 
 int main() {
@@ -191,6 +202,7 @@ int main() {
   test_save_fails_cleanly_when_the_folder_is_not_writable();
   test_hostile_folder_entries();
   test_default_path_is_per_platform_and_per_plugin();
+  test_user_home_falls_back_to_the_windows_variables();
   if (g_failed) { std::fprintf(stderr, "%d check(s) failed\n", g_failed); return 1; }
   std::puts("test_preferences: ok");
   return 0;

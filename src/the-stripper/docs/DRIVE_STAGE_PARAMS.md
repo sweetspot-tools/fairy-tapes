@@ -21,7 +21,7 @@ NAM is a container, not a sound: it can hold a preamp, a pedal, an outboard unit
 
 # Part A — NAM (knob DRIVE)
 
-A single **Drive** knob controls how hard the signal is pushed into the NAM model; no classic fallback (TapeHack2 removed from design).
+A single **Drive** knob controls how hard the signal is pushed into the NAM model. The NAM switch (`kDriveNamOn`) skips the engine. There is no classic alternative inside the NAM engine: the built-in saturation is TAPE (Part B), a port of Airwindows **Tape**; the earlier plan of Airwindows TapeHack2 as "NAM off" engine was dropped.
 
 ---
 
@@ -29,7 +29,7 @@ A single **Drive** knob controls how hard the signal is pushed into the NAM mode
 
 - **One knob**: The user only interacts with **Drive Amount** (0–100%). No output trim, no dry/wet. Rock & roll, easy to use.
 - **Always-on coloration**: When the stage is active (not bypassed) and a model is loaded, the NAM model is **always in the signal path** — even at Drive = 0%. At zero drive, input gain is unity (1×) and the model provides its natural "analog" coloration. As Drive increases, the signal is pushed harder into the model, adding saturation and harmonics.
-- **Bypass = off**: The `kBypassDrive` toggle removes the stage entirely (true bypass for CPU savings or clean signal). When not bypassed and no model is loaded, the signal passes through unmodified.
+- **Bypass = off**: The `kBypassDrive` toggle (module IN) removes the whole block, NAM and TAPE. The NAM switch (`kDriveNamOn`) skips only the NAM. With the NAM on and no model loaded, the NAM passes the signal through unmodified.
 - **Auto-compensation**: Output level is matched to input level using a smoothed RMS tracker, so the user hears timbral changes without loudness jumps.
 
 ---
@@ -40,7 +40,7 @@ A single **Drive** knob controls how hard the signal is pushed into the NAM mode
 |---|------|---------|-----------------|---------|
 | 1 | **Drive** | `kDriveAmount` | 0 = unity (coloration only), 1 = max (+20 dB into model) | Input gain into the NAM model. Exponential taper: `gain = 10^(norm)` → 1× at 0, ~3.16× at 0.5, 10× at 1.0. |
 
-Plus the existing `kBypassDrive` (stage on/off toggle).
+Plus `kDriveNamOn` (ID 35, NAM switch, default on) and `kBypassDrive` (module IN, bypasses NAM and TAPE).
 
 **Removed parameters:**
 - `kDriveOutput` — replaced by automatic RMS compensation.
@@ -54,7 +54,7 @@ Instead of a manual output trim or a "Match level" button, the Drive stage measu
 
 ### Algorithm
 
-1. **Block RMS** of the mono input **before the drive gain** and of the model output (after sanitization) are computed each process block. Measuring the input before the gain is what keeps the loudness constant across the Drive range (fixed 2026-10-24: before, the reference was taken after the gain and the output stayed up to +20 dB louder at full Drive).
+1. **Block RMS** of the input **before the drive gain** and of the model output (after sanitization) are computed each process block, **linked over both channels** (one RMS for L and R together, one gain for both: since 2026-11-02; for a mono source this is exactly the old mono reference). Measuring the input before the gain is what keeps the loudness constant across the Drive range (fixed 2026-10-24: before, the reference was taken after the gain and the output stayed up to +20 dB louder at full Drive).
 2. Both values are **smoothed** with a one-pole filter (time constant ≈ 100 ms) to avoid pumping.
 3. **Compensation gain** = `smoothed_input_rms / smoothed_output_rms`, clamped to -40..+20 dB (linear 0.01 to 10.0): the drive gain alone needs up to -20 dB, and the model can add its own gain on top.
 4. If either RMS is below a noise floor (1e-6), compensation is held at unity to avoid amplifying silence.
@@ -72,32 +72,28 @@ Instead of a manual output trim or a "Match level" button, the Drive stage measu
 ## 4. Signal flow
 
 ```
-Stereo in (L, R)
+Stereo in (L, R), in chunks of at most 8192 samples (fixed buffers, no allocation)
   │
-  ├─ Convert to mono: mid = (L + R) / 2
+  ├─ Measure input RMS (L and R together, before the drive gain)
   │
-  ├─ Measure input RMS (of mid, before the drive gain)
+  ├─ Apply drive gain: x × 10^(drive_norm), clamp to ±10.0
   │
-  ├─ Apply drive gain: mid × 10^(drive_norm)
+  ├─ L instance: model inference on L (always)
+  ├─ R instance: model inference on R (always)
   │
-  ├─ Clamp to safe range (±10.0)
+  ├─ Sanitize outputs (NaN/Inf → 0, clamp ±10.0)
   │
-  ├─ NAM model inference (mono in → mono out)
+  ├─ Measure output RMS (both channels), smooth both RMS values (one-pole, τ ≈ 100ms)
   │
-  ├─ Sanitize output (NaN/Inf → 0, clamp ±10.0)
+  ├─ Compute compensation = input_rms_smooth / output_rms_smooth (one gain, linked)
   │
-  ├─ Measure output RMS
-  │
-  ├─ Smooth both RMS values (one-pole, τ ≈ 100ms)
-  │
-  ├─ Compute compensation = input_rms_smooth / output_rms_smooth
-  │
-  ├─ Apply: out = model_output × compensation
-  │
-  └─ Write to both L and R (100% wet, mono output)
+  └─ Apply: out_L = model_L × compensation, out_R = model_R × compensation (100% wet)
 ```
 
-**Note:** The current implementation outputs a mono signal to both channels. Stereo imaging from upstream stages is preserved because the Drive stage is typically used for tonal coloring, not spatial processing. Future versions may implement mid/side processing if stereo preservation becomes a priority.
+**Dual mono (2026-11-02, spec §11).** Two instances of the model, one per channel, in CHAN and in BUS (before: `mid = (L + R) / 2` through one instance, the same signal on both sides, stereo image lost and a side-only signal cancelled). **Both instances always run** while a model is loaded (decided by the user on 2026-11-02, option B): the load is constant and never jumps. A first version skipped R while L and R were identical and replayed the missed samples when they differed again; it saved half the CPU on mono sources but made one block about ten times slower at that moment (≈ 25 ms instead of ≈ 2.7 ms with the standard WaveNet, 256-sample blocks), a dropout risk with small buffers. Measured on the development VM with `wavenet_a1_standard.nam`: about 54% of one core per Stripper with a model, mono or stereo.
+- **Linked compensation** (decided 2026-11-02): one gain for both channels keeps the stereo image steady (independent gains would make the image wander like unlinked compressors) and keeps today's loudness behaviour exactly for a mono source. It does not undo a level difference the model itself makes between two different channels.
+- **GPU (unverified, CUDA not built here):** the model is loaded once in `GpuNamManager` and **two instances** are registered (each has its own state on the GPU); if the second cannot be registered, both channels run on the CPU (never L on the GPU and R on the CPU). Each Stripper with a model now takes two of the manager's 256 instance slots.
+- **Rate changes:** `setSampleRate` resets the model only when the rate really changes (the processor calls it every block and from `setActive`). Until 2026-11-02 every call ran `nam::DSP::Reset`, which wiped the model's history and prewarmed it **every block**: a discontinuity at each block start and, with a standard WaveNet, an extra 8192-sample run per block.
 
 ---
 
@@ -114,15 +110,15 @@ Stereo in (L, R)
 
 ---
 
-## 6. GPU acceleration (planned)
+## 6. CPU and GPU inference
 
-`NamDrive` lives in `shared/nam_drive` (NeuralAmpModelerCore v0.6.0) and loads models asynchronously (`requestLoad`); the audio thread swaps the model between blocks. The CUDA path of `gpu_nam` falls back to a CPU stub; it has not been verified on a machine with an NVIDIA driver.
+`NamDrive` lives in `shared/nam_drive` (NeuralAmpModelerCore v0.6.0) and loads models asynchronously (`requestLoad`); the audio thread swaps the model between blocks. On load it tries the GPU path first: `shared/gpu_nam`, **custom CUDA kernels** for WaveNet models (no gpuaudio-sdk, see `shared/gpu_nam/docs/GPU_NAM_ARCHITECTURE.md`); an unsupported model or a CUDA error falls back to the CPU (NeuralAmpModelerCore). Without the CUDA toolkit at build time, or with `-DGPU_NAM_DISABLE_CUDA=ON`, `gpu_nam` is a CPU-only stub and the NAM always runs on the CPU (the CI workflow does not install the CUDA toolkit). The CUDA build has not been verified on a machine with an NVIDIA driver; the NAM INFERENCE setting (Auto/GPU/CPU) on the back panel is dimmed until then. No latency is reported to the host.
 
 ---
 
 # Part B — TAPE (knob TAPE)
 
-Port of **Airwindows Tape** (`vendors/airwindows/plugins/LinuxVST/src/Tape`, MIT): simplified, all-purpose tape that Airwindows tuned by stacking eight instances in series, so it holds up both per channel and on the mix bus. Source: `src/dsp/tape_saturation.{h,cpp}`. No Airwindows naming in the UI.
+Port of **Airwindows Tape** (`vendors/airwindows/plugins/LinuxVST/src/Tape`, MIT; reference submodule, not fetched by a normal clone): simplified, all-purpose tape that Airwindows tuned by stacking eight instances in series, so it holds up both per channel and on the mix bus. Source: `src/dsp/tape_saturation.{h,cpp}`. No Airwindows naming in the UI.
 
 ## 7. Parameters
 

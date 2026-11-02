@@ -414,10 +414,10 @@ function drawScope(pos){
 box(530,92,270,170,'LEVEL','bottom');
 var gMt=grp(),LX=598,STEP=16,NL=12;
 function ledRow(y,label,colFn){txt(label,LX-12,y+4,11,W,'end',800);var a=[];for(var i=0;i<NL;i++)a.push(el('circle',{cx:LX+i*STEP,cy:y,r:3.4,fill:OFFL,stroke:'#000','stroke-width':.6}));return {a:a,col:colFn};}
-function dbCol(i){var d=-60+i*(60/(NL-1));return d>=-1?RED:(d>=-9?YEL:(d>=-18?'#9fe03a':GRN));}
+function dbCol(i){var d=-60+i*(66/(NL-1));return d>=0?RED:(d>=-9?YEL:(d>=-18?'#9fe03a':GRN));}   /* -60..+6 dB, one LED every 6 dB (2026-11-02) */
 var rIL=ledRow(114,'L',dbCol),rIR=ledRow(128,'R',dbCol),rOL=ledRow(156,'L',dbCol),rOR=ledRow(170,'R',dbCol);
 txt('IN',LX-36,124,11,YEL,'middle',800);txt('OUT',LX-36,166,11,YEL,'middle',800);
-[-60,-48,-36,-24,-12,0].forEach(function(d){var idx=Math.round((d+60)/(60/(NL-1)));txt(String(d),LX+idx*STEP,146,9,DIMW,'middle',700);});
+[-60,-48,-36,-24,-12,0,6].forEach(function(d){var idx=Math.round((d+60)/(66/(NL-1)));txt(d>0?'+'+d:String(d),LX+idx*STEP,146,9,DIMW,'middle',700);});
 var rDK=ledRow(198,'',function(i){return i>8?RED:AMBL;});txt('DUCK',LX-36,202,11,YEL,'middle',800);
 txt('send level reduction',LX+5*STEP+8,216,9,DIMW,'middle',700);
 var clipEl=[],clipUntil=[0,0];
@@ -429,7 +429,7 @@ txt('CLIP',LX-36,242,11,YEL,'middle',800);
 function paintClips(){var t=performance.now();clipEl.forEach(function(d,i){d.setAttribute('fill',t<clipUntil[i]?RED:OFFL);});}
 endGrp();reg(gMt,false);
 function setLeds(r,n){r.a.forEach(function(c,i){c.setAttribute('fill',i<n?r.col(i):OFFL);});}
-function dbN(d){return Math.max(0,Math.min(NL,Math.round((d+60)/(60/(NL-1))+.5)));}
+function dbN(d){return Math.max(0,Math.min(NL,Math.round((d+60)/(66/(NL-1))+.5)));}
 function toDb(a){return a<=.001?-90:20*Math.log10(a);}
 function drawMeters(pos){
   var i=Math.floor(pos)%NSIM,v=voice[i],o=v*(1-P.mix)+wet[i]*P.mix;
@@ -574,9 +574,9 @@ box(24,102,952,250,'SIGNAL FLOW','top');
   /* detector: the input or the sidechain (SIDECHAIN switch, default off), then the gain sent to DUCK */
   L('M150 '+YC+' H247.4');RT.jack(60,YC+14,'SC IN');L('M69 '+(YC+14)+' H247.4');
   RT.ring(250,YC);RT.ring(250,YC+14);RT.ring(266,YC);L('M266 '+YC+' L252.5 '+(YC+1),false,1.8);txt('SIDECHAIN',258,YC-10,9,DIMW,'middle',800);
-  L('M268.6 '+YC+' H300');RT.tap(284,YC,16,'VOICE');
-  RT.block(300,440,YC,40,'AUTO DUCK',['DETECTOR']);
-  L('M440 '+YC+' H484 V242',true);RT.arrowUp(484,236);RT.tap(462,YC,16,'SEND LEVEL');})();
+  L('M268.6 '+YC+' H298');RT.block(298,346,YC,40,'BAND',['VOCAL']);L('M346 '+YC+' H366');RT.tap(356,YC,16,'VOICE');
+  RT.block(366,452,YC,40,'AUTO DUCK',['DETECTOR']);
+  L('M452 '+YC+' H484 V242',true);RT.arrowUp(484,236);RT.tap(468,YC,16,'SEND LEVEL');})();
 box(24,366,952,82,'LEGEND','top');
 (function(){var y=398,L=RT.ln;
   el('rect',{x:50,y:y-12,width:34,height:24,rx:3,fill:'none',stroke:W,'stroke-width':2});txt('module',92,y+4,10,DIMW,'start',700);

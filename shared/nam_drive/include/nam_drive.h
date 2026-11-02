@@ -7,6 +7,10 @@
  * increasing Drive changes timbre without changing perceived loudness.
  * Always 100% wet when active; bypass toggle (kBypassDrive) turns it off.
  *
+ * Stereo (2026-11-02): dual mono, two instances of the model (L and R), both always running while a model is loaded:
+ * a constant load, twice the mono cost, no spike when the material changes. The level compensation is linked (one gain
+ * for both channels).
+ *
  * Inference path: GPU (custom CUDA via gpu_nam) with automatic CPU fallback
  * (NeuralAmpModelerCore). The fallback is transparent to the caller.
  */
@@ -40,6 +44,8 @@ public:
   NamDrive(const NamDrive&) = delete;
   NamDrive& operator=(const NamDrive&) = delete;
 
+  /// Cheap when the rate is unchanged (the processor calls it every block); a new rate resets the model
+  /// (nam::DSP::Reset allocates and prewarms), so call it from setActive/setupProcessing when the host changes the rate.
   void setSampleRate(double sr);
   void reset();
 
@@ -89,10 +95,16 @@ public:
   /// Expected sample rate of the loaded model (-1 if unknown).
   double modelExpectedSampleRate() const;
 
-  /// Process stereo audio in-place.
+  /// Process stereo audio in-place: L through one model instance, R through the other (dual mono).
   /// If no model is loaded, the signal passes through unmodified.
-  /// Output is auto-compensated to match input loudness.
+  /// Output is auto-compensated to match input loudness (linked: one gain for both channels).
+  /// Both instances run on every block, also when L and R are identical (then both get L's driven input).
   void process(float* left, float* right, int numSamples);
+
+  /// Samples run through the model instance of a channel (0 = L, 1 = R). A diagnostic for tests.
+  std::uint64_t instanceSamples(int channel) const;
+
+  static constexpr int kMaxBlock = 8192;            // process() works in chunks of at most this many samples
 
 private:
   /// A model ready for inference (CPU or GPU path); an empty one means "no model".
@@ -102,6 +114,8 @@ private:
   void adoptPending();            // audio thread
   void collectGarbage();          // any non-audio thread
   void setInfo(LoadState st, const std::string& name, const std::string& err);  // caller holds info_mutex_
+  void processChunk(Loaded& m, float* left, float* right, int n);   // audio thread, n <= kMaxBlock
+  void runInstance(Loaded& m, int ch, float* in, float* out, int n);
 
   std::atomic<Loaded*> active_{nullptr};   // read by the audio thread, replaced only by it (or by loadModel/unloadModel when idle)
   std::atomic<Loaded*> pending_{nullptr};  // handed over by the worker
@@ -127,14 +141,15 @@ private:
   std::atomic<double> sample_rate_{48000.0};   // written by the audio thread, read by requestLoad on the message thread
   std::mutex cb_mutex_;
   std::function<void()> load_cb_;
-  int max_block_size_ = 8192;
+  int max_block_size_ = kMaxBlock;
   float drive_ = 0.0f;
 
   float input_rms_smooth_ = 0.0f;
   float output_rms_smooth_ = 0.0f;
 
-  std::vector<float> mono_in_;
-  std::vector<float> mono_out_;
+  // Audio-thread state of the dual mono path. Buffers are allocated once in the constructor.
+  std::vector<float> in_[2], out_[2];
+  std::atomic<std::uint64_t> runs_[2] = {};
 };
 
 } // namespace FairyTapes::Shared::DSP

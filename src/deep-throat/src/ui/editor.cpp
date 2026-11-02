@@ -568,7 +568,7 @@ void Editor::refreshDynamicTexts() {
   if (silk_) {
     silk_->setTag(kTagModeName, modeTagLine1(m));
     silk_->setTag(kTagModeInfo, modeTagLine2(m));
-    silk_->setTag(kTagBreath, detectorTag(m));
+    silk_->setTag(kTagBreath, detectorTag(m, latency_));
     silk_->setTag(kTagDeEss, deEssNote(m));
     silk_->setValueText(kCompRatio, ratioText(compRatioChoiceFromNorm(controllerNorm(ctl, kCompRatio)), m));
     silk_->setValueText(kCompDist, distText(compDistChoiceFromNorm(controllerNorm(ctl, kCompDist)), m));
@@ -581,6 +581,7 @@ void Editor::refreshDynamicTexts() {
     readouts_->setText(ReadoutId::ToneMud, toneGainText(m, 0, tone));
     readouts_->setText(ReadoutId::TonePresence, toneGainText(m, 1, tone));
     readouts_->setText(ReadoutId::ToneAir, toneGainText(m, 2, tone));
+    readouts_->setText(ReadoutId::LiveDetector, liveDetectorText(latency_));
   }
 }
 
@@ -597,7 +598,7 @@ void Editor::refreshDimming() {
   }
   auto partDimmed = [this](Module m) { return dim_.bypass || moduleOut(m, dim_); };
   if (readouts_)
-    for (const Readout& r : kReadouts) readouts_->setDimmed(r.id, partDimmed(r.module));
+    for (const Readout& r : kReadouts) readouts_->setDimmed(r.id, r.module != Module::None && partDimmed(r.module));   // MODE never
   if (lamp_) lamp_->setLampDimmed(partDimmed(Module::Breath));
   if (silk_)
     for (const TagSpec& t : kTags) silk_->setTagDimmed(t.tag.key, t.module != Module::None && partDimmed(t.module));   // MODE tags never
@@ -686,6 +687,7 @@ void Editor::refreshDecor() {
   decorKnown_ = true;
   const bool textsChanged = d.tapeTexts != tapeTexts_;
   tapeTexts_ = d.tapeTexts;
+  if (d.behaviour.latency != latency_) applyLatency(d.behaviour.latency);   // state recall, undo, another editor
   for (int i = 0; i < kNumScrewViews; ++i) screwAngles_[static_cast<std::size_t>(i)] = d.screwAngles[i];
   if (d.seed != 0 && d.seed != seed_) {
     seed_ = d.seed;
@@ -879,7 +881,9 @@ void Editor::controlEndEdit(CControl* control) {
 // ---- The back of the panel ------------------------------------------------------------------------------------------
 void Editor::buildBack(CViewContainer* host) {
   if (!host) return;
-  BackContent content = backContent(prefs_);
+  Behaviour behaviour;
+  behaviour.latency = latency_;
+  BackContent content = backContent(prefs_, behaviour);
   for (auto& item : content.items) {
     if (item.kind == BackItemKind::Button) {
       item.onPress = [this] { reroll(); };
@@ -899,6 +903,14 @@ void Editor::buildBack(CViewContainer* host) {
   applyBackWear();
 }
 
+void Editor::applyLatency(LatencyMode latency) {
+  latency_ = latency;
+  Behaviour b;
+  b.latency = latency;
+  if (back_) back_->setSelected(kSetLatency, selectedFor(kSetLatency, prefs_, b));
+  refreshDynamicTexts();   // the BREATH tag and the LIVE text in MODE (no views yet: nothing to do)
+}
+
 void Editor::applyBackWear() {
   if (back_) back_->setWear(FairyTapes::Ui::generateWear(seed_ ^ kBackWearSalt, wearLevel_, kWidth, kHeight));
 }
@@ -911,6 +923,19 @@ void Editor::startFlip(bool toBack) {
 }
 
 void Editor::changeSetting(int key, int index) {
+  Behaviour b;
+  b.latency = latency_;
+  if (applyBehaviourSetting(key, index, b)) {
+    if (b.latency == latency_) return;   // the same choice again: nothing to save or restart
+    if (owner_) {   // saved with the project, sent to the processor; the controller asks the host for the restart
+      Decor d = owner_->decor();
+      d.behaviour = b;
+      owner_->editDecor(d);
+      decorRevision_ = owner_->decorRevision();
+    }
+    applyLatency(b.latency);
+    return;
+  }
   Prefs p = prefs_;
   if (!applySetting(key, index, p)) return;
   if (!prefsFile_.empty()) {

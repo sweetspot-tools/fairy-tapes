@@ -1,6 +1,6 @@
 # Pillow Talk — Controlli (parametri)
 
-Elenco di **tutti i parametri** esposti all'host. Il plugin ha un editor proprio (1000 x 628, vedi sotto); i parametri restano comunque visibili e automatizzabili dalla lista standard dell'host. Ordine **per ID**. Lo stato (v3) si salva e si ricarica con il progetto: i 16 valori normalizzati, poi il decor (seme dell'usura, angoli delle viti, testi dei nastri) e le impostazioni Behaviour del retro. Gli stati v1 e v2 si caricano con i default per ciò che manca.
+Elenco di **tutti i parametri** esposti all'host. Il plugin ha un editor proprio (1000 x 470, vedi sotto); i parametri restano comunque visibili e automatizzabili dalla lista standard dell'host. Ordine **per ID**. Lo stato (v3) si salva e si ricarica con il progetto: i 16 valori normalizzati, poi il decor (seme dell'usura, angoli delle viti, testi dei nastri) e le impostazioni Behaviour del retro. Gli stati v1 e v2 si caricano con i default per ciò che manca.
 
 **Totale: 16 parametri** (ID 0…15).
 
@@ -32,14 +32,14 @@ Parametri di sola lettura e nascosti (`kIsReadOnly | kIsHidden`), fuori dalla ta
 | 1000 | `kDispVoice` | livello del rilevatore (inviluppo del segnale filtrato che il ducker confronta con Threshold: mono, passa-banda 120 Hz-5 kHz, raddrizzato), -60 ... 0 dB. Un seno stazionario si legge circa 4 dB sotto il suo picco | 0 |
 | 1001 | `kDispSend` | gain di ducking applicato al wet, lineare 0 ... 1 | 1 |
 | 1002 | `kDispEcho` | picco dell'eco in uscita (dopo ducking e Mix; con Bypass o Mix 0 è al minimo), -60 ... 0 dB | 0 |
-| 1003 / 1004 | `kDispInL` / `kDispInR` | picco di ingresso L / R (misurato prima di tutto), -60 ... 0 dB (meter IN) | 0 |
-| 1005 / 1006 | `kDispOutL` / `kDispOutR` | picco di uscita L / R (dopo Mix e Bypass), -60 ... 0 dB (meter OUT) | 0 |
+| 1003 / 1004 | `kDispInL` / `kDispInR` | picco di ingresso L / R (misurato prima di tutto), -60 ... +6 dB (meter IN) | 0 |
+| 1005 / 1006 | `kDispOutL` / `kDispOutR` | picco di uscita L / R (dopo Mix e Bypass), -60 ... +6 dB (meter OUT) | 0 |
 | 1007 / 1008 | `kDispClipIn` / `kDispClipOut` | clip di ingresso / uscita: 1 se |x| >= 1.0, mantenuto 2 s di tempo audio, altrimenti 0 | 0 |
 | 1009 | `kClearClips` | **scrivibile** (nascosto): l'editor scrive 1 con un clic su un LED di clip; il processore azzera i clip e risponde 0 | 0 |
 
 ## Editor
 
-- Layout 1000 x 628, cinque riquadri: DUCKING (display e Sidechain), LEVEL (meter IN L/R e OUT L/R, riga DUCK = riduzione della mandata, LED di clip IN e OUT), OUTPUT (Mix, Bypass), DELAY (Time, Feedback, Tone, Saturation, Wow/Flutter + Time Sync e note), AUTO DUCK (Threshold, Depth, Hold, Release + Hold Sync e note).
+- Layout 1000 x 470, cinque riquadri: DUCKING (display e Sidechain), LEVEL (meter IN L/R e OUT L/R, riga DUCK = riduzione della mandata, LED di clip IN e OUT), OUTPUT (Mix, Bypass), DELAY (Time, Feedback, Tone, Saturation, Wow/Flutter e pulsante SYNC), AUTO DUCK (Threshold, Depth, Hold, Release e pulsante SYNC). DELAY e AUTO DUCK stanno sulla stessa riga; con SYNC acceso la manopola Time (o Hold) lascia il posto ai quattro pulsanti nota, quello scelto acceso in ambra.
 - Display del ducking: voce grigia, eco ambra, linea verde della mandata, linea tratteggiata della soglia; finestra di 6 s (3/6/12 s nei Settings).
 - LED di clip: si accendono con un picco a 0 dBFS o oltre, restano accesi 2 s; **un clic li azzera**.
 - Gesti: trascinamento verticale, **Maiusc** = fine, **doppio clic** = default.
@@ -56,7 +56,7 @@ Parametri di sola lettura e nascosti (`kIsReadOnly | kIsHidden`), fuori dalla ta
 - [ ] Sync On/Off durante l'automazione di Time e Hold.
 - [ ] Display, meter e LED di clip con voce reale e con sidechain; clic sul LED = azzera.
 - [ ] Wear Off/Light/Heavy; scrivere sul nastro; ruotare le viti; flip del retro; preferenze che persistono.
-- [ ] Finestra HiDPI (Windows/Linux a 150-200 %): 1000 x 628 per il fattore, controlli allineati.
+- [ ] Finestra HiDPI (Windows/Linux a 150-200 %): 1000 x 470 per il fattore, controlli allineati.
 - [ ] Pulsanti nota attenuati cliccabili (voluto).
 - [ ] Linux: X11/XWayland in Reaper.
 

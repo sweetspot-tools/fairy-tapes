@@ -6,13 +6,13 @@ project(TheStripper VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 
-# VST3 SDK path (clone https://github.com/steinbergmedia/vst3sdk into vendors/vst3sdk at repo root)
+# VST3 SDK path: the vendors/vst3sdk submodule at the repo root (git clone --recurse-submodules)
 set(VST3_SDK_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../vendors/vst3sdk" CACHE PATH "Path to Steinberg VST3 SDK")
 # Distribution folder: built .vst3 bundles go here (gitignored). Suite root = CMAKE_SOURCE_DIR.
 set(SUITE_DIST_DIR "${CMAKE_SOURCE_DIR}/dist")
 
 if(NOT EXISTS "${VST3_SDK_PATH}/base")
-  message(FATAL_ERROR "VST3 SDK not found at ${VST3_SDK_PATH}. Clone it with:\n  git clone https://github.com/steinbergmedia/vst3sdk ${VST3_SDK_PATH}")
+  message(FATAL_ERROR "VST3 SDK not found at ${VST3_SDK_PATH}. Fetch it from the repo root with:\n  git submodule update --init --recursive vendors/vst3sdk")
 endif()
 
 # SDK include and source (minimal set for a plugin)
@@ -211,7 +211,7 @@ add_test(NAME the_stripper_back_panel_tests COMMAND the_stripper_back_panel_test
 
 # Typed values: parsing and the inverse of the display (header-only, no VSTGUI).
 add_executable(the_stripper_value_text_tests tests/test_value_text.cpp)
-target_include_directories(the_stripper_value_text_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_include_directories(the_stripper_value_text_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${VST3_SDK_PATH} ${VST3_SDK_PLUGINTERFACES}/base)   # params.h: the real gate display
 add_test(NAME the_stripper_value_text_tests COMMAND the_stripper_value_text_tests)
 
 # Recall marks (header-only, no VSTGUI).

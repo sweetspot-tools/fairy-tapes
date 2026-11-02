@@ -26,6 +26,7 @@ static_assert(readoutsInEnumOrder(), "kReadouts[i].id == i: the view indexes its
 
 ReadoutView::ReadoutView(const CRect& size, Part part) : CView(size), part_(part) {
   font10_ = makeOwned<CFontDesc>("Arial", 10, kBoldFace);
+  font9_ = makeOwned<CFontDesc>("Arial", 9, kBoldFace);
   setMouseEnabled(false);
 }
 
@@ -83,13 +84,13 @@ void ReadoutView::draw(CDrawContext* ctx) {
     if (t.empty()) continue;
     ctx->setGlobalAlpha(base * (dimmed_[static_cast<std::size_t>(i)] ? FairyTapes::Ui::kSilkDimmedAlpha : 1.f));
     const CColor colour = r.amber ? FairyTapes::Ui::kAmber : FairyTapes::Ui::kDimWhite;
-    if (r.amber && handwritten_) {
+    if (r.amber && r.handwritable && handwritten_) {
       const TapeAlign a = r.align == TextAlign::Left ? TapeAlign::Left : r.align == TextAlign::Right ? TapeAlign::Right : TapeAlign::Center;
       FairyTapes::Ui::drawTapeText(ctx, font_, t, CPoint(o.x + r.x, o.y + r.y), FairyTapes::Ui::normalizedFontSize(font_, r.size),
                                    colour, seed_ + 977u * static_cast<uint32_t>(i + 1), 0.5, a);
       continue;
     }
-    ctx->setFont(font10_);
+    ctx->setFont(r.size < 10 ? font9_ : font10_);
     ctx->setFontColor(colour);
     const CCoord w = ctx->getStringWidth(t.c_str());
     ctx->drawString(t.c_str(), CPoint(o.x + FairyTapes::Ui::alignedLeft(r.x, w, r.align), o.y + r.y));

@@ -50,6 +50,27 @@ void test_meter_bar_tracks_level_and_hold() {
   bar.setLevel(5.0, 0.03);
   CHECK(bar.level() == 1.0);                           // clamped
 }
+
+void test_meter_bar_takes_the_meter_scale() {
+  MeterBar plain(CRect(0, 0, 300, 12), MeterKind::Level);
+  CHECK(plain.scale().minDb == -60.0 && plain.scale().maxDb == 6.0);     // default: -60..+6 dB
+  MeterBar zero(CRect(0, 0, 192, 8), MeterKind::Level, 12, MeterScale{-60.0, 0.0});
+  CHECK(zero.scale().minDb == -60.0 && zero.scale().maxDb == 0.0);
+  // the held peak falls 20 dB/s of that scale: after the 1.5 s hold, 0.3 s take 6 dB = 0.1 of a -60..0 bar
+  zero.setLevel(1.0, 0.01);
+  zero.setLevel(0.0, 0.75);
+  zero.setLevel(0.0, 0.75);
+  zero.setLevel(0.0, 0.3);
+  CHECK(std::fabs(zero.hold() - 0.9) < 1e-9);
+  // the user's fall setting (dB/s) is read on the same scale
+  zero.setHoldSettings(0.5, 40.0);
+  zero.setLevel(1.0, 0.01);
+  zero.setLevel(0.0, 0.5);
+  zero.setLevel(0.0, 0.15);
+  CHECK(std::fabs(zero.hold() - 0.9) < 1e-9);
+  MeterBar bad(CRect(0, 0, 300, 12), MeterKind::Level, 15, MeterScale{0.0, -1.0});
+  CHECK(bad.scale().minDb == -60.0 && bad.scale().maxDb == 6.0);       // nonsense: the default
+}
 } // namespace
 
 int main() {
@@ -57,6 +78,7 @@ int main() {
   test_clip_led_click_calls_back_and_lit_state();
   test_clip_led_without_callback_is_harmless();
   test_meter_bar_tracks_level_and_hold();
+  test_meter_bar_takes_the_meter_scale();
   std::printf(g_failed ? "FAILED (%d)\n" : "All meter control tests passed\n", g_failed);
   return g_failed ? 1 : 0;
 }

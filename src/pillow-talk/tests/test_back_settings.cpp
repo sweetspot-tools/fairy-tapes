@@ -5,6 +5,7 @@
  * the content fits the shared template. Build target: pillow_talk_back_settings_tests.
  */
 #include "ui/back_settings.h"
+#include "ui/routing_diagram.h"
 
 #include <cstdio>
 #include <string>
@@ -118,6 +119,21 @@ void test_reroll_gives_a_new_look_and_keeps_the_behaviour() {
   ASSERT_TRUE(rerolledDecor(d, 1234).seed != 1234 && rerolledDecor(d, 1234).seed != 0);   // always another seed
   ASSERT_TRUE(rerolledDecor(d, 0).seed != 0 && rerolledDecor(d, 0).seed != 1234);
 }
+// The VOICE display point is the envelope after the detector's vocal band-pass (engine.cpp): in the diagram the BAND block
+// comes before the VOICE tap, and the tap before the AUTO DUCK detector.
+void test_routing_voice_point_after_the_band_pass() {
+  const auto r = pillowRouting();
+  const FairyTapes::Ui::RoutingPrim *band = nullptr, *voice = nullptr, *duck = nullptr;
+  for (const auto& p : r.flow) {
+    if (p.kind != FairyTapes::Ui::RoutingPrim::Kind::Text) continue;
+    if (p.text == "BAND") band = &p;
+    if (p.text == "VOICE") voice = &p;
+    if (p.text == "AUTO DUCK") duck = &p;
+  }
+  ASSERT_TRUE(band != nullptr && voice != nullptr && duck != nullptr);
+  ASSERT_TRUE(band->x < voice->x && voice->x < duck->x);
+}
+
 } // namespace
 
 int main() {
@@ -125,6 +141,7 @@ int main() {
   RUN_TEST(test_current_values_are_selected);
   RUN_TEST(test_applying_a_choice);
   RUN_TEST(test_reroll_gives_a_new_look_and_keeps_the_behaviour);
+  RUN_TEST(test_routing_voice_point_after_the_band_pass);
   std::printf("%d passed, %d failed\n", g_passed, g_failed);
   return g_failed ? 1 : 0;
 }

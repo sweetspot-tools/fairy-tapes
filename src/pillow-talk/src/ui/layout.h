@@ -10,6 +10,7 @@
 #include "params.h"
 #include "ui/editor_size.h"
 
+#include "fairy_ui/meter_math.h"
 #include "fairy_ui/sanitize.h"
 #include "fairy_ui/silkscreen.h"
 
@@ -157,9 +158,13 @@ constexpr Rect kScopeRect{44, 108, 376, 130};
 // ---- LEVEL: LED rows and clip LEDs ----------------------------------------------------------------------------------
 constexpr int kMeterLeds = 12;
 constexpr float kMeterFirstX = 598, kMeterPitch = 16, kMeterBarHeight = 8;   // centre of the first LED, LED pitch
+// The dB range of the IN/OUT rows: the processor normalizes the peaks over kMeterMinDb..kMeterMaxDb (-60..+6, params.h), and
+// the LED colours and the fall of the held peak use the same range (2026-11-02). 12 LEDs, one every 6 dB. The DUCK row is
+// linear and ignores it.
+constexpr FairyTapes::Ui::MeterScale kMeterScale{kMeterMinDb, kMeterMaxDb};
 
 struct MeterRow {
-  ParamID id;           // display parameter (meter norm over -60..0 dB; kDispSend: linear send gain)
+  ParamID id;           // display parameter (meter norm over kMeterMinDb..kMeterMaxDb; kDispSend: linear send gain)
   float cy;
   bool gainReduction;   // the DUCK row: send level reduction (1 - send gain), amber
   bool alwaysLit;       // input and output stay lit under the global bypass (as in The Stripper)
@@ -208,8 +213,8 @@ struct PanelText {
 };
 
 constexpr float kRowTagX = kMeterFirstX - 12, kSectionTagX = kMeterFirstX - 36;
-constexpr float scaleX(int db) {   // LED of the scale label (nearest of the 12 over -60..0 dB)
-  return kMeterFirstX + kMeterPitch * static_cast<int>((db + 60) / (60.0f / (kMeterLeds - 1)) + 0.5f);
+constexpr float scaleX(int db) {   // LED of the scale label (nearest of the 12 over kMeterMinDb..kMeterMaxDb)
+  return kMeterFirstX + kMeterPitch * static_cast<int>((db - kMeterMinDb) / (kMeterMaxDb - kMeterMinDb) * (kMeterLeds - 1) + 0.5);
 }
 
 constexpr PanelText kPanelTexts[] = {
@@ -233,6 +238,7 @@ constexpr PanelText kPanelTexts[] = {
     {"-24", scaleX(-24), 146, TextStyle::Scale, TextAlign::Centre},
     {"-12", scaleX(-12), 146, TextStyle::Scale, TextAlign::Centre},
     {"0", scaleX(0), 146, TextStyle::Scale, TextAlign::Centre},
+    {"+6", scaleX(6), 146, TextStyle::Scale, TextAlign::Centre},
     {"send level reduction", kMeterFirstX + 5 * kMeterPitch + 8, 216, TextStyle::Note, TextAlign::Centre},
 };
 

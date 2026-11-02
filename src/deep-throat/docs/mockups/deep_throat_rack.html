@@ -383,6 +383,8 @@ var MROWS=[
   ['Dist',function(m){return MODES.dist[m];}],
   ['Tone curve (mud / presence / air, dB at +100%)',function(m){return MODES.tone[m].map(fs).join(' / ')+' dB';}]];
 var MODE=0,RO=[],modeBtns=[],MODECELLS=[[],[],[]],MODEHEAD=[],MCAP=null,DNOTE=null;
+/* SETTINGS > BEHAVIOUR > LATENCY (spec 9b, saved with the project): 'mix' (lookahead) or 'live' (no delay, LEVEL detector in every mode) */
+var LATENCY=lsGet('dt_latency','mix')==='live'?'live':'mix';
 var INK={},OUTK={},TGK={},RGK={},BRK={},DSK=null,CPK={},TONEK={},EQK={};
 /* read-only silkscreen value: panel layer (under the wear), dims with its module or with the bypass, refreshed from the MODES table */
 function silk(){var lg=el('g',{transform:'translate(0,'+OFFY+')'},LY.scale);lg.style.transition='opacity .15s';if(CUR){(CUR._x=CUR._x||[]).push(lg);}else gbtn(lg);return lg;}
@@ -447,6 +449,8 @@ box(24,238,130,174,'MODE','bottom');
 ['SPEAK','SING','PUKE'].forEach(function(n,i){
   var b=gbtn(choice(89,302+i*26,n,i===0,function(){setMode(i);},56));modeBtns.push(b);});
 boxTag(40,260,function(){return MODES.info[MODE].split(':')[0].toUpperCase();});boxTag(40,270,function(){return (MODES.info[MODE].split(':')[1]||'').trim().toUpperCase();});
+/* LATENCY LIVE: amber status under the mode buttons, printed (never handwritten) and never dimmed, as the MODE tags */
+(function(){var lg=el('g',{transform:'translate(0,'+OFFY+')'},LY.scale);var t=txt('',89,390,9,AMBL,'middle',700,lg);RO.push(function(){t.textContent=LATENCY==='live'?'LEVEL DETECTOR \u00b7 LIVE':'';});})();
 var tgf=withNum(function(v){return (-30+v*20).toFixed(1)+' dBFS';},function(v){return -30+v*20;});
 var brf=withNum(function(v){return (v*12).toFixed(1)+' dB';},function(v){return v*12;});
 var cmf=withNum(function(v){return (-6-24*v).toFixed(1)+' dB';},function(v){return -6-24*v;});
@@ -462,7 +466,7 @@ var mRd=modBox(160,238,234,174,'RIDER',function(){
 var mBr=modBox(400,238,355,174,'BREATH',function(){
   knob(466,322,'AMOUNT',0.5,'0','12','',{def:0.5,fmt:brf,api:BRK});
   knob(550,322,'SENSITIVITY',0.5,'0','1','',{def:0.5,fmt:pct,api:{}});
-  boxTag(416,272,function(){return MODES.detector[MODE];});
+  boxTag(416,272,function(){return LATENCY==='live'?'LEVEL':MODES.detector[MODE];});
   brLed=el('circle',{cx:622,cy:350,r:5,fill:OFFL2,stroke:'#000','stroke-width':.6});
   lab('BREATH',632,354,10,W,'start');
   btn(718,364,'LISTEN',false,function(b){toggle(b);});
@@ -542,7 +546,7 @@ function seg(x,y,items,sel,cb,w){var rects=[],labels=[];w=w||70;
 function act(x,y,w,label,cb,off){var g=el('g',{style:off?'':'cursor:pointer',opacity:off?.4:1});el('rect',{x:x,y:y,width:w,height:24,rx:2,fill:'#8e8e91',stroke:'#b8b8bb'},g);txt(label,x+w/2,y+16,11,'#1a1a1c','middle',800,g);if(!off)g.addEventListener('click',cb);}
 function row(label,y,hint,x0){x0=x0||50;txt(label,x0,y+16,13,W,'start',800);if(hint)txt(hint,x0,y+32,10,DIMW,'start',700);}
 var SC=514;
-box(24,102,462,420,'APPEARANCE','top');txt('saved for you, in every project',255,130,10,DIMW,'middle',700);
+box(24,102,462,364,'APPEARANCE','top');txt('saved for you, in every project',255,130,10,DIMW,'middle',700);
 row('WEAR',146);seg(200,146,['OFF','LIGHT','HEAVY'],['off','light','heavy'].indexOf(WEAR),function(i){var w=document.getElementById('wear');w.value=['off','light','heavy'][i];w.dispatchEvent(new Event('change'));},84);
 row('NOTES LAYER',194,'tape and pen marks on the values');seg(200,194,['HIDE','SHOW'],1,function(){},84);
 row('TAPE FONT',242,'handwriting on the tape');(function(){var names=Object.keys(TAPEFONTS),x=200,y=242,w=176;
@@ -554,11 +558,14 @@ row('VALUES FONT',290,'values on the knobs');seg(200,290,['STANDARD','TAPE FONT'
 row('METER HOLD',338);seg(200,338,['OFF','1.5 S','3 S','INF'],1,function(){},63);
 row('METER RELEASE',386);seg(200,386,['SLOW','NORMAL','FAST'],1,function(){},84);
 row('LOOK',434);act(200,434,120,'RE-ROLL',function(){document.getElementById('reroll').click();});txt('new wear, dirt and screws',332,450,10,DIMW,'start',700);
-box(SC,102,462,420,'NOTES','top');
-['Appearance settings belong to you: they are kept in your','preferences and apply to every project and every instance.','',
- 'The wear layout (scratches, tape, screws) is generated once','per instance from a saved seed and never changes by itself.','Use RE-ROLL to get a new one.','',
- 'Double-click on a knob returns it to its default value.','Click a clip LED to clear it.','',
- 'The three mode buttons (SPEAK, SING, PUKE) change values','inside the chain: see the MODES tab.'].forEach(function(s,i){txt(s,SC+26,146+i*22,12,DIMW,'start',700);});
+/* behaviour (saved with the project): LATENCY, as the editor (ui/back_settings.h) */
+box(SC,102,462,364,'BEHAVIOUR','top');txt('saved with the project',SC+231,130,10,DIMW,'middle',700);
+row('LATENCY',146,'LIVE: no delay',SC+26);seg(SC+176,146,['MIX','LIVE'],LATENCY==='live'?1:0,function(i){LATENCY=i?'live':'mix';lsSet('dt_latency',LATENCY);refreshRO();},84);
+box(24,484,952,120,'NOTES','top');
+['Appearance settings belong to you: they are kept in your preferences and apply to every project and every instance.',
+ 'LATENCY is saved in the project: MIX looks about 100 ms ahead (host compensated), LIVE has no delay but reduces breaths late.',
+ 'The wear layout (scratches, tape, screws) is generated once per instance from a saved seed: RE-ROLL gives a new one.',
+ 'Double-click a knob for its default value, click a clip LED to clear it. SPEAK, SING and PUKE: see the MODES tab.'].forEach(function(s,i){txt(s,50,522+i*22,12,DIMW,'start',700);});
 
 /* ---- MODES tab: what the mode buttons force (generated from the MODES table above) ---- */
 CUR=PANES.modes;BOXOVR=BOXES.modes;
@@ -598,10 +605,10 @@ var RT=(function(){
   return {ln:ln,arrow:arrow,arrowUp:arrowUp,arrowDown:arrowDown,arrowLeft:arrowLeft,dot:dot,ring:ring,jack:jack,amp:amp,block:block,inSwitch:inSwitch,tap:tap,conn:conn};})();
 box(24,102,952,388,'SIGNAL FLOW','top');
 (function(){var Y1=178,YD=300,Y2=424,L=RT.ln;
-  /* row 1: lookahead delay, input, rider, breath, eq, de-ess */
-  RT.jack(60,Y1,'IN L · R');L('M69 '+Y1+' H98');RT.dot(82,Y1);
-  RT.block(98,176,Y1,44,'DELAY',['LOOKAHEAD']);L('M176 '+Y1+' H206');RT.dot(194,Y1);
-  RT.amp(206,Y1,'INPUT');L('M234 '+Y1+' H268');RT.tap(250,Y1,36,'IN METER','CLIP IN');
+  /* row 1: input meter and clip (raw input), input gain, lookahead delay, rider, breath, eq, de-ess (engine.cpp) */
+  RT.jack(60,Y1,'IN L · R');L('M69 '+Y1+' H112');RT.tap(86,Y1,36,'IN METER','CLIP IN');RT.dot(102,Y1);
+  RT.amp(112,Y1,'INPUT');L('M140 '+Y1+' H172');RT.dot(154,Y1);
+  RT.block(172,250,Y1,44,'DELAY',['LOOKAHEAD','MIX ONLY']);L('M250 '+Y1+' H268');
   L('M280 '+Y1+' H284');RT.block(284,364,Y1,44,'RIDER',['GAIN']);RT.inSwitch(268,Y1,382,140);L('M364 '+Y1+' H396');
   L('M408 '+Y1+' H412');RT.block(412,492,Y1,44,'BREATH',['REDUCER']);RT.inSwitch(396,Y1,510,140);L('M492 '+Y1+' H524');
   L('M536 '+Y1+' H540');RT.block(540,620,Y1,44,'EQ',['HPF · MUD CUT']);RT.inSwitch(524,Y1,638,140);L('M620 '+Y1+' H652');
@@ -610,15 +617,15 @@ box(24,102,952,388,'SIGNAL FLOW','top');
   /* what the Listen buttons play: the band the de-esser removes, the part of the breath the reducer removes */
   L('M740 200 V240 H870');RT.arrow(870,240);RT.conn(880,240,'B');txt('removed band',806,234,9,DIMW,'middle',700);
   L('M480 200 V262 H910');RT.arrow(910,262);RT.conn(920,262,'C');txt('removed breath',700,256,9,DIMW,'middle',700);
-  /* detection: live (not delayed) input, stereo-linked mono; control lines into the rider and the breath reducer */
-  L('M82 '+Y1+' V'+YD+' H100',true);RT.amp(100,YD,'INPUT');L('M128 '+YD+' H150',true);
-  RT.block(150,210,YD,32,'L + R',['MONO']);L('M210 '+YD+' H244 M226 '+YD+' V350 H244',true);RT.dot(226,YD);
+  /* detection: gained, live (not delayed) input, stereo-linked mono; control lines into the rider and the breath reducer */
+  L('M154 '+Y1+' V'+YD+' H160',true);
+  RT.block(160,220,YD,32,'L + R',['MONO']);L('M220 '+YD+' H244 M232 '+YD+' V350 H244',true);RT.dot(232,YD);
   RT.block(244,320,YD,32,'LEVEL',['RIDER METER']);L('M320 '+YD+' H334 V207',true);RT.arrowUp(334,200);
   RT.block(244,356,350,36,'BREATH DETECTOR',['SPECTRAL / LEVEL']);L('M356 350 H380',true);
   RT.block(380,460,350,36,'MAX',['LOOKAHEAD']);L('M430 332 V207',true);RT.arrowUp(430,200);
   L('M400 332 V278 H342',true);RT.arrowLeft(335,278);txt('HOLD ON BREATH',372,272,8,DIMW,'middle',800);
-  /* global BYPASS: the delayed input straight to the output switch */
-  L('M194 '+Y1+' V120 H958 V360 H700 V'+(Y2-16.6));txt('BYPASS',300,114,9,DIMW,'middle',800);txt('output = input, delayed by the lookahead',950,352,9,DIMW,'end',700);
+  /* global BYPASS: the raw input, delayed, straight to the output switch */
+  L('M102 '+Y1+' V120 H958 V360 H700 V'+(Y2-16.6));txt('BYPASS',300,114,9,DIMW,'middle',800);txt('output = input, delayed by the lookahead',950,352,9,DIMW,'end',700);
   /* row 2: comp, tone, listen, output */
   RT.conn(60,Y2,'A');L('M70 '+Y2+' H90');
   L('M102 '+Y2+' H106');RT.block(106,236,Y2,48,'COMP',['RATIO · DIST','SC HPF ON DETECTOR']);RT.inSwitch(90,Y2,254,390);L('M236 '+Y2+' H290');RT.tap(270,Y2,26,'GR');
@@ -636,7 +643,7 @@ box(24,504,952,86,'LEGEND','top');
   L('M552 '+y+' H600',true);txt('control signal',608,y+4,10,DIMW,'start',700);
   RT.dot(712,y);L('M712 '+y+' V'+(y-12),false,1.4);txt('meter / clip point',722,y+4,10,DIMW,'start',700);
   RT.conn(858,y,'A');txt('continues',874,y+4,10,DIMW,'start',700);
-  txt('SPEAK / SING / PUKE change the values inside the blocks (see MODES). LISTEN plays the DE-ESS band first, then the BREATH; off, the mix.',50,y+34,11,DIMW,'start',700);})();
+  txt('SPEAK / SING / PUKE change the values inside the blocks (see MODES). LISTEN plays what DE-ESS or BREATH removes (BREATH wins); off, the mix.',50,y+34,11,DIMW,'start',700);})();
 CUR=null;BOXOVR=null;showTab(lsGet('dt_tab','settings'));
 ROOT=svg;
 setMode(MODE);

@@ -4,7 +4,7 @@
 
 **Goal:** Costruire Pillow Talk, un plugin VST3 tape echo il cui livello di mandata si abbassa mentre la voce canta e si apre nelle pause.
 
-**Architecture:** Plugin VST3 in `src/pillow-talk/`, stessa struttura di The Stripper. Tre unità DSP indipendenti e testabili (`Ducker`, `TapeEcho`, helper dei parametri) sono collegate dal `Processor`. Il `Ducker` produce un gain per campione che il `Processor` applica all'ingresso del `TapeEcho`; il mix wet/dry è in parallelo.
+**Architecture:** Plugin VST3 in `src/pillow-talk/`, stessa struttura di The Stripper. Tre unità DSP indipendenti e testabili (`Ducker`, `TapeEcho`, helper dei parametri) sono collegate dal `Processor`. Il `Ducker` produce un gain per campione che il `Processor` applica all'ingresso del `TapeEcho`; il mix wet/dry è in parallelo. **Superato dalla spec:** il gain scala l'**uscita** wet prima del mix e l'ingresso del nastro resta aperto, così le ripetute continuano a decadere nella linea (vedi `docs/superpowers/specs/2026-10-08-pillow-talk-design.md` e `src/pillow-talk/src/engine.cpp`); le firme dei Task sotto restano come storia.
 
 **Tech Stack:** C++20, VST3 SDK (`vendors/vst3sdk`), CMake/CTest. Nessuna dipendenza da JUCE, NAM o CUDA.
 

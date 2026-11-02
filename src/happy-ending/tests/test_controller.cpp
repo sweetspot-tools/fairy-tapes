@@ -8,6 +8,7 @@
 #include "display.h"
 #include "loudness_macro.h"
 #include "state.h"
+#include "tuning.h"
 #include "pluginterfaces/base/ibstream.h"
 #include "pluginterfaces/vst/ivsteditcontroller.h"
 #include <cmath>
@@ -108,8 +109,35 @@ void testParameterStrings() {
   ASSERT_TRUE(f.text(kGlueRelease, 4) == "Auto" && f.text(kGlueRelease, 1) == "0.3 s");
   ASSERT_TRUE(f.text(kGlueRatio, 2) == "4:1" && f.text(kGlueMix, 10) == "50 %");
   ASSERT_TRUE(f.text(kFinalMode, 0) == "Inflate" && f.text(kFinalMode, 1) == "Clip");
-  ASSERT_TRUE(f.text(kLimitStyle, 1) == "Punch" && f.text(kLimitRelease, 4) == "Style" && f.text(kLimitRelease, 6) == "+2");
+  ASSERT_TRUE(f.text(kLimitStyle, 1) == "Punch");
   ASSERT_TRUE(f.text(kLoudness, 7) == "3.5" && f.text(kTilt, 0) == "-3.0 dB");
+}
+
+// LIMIT RELEASE is a trim around the style's own release (spec 5.5): the host shows the real milliseconds of the current
+// style, base * 2^((index - 4) / 3); DYN adds "prog." because the program moves it. Typed numbers pick the nearest step.
+void testLimitReleaseShowsTheStyleMilliseconds() {
+  Fixture f;
+  const auto ms = [](int style, int index) {
+    char b[32];
+    std::snprintf(b, sizeof b, "%.0f ms", Tuning::kLimitReleaseBaseMs[style] * std::pow(2.0, (index - 4) / 3.0));
+    return std::string(b);
+  };
+  for (int style = 0; style < 3; ++style) {
+    f.setIndex(kLimitStyle, style);
+    for (int i : {0, 4, 7, 8}) {
+      const std::string want = ms(style, i) + (style == 2 ? " prog." : "");
+      ASSERT_TRUE(f.text(kLimitRelease, i) == want);
+    }
+  }
+  f.setIndex(kLimitStyle, 1);
+  Steinberg::Vst::TChar typed[16];
+  const std::string s = ms(1, 5).substr(0, ms(1, 5).find(' '));
+  int k = 0;
+  for (; k < static_cast<int>(s.size()); ++k) typed[k] = static_cast<Steinberg::Vst::TChar>(s[k]);
+  typed[k] = 0;
+  Steinberg::Vst::ParamValue v = -1;
+  ASSERT_TRUE(f.c.getParamValueByString(kLimitRelease, typed, v) == Steinberg::kResultOk);
+  ASSERT_TRUE(indexFromNorm(kLimitRelease, v) == 5);
 }
 
 void testHiPassFrequencyFollowsItsMsPosition() {
@@ -272,6 +300,7 @@ void testNoRestartWithoutHandler() {
 
 int main() {
   RUN_TEST(testParameterStrings);
+  RUN_TEST(testLimitReleaseShowsTheStyleMilliseconds);
   RUN_TEST(testHiPassFrequencyFollowsItsMsPosition);
   RUN_TEST(testTypedValues);
   RUN_TEST(testParametersReadBackAtTheSameIndex);

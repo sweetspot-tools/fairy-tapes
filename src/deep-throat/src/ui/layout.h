@@ -364,7 +364,8 @@ constexpr bool panelTextDimmed(const PanelText& t, const DimState& s) {
 
 // Read-only values printed on the panel (filled from the mode table and the parameters, Task 5). The Comp cycle values
 // are printed by the Cycle items of the silkscreen.
-enum class ReadoutId { RiderInfo, EqHpf, EqMud, ToneMud, TonePresence, ToneAir };
+// LiveDetector: "LEVEL DETECTOR . LIVE" in MODE, under the three mode buttons, with LATENCY LIVE (spec 9b); empty in MIX.
+enum class ReadoutId { RiderInfo, EqHpf, EqMud, ToneMud, TonePresence, ToneAir, LiveDetector };
 struct Readout {
   ReadoutId id;
   float x, y;   // y is the baseline
@@ -372,14 +373,16 @@ struct Readout {
   bool amber;   // amber, else dim white
   TextAlign align;
   Module module;
+  bool handwritable = true;   // amber texts follow VALUES FONT; false: always printed (a status, not a value)
 };
-constexpr Readout kReadouts[6] = {
+constexpr Readout kReadouts[7] = {
     {ReadoutId::RiderInfo, 266, 390, 10, false, TextAlign::Centre, Module::Rider},
     {ReadoutId::EqHpf, 904, 314, 10, true, TextAlign::Centre, Module::Eq},
     {ReadoutId::EqMud, 904, 354, 10, true, TextAlign::Centre, Module::Eq},
     {ReadoutId::ToneMud, 938, 506, 10, true, TextAlign::Right, Module::Tone},
     {ReadoutId::TonePresence, 938, 538, 10, true, TextAlign::Right, Module::Tone},
     {ReadoutId::ToneAir, 938, 570, 10, true, TextAlign::Right, Module::Tone},
+    {ReadoutId::LiveDetector, 89, 390, 9, true, TextAlign::Centre, Module::None, false},   // MODE: never dims
 };
 
 // Faint block tags (7 px, 10% opacity) at the top left of a box: the keys of SilkscreenModel::setTag.

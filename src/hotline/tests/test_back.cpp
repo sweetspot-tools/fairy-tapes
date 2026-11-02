@@ -160,6 +160,8 @@ void test_routing_legend_explains_character() {
   std::string all;
   for (const auto& n : r.legend.notes) all += n + "\n";
   ASSERT_TRUE(contains(all, "CHARACTER") && contains(all, " IN ") && contains(all, "DEVICE") && contains(all, "MORPH"));
+  // IN off zeroes Drive, Noise and Room (applyCharacterIn): the device's own drive, noise and room go away.
+  ASSERT_TRUE(contains(all, "removes drive, noise and room") && !contains(all, "keep the device values"));
   ASSERT_TRUE(all.size() <= 150);   // one line of 11 px text across the box
 }
 

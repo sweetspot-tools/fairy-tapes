@@ -203,6 +203,18 @@ void test_block_tags() {
   CHECK(string(blockTag(Module::Input, true, 0, true, true)).empty() && string(blockTag(Module::Output, true, 0, true, true)).empty());
 }
 
+// The printed ends of the gate THRESH scale say where DeNoise really closes (2026-11-02): -inf ... -48 dB, the same numbers as
+// the host text at 0 and 1 (before: -inf ... 0).
+void test_gate_scale_ends_match_the_threshold_text() {
+  const KnobLook* g = knobLookOf(kGateThreshold);
+  CHECK(g != nullptr);
+  if (!g) return;
+  CHECK(std::string(g->lo) == "-\xE2\x88\x9E");
+  CHECK(std::string(g->hi) == "-48");
+  CHECK(gateThresholdText(1.0) == std::string(g->hi) + " dB");
+  CHECK(gateThresholdText(0.0) == "-inf dB");
+}
+
 void test_look_tables() {
   // every knob has an end-value look
   for (const auto& c : kControls) {
@@ -284,6 +296,7 @@ int main() {
   test_saturate_is_the_last_eq_knob();
   test_block_tags();
   test_look_tables();
+  test_gate_scale_ends_match_the_threshold_text();
   test_meter_dimming();
   test_gr_bar_norm();
   test_gate_row_sits_between_gain_reduction_and_clip();

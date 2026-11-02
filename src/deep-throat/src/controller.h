@@ -2,6 +2,9 @@
  * Fairy Tapes · Deep Throat — VST3 Edit Controller (parameters; the editor (ui/editor.h) is created by createView).
  * Keeps a copy of the instance decor (wear seed, screw angles, tape texts) for the editor; the processor saves it.
  * The two copies meet through "Decor" messages (messages.h), never on the audio thread.
+ * The decor also carries the BEHAVIOUR settings of the back (state v3): LATENCY (spec 9b). Whenever the LATENCY this
+ * controller knows changes (an editor edit, a state, the processor's decor), it asks the host once for
+ * restartComponent(kLatencyChanged): the processor applies the setting when the host prepares it again.
  */
 
 #pragma once
@@ -39,6 +42,8 @@ public:
 
 private:
   void sendDecor(const Decor& d);
+  // After the decor changed from `before` to `after`: restartComponent(kLatencyChanged) if LATENCY differs.
+  void latencyMaybeChanged(LatencyMode before, LatencyMode after);
 
   mutable std::mutex decor_mutex_;   // notify() may arrive on another thread
   Decor decor_;                      // seed 0 until the processor or a state provides one

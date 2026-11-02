@@ -185,3 +185,12 @@ git commit -m "feat(pillow-talk): add VSTGUI editor with ducking display"
 git add src/pillow-talk README.md docs
 git commit -m "docs(pillow-talk): document the editor and skin assets"
 ```
+
+### Task 7 (2026-11-02): colori e caduta dei meter sulla scala vera
+
+- [x] Test che falliscono in `shared/ui` (−60…0: rosso da 0 dB, giallo da −9, verde chiaro da −18; caduta 20 dB/s) e in Pillow Talk.
+  - Esito: `test_meter_math.cpp` (`test_level_led_colours_on_a_0_dB_meter` con 12 e 21 LED, soglie esatte al colore superiore; `test_default_scale_is_minus_60_to_plus_6` per 12, 15 e 24 LED e scale senza senso; caduta in `test_peak_hold_user_settings`), `test_meter_controls.cpp` (`test_meter_bar_takes_the_meter_scale`), `src/pillow-talk/tests/test_layout.cpp` (`test_level_meters_use_the_0_dB_scale`: 8 verdi, 2 verdi chiari, 1 giallo, 1 rosso sotto lo "0"). Rossi prima con un header che accettava la scala ma la ignorava (9 + 2 + 1 controlli falliti).
+- [x] `ledColor` e `PeakHold` con la scala del meter (default −60…+6, gli altri plugin invariati); `MeterBar` la riceve.
+  - Esito: `MeterScale {minDb, maxDb}`, `kDefaultMeterScale`, `sanitizeMeterScale` in `fairy_ui/meter_math.h`; `ledColor(i, n, kind, scale = default)`; `PeakHold::setScale` (la caduta resta in dB/s, `kFallDbPerSecond` = 20 sostituisce `kFallPerSecond`); `MeterBar(rect, kind, leds, scale = default)` e `scale()`. Pillow Talk: `kMeterScale` = −60…0 in `ui/layout.h`, passata a tutte le barre (la riga DUCK, lineare, la ignora). Hotline passa `MeterScale{kMeterMinDb, kMeterMaxDb}` al posto dello `static_assert` che legava le sue costanti al −60…+6 fisso del kit. The Stripper e Deep Throat invariati (default).
+- [x] Test di tutti i plugin che usano `MeterBar` verdi.
+  - Esito: 58 test CTest verdi (19 `fairy_ui`, 11 Pillow Talk, 7 Hotline, 6 Deep Throat, 15 The Stripper), prima 30/30 di `fairy_ui` e Pillow Talk; render `pillow_talk_render meters` controllato (la riga IN L a −12 dB ora ha 8 verdi e 2 verdi chiari, prima 7 verdi, 2 verdi chiari e 1 giallo); con valori più alti (prova locale, non nel tool) 0 dB accende l'ultimo LED rosso e −2,7 dB si ferma al giallo. Render di Hotline con `meters`: colori invariati.

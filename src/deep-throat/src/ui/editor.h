@@ -8,7 +8,10 @@
 // CREDITS): "BACK ->" turns the panel (FairyTapes::Ui::PanelFlip, about 0.8 s, run by the UI timer), "<- BACK" turns it
 // again; a text field open on a tape or a value is confirmed first. The editor remembers the tab while it lives. The
 // SETTINGS choices change the preferences: applied at once and saved in the file read at open (a failed write is
-// ignored, the choice stays for the session); RE-ROLL gives the instance a new seed.
+// ignored, the choice stays for the session); RE-ROLL gives the instance a new seed. BEHAVIOUR > LATENCY (MIX / LIVE,
+// spec 9b) goes to the instance decor (Controller::editDecor: saved with the project, sent to the processor, latency
+// restart asked of the host); with LIVE the front shows "LEVEL DETECTOR . LIVE" in amber in MODE, under the mode
+// buttons, and the faint detector tag of BREATH says LEVEL in every mode.
 // Wear: the seed comes from the instance decor (Controller::decor, saved with the project), the level from the user
 // preferences (ui/prefs.h, read when the editor opens; a missing or bad file gives Light / Zeyada / values in the tape
 // font). The marks change in place when the seed or the level changes (no rebuild); the UI timer polls
@@ -197,8 +200,11 @@ private:
   void applyBackWear();
   // Turns the panel to the back (true) or to the front; open text fields are confirmed first.
   void startFlip(bool toBack);
-  // A SETTINGS choice on the back: applied to the preferences, saved (a failed write is ignored) and shown at once.
+  // A SETTINGS choice on the back: applied to the preferences, saved (a failed write is ignored) and shown at once; a
+  // BEHAVIOUR choice goes to the instance decor instead.
   void changeSetting(int key, int index);
+  // The LATENCY of the instance (decor) on the back's row and in the front's texts (MODE, BREATH tag).
+  void applyLatency(LatencyMode latency);
   // Screw views for the current seed and the decor's rotations (created once, then updated in place).
   void placeScrews();
   // The end of a drag on screw `index`, which now shows `shownDeg`.
@@ -233,6 +239,7 @@ private:
 
   // The instance decor as last seen (seed_ also varies the handwriting per control).
   uint32_t seed_ = kFallbackWearSeed;
+  LatencyMode latency_ = LatencyMode::Mix;   // BEHAVIOUR > LATENCY of the instance
   uint32_t decorRevision_ = 0;
   bool decorKnown_ = false;
   std::vector<std::string> tapeTexts_;

@@ -1018,8 +1018,8 @@ void test_scope_traces_stay_inside_the_border() {
 
 
 // ---- Back of the panel: SETTINGS (Task 11) -------------------------------------------------------------------------
-// Every combination of the preference fields: the items are WEAR, TAPE FONT, VALUES FONT, LOOK in the APPEARANCE column,
-// and each one shows the option of its field.
+// Every combination of the preference fields: the items are WEAR, TAPE FONT, VALUES FONT, LOOK in the APPEARANCE column
+// (then LATENCY in BEHAVIOUR, test_settings_latency_row), and each one shows the option of its field.
 void test_settings_items_reflect_prefs() {
   using FairyTapes::Ui::BackColumn;
   using FairyTapes::Ui::BackItemKind;
@@ -1033,7 +1033,7 @@ void test_settings_items_reflect_prefs() {
           p.handwrittenValues = v == 1;
           p.notes = n == 1;
           const auto items = settingsItems(p);
-          ASSERT_TRUE(items.size() == 4);
+          ASSERT_TRUE(items.size() == 5);
           const int keys[] = {kSetWear, kSetTapeFont, kSetValuesFont, kSetLook};
           const char* labels[] = {"WEAR", "TAPE FONT", "VALUES FONT", "LOOK"};
           const BackItemKind kinds[] = {BackItemKind::Choice, BackItemKind::Stepper, BackItemKind::Choice, BackItemKind::Button};
@@ -1097,6 +1097,64 @@ void test_settings_item_to_prefs() {
             ASSERT_TRUE(!applySetting(bad.first, bad.second, p) && same(p, base));
           }
         }
+}
+
+// LATENCY (spec 9b, plan Task 12): one row in BEHAVIOUR, MIX / LIVE, showing the instance's setting (Behaviour of the
+// decor, saved with the project); a choice there changes the behaviour, never the preferences, and the template accepts
+// the back with it.
+void test_settings_latency_row() {
+  using FairyTapes::Ui::BackColumn;
+  using FairyTapes::Ui::BackItemKind;
+  for (LatencyMode m : {LatencyMode::Mix, LatencyMode::Live}) {
+    Behaviour b;
+    b.latency = m;
+    const auto items = settingsItems(Prefs{}, b);
+    ASSERT_TRUE(items.size() == 5);
+    const auto& it = items[4];
+    ASSERT_TRUE(it.key == kSetLatency && it.label == "LATENCY" && it.kind == BackItemKind::Choice);
+    ASSERT_TRUE(it.column == BackColumn::Behaviour && !it.hint.empty());
+    ASSERT_TRUE((it.options == std::vector<std::string>{"MIX", "LIVE"}));
+    ASSERT_TRUE(it.selected == (m == LatencyMode::Live ? 1 : 0) && selectedFor(kSetLatency, Prefs{}, b) == it.selected);
+    for (const auto& other : items)
+      if (other.key != kSetLatency) ASSERT_TRUE(other.column == BackColumn::Appearance);
+    const auto content = backContent(Prefs{}, b);
+    const auto problems = FairyTapes::Ui::backContentProblems(content, FairyTapes::Ui::backLayoutFor(kEditorHeight));
+    for (const std::string& problem : problems) std::fprintf(stderr, "  back content: %s\n", problem.c_str());
+    ASSERT_TRUE(problems.empty());
+  }
+  ASSERT_TRUE(backContent(Prefs{}).items[4].selected == 0);   // no behaviour given: MIX, the default
+  Behaviour b;
+  Prefs p;
+  ASSERT_TRUE(applyBehaviourSetting(kSetLatency, 1, b) && b.latency == LatencyMode::Live);
+  ASSERT_TRUE(applyBehaviourSetting(kSetLatency, 0, b) && b.latency == LatencyMode::Mix);
+  for (int bad : {-1, 2}) ASSERT_TRUE(!applyBehaviourSetting(kSetLatency, bad, b) && b.latency == LatencyMode::Mix);
+  for (int key : {(int)kSetWear, (int)kSetTapeFont, (int)kSetValuesFont, (int)kSetLook, 0}) ASSERT_TRUE(!applyBehaviourSetting(key, 1, b));
+  ASSERT_TRUE(!applySetting(kSetLatency, 1, p));   // not a preference
+  // The notes say what the setting does (one line of the box each).
+  std::string notes;
+  for (const auto& n : settingsNotes()) notes += n + "\n";
+  ASSERT_TRUE(notes.find("LATENCY") != std::string::npos && notes.find("LIVE") != std::string::npos);
+}
+
+// LIVE on the front (spec 9b): an amber "LEVEL DETECTOR \xC2\xB7 LIVE" in MODE, under the three mode buttons (a printed
+// status, never handwritten: the tape fonts have no middle dot; it never dims, as the MODE tags), and the faint detector
+// tag of BREATH says LEVEL in every mode; MIX: no text, the tag of the mode.
+void test_live_detector_text() {
+  for (Mode m : {Mode::Speak, Mode::Sing, Mode::Puke}) {
+    ASSERT_TRUE(std::string(detectorTag(m, LatencyMode::Mix)) == detectorTag(m));
+    ASSERT_TRUE(std::string(detectorTag(m, LatencyMode::Live)) == "LEVEL");
+  }
+  ASSERT_TRUE(liveDetectorText(LatencyMode::Live) == "LEVEL DETECTOR \xC2\xB7 LIVE");
+  ASSERT_TRUE(liveDetectorText(LatencyMode::Mix).empty());
+  const Readout& r = kReadouts[static_cast<int>(ReadoutId::LiveDetector)];
+  ASSERT_TRUE(r.id == ReadoutId::LiveDetector && r.amber && !r.handwritable && r.module == Module::None);
+  ASSERT_TRUE(r.align == TextAlign::Centre && r.size == 9);
+  const Rect box = boxOf(Box::Mode).rect;
+  ASSERT_TRUE(r.x == box.x + box.w / 2);
+  ASSERT_TRUE(inside(textRect(liveDetectorText(LatencyMode::Live).c_str(), r.x, r.y, r.size, 0.68f, r.align), box));
+  for (const ControlSpec& c : kControls)   // under the mode buttons
+    if (c.id == kMode) ASSERT_TRUE(r.y - r.size > c.rect.y + c.rect.h);
+  for (const Readout& o : kReadouts) ASSERT_TRUE(o.id == ReadoutId::LiveDetector || o.handwritable);
 }
 
 // ---- Back of the panel: MODES, ROUTING, CREDITS (Task 12) -----------------------------------------------------------
@@ -1274,8 +1332,31 @@ void test_routing_diagram_blocks_in_engine_order() {
   ASSERT_TRUE(dashed >= 3);
   // the detection and meter blocks of the preview are there
   for (const char* s : {"BREATH DETECTOR", "LEVEL", "LISTEN", "DELAY", "IN METER", "OUT METER", "GR"}) ASSERT_TRUE(findText(d, s) != nullptr);
+  // the look-ahead delay exists in LATENCY MIX only (spec 9b): its tag says so, under the block name
+  const RoutingPrim* delay = findText(d, "DELAY");
+  const RoutingPrim* look = findText(d, "LOOKAHEAD", 9);
+  const RoutingPrim* mixOnly = findText(d, "MIX ONLY", 9);
+  ASSERT_TRUE(look != nullptr && mixOnly != nullptr && countText(d, "MIX ONLY") == 1);
+  ASSERT_TRUE(look->x == delay->x && mixOnly->x == delay->x && delay->y < look->y && look->y < mixOnly->y);
+  ASSERT_TRUE(boxAround(d, mixOnly->x, mixOnly->y - 3) == boxAround(d, delay->x, delay->y - 4));
   // legend: the symbols the diagram uses, one note line
   ASSERT_TRUE(r.legend.symbols.size() == 7 && r.legend.notes.size() == 1);
+}
+
+// Engine order at the input (engine.cpp): the input peaks and the input clip are read on the raw input, then the Input gain,
+// then the lookahead delay; the detection taps the gained, not delayed signal. Listen: Breath Listen wins over De-ess Listen.
+void test_routing_diagram_input_side_follows_the_engine() {
+  const auto r = deepThroatRouting();
+  const auto& d = r.flow;
+  ASSERT_TRUE(countText(d, "INPUT") == 1);   // one Input gain stage, shared by the audio path and the detection
+  const RoutingPrim* meter = findText(d, "IN METER");
+  const RoutingPrim* input = findText(d, "INPUT");
+  const RoutingPrim* delay = findText(d, "DELAY");
+  ASSERT_TRUE(meter != nullptr && input != nullptr && delay != nullptr);
+  ASSERT_TRUE(meter->x < input->x && input->x < delay->x);
+  std::string notes;
+  for (const auto& n : r.legend.notes) notes += n;
+  ASSERT_TRUE(notes.find("BREATH wins") != std::string::npos && notes.find("DE-ESS band first") == std::string::npos);
 }
 
 void test_routing_diagram_inside_panel() {
@@ -1440,10 +1521,13 @@ int main() {
   RUN_TEST(test_scope_traces_stay_inside_the_border);
   RUN_TEST(test_settings_items_reflect_prefs);
   RUN_TEST(test_settings_item_to_prefs);
+  RUN_TEST(test_settings_latency_row);
+  RUN_TEST(test_live_detector_text);
   RUN_TEST(test_modes_rows_from_table);
   RUN_TEST(test_modes_follow_table_edit);
   RUN_TEST(test_active_mode_column);
   RUN_TEST(test_routing_diagram_blocks_in_engine_order);
+  RUN_TEST(test_routing_diagram_input_side_follows_the_engine);
   RUN_TEST(test_routing_diagram_inside_panel);
   RUN_TEST(test_credits_entries);
   RUN_TEST(test_no_brand_in_user_facing_strings);

@@ -898,7 +898,7 @@ var RT=(function(){
   /* summing node (parallel mix) */
   function sum(x,y,label){e('circle',{cx:x,cy:y,r:9,fill:'none',stroke:W,'stroke-width':2});ln('M'+(x-4.5)+' '+y+' H'+(x+4.5)+' M'+x+' '+(y-4.5)+' V'+(y+4.5),false,1.6);if(label)t(label,x,y-15,9,DIMW,'middle',800);}
   return {e:e,t:t,ln:ln,arrow:arrow,arrowUp:arrowUp,arrowDown:arrowDown,dot:dot,ring:ring,jack:jack,amp:amp,block:block,inSwitch:inSwitch,tap:tap,conn:conn,sum:sum};})();
-box(24,102,1232,688,'SIGNAL FLOW','top',P);
+box(24,102,1232,672,'SIGNAL FLOW','top',P);
 (function(){var Y1=250,Y2=500,L=RT.ln,T=RT.t;
   /* row 1: input, fine EQ (mid/side), vibe EQ, glue */
   RT.jack(60,Y1,'IN L · R');L('M69 '+Y1+' H100');RT.dot(82,Y1);
@@ -911,12 +911,13 @@ box(24,102,1232,688,'SIGNAL FLOW','top',P);
   RT.block(446,496,Y1,48,'M/S',['DEC'],true);RT.inSwitch(178,Y1,514,Y1-50);L('M496 '+Y1+' H576');RT.tap(524,Y1,50,'CLIP FEQ');
   /* VIBE EQ, with the DYN detector (control line) on LOW and AIR */
   L('M588 '+Y1+' H592');RT.block(592,732,Y1,48,'VIBE EQ',['TUBE-1A','LOW · AIR · TILT · TUBE']);RT.inSwitch(576,Y1,750,Y1-50);
-  RT.dot(562,Y1);L('M562 '+Y1+' V'+(Y1+90)+' H620',true);RT.block(620,680,Y1+90,24,'DYN',[]);L('M680 '+(Y1+90)+' H700 V'+(Y1+31),true);RT.arrowUp(700,Y1+25);T('LOW · AIR',650,Y1+118,9,DIMW,'middle',800);
+  RT.dot(562,Y1);L('M562 '+Y1+' V'+(Y1+90)+' H620',true);RT.block(620,680,Y1+90,24,'DYN',[]);L('M680 '+(Y1+90)+' H700 V'+(Y1+31),true);RT.arrowUp(700,Y1+25);T('LOW · AIR',650,Y1+118,9,DIMW,'middle',800);T('TUBE OVERSAMPLED',650,Y1+44,8,DIMW,'middle',800);
   L('M750 '+Y1+' H796');RT.tap(770,Y1,50,'CLIP VEQ');
-  /* GLUE: compressor in parallel (dry path and MIX), side-chain high pass on the detector */
+  /* GLUE: compressor in parallel (dry path and MIX); feedback detector: the compressed output, high-passed (dsp/glue.cpp) */
   L('M808 '+Y1+' H846');RT.dot(820,Y1);L('M820 '+Y1+' V'+(Y1+70)+' H1020 V'+(Y1+9));RT.arrowUp(1020,Y1+9);T('DRY',990,Y1+64,9,DIMW,'middle',800);
   RT.block(846,996,Y1,48,'GLUE',['4K-G','RATIO · WARM']);L('M996 '+Y1+' H1011');RT.sum(1020,Y1,'MIX');L('M1029 '+Y1+' H1046');RT.inSwitch(796,Y1,1046,Y1-50);
-  RT.dot(856,Y1+70);L('M856 '+(Y1+70)+' V'+(Y1+46)+' H876',true);RT.block(876,936,Y1+46,22,'SC HPF',[]);L('M936 '+(Y1+46)+' H960 V'+(Y1+31),true);RT.arrowUp(960,Y1+25);
+  RT.dot(1004,Y1);L('M1004 '+Y1+' V'+(Y1+46)+' H943',true);RT.e('path',{d:'M943 '+(Y1+42)+' L936 '+(Y1+46)+' L943 '+(Y1+50)+' Z',fill:W});
+  RT.block(876,936,Y1+46,22,'SC HPF',[],true);L('M876 '+(Y1+46)+' H860 V'+(Y1+31),true);RT.arrowUp(860,Y1+25);
   L('M1046 '+Y1+' H1190');RT.tap(1070,Y1,50,'GR G','CLIP GLU');RT.arrow(1190,Y1);RT.conn(1200,Y1,'A');
   /* global BYPASS: from the input jack straight to the output switch */
   L('M82 '+Y1+' V140 H1236 V'+(Y2-100)+' H1062 V'+(Y2-16.6));T('BYPASS',660,134,9,DIMW,'middle',800);T('output = input, bit for bit',1228,Y2-108,9,DIMW,'end',700);
@@ -927,23 +928,27 @@ box(24,102,1232,688,'SIGNAL FLOW','top',P);
   RT.inSwitch(490,Y2,692,Y2-70);L('M502 '+Y2+' H518');RT.ring(518,Y2);RT.ring(534,Y2-30);RT.ring(534,Y2+30);L('M518 '+Y2+' L533 '+(Y2-28),false,1.8);
   L('M534 '+(Y2-32.6)+' V'+(Y2-30)+' M536.6 '+(Y2-30)+' H544');L('M536.6 '+(Y2+30)+' H544');
   RT.block(544,664,Y2-30,36,'INFLATE',['ZL-INFL']);RT.block(544,664,Y2+30,36,'CLIP',['C-ONLY2']);T('FINAL',604,Y2-56,10,W,'middle',900);
+  RT.e('rect',{x:538,y:Y2-52,width:134,height:110,rx:4,fill:'none',stroke:DIMW,'stroke-width':1.2});
   L('M664 '+(Y2-30)+' H678 V'+(Y2+30)+' H664');RT.dot(678,Y2);L('M678 '+Y2+' H738');RT.tap(714,Y2,52,'GR F','CLIP FIN');
-  L('M750 '+Y2+' H754');RT.block(754,884,Y2,48,'METALHEAD',['brickwall']);RT.inSwitch(738,Y2,902,Y2-50,'IN · OFF BY DEFAULT',true);L('M884 '+Y2+' H948');RT.tap(924,Y2,52,'GR M','CLIP MTL');
-  RT.amp(948,Y2,'OUTPUT');L('M976 '+Y2+' H1060');
+  L('M750 '+Y2+' H754');RT.block(754,884,Y2,48,'METALHEAD',['brickwall']);RT.inSwitch(738,Y2,902,Y2-50,'IN · OFF BY DEFAULT',true);L('M884 '+Y2+' H948');RT.tap(914,Y2,52,'GR M','CLIP MTL');
+  RT.e('rect',{x:84,y:Y2-96,width:852,height:184,rx:6,fill:'none',stroke:DIMW,'stroke-width':1,'stroke-dasharray':'2 4'});T('OVERSAMPLED ZONE  ·  OFF / 2× / 4×',96,Y2-84,8,DIMW,'start',800);
+  RT.amp(948,Y2,'OUTPUT');L('M976 '+Y2+' H982');
+  /* the safety limiter and the ceiling guard, on when LIMIT, FINAL or METALHEAD is on */
+  RT.block(982,1054,Y2,36,'SAFETY',['LIM · GUARD']);L('M1054 '+Y2+' H1060');
   RT.ring(1062,Y2);RT.ring(1062,Y2-14);RT.ring(1078,Y2);L('M1078 '+Y2+' L1064.5 '+(Y2-1),false,1.8);L('M1080.6 '+Y2+' H1213');RT.tap(1110,Y2,52,'OUT METER','CLIP OUT');
   RT.jack(1222,Y2,'OUT L · R');
   /* control lines: CEILING to every stage that holds the peaks, LOUDNESS macro to CLIP, LIMIT and FINAL, MATCH from the LUFS meter */
   var CY=Y2+150,LY=Y2+190,MY=Y2+240;
   RT.block(940,1040,CY,36,'CEILING',['−0.1 … −1.0 dB'],true);
   L('M940 '+CY+' H580 a6 6 0 0 0 -12 0 H400',true);
-  [[400,Y2+24],[634,Y2+48],[819,Y2+24]].forEach(function(r){L('M'+r[0]+' '+CY+' V'+(r[1]+7),true);RT.arrowUp(r[0],r[1]);});T('CEILING',700,CY-6,9,DIMW,'middle',800);
+  [[400,Y2+24],[634,Y2+58],[819,Y2+24]].forEach(function(r){L('M'+r[0]+' '+CY+' V'+(r[1]+7),true);RT.arrowUp(r[0],r[1]);});T('CEILING',700,CY-6,9,DIMW,'middle',800);L('M1018 '+(CY-18)+' V'+(Y2+25),true);RT.arrowUp(1018,Y2+18);
   RT.block(60,170,LY,36,'LOUDNESS',['macro'],true);
   L('M150 '+(LY-18)+' V'+(Y2+31),true);RT.arrowUp(150,Y2+25);
-  L('M170 '+LY+' H574',true);[[361,Y2+24],[574,Y2+48]].forEach(function(r){L('M'+r[0]+' '+LY+' V'+(r[1]+7),true);RT.arrowUp(r[0],r[1]);});T('drives CLIP, LIMIT and FINAL',470,LY+16,9,DIMW,'middle',800);
+  L('M170 '+LY+' H574',true);[[361,Y2+24],[574,Y2+58]].forEach(function(r){L('M'+r[0]+' '+LY+' V'+(r[1]+7),true);RT.arrowUp(r[0],r[1]);});T('drives CLIP, LIMIT and FINAL',470,LY+16,9,DIMW,'middle',800);
   RT.dot(1170,Y2);L('M1170 '+Y2+' V'+(LY-25),true);RT.arrowDown(1170,LY-18);RT.block(1120,1220,LY,36,'LUFS',['short · integrated'],true);
   L('M1170 '+(LY+18)+' V'+MY+' H115 V'+(LY+25),true);RT.arrowUp(115,LY+18);T('MATCH  ·  sets LOUDNESS once to reach the TARGET (−14 … −7 LUFS)',640,MY-6,9,DIMW,'middle',800);})();
-box(24,810,1232,100,'LEGEND','top',P);
-(function(){var y=852,L=RT.ln,T=RT.t;
+box(24,790,1232,88,'LEGEND','top',P);
+(function(){var y=826,L=RT.ln,T=RT.t;
   RT.e('rect',{x:50,y:y-12,width:34,height:24,rx:3,fill:'none',stroke:W,'stroke-width':2});T('module',92,y+4,10,DIMW,'start',700);
   RT.e('path',{d:'M180 '+(y-11)+' L202 '+y+' L180 '+(y+11)+' Z',fill:'none',stroke:W,'stroke-width':2,'stroke-linejoin':'round'});T('gain stage',210,y+4,10,DIMW,'start',700);
   RT.ring(308,y);RT.ring(320,y);RT.ring(320,y-14);L('M308 '+y+' L319 '+(y-2),false,1.8);T('switch, default position',330,y+4,10,DIMW,'start',700);
@@ -952,7 +957,7 @@ box(24,810,1232,100,'LEGEND','top',P);
   RT.dot(792,y);L('M792 '+y+' V'+(y-12),false,1.4);T('meter / clip point',802,y+4,10,DIMW,'start',700);
   RT.sum(940,y);T('mix (sum)',956,y+4,10,DIMW,'start',700);
   RT.conn(1080,y,'A');T('continues',1096,y+4,10,DIMW,'start',700);
-  T('M/S, the limiter styles, INFLATE / CLIP, WARM, RATIO and SC HPF change what the blocks do; the order of the blocks never changes.',50,y+40,11,DIMW,'start',700);})();
+  T('M/S, the limiter styles, INFLATE / CLIP, WARM, RATIO and SC HPF change what the blocks do; the order of the blocks never changes.',50,y+34,11,DIMW,'start',700);})();
 showTab('settings');
 /* block tags (design system): the external engine active in each box, top left at (x+16, y+22), 7 px, faded; none for our own limiter. Texts: provisional, chosen by the user */
 var TAGL=[],fTagG=el('g',{},SMALL);

@@ -537,6 +537,50 @@ void test_blockparty_ironbar_clip() {
 // 10. DeNoise Gate/Expander DSP
 // ---------------------------------------------------------------------------
 
+// The Threshold text (host and editor) says where DeNoise really closes (2026-11-02, spec 11): the DSP threshold is (v/4)^4 in
+// amplitude, so the scale runs from -inf (v = 0) to about -48 dBFS (v = 1); before, the text said -72 + 72 v dB.
+void test_gate_threshold_text_matches_the_dsp() {
+  ASSERT_TRUE(gateThresholdText(1.0) == "-48 dB");
+  ASSERT_TRUE(gateThresholdText(0.5) == "-72 dB");
+  ASSERT_TRUE(gateThresholdText(0.0) == "-inf dB");
+  ASSERT_TRUE(std::isinf(gateThresholdDb(0.0)) && gateThresholdDb(0.0) < 0.0);
+  ASSERT_APPROX_EPS(gateThresholdDb(1.0), -48.16, 0.01);
+  for (double v : {0.05, 0.25, 0.5, 0.75, 1.0}) {
+    const double dspAmplitude = std::pow(v * 0.25, 4.0);   // DeNoise::process: topThresh = pow(threshold * 0.25, 4)
+    ASSERT_APPROX_EPS(gateThresholdDb(v), 20.0 * std::log10(dspAmplitude), 1e-9);
+  }
+  // rising with the knob, as the bisection of the typed values needs
+  for (int i = 1; i <= 100; ++i)
+    ASSERT_TRUE(gateThresholdDb(i / 100.0) > gateThresholdDb((i - 1) / 100.0));
+}
+
+// The EQ's IN off leaves the filters alone (2026-11-02): bands at any gain do nothing, the HPF still cuts.
+void test_fourkeq_filters_only_with_the_bands_out() {
+  DSP::FourKEQ eq;
+  eq.prepare(48000.0, 512);
+  DSP::FourKEQParams p;
+  p.hpfEnabled = true; p.hpfFreq = 20.0f; p.lpfEnabled = true; p.lpfFreq = 20000.0f;
+  p.lfGain = 20.0f; p.lfFreq = 400.0f; p.eqTypeBlack = false;   // a +20 dB low shelf and the Brown phase shift
+  p.bandsEnabled = false;
+  constexpr int N = 4800;
+  std::vector<float> l(N), r(N);
+  for (int i = 0; i < N; ++i) l[i] = r[i] = 0.25f * std::sin(2.0f * 3.14159265f * 200.0f * i / 48000.0f);
+  std::vector<float> in(l);
+  eq.process(l.data(), r.data(), N, p);
+  double e_in = 0, e_out = 0;
+  for (int i = N / 2; i < N; ++i) { e_in += in[i] * in[i]; e_out += l[i] * l[i]; }
+  ASSERT_APPROX_EPS(10.0 * std::log10(e_out / e_in), 0.0, 0.3);   // no +20 dB shelf: only the filters (flat at 200 Hz)
+  // the same with the HPF at its top (500 Hz): 200 Hz is cut
+  DSP::FourKEQ eq2;
+  eq2.prepare(48000.0, 512);
+  p.hpfFreq = 500.0f;
+  for (int i = 0; i < N; ++i) l[i] = r[i] = in[i];
+  eq2.process(l.data(), r.data(), N, p);
+  e_out = 0;
+  for (int i = N / 2; i < N; ++i) e_out += l[i] * l[i];
+  ASSERT_TRUE(10.0 * std::log10(e_out / e_in) < -12.0);
+}
+
 void test_denoise_passthrough_zero_threshold() {
   DSP::DeNoise dn;
   dn.setSampleRate(48000.0);
@@ -1122,6 +1166,8 @@ int main() {
   RUN_TEST(test_fourkeq_brown_vs_black_differ);
   RUN_TEST(test_fourkeq_hpf_attenuates_dc);
   RUN_TEST(test_fourkeq_hpf_passband_is_flat);
+  RUN_TEST(test_fourkeq_filters_only_with_the_bands_out);
+  RUN_TEST(test_gate_threshold_text_matches_the_dsp);
 
   // Compression
   RUN_TEST(test_compression_passthrough_zero_amount);

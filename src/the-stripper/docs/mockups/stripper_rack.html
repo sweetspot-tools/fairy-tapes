@@ -365,7 +365,8 @@ var pct=withNum(function(v){return Math.round(v*100)+' %';},function(v){return v
 function hz(a,b){return withNum(function(v){var f=a+v*(b-a);return f>=1000?(f/1000).toFixed(1)+' kHz':Math.round(f)+' Hz';},function(v){return a+v*(b-a);});}
 var num=withNum(function(v){return (v*10).toFixed(1);},function(v){return v*10;});
 var qfmt=withNum(function(v){return (0.4+v*3.6).toFixed(1);},function(v){return 0.4+v*3.6;});
-var thfmt=withNum(function(v){return Math.round(-72+v*72)+' dB';},function(v){return -72+v*72;});
+/* gate threshold as DeNoise applies it: (v/4)^4 in amplitude = 80 log10(v/4) dB, -inf at 0, about -48 dB at the top (2026-11-02) */
+var thfmt=withNum(function(v){return v<=0?'-inf dB':Math.round(80*Math.log10(v/4))+' dB';},function(v){return v<=0?-Infinity:80*Math.log10(v/4);});
 
 /* ============ ROW A ============ */
 box(24,92,150,170,'INPUT','bottom');
@@ -498,7 +499,7 @@ boxTag(388,506,function(){return namOn&&tapeOn?'NAM \u00b7 TAPE':namOn?'NAM':tap
 box(678,484,162,146,'LIMITER','bottom');
 var gLi=grp();knob(752,552,'POUND',0.4,'0','10','',{def:0.5,fmt:num});boxTag(694,506,function(){return 'B-PARTY';});endGrp();byp(811,522,gLi);
 box(846,484,130,146,'GATE','bottom');
-var gGa=grp();knob(903,552,'THRESH',0.2,'-∞','0','',{def:0,fmt:thfmt});boxTag(862,506,function(){return 'D-NOISE';});endGrp();byp(947,522,gGa);
+var gGa=grp();knob(903,552,'THRESH',0.2,'-∞','-48','',{def:0,fmt:thfmt});boxTag(862,506,function(){return 'D-NOISE';});endGrp();byp(947,522,gGa);
 ROOT=svg;OFFY=0;
 setMode('c');
 
@@ -600,11 +601,11 @@ box(24,102,952,388,'SIGNAL FLOW','top');
     L('M'+(px+12)+' '+(y-16.6)+' V'+top+' H'+rx+' V'+y);RT.dot(rx,y);txt(label,(px+rx)/2,top-6,9,AMBL,'middle',800);}
   /* row 1: input, DRIVE in CHAN, filters, equaliser, compression */
   RT.jack(60,Y1,'IN L · R');L('M69 '+Y1+' H100');RT.dot(82,Y1);
-  RT.amp(100,Y1,'INPUT');L('M128 '+Y1+' H176');RT.tap(148,Y1,50,'IN METER','CLIP IN');
+  RT.tap(91,Y1,50,'IN METER');RT.amp(100,Y1,'INPUT');L('M128 '+Y1+' H176');RT.tap(148,Y1,50,'CLIP IN');
   L('M188 '+Y1+' H192');RT.block(192,282,Y1,48,'DRIVE',['NAM · TAPE']);modeSwitch(176,Y1,298,150,'CHAN',true);L('M282 '+Y1+' H314');
   L('M326 '+Y1+' H330');RT.block(330,420,Y1,48,'FILTERS',['HP · LP']);RT.inSwitch(314,Y1,436,150);L('M420 '+Y1+' H462');
   L('M474 '+Y1+' H478');RT.block(478,588,Y1,48,'EQUALISER',['4K-G · 4K-E','+ SATURATE']);RT.inSwitch(462,Y1,604,150);L('M588 '+Y1+' H658');RT.tap(626,Y1,50,'CLIP EQ');
-  L('M670 '+Y1+' H674');RT.block(674,810,Y1,48,'COMPRESSION',['OPTO-2A · FET-76','VCA-160 · BUS']);RT.inSwitch(658,Y1,826,150);L('M810 '+Y1+' H910');RT.tap(856,Y1,50,'GR C','CLIP CMP');
+  L('M670 '+Y1+' H674');RT.block(674,810,Y1,48,'COMPRESSION',['OPTO-2A · FET-76','VCA-160 · 4K-G']);RT.inSwitch(658,Y1,826,150);L('M810 '+Y1+' H910');RT.tap(856,Y1,50,'GR C','CLIP CMP');
   RT.arrow(910,Y1);RT.conn(920,Y1,'A');
   /* sidechain: control line into the compressor detector */
   RT.jack(60,290,'SC IN');L('M69 290 H770 V232',true);RT.arrowUp(770,226);txt('SIDECHAIN',420,284,9,DIMW,'middle',800);

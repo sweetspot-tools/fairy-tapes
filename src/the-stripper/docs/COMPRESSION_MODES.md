@@ -17,7 +17,7 @@ So we always use the same Multi-Comp DSP; we only expose the modes that fit the 
 | **Drums**               | Vintage FET (1176)   | Drums, percussion, punch | Very fast attack, aggressive. Fits drums and transient-heavy material. |
 | **Classic**             | Classic VCA (dbx 160)| Bass, punch, general | OverEasy soft knee, punchy; ideal for bass and all-round use. |
 
-**Parameter:** One enum (or stepped) parameter **Compressor Mode** (Channel only), values 0…2 → Voice, Drums, Classic. In Mix bus mode this parameter is hidden or ignored; the engine is always Bus.
+**Parameter:** One enum (or stepped) parameter **Compressor Mode** (Channel only), values 0…2 → Voice, Drums, Classic. In Mix bus mode the editor hides the three buttons and the processor ignores the parameter (its value is kept); the engine is always Bus.
 
 ---
 
@@ -51,4 +51,4 @@ No extra parameter is required: use the host’s routing to connect or disconnec
 
 ## Implementation note
 
-**Current:** The compression stage uses a **C++ port of Dusk Audio Multi-Comp** DSP including **hardware emulation** (`dsp/multicomp_engines.cpp`, `dsp/hardware_emulation/`, `dsp/compression_stub.cpp`). Algorithms: **Opto** (T4B + input/output transformer + 12BH7 tube), **FET** (1176-style + input/output transformer), **VCA** (dbx 160, clean, no transformer), **Bus** (SSL-style + input/output transformer). Transformer saturation, harmonics, HF rolloff and DC blocking; tube stage (Opto only). **External sidechain** is supported for all modes (envelope detection from second input bus when present). No JUCE; real-time safe. Source: `vendors/dusk-audio-plugins/plugins/multi-comp/` (GPL-3.0).
+**Current:** The compression stage uses a **C++ port of Dusk Audio Multi-Comp** DSP including **hardware emulation** (`dsp/multicomp_engines.cpp`, `dsp/hardware_emulation/`, `dsp/compression_stub.cpp`). Algorithms: **Opto** (T4B + input/output transformer + 12BH7 tube), **FET** (1176-style + input/output transformer), **VCA** (dbx 160, clean, no transformer), **Bus** (SSL-style + input/output transformer). Transformer saturation, harmonics, HF rolloff and DC blocking; tube stage (Opto only). **External sidechain** is supported for all modes (envelope detection from second input bus when present). No JUCE; real-time safe. Source: `vendors/dusk-audio-plugins/plugins/multi-comp/` (GPL-3.0; reference submodule, not fetched by a normal clone: `git submodule update --init --checkout vendors/dusk-audio-plugins`). Registered in [THIRD_PARTY.md](../../../THIRD_PARTY.md).
