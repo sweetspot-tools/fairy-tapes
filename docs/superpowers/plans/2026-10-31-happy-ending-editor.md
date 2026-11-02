@@ -205,17 +205,19 @@ Note dell'esecuzione (2026-10-31): ogni LISTEN ha la sua chiave di serigrafia (`
 
 **Files:**
 - Modify: `src/happy-ending/src/ui/{editor.h,editor.cpp}`, `src/happy-ending/tests/test_editor.cpp`
-- Create (se serve una vista propria): `src/happy-ending/src/ui/lufs_view.{h,cpp}`
+- Create (se serve una vista propria): `src/happy-ending/src/ui/lufs_view.{h,cpp}` (fatto come `level_views.{h,cpp}`: schermo LUFS, tag delle righe GR, LED ACT, `LevelBar`)
 
 **Interfaces:**
 - Consumes: `kMeterRows`, `kGrRows`, `kClipLeds`, `kLufsScreenRect`, `kActLeds`, `kTargetLed` (Task 4), `display.h` (normalizzazioni), `readouts.h` (Task 5).
 - Produces: righe `MeterBar` IN e OUT (scala e colori di The Stripper), cinque righe GR ambra 0…12 dB rosse in cima, ognuna attenuata con il suo stadio e con BYPASS; nove `ClipLed` (un clic su uno scrive `kClearClips`; quelli degli stadi attenuati con BYPASS e con il loro IN); schermo LUFS con short-term, integrata (clic → `kResetIntegrated`) e TO TARGET con il LED verde; LED ACT del DYN (LOW e AIR) accesi quanto `kDispDynLow/Air`.
 
-- [ ] **Step 1: Scrivere i test:** `test_meters_follow_display_params` (`kDispInL` a metà → circa metà dei LED; `kDispGr2` a 0,5 → metà riga L), `test_clip_click_clears_via_trigger`, `test_lufs_click_resets_integrated`, `test_lufs_texts_and_target_led` (valori finti: testi e LED come `readouts.h`), `test_gr_rows_dim_with_stage_and_bypass`, `test_act_leds_follow_dyn`, `test_editor_timer_stops_on_close` (50 aperture e chiusure con tick in mezzo).
-- [ ] **Step 2: Eseguire e vedere fallire.**
-- [ ] **Step 3: Implementare.**
-- [ ] **Step 4: Eseguire** build e test → PASS; render con valori di prova e controllo a occhio della riga di servizio contro la preview.
-- [ ] **Step 5: Commit:** `feat(happy-ending): LEVEL meters, GR rows, clip LEDs and the LUFS readout`.
+- [x] **Step 1: Scrivere i test:** `test_meters_follow_display_params` (`kDispInL` a metà → circa metà dei LED; `kDispGr2` a 0,5 → metà riga L), `test_clip_click_clears_via_trigger`, `test_lufs_click_resets_integrated`, `test_lufs_texts_and_target_led` (valori finti: testi e LED come `readouts.h`), `test_gr_rows_dim_with_stage_and_bypass`, `test_act_leds_follow_dyn`, `test_editor_timer_stops_on_close` (50 aperture e chiusure con tick in mezzo).
+- [x] **Step 2: Eseguire e vedere fallire.**
+- [x] **Step 3: Implementare.**
+- [x] **Step 4: Eseguire** build e test → PASS; render con valori di prova e controllo a occhio della riga di servizio contro la preview.
+- [x] **Step 5: Commit:** `feat(happy-ending): LEVEL meters, GR rows, clip LEDs and the LUFS readout`.
+
+Note dell'esecuzione (2026-11-02): le righe di picco hanno 15 LED sulla scala −60…+6 dB della serigrafia (marchi di `kPanelTexts`) e di The Stripper: il valore di visualizzazione (−60…0 dB, `display.h`) è convertito (`peakBarNorm`), quindi 0 dB è il LED 13 e metà scala (−30 dB) ne accende 7. Righe GR: `MeterBar` a guadagno (ambra, rosso sugli ultimi quattro LED: la preview ne arrossa tre); una riga attenuata (BYPASS o IN dello stadio spento) non mostra riduzione, come la preview. I tag G C L F M delle righe GR e la scatola scura dello schermo LUFS non c'erano sul pannello: i primi sono una vista (`GrTags`, attenuati con la loro riga), la seconda sta nel `PanelView` sotto le etichette. Il LED ACT si accende come la preview (miscela di ambra scuro e ambra a min(1, 1,4 × valore)) e si attenua con BYPASS e con l'IN del VIBE EQ. Un clic su un LED di clip (anche attenuato) e sul valore integrato scrive i grezzi `kClearClips` / `kResetIntegrated` come una modifica. Glifi: U+2212 e U+2014 si disegnano bene in Arial (render controllato), nessuna modifica a `readouts.h`. Test in più: `test_clip_leds_dim_with_stage_and_bypass`, `test_lufs_screen_box_under_labels`.
 
 ---
 

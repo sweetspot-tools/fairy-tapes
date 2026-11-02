@@ -14,6 +14,7 @@
 #include "ui/editor.h"
 #include "ui/layout.h"
 #include "display.h"
+#include "ui/level_views.h"
 #include "ui/panel_view.h"
 #include "ui/prefs.h"
 #include "ui/readouts.h"
@@ -21,6 +22,7 @@
 #include "ui/value_text.h"
 
 #include "fairy_ui/controls.h"
+#include "fairy_ui/meters.h"
 #include "fairy_ui/rack_controls.h"
 #include "fairy_ui/silkscreen.h"
 #include "fairy_ui/silkscreen_view.h"
@@ -89,6 +91,14 @@ struct EditorTest {
   // MATCH and the column of the screen view buttons (one exclusive choice).
   static FairyTapes::Ui::NormalizedControl* match(const Editor& ed) { return ed.match_; }
   static FairyTapes::Ui::NormalizedControl* views(const Editor& ed) { return ed.views_; }
+  // LEVEL: the peak rows (IN L, IN R, OUT L, OUT R), the GR rows (G C L F M), the clip LEDs (IN ... OUT), the GR tags, the
+  // LUFS screen and the ACT LEDs (LOW, AIR); nullptr while the views do not exist.
+  static LevelBar* meter(const Editor& ed, int i) { return ed.meters_[static_cast<std::size_t>(i)]; }
+  static LevelBar* grBar(const Editor& ed, int i) { return ed.grBars_[static_cast<std::size_t>(i)]; }
+  static FairyTapes::Ui::ClipLed* clip(const Editor& ed, int i) { return ed.clips_[static_cast<std::size_t>(i)]; }
+  static GrTags* grTags(const Editor& ed) { return ed.grTags_; }
+  static LufsView* lufs(const Editor& ed) { return ed.lufs_; }
+  static ActLed* act(const Editor& ed, int i) { return ed.actLeds_[static_cast<std::size_t>(i)]; }
   // The text field of a typed value (nullptr when none is open) and its closing (confirm: what was typed is kept).
   static VSTGUI::CTextEdit* valueEdit(const Editor& ed) { return ed.valueEdit_; }
   static void closeValueEdit(Editor& ed, bool confirm) { ed.closeValueEdit(confirm); }
@@ -120,6 +130,8 @@ struct EditorTest {
   static void loadAppearance(Editor& ed, const std::filesystem::path& file) { ed.loadAppearance(file); }
   static const Prefs& prefs(const Editor& ed) { return ed.prefs_; }
   static bool timerRunning(const Editor& ed) { return ed.timer_ != nullptr; }
+  // The UI timer as open() starts it (a test has no window, so no run loop: it never fires here).
+  static void startTimer(Editor& ed) { ed.startTimer(); }
   // Gives the editor the host's IPlugFrame (nullptr takes it away), as the host does through IPlugView::setFrame.
   static Steinberg::tresult setPlugFrame(Editor& ed, Steinberg::IPlugFrame* frame) {
     return static_cast<Steinberg::IPlugView&>(ed).setFrame(frame);
@@ -1186,6 +1198,395 @@ void test_knob_values_at_preview_offset() {
   ASSERT_TRUE(above > 20);
   ASSERT_TRUE(below == 0);
 }
+
+// ---- LEVEL, LUFS and the ACT LEDs (Task 10) ---------------------------------------------------------------------------
+constexpr double kBarLow = -60.0, kBarSpan = 66.0;   // the peak rows span -60..+6 dB over 15 LEDs, as the printed scale
+
+// Every display parameter back to 0 (host side, no edit sent).
+void resetDisplays() {
+  for (Steinberg::Vst::ParamID id = kDisplayBase; id < kNumDisplayIDs; ++id)
+    if (g_ctl->getParameterObject(id)) g_ctl->setParamNormalized(id, 0.0);
+}
+void setStage(Stage s, bool on) { g_ctl->setParamNormalized(stageInParam(s), normFromIndex(static_cast<ParamID>(stageInParam(s)), on ? 1 : 0)); }
+// The brightest channel of the pixel at layout point (x, y) of a drawn editor.
+int brightAt(const Pixels& px, double x, double y) { return brightness(px.at(static_cast<int>(x), static_cast<int>(y))); }
+// The brightest pixel of the layout rect r.
+int brightIn(const Pixels& px, const Rect& r) {
+  int best = 0;
+  for (int y = static_cast<int>(r.y); y < static_cast<int>(r.y + r.h); ++y)
+    for (int x = static_cast<int>(r.x); x < static_cast<int>(r.x + r.w); ++x) best = std::max(best, brightness(px.at(x, y)));
+  return best;
+}
+// A click of the left (or right) button delivered to the container as the frame does, at a layout point: the container
+// finds the view under it, so this also proves the routing (CViewContainer::onMouseDown itself never reaches the children).
+void rootClick(VSTGUI::CViewContainer* root, double x, double y, bool left = true) {
+  const VSTGUI::MouseEventButtonState button(left ? VSTGUI::MouseButton::Left : VSTGUI::MouseButton::Right);
+  VSTGUI::MouseDownEvent down(VSTGUI::CPoint(x, y), button);
+  root->dispatchEvent(down);
+  VSTGUI::MouseUpEvent up(VSTGUI::CPoint(x, y), button);
+  root->dispatchEvent(up);
+}
+
+// The peak rows and the GR rows follow the display parameters: IN L at half scale (-30 dB) lights about half of the 15
+// LEDs of its row only (the LEDs span -60..+6 dB like the printed scale, so 7), GR 2 (LIMIT) at 0.5 half of its row; the
+// right channel and the other rows stay dark; LED colours: green low, amber for GR; a row at full scale lights up to the
+// 0 dB LED.
+void test_meters_follow_display_params() {
+  resetAll(g_ctl);
+  resetDisplays();
+  Editor ed(g_ctl);
+  auto root = EditorTest::build(ed);
+  EditorTest::tick(ed);
+  for (int i = 0; i < 4; ++i) ASSERT_TRUE(EditorTest::meter(ed, i) != nullptr && EditorTest::meter(ed, i)->level() == 0.0);
+  for (int i = 0; i < 5; ++i) ASSERT_TRUE(EditorTest::grBar(ed, i) != nullptr && EditorTest::grBar(ed, i)->level() == 0.0);
+  g_ctl->setParamNormalized(kDispInL, 0.5);
+  g_ctl->setParamNormalized(kDispOutR, 1.0);
+  g_ctl->setParamNormalized(kDispGr2, 0.5);
+  EditorTest::tick(ed);
+  using FairyTapes::Ui::ledsLit;
+  ASSERT_TRUE(near(EditorTest::meter(ed, 0)->level(), (-30.0 - kBarLow) / kBarSpan));
+  ASSERT_TRUE(ledsLit(EditorTest::meter(ed, 0)->level(), kMeterLeds) == 7);
+  ASSERT_TRUE(EditorTest::meter(ed, 1)->level() == 0.0 && EditorTest::meter(ed, 2)->level() == 0.0);
+  ASSERT_TRUE(near(EditorTest::meter(ed, 3)->level(), (0.0 - kBarLow) / kBarSpan));
+  ASSERT_TRUE(ledsLit(EditorTest::meter(ed, 3)->level(), kMeterLeds) == 14);   // up to the 0 dB LED (index 13)
+  ASSERT_TRUE(near(EditorTest::grBar(ed, 2)->level(), 0.5));
+  ASSERT_TRUE(ledsLit(EditorTest::grBar(ed, 2)->level(), kMeterLeds) == 8);
+  for (int i : {0, 1, 3, 4}) ASSERT_TRUE(EditorTest::grBar(ed, i)->level() == 0.0);
+  // The drawn LEDs: IN L's first LED green, the eighth (index 7) dark; GR 2's first LED amber, its last dark
+  auto bmp = drawOffscreen(root);
+  ASSERT_TRUE(bmp != nullptr);
+  const Pixels px = pixelsOf(bmp);
+  auto ledX = [](int k) { return kMeterFirstX + kMeterPitch * static_cast<float>(k); };
+  const VSTGUI::CColor first = px.at(static_cast<int>(ledX(0)), static_cast<int>(kMeterRows[0].cy));
+  ASSERT_TRUE(first.green > 180 && first.red < 100);                                           // 0x37d04a
+  ASSERT_TRUE(brightAt(px, ledX(7), kMeterRows[0].cy) < 60);                                    // 0x2a2a2c
+  const VSTGUI::CColor gr = px.at(static_cast<int>(ledX(0)), static_cast<int>(kGrRows[2].cy));
+  ASSERT_TRUE(gr.red > 200 && gr.green > 150 && gr.blue < 80);                                  // amber 0xf0b429
+  ASSERT_TRUE(brightAt(px, ledX(14), kGrRows[2].cy) < 60);
+  // the other direction: the display values back to 0 and the rows go dark again
+  resetDisplays();
+  EditorTest::tick(ed);
+  ASSERT_TRUE(EditorTest::meter(ed, 0)->level() == 0.0 && EditorTest::grBar(ed, 2)->level() == 0.0);
+  EditorTest::destroy(ed, root);
+  resetAll(g_ctl);
+}
+
+// A click on any of the nine clip LEDs (the LED or its label) writes the clear trigger once (kClearClips = 1, begin /
+// perform / end) and nothing else, dimmed stage LEDs included; the LEDs light and go out with the display parameters.
+void test_clip_click_clears_via_trigger() {
+  resetAll(g_ctl);
+  resetDisplays();
+  Editor ed(g_ctl);
+  auto root = EditorTest::build(ed);
+  g_ctl->setComponentHandler(&g_host);
+  g_ctl->setParamNormalized(kDispClip0, 1.0);
+  g_ctl->setParamNormalized(kDispClip4, 1.0);
+  EditorTest::tick(ed);
+  for (int i = 0; i < 9; ++i) ASSERT_TRUE(EditorTest::clip(ed, i) != nullptr);
+  ASSERT_TRUE(EditorTest::clip(ed, 0)->isLit() && EditorTest::clip(ed, 4)->isLit());
+  for (int i : {1, 2, 3, 5, 6, 7, 8}) ASSERT_TRUE(!EditorTest::clip(ed, i)->isLit());
+  for (int pass = 0; pass < 2; ++pass) {   // the second pass with BYPASS: the stage LEDs are dimmed and still clickable
+    if (pass == 1) {
+      g_ctl->setParamNormalized(kBypass, 1.0);
+      EditorTest::tick(ed);
+    }
+    for (int i = 0; i < 9; ++i) {
+      const Rect r = clipLedRect(kClipLeds[i]);
+      for (double fx : {0.12, 0.8}) {   // on the LED, on its label
+        g_host.clear();
+        g_ctl->setParamNormalized(kClearClips, 0.0);
+        rootClick(root, r.x + r.w * fx, r.y + r.h / 2);
+        ASSERT_TRUE(g_host.once(kClearClips) && near(g_host.last[kClearClips], 1.0) && g_host.total() == 3);
+        ASSERT_TRUE(g_ctl->getParamNormalized(kClearClips) == 1.0);
+      }
+    }
+  }
+  // a click beside the LED row does nothing
+  g_host.clear();
+  rootClick(root, kClipLeds[0].cx - 30, kClipRowY);
+  ASSERT_TRUE(g_host.total() == 0);
+  // the processor clears and answers: the LEDs follow the display parameters
+  g_ctl->setParamNormalized(kClearClips, 0.0);
+  g_ctl->setParamNormalized(kDispClip0, 0.0);
+  g_ctl->setParamNormalized(kDispClip4, 0.0);
+  EditorTest::tick(ed);
+  for (int i = 0; i < 9; ++i) ASSERT_TRUE(!EditorTest::clip(ed, i)->isLit());
+  g_ctl->setComponentHandler(nullptr);
+  g_ctl->setParamNormalized(kBypass, 0.0);
+  EditorTest::destroy(ed, root);
+  resetDisplays();
+  resetAll(g_ctl);
+}
+
+// A click on the integrated loudness (its zone, kLufsResetRect) writes the reset trigger once (kResetIntegrated = 1) and
+// nothing else; a click elsewhere on the screen, a right click, or a click under BYPASS (the screen stays live) behaves
+// accordingly: only the first and the BYPASS one reset.
+void test_lufs_click_resets_integrated() {
+  resetAll(g_ctl);
+  resetDisplays();
+  Editor ed(g_ctl);
+  auto root = EditorTest::build(ed);
+  g_ctl->setComponentHandler(&g_host);
+  const double cx = kLufsResetRect.x + kLufsResetRect.w / 2, cy = kLufsResetRect.y + kLufsResetRect.h / 2;
+  g_host.clear();
+  rootClick(root, cx, cy);
+  ASSERT_TRUE(g_host.once(kResetIntegrated) && near(g_host.last[kResetIntegrated], 1.0) && g_host.total() == 3);
+  ASSERT_TRUE(g_ctl->getParamNormalized(kResetIntegrated) == 1.0);
+  g_ctl->setParamNormalized(kResetIntegrated, 0.0);   // the processor's answer
+  g_host.clear();
+  rootClick(root, cx, kLufsScreenRect.y + 14);                 // the title line
+  rootClick(root, cx, kLufsScreenRect.y + kLufsScreenRect.h - 8);   // TO TARGET
+  rootClick(root, kLufsResetRect.x + 2, kLufsResetRect.y - 4);   // just above the zone
+  rootClick(root, cx, cy, false);                                // right button
+  ASSERT_TRUE(g_host.total() == 0);
+  g_ctl->setParamNormalized(kBypass, 1.0);
+  EditorTest::tick(ed);
+  rootClick(root, kLufsResetRect.x + kLufsResetRect.w - 3, kLufsResetRect.y + kLufsResetRect.h - 3);
+  ASSERT_TRUE(g_host.once(kResetIntegrated) && g_host.total() == 3);
+  g_ctl->setParamNormalized(kResetIntegrated, 0.0);
+  g_ctl->setComponentHandler(nullptr);
+  EditorTest::destroy(ed, root);
+  resetAll(g_ctl);
+}
+
+// The LUFS screen shows the display parameters as readouts.h says (typographic minus, em dash for no measurement), with
+// TO TARGET against the TARGET chosen on the panel and the green LED within 0.5 LU; under BYPASS it stays live. Texts
+// are checked as literals, not through readouts.h.
+void test_lufs_texts_and_target_led() {
+  resetAll(g_ctl);
+  resetDisplays();
+  Editor ed(g_ctl);
+  auto root = EditorTest::build(ed);
+  LufsView* v = EditorTest::lufs(ed);
+  ASSERT_TRUE(v != nullptr);
+  const std::string dash = "\xE2\x80\x94";
+  EditorTest::tick(ed);   // no measurement
+  ASSERT_TRUE(v->shortText() == dash && v->integratedText() == dash && v->targetGapText() == dash && !v->targetLit());
+  g_ctl->setParamNormalized(kDispLufsShort, normFromLufs(-14.2));
+  g_ctl->setParamNormalized(kDispLufsInt, normFromLufs(-15.6));
+  EditorTest::tick(ed);   // TARGET -14
+  ASSERT_TRUE(v->shortText() == "\xE2\x88\x92" "14.2" && v->integratedText() == "\xE2\x88\x92" "15.6");
+  ASSERT_TRUE(v->targetGapText() == "\xE2\x88\x92" "0.2" && v->targetLit());
+  g_ctl->setParamNormalized(kTarget, normFromIndex(kTarget, 2));   // -9
+  EditorTest::tick(ed);
+  ASSERT_TRUE(v->shortText() == "\xE2\x88\x92" "14.2" && v->targetGapText() == "\xE2\x88\x92" "5.2" && !v->targetLit());
+  g_ctl->setParamNormalized(kTarget, normFromIndex(kTarget, 1));   // -11
+  g_ctl->setParamNormalized(kDispLufsShort, normFromLufs(-10.3));
+  EditorTest::tick(ed);
+  ASSERT_TRUE(v->targetGapText() == "+0.7" && !v->targetLit());
+  g_ctl->setParamNormalized(kDispLufsShort, normFromLufs(-11.4));
+  EditorTest::tick(ed);
+  ASSERT_TRUE(v->targetGapText() == "\xE2\x88\x92" "0.4" && v->targetLit());
+  // live under BYPASS
+  g_ctl->setParamNormalized(kBypass, 1.0);
+  g_ctl->setParamNormalized(kDispLufsShort, normFromLufs(-12.0));
+  EditorTest::tick(ed);
+  ASSERT_TRUE(v->shortText() == "\xE2\x88\x92" "12.0" && v->targetGapText() == "\xE2\x88\x92" "1.0" && !v->targetLit());
+  g_ctl->setParamNormalized(kBypass, 0.0);
+  // the green LED is drawn: lit at -11.4, dark without a measurement
+  g_ctl->setParamNormalized(kDispLufsShort, normFromLufs(-11.4));
+  EditorTest::tick(ed);
+  auto lit = drawOffscreen(root);
+  g_ctl->setParamNormalized(kDispLufsShort, 0.0);
+  EditorTest::tick(ed);
+  auto dark = drawOffscreen(root);
+  ASSERT_TRUE(lit != nullptr && dark != nullptr);
+  const VSTGUI::CColor on = pixelsOf(lit).at(static_cast<int>(kTargetLed.cx), static_cast<int>(kTargetLed.cy));
+  const VSTGUI::CColor off = pixelsOf(dark).at(static_cast<int>(kTargetLed.cx), static_cast<int>(kTargetLed.cy));
+  ASSERT_TRUE(on.green > 180 && on.red < 100 && brightness(off) < 60);
+  EditorTest::destroy(ed, root);
+  resetDisplays();
+  resetAll(g_ctl);
+}
+
+// The GR rows and their tags dim with their stage's IN and with BYPASS, and show nothing while dimmed (as the preview);
+// the peak rows never dim. The bars say it themselves (LevelBar::isDimmed), the tags are read from the pixels (a dimmed tag
+// is far darker).
+void test_gr_rows_dim_with_stage_and_bypass() {
+  resetAll(g_ctl);
+  resetDisplays();
+  Editor ed(g_ctl);
+  auto root = EditorTest::build(ed);
+  GrTags* tags = EditorTest::grTags(ed);
+  ASSERT_TRUE(tags != nullptr);
+  for (int i = 0; i < 5; ++i) g_ctl->setParamNormalized(kDispGr0 + static_cast<Steinberg::Vst::ParamID>(i), 0.6);
+  g_ctl->setParamNormalized(kDispInL, 0.5);
+  EditorTest::tick(ed);
+  // defaults: METALHEAD is off, the other four stages on
+  ASSERT_TRUE(!tags->dimmed(0) && !tags->dimmed(1) && !tags->dimmed(2) && !tags->dimmed(3) && tags->dimmed(4));
+  for (int i = 0; i < 4; ++i) ASSERT_TRUE(near(EditorTest::grBar(ed, i)->level(), 0.6));
+  ASSERT_TRUE(EditorTest::grBar(ed, 4)->level() == 0.0);
+  auto tagBright = [&](int row) {
+    auto bmp = drawOffscreen(root);
+    const Pixels px = pixelsOf(bmp);
+    return brightIn(px, {kRowTagX - 12, kGrRows[row].cy - 6, 14, 12});
+  };
+  const int tagOn = tagBright(0), tagOff = tagBright(4);
+  ASSERT_TRUE(tagOn > 200 && tagOff < 140);
+  for (int i = 0; i < 4; ++i) ASSERT_TRUE(!EditorTest::grBar(ed, i)->isDimmed());
+  ASSERT_TRUE(EditorTest::grBar(ed, 4)->isDimmed());
+  for (int i = 0; i < 4; ++i) ASSERT_TRUE(!EditorTest::meter(ed, i)->isDimmed());
+  // GLUE's IN off: its row alone goes empty and dim; METALHEAD on: its row wakes
+  setStage(Stage::Glue, false);
+  setStage(Stage::Metal, true);
+  EditorTest::tick(ed);
+  ASSERT_TRUE(tags->dimmed(0) && !tags->dimmed(1) && !tags->dimmed(2) && !tags->dimmed(3) && !tags->dimmed(4));
+  ASSERT_TRUE(EditorTest::grBar(ed, 0)->isDimmed() && !EditorTest::grBar(ed, 1)->isDimmed() && !EditorTest::grBar(ed, 4)->isDimmed());
+  ASSERT_TRUE(EditorTest::grBar(ed, 0)->level() == 0.0 && near(EditorTest::grBar(ed, 1)->level(), 0.6) && near(EditorTest::grBar(ed, 4)->level(), 0.6));
+  setStage(Stage::Glue, true);
+  EditorTest::tick(ed);
+  ASSERT_TRUE(!tags->dimmed(0) && near(EditorTest::grBar(ed, 0)->level(), 0.6));
+  // BYPASS: every row dims and empties, the peak row keeps its level and its brightness
+  g_ctl->setParamNormalized(kBypass, 1.0);
+  EditorTest::tick(ed);
+  for (int i = 0; i < 5; ++i) ASSERT_TRUE(tags->dimmed(i) && EditorTest::grBar(ed, i)->isDimmed() && EditorTest::grBar(ed, i)->level() == 0.0);
+  for (int i = 0; i < 4; ++i) ASSERT_TRUE(!EditorTest::meter(ed, i)->isDimmed());
+  ASSERT_TRUE(near(EditorTest::meter(ed, 0)->level(), (-30.0 - kBarLow) / kBarSpan));
+  {
+    auto bmp = drawOffscreen(root);
+    const Pixels px = pixelsOf(bmp);
+    ASSERT_TRUE(brightAt(px, kMeterFirstX, kMeterRows[0].cy) > 180);   // IN L's lit LED at full brightness
+    ASSERT_TRUE(brightAt(px, kMeterFirstX + kMeterPitch * 14, kMeterRows[0].cy) >= 38);   // and an unlit one undimmed
+  }
+  g_ctl->setParamNormalized(kBypass, 0.0);
+  EditorTest::tick(ed);
+  ASSERT_TRUE(!tags->dimmed(0) && !EditorTest::grBar(ed, 0)->isDimmed() && near(EditorTest::grBar(ed, 0)->level(), 0.6));
+  EditorTest::destroy(ed, root);
+  resetDisplays();
+  resetAll(g_ctl);
+}
+
+// The stage clip LEDs dim with BYPASS and with their IN; IN and OUT never do (a lit LED is red at full brightness, at
+// 35 % it is much darker).
+void test_clip_leds_dim_with_stage_and_bypass() {
+  resetAll(g_ctl);
+  resetDisplays();
+  Editor ed(g_ctl);
+  auto root = EditorTest::build(ed);
+  for (int i = 0; i < 9; ++i) g_ctl->setParamNormalized(kDispClip0 + static_cast<Steinberg::Vst::ParamID>(i), 1.0);
+  EditorTest::tick(ed);
+  auto levels = [&] {
+    auto bmp = drawOffscreen(root);
+    const Pixels px = pixelsOf(bmp);
+    std::vector<int> out;
+    for (const FairyTapes::HappyEnding::Ui::ClipLed& c : kClipLeds) out.push_back(brightAt(px, c.cx, kClipRowY));
+    return out;
+  };
+  auto bright = [](int b) { return b > 200; };
+  auto dim = [](int b) { return b < 150; };
+  std::vector<int> v = levels();
+  for (int i = 0; i < 9; ++i) ASSERT_TRUE(i == 7 ? dim(v[7]) : bright(v[static_cast<std::size_t>(i)]));   // METALHEAD is off by default
+  setStage(Stage::Clip, false);
+  setStage(Stage::Metal, true);
+  EditorTest::tick(ed);
+  v = levels();
+  for (int i = 0; i < 9; ++i) ASSERT_TRUE(i == 4 ? dim(v[4]) : bright(v[static_cast<std::size_t>(i)]));
+  setStage(Stage::Clip, true);
+  g_ctl->setParamNormalized(kBypass, 1.0);
+  EditorTest::tick(ed);
+  v = levels();
+  for (int i = 0; i < 9; ++i) ASSERT_TRUE((i == 0 || i == 8) ? bright(v[static_cast<std::size_t>(i)]) : dim(v[static_cast<std::size_t>(i)]));
+  EditorTest::destroy(ed, root);
+  resetDisplays();
+  resetAll(g_ctl);
+}
+
+// The ACT LEDs of the DYN buttons light as much as the boost is pulled back (kDispDynLow / kDispDynAir, dark amber at 0, amber
+// at full), each from its own parameter, and dim with BYPASS and with VIBE EQ's IN.
+void test_act_leds_follow_dyn() {
+  resetAll(g_ctl);
+  resetDisplays();
+  Editor ed(g_ctl);
+  auto root = EditorTest::build(ed);
+  ASSERT_TRUE(EditorTest::act(ed, 0) != nullptr && EditorTest::act(ed, 1) != nullptr);
+  auto shade = [&](int i) {
+    auto bmp = drawOffscreen(root);
+    return brightAt(pixelsOf(bmp), kActLeds[i].cx, kActLeds[i].cy);
+  };
+  EditorTest::tick(ed);
+  const int idleLow = shade(0), idleAir = shade(1);
+  ASSERT_TRUE(idleLow >= 45 && idleLow <= 60 && idleAir >= 45 && idleAir <= 60);   // 0x33260a
+  g_ctl->setParamNormalized(kDispDynLow, 0.4);
+  g_ctl->setParamNormalized(kDispDynAir, 1.0);
+  EditorTest::tick(ed);
+  ASSERT_TRUE(near(EditorTest::act(ed, 0)->level(), 0.4) && near(EditorTest::act(ed, 1)->level(), 1.0));
+  const int low = shade(0), air = shade(1);
+  ASSERT_TRUE(low > 130 && low < 190);   // mixed 56 % towards amber
+  ASSERT_TRUE(air > 225);
+  g_ctl->setParamNormalized(kDispDynLow, 0.0);
+  g_ctl->setParamNormalized(kDispDynAir, 0.4);
+  EditorTest::tick(ed);
+  ASSERT_TRUE(near(EditorTest::act(ed, 0)->level(), 0.0) && near(EditorTest::act(ed, 1)->level(), 0.4));
+  ASSERT_TRUE(shade(0) == idleLow && shade(1) == low);
+  // dimmed by BYPASS and by the stage's IN
+  g_ctl->setParamNormalized(kDispDynAir, 1.0);
+  EditorTest::tick(ed);
+  ASSERT_TRUE(!EditorTest::act(ed, 1)->isDimmed());
+  g_ctl->setParamNormalized(kBypass, 1.0);
+  EditorTest::tick(ed);
+  ASSERT_TRUE(EditorTest::act(ed, 0)->isDimmed() && EditorTest::act(ed, 1)->isDimmed() && shade(1) < 130);
+  g_ctl->setParamNormalized(kBypass, 0.0);
+  setStage(Stage::Vibe, false);
+  EditorTest::tick(ed);
+  ASSERT_TRUE(EditorTest::act(ed, 1)->isDimmed());
+  setStage(Stage::Vibe, true);
+  EditorTest::tick(ed);
+  ASSERT_TRUE(!EditorTest::act(ed, 0)->isDimmed() && !EditorTest::act(ed, 1)->isDimmed() && shade(1) > 225);
+  EditorTest::destroy(ed, root);
+  resetDisplays();
+  resetAll(g_ctl);
+}
+
+// The LUFS screen's dark box is on the panel layer, under the labels: dark inside (7, 7, 8) where the panel is not, the
+// "SHORT" label still bright over it.
+void test_lufs_screen_box_under_labels() {
+  resetAll(g_ctl);
+  resetDisplays();
+  Editor ed(g_ctl);
+  auto root = EditorTest::build(ed);
+  EditorTest::tick(ed);
+  auto bmp = drawOffscreen(root);
+  ASSERT_TRUE(bmp != nullptr);
+  const Pixels px = pixelsOf(bmp);
+  const int inside = brightAt(px, kLufsScreenRect.x + 100, kLufsScreenRect.y + 30);
+  const int beside = brightAt(px, kLufsScreenRect.x - 8, kLufsScreenRect.y + 60);
+  const int label = brightIn(px, {652, 139, 28, 8});   // SHORT, 8 px bold dim white
+  EditorTest::destroy(ed, root);
+  ASSERT_TRUE(inside <= 12);
+  ASSERT_TRUE(beside > inside);
+  ASSERT_TRUE(label > 120);
+}
+
+// The editor's views are built and removed 50 times with timer work in between and the UI timer started and closed each
+// time: close() stops the timer and lets the views go (the LEVEL views, the LUFS screen and the ACT LEDs included), a tick
+// after it is safe, and nothing is left referenced.
+void test_editor_timer_stops_on_close() {
+  resetAll(g_ctl);
+  resetDisplays();
+  for (int i = 0; i < 50; ++i) {
+    Steinberg::IPlugView* view = g_ctl->createView(Steinberg::Vst::ViewType::kEditor);
+    ASSERT_TRUE(view != nullptr);
+    auto* ed = dynamic_cast<Editor*>(view);
+    ASSERT_TRUE(ed != nullptr);
+    auto root = EditorTest::build(*ed);
+    ASSERT_TRUE(EditorTest::lufs(*ed) != nullptr && EditorTest::meter(*ed, 0) != nullptr && EditorTest::act(*ed, 1) != nullptr);
+    EditorTest::startTimer(*ed);
+    ASSERT_TRUE(EditorTest::timerRunning(*ed));
+    g_ctl->setParamNormalized(kDispInL, (i % 10) / 10.0);
+    g_ctl->setParamNormalized(kDispLufsShort, normFromLufs(-30.0 + i % 20));
+    EditorTest::tick(*ed);
+    ed->close();
+    ASSERT_TRUE(!EditorTest::timerRunning(*ed));
+    ASSERT_TRUE(EditorTest::lufs(*ed) == nullptr && EditorTest::meter(*ed, 0) == nullptr && EditorTest::clip(*ed, 3) == nullptr &&
+                EditorTest::act(*ed, 0) == nullptr && EditorTest::grTags(*ed) == nullptr);
+    EditorTest::tick(*ed);   // no views, no timer: safe
+    root->removeAll(true);
+    ASSERT_TRUE(root->getNbReference() == 1);
+    ASSERT_TRUE(view->release() == 0);
+  }
+  resetDisplays();
+  resetAll(g_ctl);
+}
 } // namespace
 
 int main() {
@@ -1231,6 +1632,15 @@ int main() {
     RUN_TEST(test_limit_release_shows_ms);
     RUN_TEST(test_ms_prints_sigla);
     RUN_TEST(test_knob_values_at_preview_offset);
+    RUN_TEST(test_meters_follow_display_params);
+    RUN_TEST(test_clip_click_clears_via_trigger);
+    RUN_TEST(test_lufs_click_resets_integrated);
+    RUN_TEST(test_lufs_texts_and_target_led);
+    RUN_TEST(test_gr_rows_dim_with_stage_and_bypass);
+    RUN_TEST(test_clip_leds_dim_with_stage_and_bypass);
+    RUN_TEST(test_act_leds_follow_dyn);
+    RUN_TEST(test_lufs_screen_box_under_labels);
+    RUN_TEST(test_editor_timer_stops_on_close);
     g_ctl = nullptr;
     ctl.terminate();
     failed = g_failed;

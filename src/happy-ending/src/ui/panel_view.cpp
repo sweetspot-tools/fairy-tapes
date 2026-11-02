@@ -23,6 +23,8 @@ namespace {
 constexpr CColor kYellow(0xf2, 0xc2, 0x1b);   // LEVEL section tags, the LUFS title
 constexpr CCoord kBoxRadius = 11;             // the boxes' corners (as fairy_ui drawTitledBox)
 constexpr float kHeaderLineOpacity = 0.5f;
+constexpr CColor kLufsScreenFill(0x07, 0x07, 0x08), kLufsScreenBorder(0x3a, 0x3a, 0x3d);   // the preview's LUFS screen
+constexpr CCoord kLufsScreenRadius = 4, kLufsScreenBorderWidth = 1.2;
 
 struct StyleLook {
   CCoord size;
@@ -119,6 +121,19 @@ void PanelView::draw(CDrawContext* ctx) {
     ctx->restoreGlobalState();
     lines_.push_back({l.x0, l.x1, l.y, alpha});
   }
+
+  // The LUFS screen: a dark box under its labels (the values and the LED are the editor's LufsView above the silkscreen).
+  ctx->saveGlobalState();
+  if (auto path = owned(ctx->createRoundRectGraphicsPath(
+          CRect(o.x + kLufsScreenRect.x, o.y + kLufsScreenRect.y, o.x + kLufsScreenRect.x + kLufsScreenRect.w,
+                o.y + kLufsScreenRect.y + kLufsScreenRect.h), kLufsScreenRadius))) {
+    ctx->setFillColor(kLufsScreenFill);
+    ctx->drawGraphicsPath(path, CDrawContext::kPathFilled);
+    ctx->setFrameColor(kLufsScreenBorder);
+    ctx->setLineWidth(kLufsScreenBorderWidth);
+    ctx->drawGraphicsPath(path, CDrawContext::kPathStroked);
+  }
+  ctx->restoreGlobalState();
 
   // Printed texts: header, LEVEL tags and scale, LUFS labels, band and group names, CLIP and METALHEAD notes.
   texts_.clear();

@@ -5,6 +5,8 @@
 #include "ui/editor.h"
 
 #include "controller.h"
+#include "display.h"
+#include "ui/level_views.h"
 #include "ui/panel_view.h"
 #include "ui/readouts.h"
 #include "ui/screen_model.h"
@@ -12,6 +14,7 @@
 
 #include "fairy_ui/draw_util.h"
 #include "fairy_ui/knob_math.h"
+#include "fairy_ui/meters.h"
 #include "fairy_ui/rack_controls.h"
 #include "fairy_ui/sanitize.h"
 #include "fairy_ui/silkscreen_view.h"
@@ -41,6 +44,7 @@
 namespace FairyTapes::HappyEnding::Ui {
 
 using namespace VSTGUI;
+using FairyTapes::Ui::MeterKind;
 using FairyTapes::Ui::NormalizedControl;
 using FairyTapes::Ui::RackCycle;
 using FairyTapes::Ui::RackKnob;
@@ -53,6 +57,7 @@ using Steinberg::Vst::ParamID;
 namespace {
 
 constexpr uint32_t kTimerMs = 30;
+constexpr double kTimerSeconds = kTimerMs / 1000.0;   // the step of the meters' peak hold
 constexpr CColor kFrameBackground(0x16, 0x16, 0x17);
 // Tags of the views that are not a parameter (outside every parameter, hidden and display id).
 constexpr int32_t kValueEditTag = 9100, kMatchTag = 9200, kViewsTag = 9300;
@@ -69,6 +74,20 @@ std::filesystem::path userPrefsFile() {
 }
 
 CRect toCRect(const Rect& r) { return CRect(r.x, r.y, r.x + r.w, r.y + r.h); }
+
+// The view of a LED row: centred on the row, 2r + 1 high, so the shared MeterBar (LED radius min(pitch / 2 - 1, height / 2
+// - 0.5)) draws LEDs of the preview's radius r.
+CRect ledRowRect(const Rect& bar, float radius) {
+  const double cy = bar.y + bar.h / 2.0;
+  return CRect(bar.x, cy - radius - 0.5, bar.x + bar.w, cy + radius + 0.5);
+}
+
+// The peak rows light 15 LEDs over -60..+6 dB, the scale printed under them (kPanelTexts, levelScaleX) and the one of
+// The Stripper; the display parameter spans -60..0 dB (display.h): the bar takes the dB position on its own span.
+double peakBarNorm(double displayNorm) {
+  const FairyTapes::Ui::MeterScale scale = FairyTapes::Ui::kDefaultMeterScale;
+  return (peakDbFromNorm(displayNorm) - scale.minDb) / (scale.maxDb - scale.minDb);
+}
 
 // A parameter the controls edit: the stored table, LISTEN and SET.
 bool editable(int32_t tag) { return (tag >= 0 && tag < static_cast<int32_t>(kNumParams)) || tag == kListenBand || tag == kSetActive; }
@@ -272,8 +291,12 @@ bool PLUGIN_API Editor::open(void* parent, const PlatformType& platformType) {
     close();
     return false;
   }
-  timer_ = makeOwned<CVSTGUITimer>([this](CVSTGUITimer*) { onTimer(); }, kTimerMs, true);
+  startTimer();
   return true;
+}
+
+void Editor::startTimer() {
+  timer_ = makeOwned<CVSTGUITimer>([this](CVSTGUITimer*) { onTimer(); }, kTimerMs, true);
 }
 
 void PLUGIN_API Editor::close() {
@@ -305,6 +328,12 @@ void Editor::resetViewPointers() {
   controls_.fill(nullptr);
   match_ = nullptr;
   views_ = nullptr;
+  meters_.fill(nullptr);
+  grBars_.fill(nullptr);
+  clips_.fill(nullptr);
+  grTags_ = nullptr;
+  lufs_ = nullptr;
+  actLeds_.fill(nullptr);
   valueEdit_ = nullptr;
   valueEditId_ = kNumParams;
 }
@@ -387,7 +416,36 @@ void Editor::createViews(CViewContainer* parent) {
       FairyTapes::Ui::normFromChoiceIndex(owner_ ? static_cast<int>(owner_->screenView()) : 0, kNumViews)));
   parent->addView(views_);
 
+  // LEVEL: the peak rows, the GR rows with their tags, the nine clip LEDs (a click on one clears all), the LUFS screen
+  // (a click on the integrated loudness restarts it) and the ACT LEDs of the DYN buttons. They show the display
+  // parameters (updateDisplays on the timer) and dim by the UiState (refreshFromController).
+  for (int i = 0; i < 4; ++i) {
+    meters_[static_cast<std::size_t>(i)] = new LevelBar(ledRowRect(meterBarRect(kMeterRows[i]), kMeterLedRadius), MeterKind::Level, kMeterLeds);
+    parent->addView(meters_[static_cast<std::size_t>(i)]);
+  }
+  for (int i = 0; i < 5; ++i) {
+    grBars_[static_cast<std::size_t>(i)] =
+        new LevelBar(ledRowRect(grBarRect(kGrRows[i]), kGrLedRadius), MeterKind::GainReduction, kMeterLeds);
+    parent->addView(grBars_[static_cast<std::size_t>(i)]);
+  }
+  grTags_ = new GrTags();
+  parent->addView(grTags_);
+  for (int i = 0; i < 9; ++i) {
+    auto* clip = new FairyTapes::Ui::ClipLed(toCRect(clipLedRect(kClipLeds[i])), kClipLeds[i].label);
+    clip->onClick = [this] { clearClips(); };
+    clips_[static_cast<std::size_t>(i)] = clip;
+    parent->addView(clip);
+  }
+  lufs_ = new LufsView(toCRect(kLufsScreenRect));
+  lufs_->onReset = [this] { resetIntegrated(); };
+  parent->addView(lufs_);
+  for (int i = 0; i < 2; ++i) {
+    actLeds_[static_cast<std::size_t>(i)] = new ActLed(kActLeds[i]);
+    parent->addView(actLeds_[static_cast<std::size_t>(i)]);
+  }
+
   watchParameters();   // every value, text, dimming and lock from the controller
+  updateDisplays();
 }
 
 void Editor::watchParameters() {
@@ -420,8 +478,29 @@ void PLUGIN_API Editor::update(Steinberg::FUnknown*, Steinberg::int32 message) {
 
 void Editor::onTimer() {
   if (pending_.exchange(false)) refreshFromController();
+  updateDisplays();
   // The field reported what was typed when it lost the focus (Enter, a click elsewhere): it is done.
   if (valueEdit_ && frame && frame->getFocusView() != valueEdit_) closeValueEdit(false);
+}
+
+// The display parameters (hidden, written by the processor about every 33 ms) to the LEVEL views. A GR row that is
+// dimmed (BYPASS or its stage's IN off) shows no reduction, as the preview; the peak rows, the IN and OUT clip LEDs and
+// the LUFS screen are always live.
+void Editor::updateDisplays() {
+  if (!root_) return;
+  auto* ctl = getController();
+  auto display = [ctl](ParamID id) { return FairyTapes::Ui::sanitizeNorm(ctl->getParamNormalized(id), 0.0); };
+  for (int i = 0; i < 4; ++i)
+    if (LevelBar* bar = meters_[static_cast<std::size_t>(i)]) bar->setLevel(peakBarNorm(display(kMeterRows[i].id)), kTimerSeconds);
+  for (int i = 0; i < 5; ++i)
+    if (LevelBar* bar = grBars_[static_cast<std::size_t>(i)]) bar->setLevel(grRowDimmed(i, state_) ? 0.0 : display(kGrRows[i].id), kTimerSeconds);
+  for (int i = 0; i < 9; ++i)
+    if (auto* clip = clips_[static_cast<std::size_t>(i)]) clip->setLit(display(kClipLeds[i].id) >= 0.5);
+  if (lufs_)
+    lufs_->setReadout(lufsFromNorm(display(kDispLufsShort)), lufsFromNorm(display(kDispLufsInt)),
+                      indexFromNorm(kTarget, FairyTapes::Ui::sanitizeNorm(ctl->getParamNormalized(kTarget), defaultNorm(ctl, kTarget))));
+  for (int i = 0; i < 2; ++i)
+    if (ActLed* led = actLeds_[static_cast<std::size_t>(i)]) led->setLevel(display(kActLedIds[i]));
 }
 
 void Editor::refreshFromController() {
@@ -432,7 +511,18 @@ void Editor::refreshFromController() {
   const int listen = listenFromNorm(FairyTapes::Ui::sanitizeNorm(ctl->getParamNormalized(kListenBand), kDefaultListenNorm));
   const bool set = FairyTapes::Ui::sanitizeNorm(ctl->getParamNormalized(kSetActive), kDefaultSetNorm) >= 0.5;
   const UiState s = uiStateFrom(norm, listen, set);
+  state_ = s;
   if (panel_) panel_->setUiState(s);
+  // LEVEL: the GR rows and their tags dim with BYPASS and their stage's IN, the stage clip LEDs likewise, the ACT LEDs with
+  // BYPASS and VIBE EQ's IN; the peak rows, the IN / OUT clip LEDs and the LUFS screen never do.
+  for (int i = 0; i < 5; ++i) {
+    if (LevelBar* bar = grBars_[static_cast<std::size_t>(i)]) bar->setDimmed(grRowDimmed(i, s));
+    if (grTags_) grTags_->setDimmed(i, grRowDimmed(i, s));
+  }
+  for (int i = 0; i < 9; ++i)
+    if (auto* clip = clips_[static_cast<std::size_t>(i)]) clip->setDimmed(clipLedDimmed(i, s));
+  for (ActLed* led : actLeds_)
+    if (led) led->setDimmed(actLedDimmed(s));
 
   const int heard = listenedBand(s);
   const bool side = indexFromNorm(kHpMs, norm[kHpMs]) == 2;

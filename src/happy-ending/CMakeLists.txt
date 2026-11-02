@@ -40,6 +40,7 @@ set(HAPPY_ENDING_ENGINE_SOURCES
 # (Controller::createView gives the editor only then: the controller tests compile controller.cpp without VSTGUI).
 set(HAPPY_ENDING_EDITOR_SOURCES
   src/ui/editor.cpp
+  src/ui/level_views.cpp
   src/ui/panel_view.cpp
   src/ui/prefs.cpp
 )

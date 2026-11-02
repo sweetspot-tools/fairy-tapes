@@ -1,8 +1,8 @@
 // Happy Ending GUI: the plugin editor (1280 x 890 rack panel, views built in code, no .uidesc).
 // Layers from the bottom (docs/DESIGN_SYSTEM.md): panel (PanelView: body, grain, boxes with their titles on the bottom
-// border, the screen's untitled box, header lines, printed texts, engine tags), the silkscreen, the controls; wear, paper
-// tapes, screws, screen and meters come with the later tasks of the editor plan (docs/superpowers/plans/
-// 2026-10-31-happy-ending-editor.md, Tasks 10-14).
+// border, the screen's untitled box, the LUFS screen's box, header lines, printed texts, engine tags), the silkscreen, the
+// controls and the LEVEL views; the shared screen, wear, paper tapes, screws and the back come with the later tasks of the
+// editor plan (docs/superpowers/plans/2026-10-31-happy-ending-editor.md, Tasks 11-14).
 // Window: 1280 x 890 logical px times the host's content scale factor (IPlugViewContentScaleSupport) times the SIZE of
 // this plug-in's preferences (ui/prefs.h, HappyEnding.prefs, key size=75|90|100|125), read when the view is made and
 // again when it opens; the frame is zoomed by the same factor, so the views keep their logical coordinates.
@@ -20,6 +20,12 @@
 // grid of the parameter's steps); a double click on a knob is its default; a click on the value under a knob opens a text
 // field (Enter or leaving it confirms through parseValue, Escape cancels). The three LISTEN buttons write kListenBand (a
 // click on the lit one switches it off). close() switches LISTEN and SET off (one edit each) when they are on.
+// LEVEL (Task 10, ui/level_views.h): the four peak rows, the five GR rows with their tags, the nine clip LEDs, the LUFS
+// screen (short-term, integrated, TO TARGET with its green LED) and the two ACT LEDs of the DYN buttons show the hidden
+// display parameters, read on every UI timer run (they are not watched); the peak rows span -60..+6 dB over 15 LEDs, the
+// scale printed under them. The GR rows, the stage clip LEDs and the ACT LEDs dim with BYPASS and their stage's IN (a dimmed
+// GR row shows no reduction); the peak rows, the IN and OUT clip LEDs and the LUFS screen are always live. A click on a clip
+// LED writes the kClearClips trigger, one on the integrated loudness kResetIntegrated (one host edit each).
 // Controller::decor() has seed 0 until the processor, a state or an edit gives one: the seeded parts (wear, tapes,
 // screws, Task 12) wait for a decor revision with a seed; the panel layer does not depend on it.
 #pragma once
@@ -48,6 +54,7 @@ class CViewContainer;
 }
 
 namespace FairyTapes::Ui {
+class ClipLed;
 class NormalizedControl;
 class SilkscreenView;
 }
@@ -58,6 +65,10 @@ class Controller;
 
 namespace FairyTapes::HappyEnding::Ui {
 
+class ActLed;
+class GrTags;
+class LevelBar;
+class LufsView;
 class PanelView;
 struct EditorPreview;   // offscreen render tool (tools/render_editor.cpp)
 struct EditorTest;      // headless editor tests (tests/test_editor.cpp)
@@ -109,9 +120,14 @@ private:
   // Builds the layers in `parent` (the frame in open(); a plain container in the render tool and the tests).
   void createViews(VSTGUI::CViewContainer* parent);
   void resetViewPointers();
-  // The UI timer's work: a flagged change of the controller's parameters to the views; the typed value field that lost
-  // the focus is done. Also safe with no views.
+  // The UI timer (30 ms) running onTimer; open() starts it, close() stops it.
+  void startTimer();
+  // The UI timer's work: a flagged change of the controller's parameters to the views; the display parameters to the
+  // LEVEL views; the typed value field that lost the focus is done. Also safe with no views.
   void onTimer();
+  // The display parameters (hidden, written by the processor) to the peak rows, GR rows, clip LEDs, LUFS screen and ACT
+  // LEDs. Read on every timer run: they are not watched.
+  void updateDisplays();
   // Every view from the controller's parameters: the controls' values (stepped values on the step the DSP uses), the
   // printed values, and the UiState (dimming, locking, FINAL's controls, the LISTEN LEDs, the HI PASS scale, the panel).
   void refreshFromController();
@@ -121,6 +137,10 @@ private:
 
   // One user edit of a parameter outside a control gesture (begin, set, perform, end).
   void editParameter(Steinberg::Vst::ParamID id, double norm);
+  // The hidden triggers of the processor (the editor writes 1, the processor clears and answers 0): one click on a clip
+  // LED clears every clip LED, one on the integrated loudness restarts it.
+  void clearClips() { editParameter(kClearClips, 1.0); }
+  void resetIntegrated() { editParameter(kResetIntegrated, 1.0); }
   // close(): LISTEN and SET back to off, one edit each, only when they are on.
   void switchSessionParametersOff();
 
@@ -146,6 +166,14 @@ private:
   std::array<FairyTapes::Ui::NormalizedControl*, kNumControls> controls_{};   // kControls order
   FairyTapes::Ui::NormalizedControl* match_ = nullptr;   // MATCH (momentary)
   FairyTapes::Ui::NormalizedControl* views_ = nullptr;   // the five screen view buttons, one exclusive choice
+  // LEVEL (kMeterRows, kGrRows, kClipLeds order), the LUFS screen and the ACT LEDs (LOW, AIR).
+  std::array<LevelBar*, 4> meters_{};
+  std::array<LevelBar*, 5> grBars_{};
+  std::array<FairyTapes::Ui::ClipLed*, 9> clips_{};
+  GrTags* grTags_ = nullptr;
+  LufsView* lufs_ = nullptr;
+  std::array<ActLed*, 2> actLeds_{};
+  UiState state_{};   // as last read from the controller (dims the GR rows, the clip LEDs and the ACT LEDs)
   VSTGUI::CTextEdit* valueEdit_ = nullptr;               // the open typed value field, if any
   Steinberg::Vst::ParamID valueEditId_ = kNumParams;
   bool valueEditReported_ = false;                       // the field already reported what was typed

@@ -5,8 +5,8 @@
 // panel and its tabs come with the editor's back (editor plan, Tasks 13-14): the tool will write back_<tab>.png then.
 // bypass, final=, stage-off=, band-off=, listen= and set go through the controller's parameters, picked up by the
 // editor's timer work (dimming, the FINAL tag); no-grain draws the panel without the grain tile. meters sets proof
-// values of the display parameters (LEVEL rows, GR rows, clip LEDs, LUFS, DYN, the screen's inputs), shown once their
-// views exist (Tasks 10-11). cycles=<n> builds and removes the editor's views n times first (for leak checkers).
+// values of the display parameters (LEVEL rows, GR rows, clip LEDs, LUFS near the default TARGET so the green LED is on,
+// DYN, the screen's inputs); the LEVEL views show them, the screen's views come with Task 11. cycles=<n> builds and removes the editor's views n times first (for leak checkers).
 // Used to check the code-drawn GUI against src/happy-ending/docs/mockups/happy_ending_rack.html on a machine without a
 // host.
 #include "controller.h"
@@ -148,7 +148,7 @@ int main(int argc, char** argv) {
       } else if (!std::strcmp(a, "meters")) {
         const double v[][2] = {{kDispInL, .8},        {kDispInR, .62},       {kDispOutL, .7},          {kDispOutR, .55},
                                {kDispGr0, .35},       {kDispGr1, .2},        {kDispGr2, .5},           {kDispGr3, .15},
-                               {kDispClip0, 1.0},     {kDispClip4, 1.0},     {kDispLufsShort, .62},    {kDispLufsInt, .58},
+                               {kDispClip0, 1.0},     {kDispClip4, 1.0},     {kDispLufsShort, .767},   {kDispLufsInt, .75},
                                {kDispDynLow, .4},     {kDispDynAir, .7},     {kDispGlueIn, .7},        {kDispGlueGr, .3},
                                {kDispLimitIn, .75},   {kDispLimitThresh, .6}, {kDispClipIn, .72},      {kDispFinalIn, .68}};
         for (const auto& p : v) ctl.setParamNormalized(static_cast<Steinberg::Vst::ParamID>(p[0]), p[1]);
