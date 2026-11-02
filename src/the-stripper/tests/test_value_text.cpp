@@ -1,6 +1,7 @@
 /** Fairy Tapes · The Stripper — typed values: parsing "3", "+3.5 dB", "1.2k", "45 %" and the inverse of the display (no VSTGUI). */
 
 #include "ui/value_text.h"
+#include "params.h"
 
 #include <cmath>
 #include <cstdio>
@@ -31,6 +32,23 @@ void test_numbers_of_display_strings() {
   CHECK(near(*numberOfDisplay("20000 Hz"), 20000) && near(*numberOfDisplay("2.5 kHz"), 2500) && near(*numberOfDisplay("100 Hz"), 100));
   CHECK(near(*numberOfDisplay("45%"), 45) && near(*numberOfDisplay("0.70"), 0.7) && near(*numberOfDisplay("5.0"), 5));
   CHECK(!numberOfDisplay("Bypass") && !numberOfDisplay(""));
+  // the bottom of the gate threshold (2026-11-02): "-inf dB" is minus infinity, not "no number"
+  CHECK(numberOfDisplay("-inf dB") && std::isinf(*numberOfDisplay("-inf dB")) && *numberOfDisplay("-inf dB") < 0);
+  CHECK(!numberOfDisplay("info") && !numberOfDisplay("-information"));
+}
+
+// The real gate display: -inf at 0, 80 log10(v/4) dB above (about -48 dB at the top).
+std::string gateDisplay(double v) { return FairyTapes::TheStripper::gateThresholdText(v); }
+
+void test_gate_threshold_is_typed_back() {
+  const double v60 = solveNormalized(gateDisplay, -60);
+  CHECK(*numberOfDisplay(gateDisplay(v60)) == -60);                 // typed "-60": the knob lands where the text says -60 dB
+  CHECK(near(v60, 4.0 * std::pow(10.0, -60.0 / 80.0), 0.02));     // as exact as the display (1 dB steps)
+  CHECK(solveNormalized(gateDisplay, -48) == 1.0 || *numberOfDisplay(gateDisplay(solveNormalized(gateDisplay, -48))) == -48);
+  CHECK(solveNormalized(gateDisplay, 0) == 1.0);                   // above the top (-48 dB): the top
+  CHECK(solveNormalized(gateDisplay, -1000) < 1e-3);               // far below: practically the bottom
+  CHECK(editFieldText(gateDisplay(0.0)) == "-inf");
+  CHECK(editFieldText(gateDisplay(1.0)) == "-48");
 }
 
 // A display like the gain knobs: -20..+20 dB with one decimal.
@@ -76,6 +94,7 @@ int main() {
   test_numbers_of_display_strings();
   test_inverse_of_the_display();
   test_text_for_the_edit_field();
+  test_gate_threshold_is_typed_back();
   if (g_failed) { std::fprintf(stderr, "%d check(s) failed\n", g_failed); return 1; }
   std::puts("test_value_text: ok");
   return 0;

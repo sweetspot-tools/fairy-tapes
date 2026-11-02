@@ -22,6 +22,9 @@ struct FourKEQParams {
   float hfGain = 0.0f, hfFreq = 8000.0f;
   bool hfBell = false;
   bool eqTypeBlack = false;  // false = Brown (E), true = Black (G)
+  // The four bands and the Brown phase shift. Off = filters only: HPF and LPF follow their own IN, independent of the
+  // EQ's IN (2026-11-02); the filters keep running without a break when the bands go in or out.
+  bool bandsEnabled = true;
 };
 
 class FourKEQ {
@@ -35,6 +38,9 @@ public:
   void process(float* left, float* right, int numSamples, const FourKEQParams& p);
 
   void reset();
+
+  /** The processor skipped the whole stage (filters and EQ both out): whatever goes in next starts from a clean state. */
+  void markIdle();
 
 private:
   struct FilterBand {
@@ -90,6 +96,7 @@ private:
   FourKEQParams lastParams_;
   bool lastHpfEnabled_ = false;
   bool lastLpfEnabled_ = false;
+  bool lastBandsEnabled_ = false;
 };
 
 }  // namespace FairyTapes::TheStripper::DSP

@@ -127,7 +127,7 @@ constexpr KnobLook kKnobLooks[] = {
     {kEqHFGain, "-20", "+20", 19},       {kEqHFFreq, "1.5k", "16k", 19},      {kCompressAmount, "0", "10", 19},
     {kCompressMix, "DRY", "WET", 19},    {kDriveAmount, "0", "10", 21},       {kEqSaturation, "0", "10", 22},
     {kDriveTapeAmount, "0", "10", 19},
-    {kLimiterPound, "0", "10", 19},      {kGateThreshold, "-\xE2\x88\x9E", "0", 19},
+    {kLimiterPound, "0", "10", 19},      {kGateThreshold, "-\xE2\x88\x9E", "-48", 19},   // DeNoise: -inf ... about -48 dBFS (gateThresholdText)
 };
 inline const KnobLook* knobLookOf(Steinberg::Vst::ParamID id) {
   for (const auto& k : kKnobLooks)

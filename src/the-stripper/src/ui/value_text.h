@@ -20,6 +20,7 @@ namespace value_text_detail {
 inline bool isDigit(char c) { return c >= '0' && c <= '9'; }
 
 // Parses [sign] number [spaces] [unit] from the whole string; the unit is k (x1000), kHz, Hz, dB or %.
+// A display (allowAnyUnit) may also say "-inf dB" (the bottom of the gate threshold): minus infinity, the low end.
 inline std::optional<double> parse(const std::string& in, bool allowAnyUnit) {
   std::string s;
   for (char c : in) s.push_back(c == ',' ? '.' : c);
@@ -27,6 +28,15 @@ inline std::optional<double> parse(const std::string& in, bool allowAnyUnit) {
   while (i < s.size() && s[i] == ' ') ++i;
   const std::size_t start = i;
   if (i < s.size() && (s[i] == '+' || s[i] == '-')) ++i;
+  if (allowAnyUnit && s.compare(i, 3, "inf") == 0 && (i + 3 == s.size() || s[i + 3] == ' ')) {
+    std::size_t j = i + 3;
+    while (j < s.size() && s[j] == ' ') ++j;
+    std::string unit;
+    while (j < s.size() && s[j] != ' ') unit.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(s[j++]))));
+    while (j < s.size() && s[j] == ' ') ++j;
+    if (j != s.size() || !(unit.empty() || unit == "db")) return std::nullopt;
+    return (start < s.size() && s[start] == '-') ? -INFINITY : INFINITY;
+  }
   std::size_t digits = 0;
   while (i < s.size() && isDigit(s[i])) { ++i; ++digits; }
   if (i < s.size() && s[i] == '.') {
@@ -58,7 +68,7 @@ inline std::optional<double> parse(const std::string& in, bool allowAnyUnit) {
 // What the user typed, as a number in the units of the display (kHz and k mean thousands).
 inline std::optional<double> parseTypedNumber(const std::string& typed) { return value_text_detail::parse(typed, false); }
 
-// The number behind a text the controller formats ("+3.5 dB", "2.5 kHz", "45%", "0.70"); nothing for text such as "Bypass".
+// The number behind a text the controller formats ("+3.5 dB", "2.5 kHz", "45%", "0.70", "-inf dB"); nothing for text such as "Bypass".
 inline std::optional<double> numberOfDisplay(const std::string& display) { return value_text_detail::parse(display, true); }
 
 // The text the edit field starts with: the number alone (no unit), without trailing zeros; other text as it is.

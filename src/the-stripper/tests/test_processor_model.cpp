@@ -269,6 +269,32 @@ void test_controller_state_keeps_seed_and_tape() {
   auto ex = (bool (*)())dlsym(h, "ModuleExit"); if (ex) ex();
   dlclose(h);
 }
+
+// The host text of the gate threshold follows the DSP (2026-11-02): 80 log10(v/4) dB, -inf at the bottom.
+void test_controller_gate_threshold_text() {
+  void* h = dlopen(THE_STRIPPER_MODULE, RTLD_NOW | RTLD_LOCAL); CHECK(h != nullptr);
+  if (!h) return;
+  auto entry = (bool (*)(void*))dlsym(h, "ModuleEntry"); auto getFactory = (IPluginFactory * (*)())dlsym(h, "GetPluginFactory");
+  entry(h);
+  IPluginFactory* f = getFactory(); FUnknown* obj = nullptr;
+  CHECK(f->createInstance(FairyTapes::TheStripper::kControllerUID.toTUID(), IEditController::iid, (void**)&obj) == kResultOk && obj);
+  auto* ctl = static_cast<IEditController*>(obj);
+  MockHost host;
+  CHECK(ctl->initialize(&host) == kResultOk);
+  auto text = [&](double v) {
+    String128 s{};
+    CHECK(ctl->getParamStringByValue(FairyTapes::TheStripper::kGateThreshold, v, s) == kResultOk);
+    std::string out;
+    for (int i = 0; i < 128 && s[i]; ++i) out.push_back(static_cast<char>(s[i]));
+    return out;
+  };
+  CHECK(text(1.0) == "-48 dB");
+  CHECK(text(0.5) == "-72 dB");
+  CHECK(text(0.0) == "-inf dB");
+  ctl->terminate(); ctl->release(); f->release();
+  auto ex = (bool (*)())dlsym(h, "ModuleExit"); if (ex) ex();
+  dlclose(h);
+}
 } // namespace
 
 int main() {
@@ -278,6 +304,7 @@ int main() {
   test_missing_file_reports_failed_and_empty_path_unloads();
   test_model_path_is_saved_and_restored();
   test_controller_state_keeps_seed_and_tape();
+  test_controller_gate_threshold_text();
   std::printf(g_failed ? "Model message module tests FAILED\n" : "Model message module tests OK\n");
   return g_failed ? 1 : 0;
 }

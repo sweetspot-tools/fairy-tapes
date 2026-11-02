@@ -586,8 +586,7 @@ Steinberg::tresult PLUGIN_API Controller::getParamStringByValue(Steinberg::Vst::
     asciiToStr128(buf, string);
     return Steinberg::kResultOk;
   case kGateThreshold:
-    snprintf(buf, sizeof(buf), "%.0f dB", -72.0 + valueNormalized * 72.0);
-    asciiToStr128(buf, string);
+    asciiToStr128(gateThresholdText(valueNormalized).c_str(), string);
     return Steinberg::kResultOk;
   default:
     string[0] = 0;

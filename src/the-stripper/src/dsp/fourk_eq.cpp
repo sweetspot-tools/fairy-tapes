@@ -55,6 +55,12 @@ void FourKEQ::reset() {
   phaseShift_.reset();
 }
 
+void FourKEQ::markIdle() {
+  lastHpfEnabled_ = false;
+  lastLpfEnabled_ = false;
+  lastBandsEnabled_ = false;
+}
+
 void FourKEQ::prepare(double sampleRate, int maxBlockSize) {
   if (sampleRate <= 0.0 || maxBlockSize <= 0)
     return;
@@ -292,6 +298,16 @@ void FourKEQ::process(float* left, float* right, int numSamples, const FourKEQPa
   if (p.lpfEnabled && !lastLpfEnabled_)
     lpf_.reset();
   lastLpfEnabled_ = p.lpfEnabled;
+  if (p.bandsEnabled && !lastBandsEnabled_) {
+    // the bands come back in (EQ IN on again): start them from silence, not from the state they had when they went out
+    lfFilter_.reset();
+    lmFilter_.reset();
+    hmFilter_.reset();
+    hfFilter_.reset();
+    phaseShift_.reset();
+  }
+  lastBandsEnabled_ = p.bandsEnabled;
+  const bool bands = p.bandsEnabled;
 
   for (int i = 0; i < numSamples; ++i) {
     float l = left[i];
@@ -301,19 +317,21 @@ void FourKEQ::process(float* left, float* right, int numSamples, const FourKEQPa
       l = hpf_.processL(l);
       r = hpf_.processR(r);
     }
-    l = lfFilter_.processL(l);
-    r = lfFilter_.processR(r);
-    l = lmFilter_.processL(l);
-    r = lmFilter_.processR(r);
-    l = hmFilter_.processL(l);
-    r = hmFilter_.processR(r);
-    l = hfFilter_.processL(l);
-    r = hfFilter_.processR(r);
+    if (bands) {
+      l = lfFilter_.processL(l);
+      r = lfFilter_.processR(r);
+      l = lmFilter_.processL(l);
+      r = lmFilter_.processR(r);
+      l = hmFilter_.processL(l);
+      r = hmFilter_.processR(r);
+      l = hfFilter_.processL(l);
+      r = hfFilter_.processR(r);
+    }
     if (p.lpfEnabled) {
       l = lpf_.processL(l);
       r = lpf_.processR(r);
     }
-    if (!p.eqTypeBlack) {
+    if (bands && !p.eqTypeBlack) {
       l = phaseShift_.processL(l);
       r = phaseShift_.processR(r);
     }

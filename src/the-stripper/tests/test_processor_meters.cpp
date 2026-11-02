@@ -196,10 +196,13 @@ double maxDiff(const std::vector<float>& a, const std::vector<float>& b) {
 void test_saturation_belongs_to_the_eq_again() {
   // the 4K saturation is the last step of the EQ (back from the Drive, 2026-10-24): audible with the EQ in ...
   CHECK(maxDiff(outputWith({{kEqSaturation, 0.0}}), outputWith({{kEqSaturation, 1.0}})) > 1e-3);
-  // ... and gone with the EQ's IN off, whatever the old NAM / 4K switch says
-  CHECK(maxDiff(outputWith({{kBypassEQ, 1.0}, {kEqSaturation, 0.0}}), outputWith({{kBypassEQ, 1.0}, {kEqSaturation, 1.0}})) < 1e-6);
+  // ... and gone with the EQ's IN off, whatever the old NAM / 4K switch says. Since 2026-11-02 the filters keep running with the
+  // EQ out, so the limiter's and gate's floating-point dither (Airwindows, seeded at random per instance) no longer rounds away:
+  // two fresh instances differ by a few 1e-6. The saturation itself changes the output by more than 1e-3 (first check).
+  constexpr double kDither = 1e-4;
+  CHECK(maxDiff(outputWith({{kBypassEQ, 1.0}, {kEqSaturation, 0.0}}), outputWith({{kBypassEQ, 1.0}, {kEqSaturation, 1.0}})) < kDither);
   CHECK(maxDiff(outputWith({{kBypassEQ, 1.0}, {kDriveNamOn, 0.0}, {kEqSaturation, 1.0}}),
-                outputWith({{kBypassEQ, 1.0}, {kDriveNamOn, 1.0}, {kEqSaturation, 1.0}})) < 1e-6);
+                outputWith({{kBypassEQ, 1.0}, {kDriveNamOn, 1.0}, {kEqSaturation, 1.0}})) < kDither);
 }
 
 void test_tape_engine_switch_and_drive_in() {
@@ -255,6 +258,56 @@ void test_gate_gain_reduction_meter() {
   CHECK(gateGrWith(1.0, true, true) == 0.0);               // global bypass: no reduction
 }
 
+// Filters independent of the EQ's IN (2026-11-02, spec 11): output RMS over the last 60 blocks of a sine (dB relative to the
+// input), with every module out except what `params` turns back in.
+struct FilterRun { double gainDb; std::vector<float> lastIn, lastOut; double clipEq; };
+FilterRun filterRun(double hz, float amp, std::initializer_list<std::pair<PID, double>> params) {
+  Host h; CHECK(h.open());
+  MockChanges c;
+  c.set(kBypassCompression, 1.0); c.set(kBypassDrive, 1.0); c.set(kBypassLimiter, 1.0); c.set(kBypassGate, 1.0);
+  for (const auto& p : params) c.set(p.first, p.second);
+  h.sine(amp, hz, &c);
+  double in2 = 0.0, out2 = 0.0;
+  for (int b = 0; b < 100; ++b) {
+    h.sine(amp, hz);
+    if (b >= 40)
+      for (int i = 0; i < 64; ++i) { in2 += (double)h.inL[i] * h.inL[i]; out2 += (double)h.outL[i] * h.outL[i]; }
+  }
+  FilterRun r{10.0 * std::log10(std::max(out2, 1e-30) / in2), std::vector<float>(h.inL.begin(), h.inL.end()),
+              std::vector<float>(h.outL.begin(), h.outL.end()), h.last(kClipEq)};
+  h.close();
+  return r;
+}
+
+void test_filters_work_with_the_eq_out() {
+  // EQ out, filters in, High Pass at the top of its range: a 50 Hz sine is cut hard (before 2026-11-02 the filters went out with the EQ)
+  const auto hp = filterRun(50.0, 0.5f, {{kBypassEQ, 1.0}, {kBypassLPHP, 0.0}, {kEqHPFFreq, 1.0}});
+  if (hp.gainDb > -20.0) std::fprintf(stderr, "  HPF with the EQ out: %+.1f dB at 50 Hz\n", hp.gainDb);
+  CHECK(hp.gainDb < -20.0);
+  // ... and the Low Pass at its bottom cuts a 15 kHz sine
+  const auto lp = filterRun(15000.0, 0.5f, {{kBypassEQ, 1.0}, {kBypassLPHP, 0.0}, {kEqLPFFreq, 0.0}});
+  if (lp.gainDb > -6.0) std::fprintf(stderr, "  LPF with the EQ out: %+.1f dB at 15 kHz\n", lp.gainDb);
+  CHECK(lp.gainDb < -6.0);
+  // EQ out and filters out: a passthrough
+  const auto off = filterRun(50.0, 0.5f, {{kBypassEQ, 1.0}, {kBypassLPHP, 1.0}, {kEqHPFFreq, 1.0}});
+  CHECK(maxDiff(off.lastIn, off.lastOut) < 1e-6);
+  // with the EQ out the bands and SATURATE stay out, whatever their values
+  const auto flat = filterRun(80.0, 0.5f, {{kBypassEQ, 1.0}, {kBypassLPHP, 0.0}});
+  const auto turned = filterRun(80.0, 0.5f, {{kBypassEQ, 1.0}, {kBypassLPHP, 0.0}, {kEqLFGain, 1.0}, {kEqHMGain, 0.0}, {kEqSaturation, 1.0}});
+  CHECK(maxDiff(flat.lastOut, turned.lastOut) < 1e-6);
+  // the default filters (HPF 20 Hz, LPF 20 kHz) leave a 1 kHz sine alone with the EQ out
+  CHECK(std::fabs(filterRun(1000.0, 0.5f, {{kBypassEQ, 1.0}, {kBypassLPHP, 0.0}}).gainDb) < 0.5);
+  // the EQ in with the filters in still cuts (no regression)
+  CHECK(filterRun(50.0, 0.5f, {{kBypassEQ, 0.0}, {kBypassLPHP, 0.0}, {kEqHPFFreq, 1.0}}).gainDb < -20.0);
+}
+
+void test_eq_clip_led_follows_filters_or_eq() {
+  // CLIP EQ taps the line after FILTERS and EQUALISER (ROUTING): lit while either is in, dark when both are out
+  CHECK(filterRun(1000.0, 1.5f, {{kBypassEQ, 1.0}, {kBypassLPHP, 0.0}}).clipEq == 1.0);
+  CHECK(filterRun(1000.0, 1.5f, {{kBypassEQ, 1.0}, {kBypassLPHP, 1.0}}).clipEq == 0.0);
+  CHECK(filterRun(1000.0, 1.5f, {{kBypassEQ, 0.0}, {kBypassLPHP, 1.0}}).clipEq == 1.0);
+}
+
 void test_clear_clips_request() {
   Host h; CHECK(h.open());
   for (int i = 0; i < 40; ++i) h.block(1.5f);
@@ -278,6 +331,8 @@ int main() {
   test_tape_engine_switch_and_drive_in();
   test_drive_block_moves_with_strip_mode();
   test_gate_gain_reduction_meter();
+  test_filters_work_with_the_eq_out();
+  test_eq_clip_led_follows_filters_or_eq();
   test_clear_clips_request();
   std::printf(g_failed ? "Processor meter tests FAILED\n" : "Processor meter tests OK\n");
   return g_failed ? 1 : 0;
