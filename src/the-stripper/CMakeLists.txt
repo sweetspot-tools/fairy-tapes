@@ -211,7 +211,7 @@ add_test(NAME the_stripper_back_panel_tests COMMAND the_stripper_back_panel_test
 
 # Typed values: parsing and the inverse of the display (header-only, no VSTGUI).
 add_executable(the_stripper_value_text_tests tests/test_value_text.cpp)
-target_include_directories(the_stripper_value_text_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_include_directories(the_stripper_value_text_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${VST3_SDK_PATH} ${VST3_SDK_PLUGINTERFACES}/base)   # params.h: the real gate display
 add_test(NAME the_stripper_value_text_tests COMMAND the_stripper_value_text_tests)
 
 # Recall marks (header-only, no VSTGUI).

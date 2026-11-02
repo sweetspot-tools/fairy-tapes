@@ -32,7 +32,7 @@ The same diagram is on the ROUTING tab of the back panel. In engine order:
 
 1. **Input.** The input level meter reads the raw input. Then the input gain, -20 to +20 dB, and the IN clip LED.
 2. **Drive, CHAN only at this point.** NAM, then TAPE, each with its own on/off switch. The Drive IN takes out both.
-3. **Filters and EQ.** One 4K-EQ engine: high pass first, then the four bands (LF, LM, HM, HF), then the low pass. SATURATE adds the console saturation as the last step of the EQ. The filters have their own IN, but they live inside the EQ: with the EQ IN off, the filters are out too.
+3. **Filters and EQ.** One 4K-EQ engine: high pass first, then the four bands (LF, LM, HM, HF), then the low pass. SATURATE adds the console saturation as the last step of the EQ. The filters follow only their own IN: with the EQ IN off and the FILTERS IN on, the high pass and low pass still work while the bands and SATURATE are out.
 4. **Compression.** Amount and Mix, with the character set by CHAN / BUS and VOICE / DRUMS / CLASSIC. The sidechain input feeds the detector.
 5. **Drive, BUS only at this point.** The same block as step 2.
 6. **Limiter.** One knob, POUND.
@@ -70,7 +70,7 @@ Every control is a VST3 parameter, so the host can automate it and show it in it
 | DRIVE | IN (Drive Bypass, inverted) | in / out | in |
 | LIMITER | POUND (Limiter Pound) | 0 to 10 | 5.0 |
 | LIMITER | IN (Limiter Bypass, inverted) | in / out | in |
-| GATE | THRESH (Gate Threshold) | fully left = gate open; the host shows -72 to 0 dB | fully left |
+| GATE | THRESH (Gate Threshold) | -inf (fully left, gate open) to about -48 dBFS (fully right) | fully left |
 | GATE | IN (Gate Bypass, inverted) | in / out | in |
 | OUTPUT | GAIN (Output Gain) | -20 to +20 dB | 0 dB |
 | OUTPUT | CHAN / BUS (Strip Mode) | Channel / Mix bus | CHAN |
@@ -106,7 +106,7 @@ The Stripper ships with no models. You bring your own `.nam` files.
 - **How to load:** click the model strip in the DRIVE box. The model browser opens. Add the folders where you keep your models with **+ ADD**; they are scanned with all their subfolders. Pick a model (you can search by name) and press **LOAD**. Until you edit the folder list, the browser offers `~/NAM`, `~/Documents/NAM` and `~/Documents/Tone3000` if they exist. There is no online search or download in version 1.
 - **Loading** runs on a separate thread: the audio does not stop. The model path is saved with the project and loaded again when you open it. If the file is missing or cannot be read, the strip shows the error and NAM passes the signal through.
 - **No model:** with no model loaded (or after **NO MODEL** in the browser), NAM passes the signal through unchanged. TAPE still works.
-- **Mono:** NAM sums left and right and sends the same signal to both sides. On a stereo bus this narrows the image to mono while NAM is on. TAPE stays stereo.
+- **Stereo:** NAM runs as dual mono, one instance of the model for each channel, in CHAN and in BUS, so the stereo image is kept. When left and right are identical (a mono source) only one instance runs and its result is copied to both sides: a mono track costs the same as one instance. The level compensation is linked (one gain for both channels). When a source that was mono for a while turns stereo, the second instance first catches up on the samples it skipped, so there is no click; that one block costs more CPU (with a typical WaveNet capture, a few thousand samples of extra work in that block).
 - **Sample rate:** the model runs at the session rate, with no resampling. NAM models are normally trained at 48 kHz, so a 48 kHz session gives the sound of the capture.
 - **CPU and GPU:** NAM runs on the CPU (NeuralAmpModelerCore), and each instance with a model has a real CPU cost. There is an optional GPU path for NVIDIA cards (custom CUDA kernels in `shared/gpu_nam`, WaveNet models only). It is built only when the CUDA toolkit is present at build time and has not been verified yet. When the GPU cannot take a model, the model runs on the CPU.
 

@@ -365,7 +365,8 @@ var pct=withNum(function(v){return Math.round(v*100)+' %';},function(v){return v
 function hz(a,b){return withNum(function(v){var f=a+v*(b-a);return f>=1000?(f/1000).toFixed(1)+' kHz':Math.round(f)+' Hz';},function(v){return a+v*(b-a);});}
 var num=withNum(function(v){return (v*10).toFixed(1);},function(v){return v*10;});
 var qfmt=withNum(function(v){return (0.4+v*3.6).toFixed(1);},function(v){return 0.4+v*3.6;});
-var thfmt=withNum(function(v){return Math.round(-72+v*72)+' dB';},function(v){return -72+v*72;});
+/* gate threshold as DeNoise applies it: (v/4)^4 in amplitude = 80 log10(v/4) dB, -inf at 0, about -48 dB at the top (2026-11-02) */
+var thfmt=withNum(function(v){return v<=0?'-inf dB':Math.round(80*Math.log10(v/4))+' dB';},function(v){return v<=0?-Infinity:80*Math.log10(v/4);});
 
 /* ============ ROW A ============ */
 box(24,92,150,170,'INPUT','bottom');
@@ -498,7 +499,7 @@ boxTag(388,506,function(){return namOn&&tapeOn?'NAM \u00b7 TAPE':namOn?'NAM':tap
 box(678,484,162,146,'LIMITER','bottom');
 var gLi=grp();knob(752,552,'POUND',0.4,'0','10','',{def:0.5,fmt:num});boxTag(694,506,function(){return 'B-PARTY';});endGrp();byp(811,522,gLi);
 box(846,484,130,146,'GATE','bottom');
-var gGa=grp();knob(903,552,'THRESH',0.2,'-∞','0','',{def:0,fmt:thfmt});boxTag(862,506,function(){return 'D-NOISE';});endGrp();byp(947,522,gGa);
+var gGa=grp();knob(903,552,'THRESH',0.2,'-∞','-48','',{def:0,fmt:thfmt});boxTag(862,506,function(){return 'D-NOISE';});endGrp();byp(947,522,gGa);
 ROOT=svg;OFFY=0;
 setMode('c');
 
