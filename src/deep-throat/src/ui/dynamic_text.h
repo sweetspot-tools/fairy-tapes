@@ -132,6 +132,12 @@ inline std::string hpfChoiceText(int choice) {
 inline std::string modeTagLine1(Mode m) { return modeTagLine1(modeRow(m)); }
 inline std::string modeTagLine2(Mode m) { return modeTagLine2(modeRow(m)); }
 inline const char* detectorTag(Mode m) { return detectorTag(modeRow(m)); }
+// LATENCY LIVE (spec 9b): the level detector runs in every mode, so the BREATH tag says LEVEL, and MODE shows the amber
+// liveDetectorText under its buttons (the breaths are reduced late).
+inline const char* detectorTag(Mode m, LatencyMode l) { return l == LatencyMode::Live ? "LEVEL" : detectorTag(m); }
+inline std::string liveDetectorText(LatencyMode l) {
+  return l == LatencyMode::Live ? "LEVEL DETECTOR \xC2\xB7 LIVE" : std::string();
+}
 inline std::string riderMaxText(Mode m) { return riderMaxText(modeRow(m)); }
 inline std::string deEssNote(Mode m) { return m == Mode::Puke ? deEssNote(modeRow(m)) : std::string(); }
 

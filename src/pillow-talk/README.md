@@ -84,9 +84,12 @@ The front panel has five boxes:
   the detector sees it after its filter (a steady sine reads about 4 dB below its peak). The amber area is the echo as
   it reaches the output, after ducking and Mix. The green line is the send level (the gain applied to the echo). The
   dashed line is the threshold.
-- **LEVEL:** LED meters for IN L/R (before anything) and OUT L/R (after Mix and Bypass), scale −60 to 0 dB. The **DUCK**
+- **LEVEL:** LED meters for IN L/R (before anything) and OUT L/R (after Mix and Bypass), scale −60 to +6 dB like every Fairy Tapes plug-in. The **DUCK**
   row in amber shows how much the echo is turned down. Two clip LEDs (IN, OUT) light at 0 dBFS or above and stay on for
-  2 seconds; click either clip LED to clear both. The meters hold their highest peak for the time set in DISPLAY PEAKS.
+  2 seconds; click either clip LED to clear both. The 12 LEDs of each IN/OUT row are coloured by the level they stand
+  for, one LED every 6 dB: green below −18 dB, light green from −18, yellow from −9, red at 0 and +6 dB. Each LED lights
+  from half a step below its value, so the first red one comes on from about −3 dBFS; the clip LEDs are the exact
+  0 dBFS indicator. The meters hold their highest peak for the time set in DISPLAY PEAKS, then it falls at 20 dB per second.
 - **OUTPUT:** the **Mix** knob and the **Bypass** button.
 - **DELAY:** Time, Feedback, Tone, Saturation, Wow/Flutter and a **SYNC** button.
 - **AUTO DUCK:** Threshold, Depth, Hold, Release and a **SYNC** button.

@@ -30,7 +30,7 @@ body{margin:0;padding:16px;background:#e9e8e4;font-family:system-ui,sans-serif;c
   <label>Signal <input type="range" id="lvl" min="0" max="100" value="55" style="width:120px"></label>
   <span style="color:#555">Rack-style panel preview (1000 × 628, landscape). Knobs: drag vertically, Shift = fine, double-click = default. Click a clip LED to clear all. When a module IN button is off (all on by default) its controls dim; the BYPASS button at the top right (Output) dims everything and puts the plugin in bypass.</span>
 </div>
-<div class="stage"><div class="scene"><div class="card" id="card"><svg id="ui" viewBox="0 0 1000 470" role="img" aria-label="Hotline editor, rack-style panel"></svg><svg id="back" viewBox="0 0 1000 628" role="img" aria-label="Credits, references and licenses"></svg></div></div></div>
+<div class="stage"><div class="scene"><div class="card" id="card"><svg id="ui" viewBox="0 0 1000 470" role="img" aria-label="Hotline editor, rack-style panel"></svg><svg id="back" viewBox="0 0 1000 470" role="img" aria-label="Settings, devices, routing and credits"></svg></div></div></div>
 <script>
 var NS='http://www.w3.org/2000/svg',svg=document.getElementById('ui');
 function el(n,a,p){var e=document.createElementNS(NS,n);for(var k in a)e.setAttribute(k,a[k]);(p||CUR||ROOT).appendChild(e);return e;}
@@ -420,36 +420,36 @@ endGrp();byp(948,304,g1);
 
 
 
-/* ============ BACK: credits, references, licenses ============ */
+/* ============ BACK: settings, devices, routing, credits (2026-11-02: aligned with the editor, 470 px, the kShort template) ============ */
 var back=document.getElementById('back');ROOT=back;CUR=null;
-el('rect',{width:1000,height:628,rx:14,fill:'#161617'});texLayer();
-el('rect',{x:2,y:2,width:996,height:624,rx:13,fill:'none',stroke:'#2c2c2f','stroke-width':2});
+el('rect',{width:1000,height:470,rx:14,fill:'#161617'});texLayer();
+el('rect',{x:2,y:2,width:996,height:466,rx:13,fill:'none',stroke:'#2c2c2f','stroke-width':2});
 LY=layers();addWear(LY.wear,0x77,true);screws(LY.screw);
 var bTitle=txt('CREDITS',34,58,38,W,'start',900,back,true);
 txt('FAIRY TAPES',36,78,11,DIMW,'start',700);
-var PANES={credits:el('g',{},back),settings:el('g',{},back),routing:el('g',{},back)},BOXES={credits:el('g',{},LY.box),settings:el('g',{},LY.box),routing:el('g',{},LY.box)},TABEL={};
+var TABS=['settings','devices','routing','credits'],PANES={},BOXES={},TABEL={};
+TABS.forEach(function(k){PANES[k]=el('g',{},back);BOXES[k]=el('g',{},LY.box);});
 function tabLink(label,key,x){var g=el('g',{style:'cursor:pointer'});el('rect',{x:x-84,y:66,width:86,height:18,fill:'transparent'},g);TABEL[key]=txt(label,x,78,11,DIMW,'end',700,g);g.addEventListener('click',function(){showTab(key);});}
-tabLink('SETTINGS','settings',700);tabLink('ROUTING','routing',790);tabLink('CREDITS','credits',880);
+tabLink('SETTINGS','settings',608);tabLink('DEVICES','devices',698);tabLink('ROUTING','routing',788);tabLink('CREDITS','credits',878);
 var bk=el('g',{style:'cursor:pointer'});el('rect',{x:896,y:66,width:76,height:18,fill:'transparent'},bk);txt('←  BACK',966,78,11,DIMW,'end',700,bk);
 bk.addEventListener('click',function(){document.getElementById('card').classList.remove('flipped');});
-function showTab(k){lsSet('st_tab',k);bTitle.textContent=k.toUpperCase();['credits','settings','routing'].forEach(function(t){PANES[t].style.display=BOXES[t].style.display=(t===k?'':'none');TABEL[t].setAttribute('fill',t===k?W:DIMW);});}
+function showTab(k){if(TABS.indexOf(k)<0)k='settings';lsSet('st_tab',k);bTitle.textContent=k.toUpperCase();TABS.forEach(function(t){PANES[t].style.display=BOXES[t].style.display=(t===k?'':'none');TABEL[t].setAttribute('fill',t===k?W:DIMW);});}
 txt('HOTLINE  ·  LINE DEVICES VST3',966,46,13,W,'end',700);
 
-/* ---- CREDITS tab ---- */
+/* ---- CREDITS tab: what the plug-in ships (src/ui/credits.h) ---- */
 CUR=PANES.credits;BOXOVR=BOXES.credits;
-box(24,102,952,118,'HOTLINE','top');
-txt('Version 1.0.0  ·  Fairy Tapes  ·  github.com/sweetspot-tools',50,140,14,W,'start',700);
-txt('Free software: released under the GNU General Public License v3.0 (GPL-3.0), full text in the LICENSE file.',50,164,12,DIMW,'start',700);
-txt('The plugin includes GPL-3.0 components, so the combined work is distributed under the same license.',50,184,12,DIMW,'start',700);
-txt('Source code and build instructions are available in the project repository.',50,204,12,DIMW,'start',700);
-box(24,246,952,252,'COMPONENTS AND LICENSES','top');
-var CRD=[['4K-EQ · Multi-Comp','Dusk Audio','GPL-3.0'],['Airwindows','Chris Johnson','MIT'],['Neural Amp Modeler Core','Steven Atkinson','MIT'],['Eigen','Eigen contributors','MPL-2.0'],['nlohmann/json','Niels Lohmann','MIT'],['VST 3 SDK','Steinberg Media Technologies','MIT'],['VSTGUI','Steinberg Media Technologies','VSTGUI license (BSD)']];
-CRD.forEach(function(c,i){var y=284+i*30;txt(c[0],50,y,14,W,'start',800);txt(c[1],350,y,13,DIMW,'start',700);txt(c[2],950,y,13,AMBL,'end',700);
-  if(i<CRD.length-1)el('path',{d:'M50 '+(y+12)+' H950',stroke:DIMW,'stroke-width':1,opacity:.25});});
-box(24,522,952,88,'NOTICES','top');
-txt('VST is a trademark of Steinberg Media Technologies GmbH, registered in Europe and other countries.',50,556,12,DIMW,'start',700);
-txt('.nam models belong to their authors and each carries its own license.',50,578,12,DIMW,'start',700);
-txt('Third-party names are cited for attribution only.',50,598,12,DIMW,'start',700);
+box(24,102,952,92,'HOTLINE','top');
+txt('Version 1.0.0  ·  Fairy Tapes  ·  github.com/sweetspot-tools',50,132,14,W,'start',700);
+txt('Free software: released under the GNU General Public License v3.0 (GPL-3.0), full text in the LICENSE file.',50,150,12,DIMW,'start',700);
+txt('Source code, build instructions and the license texts of the components are in the project repository.',50,166,12,DIMW,'start',700);
+box(24,210,952,140,'COMPONENTS AND LICENSES','top');
+var CRD=[['VST 3 SDK','Steinberg Media Technologies','MIT'],['VSTGUI','Steinberg Media Technologies','BSD-3-Clause'],['Zeyada (tape font)','Kimberly Geswein','OFL-1.1'],['Rock Salt (tape font)','Font Diner','Apache-2.0'],['Homemade Apple (tape font)','Font Diner','Apache-2.0']];
+CRD.forEach(function(c,i){var y=238+i*22;txt(c[0],50,y,14,W,'start',800);txt(c[1],350,y,13,DIMW,'start',700);txt(c[2],950,y,13,AMBL,'end',700);
+  if(i<CRD.length-1)el('path',{d:'M50 '+(y+8)+' H950',stroke:DIMW,'stroke-width':1,opacity:.25});});
+box(24,366,952,82,'NOTICES','top');
+txt('VST is a trademark of Steinberg Media Technologies GmbH, registered in Europe and other countries.',50,394,12,DIMW,'start',700);
+txt('The tape fonts are embedded as vector outlines of their glyphs; no font file is installed.',50,412,12,DIMW,'start',700);
+txt('Third-party names are cited for attribution only.',50,430,12,DIMW,'start',700);
 
 /* ---- SETTINGS tab: appearance (saved for the user, all projects) and behaviour (saved with the project) ---- */
 CUR=PANES.settings;BOXOVR=BOXES.settings;
@@ -461,30 +461,32 @@ function seg(x,y,items,sel,cb,w){var rects=[],labels=[];w=w||70;
 function act(x,y,w,label,cb,off){var g=el('g',{style:off?'':'cursor:pointer',opacity:off?.4:1});var r=el('rect',{x:x,y:y,width:w,height:24,rx:2,fill:'#8e8e91',stroke:'#b8b8bb'},g);txt(label,x+w/2,y+16,11,'#1a1a1c','middle',800,g);if(!off)g.addEventListener('click',cb);}
 function row(label,y,hint,x0){x0=x0||50;txt(label,x0,y+16,13,W,'start',800);if(hint)txt(hint,x0,y+32,10,DIMW,'start',700);}
 var SC=514;
-box(24,102,462,364,'APPEARANCE','top');txt('saved for you, in every project',255,130,10,DIMW,'middle',700);
-row('WEAR',146);seg(200,146,['OFF','LIGHT','HEAVY'],['off','light','heavy'].indexOf(WEAR),function(i){var w=document.getElementById('wear');w.value=['off','light','heavy'][i];w.dispatchEvent(new Event('change'));},84);
-row('NOTES LAYER',194,'tape and pen marks on the values');seg(200,194,['HIDE','SHOW'],1,function(){},84);
+box(24,102,462,234,'APPEARANCE','top');txt('saved for you, in every project',255,130,10,DIMW,'middle',700);
+row('WEAR',140);seg(200,140,['OFF','LIGHT','HEAVY'],['off','light','heavy'].indexOf(WEAR),function(i){var w=document.getElementById('wear');w.value=['off','light','heavy'][i];w.dispatchEvent(new Event('change'));},84);
 /* tape font: stepper, each name drawn in its own font */
-row('TAPE FONT',242,'handwriting on the tape');(function(){var names=Object.keys(TAPEFONTS),x=200,y=242,w=176;
+row('TAPE FONT',180,'handwriting on the tape');(function(){var names=Object.keys(TAPEFONTS),x=200,y=180,w=176;
   function arrow(ax,lab,d){var g=el('g',{style:'cursor:pointer'});el('rect',{x:ax,y:y,width:24,height:24,rx:2,fill:'#8e8e91',stroke:'#b8b8bb'},g);txt(lab,ax+12,y+17,14,'#1a1a1c','middle',800,g);g.addEventListener('click',function(){var i=(names.indexOf(TAPEFONT)+d+names.length)%names.length;TAPEFONT=names[i];lsSet('st_tapefont',TAPEFONT);upd();redrawWear();applyHW();fitName();});}
   el('rect',{x:x+26,y:y,width:w,height:24,rx:2,fill:'none',stroke:W,'stroke-width':1.5});var t=el('text',{x:x+26+w/2,y:y+17,'text-anchor':'middle',fill:W});
   function upd(){t.textContent=TAPEFONT;t.setAttribute('font-family',"'"+TAPEFONT+"',cursive");t.setAttribute('font-size',Math.min(19,(12*TAPEFONTS[TAPEFONT]+3)).toFixed(1));}
   arrow(x,'‹',-1);arrow(x+26+w+2,'›',1);upd();})();
-row('VALUES FONT',290,'values and model name');seg(200,290,['STANDARD','TAPE FONT'],HW?1:0,function(i){HW=(i===1);lsSet('st_hw',HW?'1':'0');applyHW();},118);
-row('METER HOLD',338);seg(200,338,['OFF','1.5 S','3 S','INF'],1,function(){},63);
-row('METER RELEASE',386);seg(200,386,['SLOW','NORMAL','FAST'],1,function(){},84);
-row('LOOK',434);act(200,434,120,'RE-ROLL',function(){document.getElementById('reroll').click();});txt('new wear, dirt and screws',332,450,10,DIMW,'start',700);
-box(SC,102,462,364,'BEHAVIOUR','top');txt('saved with the project',SC+231,130,10,DIMW,'middle',700);
-row('NAM INFERENCE',146,'GPU available (CUDA)',SC+26);seg(SC+176,146,['AUTO','GPU','CPU'],0,function(){},84);
-row('RECALL MARKS',194,'where the pen marks sit',SC+26);seg(SC+176,194,['AUTO','MANUAL'],0,function(){},84);
-row('MARK NOW',242,'set the marks to the current values',SC+26);act(SC+176,242,120,'MARK NOW',function(){});
-row('MODEL FOLDERS',290,'',SC+26);act(SC+176,290,120,'MANAGE…',function(){});
-row('TONE3000',338,'',SC+26);act(SC+176,338,120,'SIGN IN',function(){},true);txt('coming later',SC+308,354,10,DIMW,'start',700);
-box(24,484,952,120,'NOTES','top');
-txt('Appearance settings belong to you: they are kept in your preferences and apply to every project and every instance.',50,522,12,DIMW,'start',700);
-txt('Behaviour settings change how the plugin works: they are saved in the project, together with the parameters.',50,544,12,DIMW,'start',700);
-txt('The wear layout (scratches, tape, screws) is generated once per instance from a saved seed and never changes by itself.',50,566,12,DIMW,'start',700);
-txt('Double-click on a knob returns it to its neutral default.',50,588,12,DIMW,'start',700);
+box(SC,102,462,234,'BEHAVIOUR','top');txt('saved with the project',SC+231,130,10,DIMW,'middle',700);
+box(24,350,952,98,'NOTES','top');
+txt('Appearance settings belong to you: they are kept in your preferences and apply to every project and every instance.',50,376,12,DIMW,'start',700);
+txt('Hotline has no behaviour settings yet; the ones added later are saved in the project, together with the parameters.',50,394,12,DIMW,'start',700);
+txt('The wear layout (scratches, tape, screws) is generated once per instance from a saved seed and never changes by itself.',50,412,12,DIMW,'start',700);
+txt('Double-click on a knob returns it to its neutral default.',50,430,12,DIMW,'start',700);
+
+/* ---- DEVICES tab: the device table (src/devices.cpp), one box per device, as the editor draws it ---- */
+CUR=PANES.devices;BOXOVR=BOXES.devices;
+var DEVTAB=[['Megaphone',[['HIGH PASS','400 Hz'],['LOW PASS','4.5 kHz'],['DRIVE','50 %'],['CONE','1.8 kHz +6 dB Q 2'],['HORN','+4 dB'],['COMPANDER','3:1'],['NOISE','-60 dB'],['ROOM','5 %']]],
+  ['Telephone',[['HIGH PASS','300 Hz'],['LOW PASS','3.4 kHz'],['DRIVE','25 %'],['CONE','1.2 kHz +3 dB Q 1'],['CRUSH','8 kHz 10 bit'],['COMPANDER','2:1'],['NOISE','-54 dB']]],
+  ['Walkie-talkie',[['HIGH PASS','400 Hz'],['LOW PASS','2.8 kHz'],['DRIVE','70 %'],['CONE','1.5 kHz +4 dB Q 1'],['CRUSH','11.025 kHz 8 bit'],['COMPANDER','6:1 squelch -50 dB'],['NOISE','-40 dB']]],
+  ['AM radio',[['HIGH PASS','150 Hz'],['LOW PASS','5 kHz'],['DRIVE','30 %'],['CONE','900 Hz +2 dB Q 0.8'],['COMPANDER','2:1'],['NOISE','-48 dB']]],
+  ['Station PA',[['HIGH PASS','250 Hz'],['LOW PASS','6 kHz'],['DRIVE','20 %'],['CONE','2.5 kHz +4 dB Q 1.5'],['COMPANDER','2:1'],['NOISE','-66 dB'],['ROOM','60 %']]],
+  ['Cheap speaker',[['HIGH PASS','180 Hz'],['LOW PASS','7 kHz'],['DRIVE','40 %'],['CONE','1.1 kHz +5 dB Q 3'],['NOISE','-70 dB']]]];
+DEVTAB.forEach(function(d,i){var bx=24+(i%3)*322,by=i<3?102:283;box(bx,by,308,166,d[0],'top');
+  d[1].forEach(function(r,j){var y=by+34+j*16,lt=txt(r[0],bx+22,y,11,W,'start',800);txt(r[1],bx+22+lt.getComputedTextLength()+5,y,11,DIMW,'start',700);});});
+
 /* ---- ROUTING tab (design system, 2026-10-23): fixed block diagram of the signal path, outboard-manual style; order of the audio engine (spec §2) ---- */
 CUR=PANES.routing;BOXOVR=BOXES.routing;
 var RT=(function(){
@@ -506,45 +508,44 @@ var RT=(function(){
   function conn(x,y,k){el('circle',{cx:x,cy:y,r:10,fill:'none',stroke:W,'stroke-width':2});txt(k,x,y+4,11,W,'middle',900);}
   function sum(x,y){el('circle',{cx:x,cy:y,r:9,fill:'none',stroke:W,'stroke-width':2});ln('M'+(x-5)+' '+y+' H'+(x+5)+' M'+x+' '+(y-5)+' V'+(y+5),false,1.8);}
   return {ln:ln,arrow:arrow,arrowUp:arrowUp,arrowDown:arrowDown,dot:dot,ring:ring,jack:jack,amp:amp,block:block,inSwitch:inSwitch,tap:tap,conn:conn,sum:sum};})();
-box(24,102,952,388,'SIGNAL FLOW','top');
-(function(){var Y1=200,Y2=392,L=RT.ln,CB=290;
-  /* row 1: input, mono sum (off by default), dry split, band, drive, cone, crush */
-  RT.jack(60,Y1,'IN L · R');L('M69 '+Y1+' H158');RT.dot(82,Y1);RT.tap(112,Y1,50,'IN METER','CLIP IN');
-  L('M170 '+Y1+' H174');RT.block(174,254,Y1,48,'MONO',['L + R']);RT.inSwitch(158,Y1,272,150,'MONO',true);L('M254 '+Y1+' H300');
-  RT.dot(286,Y1);L('M286 '+Y1+' V250');RT.conn(286,260,'B');txt('DRY',300,246,9,DIMW,'start',800);
-  RT.block(300,400,Y1,48,'BAND',['HPF · LPF']);L('M400 '+Y1+' H424');
-  RT.block(424,524,Y1,48,'DRIVE',['waveshaper']);L('M524 '+Y1+' H564');RT.tap(544,Y1,50,'CLIP DRV');
-  RT.block(564,664,Y1,48,'CONE',['peak EQ · horn']);L('M664 '+Y1+' H688');
-  RT.block(688,788,Y1,48,'CRUSH',['rate · bits']);L('M788 '+Y1+' H910');
-  RT.arrow(910,Y1);RT.conn(920,Y1,'A');
-  /* DEVICE x MORPH: control line into every block the device table sets */
-  el('rect',{x:40,y:CB-11,width:116,height:22,rx:3,fill:'none',stroke:W,'stroke-width':1.6});txt('DEVICE · MORPH',98,CB+4,9,W,'middle',900);
+box(24,102,952,250,'SIGNAL FLOW','top');
+/* transcription of src/ui/routing_diagram.h (the editor, 470 px back): rows at 160 and 292 */
+(function(){var Y1=160,CB=222,Y2=292,TOP=110,YB=248,Ysw=Y1-26,L=RT.ln;
+  /* row 1: input, mono sum (off by default), dry tap, band, drive, cone, crush */
+  RT.jack(60,Y1,'IN L · R');L('M69 '+Y1+' H158');RT.dot(82,Y1);RT.tap(112,Y1,22,'IN METER','CLIP IN');
+  L('M170 '+Y1+' H174');RT.block(174,254,Y1,44,'MONO',['L + R']);
+  RT.ring(158,Y1);RT.ring(170,Y1);RT.ring(170,Y1-14);L('M158 '+Y1+' L169 '+(Y1-12),false,1.8);
+  L('M170 '+(Y1-16.6)+' V'+Ysw+' H272 V'+Y1);RT.dot(272,Y1);txt('MONO',215,Ysw-6,9,DIMW,'middle',800);
+  L('M254 '+Y1+' H300');RT.dot(286,Y1);L('M286 '+Y1+' V'+(Y1+16));RT.conn(286,Y1+26,'B');txt('DRY',299,Y1+36,9,DIMW,'start',800);
+  RT.block(300,400,Y1,44,'BAND',['HPF · LPF']);L('M400 '+Y1+' H424');
+  RT.block(424,524,Y1,44,'DRIVE',['waveshaper']);L('M524 '+Y1+' H564');RT.tap(544,Y1,18,'CLIP DRV');
+  RT.block(564,664,Y1,44,'CONE',['peak EQ · horn']);L('M664 '+Y1+' H688');
+  RT.block(688,788,Y1,44,'CRUSH',['rate · bits']);L('M788 '+Y1+' H910');RT.arrow(910,Y1);RT.conn(920,Y1,'A');
+  /* DEVICE x MORPH: a control line into every block the device table sets */
+  el('rect',{x:40,y:CB-11,width:116,height:22,rx:3,fill:'none',stroke:W,'stroke-width':2});txt('DEVICE · MORPH',98,CB+4,9,W,'middle',800);
   L('M156 '+CB+' H738',true);
-  [350,474,614,738].forEach(function(x){L('M'+x+' '+CB+' V232',true);RT.arrowUp(x,226);});
-  [180,262,376].forEach(function(x){L('M'+x+' '+CB+' V'+(x===262?Y2-86:Y2-32),true);RT.arrowDown(x,x===262?Y2-79:Y2-25);});
+  [350,474,614,738].forEach(function(x){L('M'+x+' '+CB+' V'+(Y1+33),true);RT.arrowUp(x,Y1+26);});
+  [180,262,376].forEach(function(x){var n=x===262;L('M'+x+' '+CB+' V'+(n?Y2-64:Y2-30),true);RT.arrowDown(x,n?Y2-57:Y2-23);});
   /* global BYPASS: from the input jack straight to the output switch */
-  L('M82 '+Y1+' V128 H958 V300 H886 V'+(Y2-16.6));txt('BYPASS',520,122,9,DIMW,'middle',800);txt('output = input, bit for bit',950,292,9,DIMW,'end',700);
+  L('M82 '+Y1+' V'+TOP+' H958 V'+YB+' H886 V'+(Y2-16.6));txt('BYPASS',700,TOP+13,9,DIMW,'middle',800);txt('output = input, bit for bit',950,YB-8,9,DIMW,'end',700);
   /* row 2: compander, noise added, room, mix (dry from B), output */
-  RT.conn(60,Y2,'A');L('M70 '+Y2+' H90');
-  RT.block(90,210,Y2,48,'COMPANDER',['squelch']);L('M210 '+Y2+' H253');
-  RT.block(217,307,Y2-62,34,'NOISE',['hiss · crackle'],true);L('M262 '+(Y2-45)+' V'+(Y2-9));RT.sum(262,Y2);L('M271 '+Y2+' H316');
-  RT.block(316,436,Y2,48,'ROOM',['short reverb']);L('M436 '+Y2+' H480');
-  RT.block(480,600,Y2,48,'MIX',['dry / wet']);RT.conn(540,Y2+62,'B');L('M540 '+(Y2+52)+' V'+(Y2+31));RT.arrowUp(540,Y2+24);txt('DRY',552,Y2+46,9,DIMW,'start',800);
+  RT.conn(60,Y2,'A');L('M70 '+Y2+' H90');RT.block(90,210,Y2,44,'COMPANDER',['squelch']);L('M210 '+Y2+' H253');
+  RT.block(217,307,Y2-42,30,'NOISE',['hiss · crackle'],true);L('M262 '+(Y2-27)+' V'+(Y2-9));RT.sum(262,Y2);L('M271 '+Y2+' H316');
+  RT.block(316,436,Y2,44,'ROOM',['short reverb']);L('M436 '+Y2+' H480');
+  RT.block(480,600,Y2,44,'MIX',['dry / wet']);RT.conn(540,Y2+48,'B');L('M540 '+(Y2+38)+' V'+(Y2+31));RT.arrowUp(540,Y2+24);txt('DRY',552,Y2+34,9,DIMW,'start',800);
   L('M600 '+Y2+' H660');RT.amp(660,Y2,'OUTPUT');L('M688 '+Y2+' H884');
-  RT.ring(886,Y2);RT.ring(886,Y2-14);RT.ring(902,Y2);L('M902 '+Y2+' L888.5 '+(Y2-1),false,1.8);L('M904.6 '+Y2+' H935');RT.tap(918,Y2,52,'OUT METER','CLIP OUT');
+  RT.ring(886,Y2);RT.ring(886,Y2-14);RT.ring(902,Y2);L('M902 '+Y2+' L888.5 '+(Y2-1),false,1.8);L('M904.6 '+Y2+' H935');RT.tap(912,Y2,30,'OUT METER','CLIP OUT');
   RT.jack(944,Y2,'OUT L · R');})();
-box(24,508,952,102,'LEGEND','top');
-(function(){var y=546,L=RT.ln;
+box(24,366,952,82,'LEGEND','top');
+(function(){var y=398,L=RT.ln;
   el('rect',{x:50,y:y-12,width:34,height:24,rx:3,fill:'none',stroke:W,'stroke-width':2});txt('module',92,y+4,10,DIMW,'start',700);
-  el('path',{d:'M150 '+(y-11)+' L172 '+y+' L150 '+(y+11)+' Z',fill:'none',stroke:W,'stroke-width':2,'stroke-linejoin':'round'});txt('gain stage',180,y+4,10,DIMW,'start',700);
-  RT.ring(254,y);RT.ring(266,y);RT.ring(266,y-14);L('M254 '+y+' L265 '+(y-2),false,1.8);txt('switch, default position',276,y+4,10,DIMW,'start',700);
-  RT.sum(418,y);txt('sum',432,y+4,10,DIMW,'start',700);
-  el('circle',{cx:484,cy:y,r:9,fill:'none',stroke:W,'stroke-width':2});el('circle',{cx:484,cy:y,r:3.2,fill:W});txt('input / output',500,y+4,10,DIMW,'start',700);
-  L('M592 '+y+' H636',true);txt('control signal',644,y+4,10,DIMW,'start',700);
-  RT.dot(738,y);L('M738 '+y+' V'+(y-12),false,1.4);txt('meter / clip point',748,y+4,10,DIMW,'start',700);
-  RT.conn(870,y,'A');txt('continues',886,y+4,10,DIMW,'start',700);
-  txt('DEVICE sets the blocks, MORPH blends them from neutral (0) to the device (1). CHARACTER scales Drive, Tone (on BAND), Noise, Room and Mix;',50,y+32,11,DIMW,'start',700);
-  txt('IN off removes drive, noise and room (Tone neutral, Mix 100 %). The order of the blocks never changes.',50,y+48,11,DIMW,'start',700);})();
+  el('path',{d:'M160 '+(y-11)+' L182 '+y+' L160 '+(y+11)+' Z',fill:'none',stroke:W,'stroke-width':2,'stroke-linejoin':'round'});txt('gain stage',190,y+4,10,DIMW,'start',700);
+  RT.ring(268,y);RT.ring(280,y);RT.ring(280,y-14);L('M268 '+y+' L279 '+(y-2),false,1.8);txt('switch, default position',290,y+4,10,DIMW,'start',700);
+  el('circle',{cx:438,cy:y,r:9,fill:'none',stroke:W,'stroke-width':2});el('circle',{cx:438,cy:y,r:3.2,fill:W});txt('input / output',454,y+4,10,DIMW,'start',700);
+  L('M552 '+y+' H600',true);txt('control signal',608,y+4,10,DIMW,'start',700);
+  RT.dot(712,y);L('M712 '+y+' V'+(y-12),false,1.4);txt('meter / clip point',722,y+4,10,DIMW,'start',700);
+  RT.conn(858,y,'A');txt('continues',874,y+4,10,DIMW,'start',700);
+  txt('MORPH blends the blocks from neutral to the DEVICE. CHARACTER scales Drive, Tone, Noise, Room and Mix; IN off removes drive, noise and room.',50,y+36,11,DIMW,'start',700);})();
 CUR=null;BOXOVR=null;showTab(lsGet('st_tab','settings'));
 ROOT=svg;
 

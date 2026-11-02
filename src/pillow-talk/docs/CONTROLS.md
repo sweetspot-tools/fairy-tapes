@@ -32,8 +32,8 @@ Parametri di sola lettura e nascosti (`kIsReadOnly | kIsHidden`), fuori dalla ta
 | 1000 | `kDispVoice` | livello del rilevatore (inviluppo del segnale filtrato che il ducker confronta con Threshold: mono, passa-banda 120 Hz-5 kHz, raddrizzato), -60 ... 0 dB. Un seno stazionario si legge circa 4 dB sotto il suo picco | 0 |
 | 1001 | `kDispSend` | gain di ducking applicato al wet, lineare 0 ... 1 | 1 |
 | 1002 | `kDispEcho` | picco dell'eco in uscita (dopo ducking e Mix; con Bypass o Mix 0 è al minimo), -60 ... 0 dB | 0 |
-| 1003 / 1004 | `kDispInL` / `kDispInR` | picco di ingresso L / R (misurato prima di tutto), -60 ... 0 dB (meter IN) | 0 |
-| 1005 / 1006 | `kDispOutL` / `kDispOutR` | picco di uscita L / R (dopo Mix e Bypass), -60 ... 0 dB (meter OUT) | 0 |
+| 1003 / 1004 | `kDispInL` / `kDispInR` | picco di ingresso L / R (misurato prima di tutto), -60 ... +6 dB (meter IN) | 0 |
+| 1005 / 1006 | `kDispOutL` / `kDispOutR` | picco di uscita L / R (dopo Mix e Bypass), -60 ... +6 dB (meter OUT) | 0 |
 | 1007 / 1008 | `kDispClipIn` / `kDispClipOut` | clip di ingresso / uscita: 1 se |x| >= 1.0, mantenuto 2 s di tempo audio, altrimenti 0 | 0 |
 | 1009 | `kClearClips` | **scrivibile** (nascosto): l'editor scrive 1 con un clic su un LED di clip; il processore azzera i clip e risponde 0 | 0 |
 

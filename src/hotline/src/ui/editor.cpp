@@ -462,7 +462,8 @@ void Editor::createViews(CViewContainer* parent) {
   }
 
   for (int i = 0; i < kMeterRowCount; ++i) {
-    bars_[i] = new MeterBar(toCRect(meterBarRect(kMeterRows[i])), MeterKind::Level, kMeterLeds);
+    bars_[i] = new MeterBar(toCRect(meterBarRect(kMeterRows[i])), MeterKind::Level, kMeterLeds,
+                            FairyTapes::Ui::MeterScale{kMeterMinDb, kMeterMaxDb});
     parent->addView(bars_[i]);
   }
   for (int i = 0; i < kClipCount; ++i) {

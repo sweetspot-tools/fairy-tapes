@@ -32,6 +32,9 @@ enum ParamID : Steinberg::Vst::ParamID {
 // Read-only hidden display parameters (processor -> editor), outside the persistent table.
 // Normalized: voice and echo = meter norm of the peak in dB over -60..0, send = linear gain 0..1.
 constexpr Steinberg::Vst::ParamID kMeterBase = 1000;
+// The IN/OUT level meters span -60..+6 dBFS, the scale of every plug-in of the suite (2026-11-02; it was -60..0).
+constexpr double kMeterMinDb = -60.0;
+constexpr double kMeterMaxDb = 6.0;
 enum DisplayID : Steinberg::Vst::ParamID {
   kDispVoice = kMeterBase,
   kDispSend,
