@@ -211,6 +211,20 @@ inline std::filesystem::path preferencesPath(const std::string& plugin, const st
   return base / "FairyTapes" / (plugin + ".prefs");
 }
 
+/// The user's home folder: $HOME, else %USERPROFILE% (Windows normally has no HOME), else %HOMEDRIVE%%HOMEPATH%; empty
+/// when none is set. The values are parameters so tests do not touch the environment.
+inline std::string userHomeFrom(const char* home, const char* userProfile, const char* homeDrive, const char* homePath) {
+  if (home && *home) return home;
+  if (userProfile && *userProfile) return userProfile;
+  if (homeDrive && *homeDrive && homePath && *homePath) return std::string(homeDrive) + homePath;
+  return {};
+}
+
+/// The user's home folder, from the environment.
+inline std::string userHome() {
+  return userHomeFrom(std::getenv("HOME"), std::getenv("USERPROFILE"), std::getenv("HOMEDRIVE"), std::getenv("HOMEPATH"));
+}
+
 /// The real path for this user, from the environment.
 inline std::filesystem::path preferencesPath(const std::string& plugin) {
   const char* home = std::getenv("HOME");

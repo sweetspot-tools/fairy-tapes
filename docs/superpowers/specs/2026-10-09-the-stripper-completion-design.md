@@ -150,14 +150,11 @@ Doggystyle riusa `shared/nam_drive` e il caricamento asincrono: questo spec va i
 
 ## 11. Decisioni aperte (2026-10-10)
 
+- **Corretti il 2026-11-02:** scheda ROUTING con IN METER sull'ingresso grezzo (prima di INPUT) e CLIP IN dopo; sigla del compressore in Bus `4K-G` come sul pannello (preview e editor, test in `test_back_panel.cpp`); cartelle predefinite dei modelli da `userHome()` (`HOME`, poi `USERPROFILE`, poi `HOMEDRIVE`+`HOMEPATH`; test in `test_preferences.cpp`); tolti i testi vecchi ("No custom UI", unità "Both modes" di `kBypassLPHP`, "when feasible", clone a mano di `vst3sdk` nel CMake).
 - **Emerse rivedendo i documenti (2026-11-02), da decidere:**
   - **Filtri dentro l'EQ:** la scheda ROUTING disegna FILTERS come blocco a sé con il proprio IN, prima dell'EQUALISER; nel codice HPF e LPF stanno dentro il 4K-EQ (`processor.cpp`), quindi **con l'IN dell'EQ spento spariscono anche i filtri**. Scegliere se correggere il disegno o separare i filtri dall'IN dell'EQ.
-  - **IN METER:** il disegno lo mette dopo il guadagno d'ingresso; il motore legge l'ingresso prima del guadagno (come chiede §4.1), mentre il LED CLIP IN è dopo. Correggere il disegno.
-  - **Sigla della compressione in Bus:** sul pannello è `4K-G` (`ui/layout.h`), nella scheda ROUTING `BUS`. Sceglierne una.
   - **Soglia del gate:** l'host mostra −72…0 dB, la serigrafia −∞…0, il DSP (DeNoise) arriva a circa −48 dBFS. Allineare la scala mostrata.
   - **NAM in mono:** il Drive somma L+R e scrive lo stesso segnale sui due lati (anche in Mix bus) e non ricampiona. Decidere se va bene per il Mix bus.
-  - **Cartelle predefinite dei modelli:** `ui/model_browser.cpp` usa `$HOME`, di norma assente su Windows: lì le cartelle predefinite non compaiono.
-  - **Testi vecchi nel codice:** intestazione di `params.h` ("No custom UI"), unità "Both modes" di `kBypassLPHP` in `controller.cpp`, commenti "when feasible"; `src/the-stripper/CMakeLists.txt` righe 9 e 16 dicono ancora di clonare `vst3sdk` a mano.
 
 - **OVERSAMPLING (proposto 2026-10-24, da decidere):** come in Happy Ending, impostazione OVERSAMPLING in BEHAVIOUR (Off / 2× / 4×, default 2×, filtri a fase lineare, latenza dichiarata e costante durante la riproduzione), applicata solo agli stadi non lineari di questo plugin: quelli del Drive diversi dal NAM (TAPE, Saturate) e probabilmente il limiter; non il NAM (il modello lavora alla frequenza su cui è addestrato).
 - **SET per la release della compressione (proposto 2026-10-24, da decidere):** lo schema comune di `docs/DESIGN_SYSTEM.md` ("Taratura guidata della release") applicato a COMPRESSION nei modi FET-76, VCA-160 e 4K-G, che hanno la release regolabile; non con OPTO-2A (release dipendente dal programma). Da decidere se adottarlo e dove metterlo nel riquadro.

@@ -1,6 +1,6 @@
 /**
  * Fairy Tapes · The Stripper — Parameter IDs and constants.
- * No custom UI: host (e.g. Reaper) shows standard parameter list.
+ * The editor (src/ui/) and the host's generic list show the same parameters.
  */
 
 #pragma once
@@ -16,7 +16,7 @@ enum ParamID : Steinberg::Vst::ParamID {
   kInputGain,
   kOutputGain,
   kBypassGainStaging,
-  kBypassLPHP,   // Bypass LP/HP section. Channel: 4K-EQ HPF/LPF. Mix bus: LP/HP active when feasible (same params).
+  kBypassLPHP,   // Bypass LP/HP section: the HPF/LPF of the 4K-EQ, in both strip modes (same params).
   kBypassEQ,
   kBypassCompression,
   kBypassDrive,

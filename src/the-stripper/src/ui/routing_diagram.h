@@ -34,9 +34,10 @@ inline FairyTapes::Ui::BackRouting stripperRouting() {
   b.jack(60, Y1, "IN L \xC2\xB7 R");
   b.ln("M69 " + s(Y1) + " H100");
   b.dot(82, Y1);
+  b.tap(91, Y1, 50, "IN METER");   // raw input, before the gain (processor.cpp, peakIn_)
   b.amp(100, Y1, "INPUT");
   b.ln("M128 " + s(Y1) + " H176");
-  b.tap(148, Y1, 50, "IN METER", "CLIP IN");
+  b.tap(148, Y1, 50, "CLIP IN");   // output of the input gain stage
   b.ln("M188 " + s(Y1) + " H192");
   b.block(192, 282, Y1, 48, "DRIVE", {"NAM \xC2\xB7 TAPE"});
   modeSwitch(176, Y1, 298, 150, "CHAN", true);
@@ -51,7 +52,7 @@ inline FairyTapes::Ui::BackRouting stripperRouting() {
   b.ln("M588 " + s(Y1) + " H658");
   b.tap(626, Y1, 50, "CLIP EQ");
   b.ln("M670 " + s(Y1) + " H674");
-  b.block(674, 810, Y1, 48, "COMPRESSION", {"OPTO-2A \xC2\xB7 FET-76", "VCA-160 \xC2\xB7 BUS"});
+  b.block(674, 810, Y1, 48, "COMPRESSION", {"OPTO-2A \xC2\xB7 FET-76", "VCA-160 \xC2\xB7 4K-G"});
   b.inSwitch(658, Y1, 826, 150);
   b.ln("M810 " + s(Y1) + " H910");
   b.tap(856, Y1, 50, "GR C", "CLIP CMP");

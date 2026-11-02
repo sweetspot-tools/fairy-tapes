@@ -1,6 +1,6 @@
 /**
  * Fairy Tapes · The Stripper — VST3 Edit Controller implementation.
- * No custom UI: host (e.g. Reaper) shows standard parameter list.
+ * The editor is created in createView (src/ui/editor.cpp); the host's generic list shows the same parameters.
  */
 
 #include "controller.h"
@@ -257,7 +257,7 @@ Steinberg::tresult PLUGIN_API Controller::getParameterInfo(Steinberg::int32 inde
     info.defaultNormalizedValue = kDefaultBypassStage;
     asciiToStr128("LP/HP Bypass", info.title);
     asciiToStr128("LPHP Byp", info.shortTitle);
-    asciiToStr128("Both modes", info.units);  // Channel: 4K-EQ HPF/LPF; Mix bus: LP/HP active when feasible
+    asciiToStr128("", info.units);  // HPF/LPF of the 4K-EQ, in both strip modes
     break;
   case kBypassEQ:
     info.stepCount = 1;

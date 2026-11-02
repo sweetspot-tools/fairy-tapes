@@ -5,6 +5,7 @@
 
 #include "ui/back_content.h"
 #include "ui/back_panel.h"
+#include "ui/routing_diagram.h"
 
 #include <cmath>
 #include <cstdio>
@@ -214,6 +215,27 @@ void test_changing_a_row_changes_the_preferences_and_presses_call_the_editor() {
 }
 } // namespace
 
+// The ROUTING diagram follows the engine and the front panel (processor.cpp, ui/layout.h): the input meter reads the raw
+// input (before the INPUT gain), the input clip LED the output of the gain; in BUS the compressor tag is 4K-G, as printed.
+void test_routing_matches_the_engine_and_the_panel() {
+  const auto r = stripperRouting();
+  const FairyTapes::Ui::RoutingPrim* meter = nullptr;
+  const FairyTapes::Ui::RoutingPrim* clip = nullptr;
+  const FairyTapes::Ui::RoutingPrim* input = nullptr;
+  bool busTag = false, oldBus = false;
+  for (const auto& p : r.flow) {
+    if (p.kind != FairyTapes::Ui::RoutingPrim::Kind::Text) continue;
+    if (p.text == "IN METER") meter = &p;
+    if (p.text == "CLIP IN") clip = &p;
+    if (p.text == "INPUT") input = &p;
+    if (contains(p.text, "VCA-160") && contains(p.text, "4K-G")) busTag = true;
+    if (contains(p.text, "VCA-160") && contains(p.text, "BUS")) oldBus = true;
+  }
+  CHECK(meter != nullptr && clip != nullptr && input != nullptr);
+  if (meter && clip && input) CHECK(meter->x < input->x && input->x < clip->x);
+  CHECK(busTag && !oldBus);
+}
+
 int main() {
   test_credits_list_every_component_with_its_license();
   test_notices_and_license_text();
@@ -227,6 +249,7 @@ int main() {
   test_rows_show_the_preferences_and_the_recall_mode();
   test_what_is_not_available_yet_is_dimmed();
   test_changing_a_row_changes_the_preferences_and_presses_call_the_editor();
+  test_routing_matches_the_engine_and_the_panel();
   if (g_failed) { std::fprintf(stderr, "%d check(s) failed\n", g_failed); return 1; }
   std::puts("test_back_panel: ok");
   return 0;
