@@ -544,7 +544,7 @@ box(24,508,952,102,'LEGEND','top');
   RT.dot(738,y);L('M738 '+y+' V'+(y-12),false,1.4);txt('meter / clip point',748,y+4,10,DIMW,'start',700);
   RT.conn(870,y,'A');txt('continues',886,y+4,10,DIMW,'start',700);
   txt('DEVICE sets the blocks, MORPH blends them from neutral (0) to the device (1). CHARACTER scales Drive, Tone (on BAND), Noise, Room and Mix;',50,y+32,11,DIMW,'start',700);
-  txt('with its IN off they keep the device values. The order of the blocks never changes.',50,y+48,11,DIMW,'start',700);})();
+  txt('IN off removes drive, noise and room (Tone neutral, Mix 100 %). The order of the blocks never changes.',50,y+48,11,DIMW,'start',700);})();
 CUR=null;BOXOVR=null;showTab(lsGet('st_tab','settings'));
 ROOT=svg;
 

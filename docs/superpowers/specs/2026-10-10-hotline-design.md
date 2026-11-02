@@ -92,7 +92,7 @@ Pannello rack orizzontale 1000 × 470 (altezza di Pillow Talk, così il retro us
 
 Nessuna decisione aperta sul kit comune (vedi "Decise").
 
-- **Legenda di ROUTING sbagliata su CHARACTER IN** (emerso il 2026-11-02 rivedendo il README): la legenda della preview (`hotline_rack.html`, riga 547) e dell'editor (`src/ui/routing_diagram.h`, riga 119) dice che con IN spento i cinque controlli "keep the device values", ma `applyCharacterIn` (`engine.cpp`) porta Drive, Noise e Room a 0, Tone a neutro e Mix al 100 %: drive, rumore e stanza del dispositivo spariscono. Correggere il testo in preview ed editor (con build e test), poi rigenerare `docs/images/routing.png`.
+- **Legenda di ROUTING su CHARACTER IN (corretta il 2026-11-02):** preview ed editor dicevano che con IN spento i cinque controlli "keep the device values"; ora "IN off removes drive, noise and room", come fa `applyCharacterIn` e come dice il §2. Test in `test_back.cpp`.
 - **Schede della preview:** la preview ha SETTINGS, ROUTING, CREDITS; l'editor anche DEVICES (§8 dice già che il retro della preview è vecchio). L'immagine nel README viene dalla preview.
 
 Note tecniche rinviate (una riga ciascuna):

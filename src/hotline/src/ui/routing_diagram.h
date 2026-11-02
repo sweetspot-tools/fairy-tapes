@@ -116,7 +116,7 @@ inline FairyTapes::Ui::BackRouting hotlineRouting() {
   // One line: the LEGEND box of the 470 px back has room for one note. CHARACTER and its IN are explained here; they do not
   // change the path.
   r.legend.notes = {"MORPH blends the blocks from neutral to the DEVICE. "
-                    "CHARACTER scales Drive, Tone, Noise, Room and Mix; with its IN off they keep the device values."};
+                    "CHARACTER scales Drive, Tone, Noise, Room and Mix; IN off removes drive, noise and room."};
   return r;
 }
 
