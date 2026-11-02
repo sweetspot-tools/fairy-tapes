@@ -3,7 +3,7 @@
 // input meter and clip on the raw input, the input gain, the lookahead delay, Rider, Breath, EQ, De-ess (first line), Comp,
 // Tone, the two Listen taps, the output gain (second line); the detection runs on the gained, live (not delayed) input,
 // stereo-linked mono, and drives the Rider and the breath reducer (dashed control lines); the global BYPASS sends the raw
-// input, delayed, to the output switch. Pure, tested.
+// input, delayed, to the output switch. The delay exists with LATENCY MIX only (spec 9b): LIVE has none. Pure, tested.
 #pragma once
 
 #include "fairy_ui/routing.h"
@@ -29,7 +29,7 @@ inline FairyTapes::Ui::BackRouting deepThroatRouting() {
   b.amp(112, Y1, "INPUT");
   b.ln("M140 " + y1 + " H172");
   b.dot(154, Y1);
-  b.block(172, 250, Y1, 44, "DELAY", {"LOOKAHEAD"});
+  b.block(172, 250, Y1, 44, "DELAY", {"LOOKAHEAD", "MIX ONLY"});   // LATENCY LIVE has no look-ahead (spec 9b)
   b.ln("M250 " + y1 + " H268");
   b.ln("M280 " + y1 + " H284");
   b.block(284, 364, Y1, 44, "RIDER", {"GAIN"});

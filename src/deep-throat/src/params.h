@@ -7,6 +7,7 @@
 #include "pluginterfaces/vst/vsttypes.h"
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 
 namespace FairyTapes::DeepThroat {
 
@@ -58,6 +59,12 @@ enum DisplayID : Steinberg::Vst::ParamID {
 constexpr Steinberg::Vst::ParamID kClearClips = kMeterBase + 100;
 
 enum class Mode { Speak, Sing, Puke };
+
+// LATENCY (spec 9b): a project setting of the back panel (SETTINGS > BEHAVIOUR), not a parameter and not automatable.
+// MIX: look-ahead 80 ms + the spectral frame (the host compensates it); LIVE: no look-ahead, latency 0, the level breath
+// detector in every mode. The values are the ones stored in the state (uint32).
+enum class LatencyMode : uint32_t { Mix = 0, Live = 1 };
+constexpr int kLatencyModeCount = 2;
 
 // Step counts of the choice parameters (StringListParameter: norm = index / (count - 1)).
 constexpr int kModeCount = 3;
