@@ -20,7 +20,7 @@ Il piano è chiuso dal punto di vista del codice (2026-10-21, decisione dell'ute
 - [x] **Editor da allineare alla preview (2026-10-21; fatto 2026-10-23):** pulsanti delle scelte esclusive con il nome sulla faccia (CHAN/BUS, VOICE/DRUMS/CLASSIC, NAM/4K); CHAN/BUS e VOICE/DRUMS/CLASSIC in colonna, lontani dagli IN; NAM/4K staccati dall'IN; togliere l'icona GPU dal pulsante NAM (`ui/gpu_chip_view`). Vedi spec §11.
 - [x] **Scheda ROUTING sul retro (2026-10-23; fatta lo stesso giorno, `ui/routing_diagram.h`):** schema a blocchi fisso del percorso del segnale (regola comune in `docs/DESIGN_SYSTEM.md`), come nella preview `stripper_rack.html`; link SETTINGS, BUTTONS, ROUTING, CREDITS. Vedi spec §11.
 
-## Stato dei compiti (2026-10-10)
+## Stato dei compiti (avviato il 2026-10-10)
 
 - [x] Task 1 — `NamDrive` in `shared/nam_drive` (commit `5805520`, adattato a NAM v0.6.0 in `10cb131`; 49 test su 49; CUDA non verificato)
 - [x] Task 2 — caricamento asincrono (`requestLoad`, `LoadState`; 5 test, 25 ripetizioni senza errori). Trovato e corretto un difetto del Task 1: i registratori delle architetture NAM sono inizializzatori statici e il linker li scartava dalla libreria statica; i consumatori usano ora `nam_drive_link(<target>)` (collegamento whole-archive)

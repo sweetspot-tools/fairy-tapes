@@ -21,7 +21,7 @@ NAM is a container, not a sound: it can hold a preamp, a pedal, an outboard unit
 
 # Part A — NAM (knob DRIVE)
 
-A single **Drive** knob controls how hard the signal is pushed into the NAM model; no classic fallback (TapeHack2 removed from design).
+A single **Drive** knob controls how hard the signal is pushed into the NAM model. The NAM switch (`kDriveNamOn`) skips the engine. There is no classic alternative inside the NAM engine: the built-in saturation is TAPE (Part B), a port of Airwindows **Tape**; the earlier plan of Airwindows TapeHack2 as "NAM off" engine was dropped.
 
 ---
 
@@ -29,7 +29,7 @@ A single **Drive** knob controls how hard the signal is pushed into the NAM mode
 
 - **One knob**: The user only interacts with **Drive Amount** (0–100%). No output trim, no dry/wet. Rock & roll, easy to use.
 - **Always-on coloration**: When the stage is active (not bypassed) and a model is loaded, the NAM model is **always in the signal path** — even at Drive = 0%. At zero drive, input gain is unity (1×) and the model provides its natural "analog" coloration. As Drive increases, the signal is pushed harder into the model, adding saturation and harmonics.
-- **Bypass = off**: The `kBypassDrive` toggle removes the stage entirely (true bypass for CPU savings or clean signal). When not bypassed and no model is loaded, the signal passes through unmodified.
+- **Bypass = off**: The `kBypassDrive` toggle (module IN) removes the whole block, NAM and TAPE. The NAM switch (`kDriveNamOn`) skips only the NAM. With the NAM on and no model loaded, the NAM passes the signal through unmodified.
 - **Auto-compensation**: Output level is matched to input level using a smoothed RMS tracker, so the user hears timbral changes without loudness jumps.
 
 ---
@@ -40,7 +40,7 @@ A single **Drive** knob controls how hard the signal is pushed into the NAM mode
 |---|------|---------|-----------------|---------|
 | 1 | **Drive** | `kDriveAmount` | 0 = unity (coloration only), 1 = max (+20 dB into model) | Input gain into the NAM model. Exponential taper: `gain = 10^(norm)` → 1× at 0, ~3.16× at 0.5, 10× at 1.0. |
 
-Plus the existing `kBypassDrive` (stage on/off toggle).
+Plus `kDriveNamOn` (ID 35, NAM switch, default on) and `kBypassDrive` (module IN, bypasses NAM and TAPE).
 
 **Removed parameters:**
 - `kDriveOutput` — replaced by automatic RMS compensation.
@@ -97,7 +97,7 @@ Stereo in (L, R)
   └─ Write to both L and R (100% wet, mono output)
 ```
 
-**Note:** The current implementation outputs a mono signal to both channels. Stereo imaging from upstream stages is preserved because the Drive stage is typically used for tonal coloring, not spatial processing. Future versions may implement mid/side processing if stereo preservation becomes a priority.
+**Note:** The current implementation outputs a mono signal to both channels: while the NAM is on, the stereo image of the input is lost (relevant in Mix bus, where the block processes the whole mix). TAPE stays stereo. Future versions may process L/R or mid/side separately if stereo preservation becomes a priority.
 
 ---
 
@@ -114,15 +114,15 @@ Stereo in (L, R)
 
 ---
 
-## 6. GPU acceleration (planned)
+## 6. CPU and GPU inference
 
-`NamDrive` lives in `shared/nam_drive` (NeuralAmpModelerCore v0.6.0) and loads models asynchronously (`requestLoad`); the audio thread swaps the model between blocks. The CUDA path of `gpu_nam` falls back to a CPU stub; it has not been verified on a machine with an NVIDIA driver.
+`NamDrive` lives in `shared/nam_drive` (NeuralAmpModelerCore v0.6.0) and loads models asynchronously (`requestLoad`); the audio thread swaps the model between blocks. On load it tries the GPU path first: `shared/gpu_nam`, **custom CUDA kernels** for WaveNet models (no gpuaudio-sdk, see `shared/gpu_nam/docs/GPU_NAM_ARCHITECTURE.md`); an unsupported model or a CUDA error falls back to the CPU (NeuralAmpModelerCore). Without the CUDA toolkit at build time, or with `-DGPU_NAM_DISABLE_CUDA=ON`, `gpu_nam` is a CPU-only stub and the NAM always runs on the CPU (the CI workflow does not install the CUDA toolkit). The CUDA build has not been verified on a machine with an NVIDIA driver; the NAM INFERENCE setting (Auto/GPU/CPU) on the back panel is dimmed until then. No latency is reported to the host.
 
 ---
 
 # Part B — TAPE (knob TAPE)
 
-Port of **Airwindows Tape** (`vendors/airwindows/plugins/LinuxVST/src/Tape`, MIT): simplified, all-purpose tape that Airwindows tuned by stacking eight instances in series, so it holds up both per channel and on the mix bus. Source: `src/dsp/tape_saturation.{h,cpp}`. No Airwindows naming in the UI.
+Port of **Airwindows Tape** (`vendors/airwindows/plugins/LinuxVST/src/Tape`, MIT; reference submodule, not fetched by a normal clone): simplified, all-purpose tape that Airwindows tuned by stacking eight instances in series, so it holds up both per channel and on the mix bus. Source: `src/dsp/tape_saturation.{h,cpp}`. No Airwindows naming in the UI.
 
 ## 7. Parameters
 

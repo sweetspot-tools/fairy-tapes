@@ -46,15 +46,12 @@ You are an expert programming assistant specialized in **VST3 audio plugins**, *
 
 ---
 
-## 4. GPU Audio SDK (gpuaudio-sdk)
+## 4. GPU path (`shared/gpu_nam`)
 
-- **Repository**: https://github.com/gpuaudio/gpuaudio-sdk (main branch).
-- **Purpose**: Offload audio processing (e.g. NAM inference, convolutions, big filters) to the GPU to free CPU and allow larger/more complex models.
-- **Integration**:
-  - Follow the SDK’s build and link instructions (CMake, submodule, or package). Use the provided APIs for **buffer management** (host ↔ device) and **kernel/plugin execution**.
-  - **Latency and sync**: GPU processing adds latency (transfer + execution). Buffer sizes and scheduling must be chosen so that the plugin still meets real-time constraints; document any added latency.
-  - **Fallback**: Prefer a design that can fall back to CPU (e.g. if GPU is unavailable or unsupported), so the plugin remains usable everywhere.
-- **Best practices**: Minimize host–device transfers; batch process when possible; avoid per-sample transfers. Keep the audio thread only submitting work and receiving results, not doing heavy GPU driver calls.
+- **What it is**: our own CUDA kernels for NAM WaveNet inference, with a process-wide manager and a CPU fallback (NeuralAmpModelerCore). Details: `shared/gpu_nam/docs/GPU_NAM_ARCHITECTURE.md`.
+- **Not used**: `gpuaudio-sdk` (its licence is not compatible with GPL-3.0) or any external inference framework.
+- **Build**: `-DGPU_NAM_DISABLE_CUDA=ON` builds the no-op stub; CUDA is verified separately, on a machine with NVIDIA drivers.
+- **Best practices**: minimize host-device transfers, batch when possible, keep the audio thread to submitting work and reading results.
 
 ---
 
@@ -62,16 +59,13 @@ You are an expert programming assistant specialized in **VST3 audio plugins**, *
 
 - **Secretated files**: Never read, suggest reading, or embed contents of the following file:
   - **`.env`** (project root) — contains API keys and other secrets.
-- **Tone3000 API key**:
-  - **Development**: The project uses **TONE3000_API_KEY** in `.env` only temporarily for development (e.g. testing download-from-Tone3000 in the plugin).
-  - **Release**: In the shipped plugin, the user enters the API key (and other API/settings) in the **plugin’s own settings UI**; the code must read from that configuration, not from the environment. Design settings storage (e.g. host-friendly path or plugin-provided prefs) so the key is entered once and persisted by the plugin.
-- **Implementation**: During dev, the key can be loaded from the environment (`getenv("TONE3000_API_KEY")`); in release, load from plugin settings. Never hardcode the key. Only the variable name **TONE3000_API_KEY** is known in rules/code.
+- **Tone3000 API key**: the Tone3000 integration is suspended (not in version 1; client code removed on 2026-10-24, see `docs/superpowers/specs/2026-10-21-tone3000-integration-design.md`). `TONE3000_API_KEY` in `.env` is only for that suspended work. If it comes back: dev = environment, release = the plug-in's own settings UI; never hardcode the key.
 
 ---
 
 ## 6. Inspirations and naming
 
-- **Conceptual inspiration (Chiarello)**: The suite’s *idea* (e.g. channel-strip style, downloading Tone3000 models from inside the plugin) is inspired by Gianni Chiarello’s work (e.g. PreBrowser). There are few public, linkable sources (mainly videos); this note is for context only. No need to search for further references unless the user asks.
+- **Conceptual inspiration (Chiarello)**: The suite’s *idea* (e.g. channel-strip style, browsing NAM models from inside the plugin) is inspired by Gianni Chiarello’s work (e.g. PreBrowser). There are few public, linkable sources (mainly videos); this note is for context only. No need to search for further references unless the user asks.
 - **Algorithm inspiration (Airwindows)**: For plugins that **do not use NAM** (EQ, compression, saturation, etc.), use as reference the **Airwindows** source code: https://github.com/airwindows/airwindows/tree/master/plugins — MIT license, suitable for inspiration and study of algorithms. Do not copy names or branding; only algorithms and techniques.
 - **Suite name**: **Fairy Tapes**. Wordplay on “fairy tales”; “tapes” = analog, real sound. All plugins in this project belong to the Fairy Tapes suite.
 - **First plugin**: **The Stripper** — channel strip. Name follows the suite’s slightly ironic tone (“strip” = channel strip) but the plugin is highly professional and quality-focused underneath.
@@ -95,7 +89,7 @@ You are an expert programming assistant specialized in **VST3 audio plugins**, *
 
 - **New plugin folder**: If the user says they are creating a new plugin (e.g. “create plugin X”), propose a minimal VST3 skeleton (CMake + one processor class + parameter list) and, if needed, a placeholder for NAM or GPU.
 - **NAM in a plugin**: When integrating NAM, clarify: model format version, sample rate handling, and latency. Suggest a small set of test models from tone3000.com for validation.
-- **GPU path**: When using gpuaudio-sdk, help with: project setup, buffer lifecycle, and how the current plugin design maps to the SDK’s execution model (e.g. one GPU “plugin” per NAM model).
+- **GPU path**: work in `shared/gpu_nam` (custom CUDA kernels, CPU fallback); see its architecture guide.
 - **Innovation**: Encourage clear, modular design (e.g. “model loader” vs “inference engine” vs “VST3 wrapper”) so that new ideas (different NAM backends, different GPU strategies) can be tried without rewriting the whole plugin.
 
 ---
@@ -106,7 +100,7 @@ You are an expert programming assistant specialized in **VST3 audio plugins**, *
 |------------------|----------------------------------------------------------------------------|
 | VST3             | Correct process signature, parameters, latency, state, thread/real-time safety. |
 | NAM              | tone3000.com models, .nam format, receptive field/latency, sample rate.   |
-| GPU Audio SDK    | gpuaudio-sdk repo, host/device buffers, batching, optional CPU fallback.   |
+| GPU NAM          | `shared/gpu_nam`: custom CUDA kernels, batching, CPU fallback; no gpuaudio-sdk. |
 | Project layout   | One folder per plugin; no cross-deps; conventional `src`/`include`/etc.  |
 | Code style       | snake_case (local/private), camelCase (rest); English comments & commits.  |
 | Secrets          | `.env` secretated; dev = env; release = plugin settings UI. Never hardcode key.  |
