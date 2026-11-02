@@ -3,6 +3,20 @@
 Fairy Tapes is released under the **GNU General Public License v3.0** ([LICENSE](LICENSE)). It builds on the work of the
 projects below. Every ported source file starts with a header that names its origin, author and licence.
 
+## At a glance: what each plug-in uses
+
+Every plug-in uses the VST 3 SDK. Every plug-in with an editor also uses VSTGUI, the shared `fairy_ui` code (ours) and
+the three tape fonts. The table lists the rest.
+
+| Plug-in | Third-party code inside |
+|---|---|
+| The Stripper | 4K-EQ and Multi-Comp (Dusk Audio, GPL-3.0); BlockParty, DeNoise and Tape (Airwindows, MIT); NeuralAmpModelerCore with Eigen and nlohmann/json (MIT, MPL-2.0) |
+| Pillow Talk | none |
+| Hotline | none |
+| Deep Throat | none |
+| Happy Ending | Multi-Comp `BusCompressor` and Multi-Q (Dusk Audio, GPL-3.0); ClipSoftly and ClipOnly2 (Airwindows, MIT); ZLInflator (ZL Audio, GPL-3.0); K-weighting constants from libebur128 (MIT). No editor yet. |
+| Doggystyle | not implemented |
+
 ## Build dependencies (submodules, fetched by a recursive clone)
 
 | Path | Project | Author | Licence | Used for |
@@ -40,7 +54,7 @@ git submodule update --init --checkout vendors/airwindows vendors/dusk-audio-plu
 | Multi-Comp (engines, hardware emulation) | Dusk Audio | GPL-3.0 | `src/the-stripper/src/dsp/multicomp_engines.*`, `hardware_emulation/`, `compression_stub.*` |
 | Multi-Comp `BusCompressor` | Dusk Audio | GPL-3.0 | `src/happy-ending/src/dsp/glue.*` |
 | Multi-Q (`AnalogMatchedBiquad`, Tube EQ, `ADAASaturation`) | Dusk Audio | GPL-3.0 | `src/happy-ending/src/dsp/matched_biquad.h`, `vibe_eq.*` |
-| BlockParty, DeNoise, ButterComp, Tape | Chris Johnson (Airwindows) | MIT | `src/the-stripper/src/dsp/blockparty.*`, `denoise.*`, `buttercomp.*`, `tape_saturation.*` |
+| BlockParty, DeNoise, Tape | Chris Johnson (Airwindows) | MIT | `src/the-stripper/src/dsp/blockparty.*`, `denoise.*`, `tape_saturation.*` |
 | ClipSoftly, ClipOnly2 | Chris Johnson (Airwindows) | MIT | `src/happy-ending/src/dsp/clip_softly.h`, `clip_only2.h` |
 | [ZLInflator](https://github.com/ZL-Audio/ZLInflator) (shaper curves, mixer) | zsliu98 (ZL Audio) | GPL-3.0 | `shared/inflator/inflator.h` |
 | [libebur128](https://github.com/jiixyj/libebur128) (K-weighting prototype constants only) | Jan Kokemüller | MIT ([LICENSES/libebur128-MIT.txt](LICENSES/libebur128-MIT.txt)) | `src/happy-ending/src/dsp/loudness_meter.*` |

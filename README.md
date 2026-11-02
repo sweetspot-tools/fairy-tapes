@@ -1,31 +1,46 @@
 # Fairy Tapes
 
-Suite of VST3 audio plugins: real, analog-style tone via NAM (Neural Amp Modeler) and GPU where applicable.
+A suite of VST3 audio plug-ins with an analog, hands-on feel. Each plug-in does one job with a few controls, behind a
+rack-style panel with worn paint, paper tape you can write on and screws you can turn.
 
-**License:** GNU General Public License v3.0 (GPL-3.0), full text in [LICENSE](LICENSE). Third-party code, fonts and their licences: [THIRD_PARTY.md](THIRD_PARTY.md).
+Published by **Sweetspot Tools** ([github.com/sweetspot-tools](https://github.com/sweetspot-tools)). VST3 vendor
+"Sweetspot Tools", macOS bundle identifiers `com.sweetspot-tools.fairytapes.<plugin>`.
 
-- **Suite**: Fairy Tapes, published by **Sweetspot Tools** ([github.com/sweetspot-tools](https://github.com/sweetspot-tools)): VST3 vendor "Sweetspot Tools", macOS bundle identifiers `com.sweetspot-tools.fairytapes.<plugin>`
-- [The Stripper](src/the-stripper/) — **bus-oriented** channel strip (LP/HP, EQ, compression, Gain/Drive with NAM or tape, limiter, gate/expander). See [src/the-stripper/docs/OVERVIEW.md](src/the-stripper/docs/OVERVIEW.md) and [FEATURES.md](src/the-stripper/docs/FEATURES.md) for design and stage choices.
-- [Pillow Talk](src/pillow-talk/) — tape echo that ducks its own return while the voice sings and opens in the pauses, so the tails land after each phrase without automation. Works as an insert or on a return bus with sidechain. See [src/pillow-talk/docs/CONTROLS.md](src/pillow-talk/docs/CONTROLS.md) and the [design](docs/superpowers/specs/2026-10-08-pillow-talk-design.md).
-- [Hotline](src/hotline/) — device effect for voice: megaphone, telephone, walkie-talkie, AM radio, station PA and cheap speaker from one chain with a single automatable Morph from clean to device and zero latency. See the [design](docs/superpowers/specs/2026-10-10-hotline-design.md) and [plan](docs/superpowers/plans/2026-10-10-hotline.md).
-- [Deep Throat](src/deep-throat/) — channel strip for vocals: fixed chain, a mode selector and a few knobs. See the [design](docs/superpowers/specs/2026-10-10-deep-throat-design.md).
-- [Happy Ending](src/happy-ending/) — mastering chain for the master bus, with stepped controls and narrow ranges. See the [design](docs/superpowers/specs/2026-10-21-happy-ending-design.md).
-- [Doggystyle](src/doggystyle/) (designed, not implemented yet) — aggressive parallel compression for drums. See the [design](docs/superpowers/specs/2026-10-09-doggystyle-design.md) and [plan](docs/superpowers/plans/2026-10-09-doggystyle.md).
+**License:** GNU General Public License v3.0 (GPL-3.0), full text in [LICENSE](LICENSE). Third-party code, fonts and
+their licences: [THIRD_PARTY.md](THIRD_PARTY.md).
 
-## Structure
+> **Work in progress.** The plug-ins are under active development and not released yet. Each README states what works
+> and what is still to be checked in a host.
 
-- **`vendors/`** — Third-party repositories as git submodules, pinned to a commit. See [THIRD_PARTY.md](THIRD_PARTY.md).
-- **`shared/`** — Libraries shared by the plugins: `gpu_nam` (NAM on GPU), `nam_drive`, `inflator` and `ui` (`fairy_ui`, `fairy_ui_widgets`: code-drawn VSTGUI controls).
-- **`src/`** — One folder per plugin.
-- **`LICENSES/`** — Licence texts of ported third-party code that is not in a fetched submodule.
-- **`build/`** — CMake output. **Not in the repo** (gitignored).
-- **`dist/`** — **Only** the built plugin bundles (e.g. `TheStripper.vst3`, `PillowTalk.vst3`); each plugin target writes its `.vst3` here. **Not in the repo** (gitignored).
+## The plug-ins
 
-Shared conventions and build setup; no cross-plugin code coupling. **Default branch:** `master` (CI and merges target this branch).
+| Plug-in | Put it on | What it does | Status |
+|---|---|---|---|
+| [The Stripper](src/the-stripper/) | single tracks, groups, mix bus | Channel strip: filters, 4-band EQ, compression, drive through a NAM model or tape, limiter and gate. One switch picks Channel or Mix bus voicing. | DSP and editor done; host, Windows/macOS and CUDA checks pending |
+| [Pillow Talk](src/pillow-talk/) | vocals, or a return bus | Tape echo that ducks its own repeats while the singer sings and lets them bloom in the pauses. No send automation. | Done; manual check in hosts pending |
+| [Hotline](src/hotline/) | vocals, intros, any track | Makes the sound come out of a megaphone, phone, walkie-talkie, AM radio, station PA or cheap speaker. One Morph knob goes from clean to device. | Done; manual check in hosts pending |
+| [Deep Throat](src/deep-throat/) | vocals: speech, singing, screams | Vocal channel strip with three modes: level rider, breath reduction, corrective EQ, de-esser, compressor and tone. | DSP and editor done; manual check in hosts pending |
+| [Happy Ending](src/happy-ending/) | the master bus | Mastering chain: fine EQ, vibe EQ, glue compressor, clipper, limiter and final loudness, with LUFS metering and a fixed ceiling. | Audio engine done; editor not built yet; by-ear tuning pending |
+| [Doggystyle](src/doggystyle/) | drum groups, bass and guitar groups | Aggressive parallel compression with two opposite characters. | Designed, not implemented |
 
-### Download pre-built binaries
+Each README has the signal flow diagram of its plug-in (the ROUTING page of the panel), the controls and the build
+commands.
 
-Pre-built binaries are **not** included in this repository. Download them from the **[GitHub Releases](https://github.com/sweetspot-tools/fairy-tapes/releases)** of this repository; each release is built from the tagged source.
+## Download
+
+Pre-built binaries are **not** in this repository. They will be published in the
+**[GitHub Releases](https://github.com/sweetspot-tools/fairy-tapes/releases)**, each built from the tagged source.
+Until then, build from source (below) or take the CI artifacts (see [CI](#ci-github-actions)).
+
+To install, copy the `.vst3` bundle into your host's VST3 folder:
+
+| System | Folder |
+|---|---|
+| Windows | `C:\Program Files\Common Files\VST3` |
+| macOS | `~/Library/Audio/Plug-Ins/VST3` (or `/Library/Audio/Plug-Ins/VST3`) |
+| Linux | `~/.vst3` (or `/usr/lib/vst3`) |
+
+On Linux the editors embed only in X11 windows: the host must run on X11 or XWayland.
 
 ## Getting the sources
 
@@ -36,96 +51,101 @@ cd fairy-tapes
 git submodule update --init --recursive
 ```
 
-This fetches what the build needs: `vendors/vst3sdk` (VST 3 SDK and VSTGUI) and `vendors/NeuralAmpModelerCore` (with its own dependencies).
+This fetches what the build needs: `vendors/vst3sdk` (VST 3 SDK and VSTGUI) and `vendors/NeuralAmpModelerCore` (with
+its own dependencies).
 
-`vendors/airwindows` and `vendors/dusk-audio-plugins` are **reference sources**: their code is already ported into `src/` and `shared/`, so they are marked `update = none` and skipped by the commands above. They stay as submodules to keep the exact upstream commit the ports came from. To fetch them (for example to port another algorithm or compare with the original):
+`vendors/airwindows` and `vendors/dusk-audio-plugins` are **reference sources**: their code is already ported into
+`src/` and `shared/`, so they are marked `update = none` and skipped by the commands above. They stay as submodules to
+record the exact upstream commit the ports came from. To fetch them (to compare with the original or port another
+algorithm):
 
 ```bash
 git submodule update --init --checkout vendors/airwindows vendors/dusk-audio-plugins
 ```
 
-Do not move a submodule to another commit by accident (`git pull` inside it): update a pinned commit only on purpose, adjusting the CMake source lists and running the tests.
+Do not move a submodule to another commit by accident (`git pull` inside it): change a pinned commit only on purpose,
+then adjust the CMake source lists and run the tests.
 
-## Build (The Stripper)
+## Build
 
-1. **SDK**  
-   Ensure `vendors/vst3sdk` is present (see [Getting the sources](#getting-the-sources)).
+Requirements: CMake 3.25 or newer and a C++20 compiler (Visual Studio 2022, Xcode, GCC or Clang). On Linux, the
+system packages VSTGUI needs (list used by the CI, Ubuntu 24.04):
 
-2. **Configure and build**  
-   Dalla root **fairy-tapes**:
+```bash
+sudo apt-get install -y \
+  libcairo2-dev libfreetype-dev libfontconfig1-dev libpango1.0-dev \
+  libxcb1-dev libxcb-util-dev libxcb-cursor-dev libxcb-keysyms1-dev libxcb-xkb-dev \
+  libxkbcommon-dev libxkbcommon-x11-dev \
+  libx11-dev libx11-xcb-dev libwayland-dev wayland-protocols \
+  libglib2.0-dev libgtkmm-3.0-dev libsqlite3-dev libexpat1-dev
+```
 
-   **Linux / macOS:**
-   ```bash
-   ./build.sh              # build di tutti i plugin
-   ./build.sh the-stripper # build solo The Stripper
-   ./build.sh --configure  # solo configurazione CMake, senza build
-   ```
+Build one plug-in with CMake (the build folder can live anywhere; `GPU_NAM_DISABLE_CUDA=ON` skips the optional CUDA
+path of The Stripper):
 
-   **Windows:**  
-   Si usano ancora i file **.bat** (batch) per automatizzare build da CMD. Dalla root del repo:
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DGPU_NAM_DISABLE_CUDA=ON
+cmake --build build --config Release -j2 --target hotline
+```
 
-   ```cmd
-   build.bat              REM build di tutti i plugin (test poi build)
-   build.bat the-stripper REM build solo The Stripper
-   build.bat --configure  REM solo cmake configure, senza build
-   ```
+Targets: `the_stripper`, `pillow_talk`, `hotline`, `deep_throat`, `happy_ending`. Each bundle is written to `dist/`
+(`TheStripper.vst3`, `PillowTalk.vst3`, `Hotline.vst3`, `DeepThroat.vst3`, `HappyEnding.vst3`). Building every target
+at once needs a lot of memory: build the ones you need.
 
-   Richiede CMake in PATH; su Windows è consigliato aprire il **“x64 Native Tools Command Prompt for VS”** (se usi Visual Studio) e lanciare da lì `build.bat the-stripper`.
+The scripts in the root wrap the same steps and run the tests first:
 
-   Oppure a mano:
+```bash
+./build.sh              # all plug-ins
+./build.sh the-stripper # one plug-in
+./build.sh --configure  # configure only
+```
 
-   ```bash
-   cd /path/to/fairy-tapes
-   mkdir build && cd build
-   cmake ..
-   cmake --build .
-   ```
+On Windows, `build.bat` does the same from a "x64 Native Tools Command Prompt for VS" (`build.bat the-stripper`).
 
-   Non serve passare `VST3_SDK_PATH` se l’SDK è in `vendors/vst3sdk`. Per compilare solo The Stripper dalla sua cartella:
+## Tests
 
-   ```bash
-   cd src/the-stripper
-   mkdir build && cd build
-   cmake .. -DVST3_SDK_PATH=/path/to/fairy-tapes/vendors/vst3sdk
-   cmake --build .
-   ```
-
-3. **Tests**  
-   `./build.sh` runs the test suite **before** building the plugin(s); if tests fail, the build stops. Tests are in `src/the-stripper/tests/` (parameter helpers). From `build/` you can run only tests with `ctest --output-on-failure`.
-
-4. **Install (local use)**  
-   The built bundle is written directly to **`dist/TheStripper.vst3`**. Copy it into your host’s VST3 folder (see your DAW/host documentation).
+Each plug-in has its test targets (for example `the_stripper_tests`, `hotline_tests`); the plug-in READMEs list them.
+Build the ones you need, then run `ctest --test-dir build --output-on-failure` (add `-R <plugin>` to filter). Tests stay
+green before and after every change, and new code comes with a test.
 
 ## CI (GitHub Actions)
 
-Push (or PR) to **master** triggers a build on **Linux**, **Windows**, and **macOS**. The workflow:
+A push or pull request to `master` builds the suite on Linux, Windows and macOS
+([.github/workflows/build.yml](.github/workflows/build.yml)). The workflow checks out the submodules, builds, and
+uploads one artifact per plug-in and system: `the-stripper-<os>`, `pillow-talk-<os>`, `deep-throat-<os>`,
+`hotline-<os>`, `happy-ending-<os>` with `<os>` = `linux`, `windows` or `macos`. The CI does not run `ctest`.
 
-- Checks out the repo **with submodules** (so `vendors/vst3sdk` is available).
-- Builds the plugins and uploads The Stripper, Pillow Talk, Deep Throat and Hotline `.vst3` bundles as **artifacts** per platform.
+To use a build: open the run, **Summary**, **Artifacts**, download the one for your system, unzip it and copy the
+`.vst3` folder into your host's VST3 folder.
 
-**Rough duration (per run):**  
-With submodules, the SDK is fetched at checkout. Build is typically **2–6 min per OS**; total for all three platforms is usually **under 15 minutes**.
+## Repository layout
 
-**GitHub free tier:** 2000 minutes/month. Linux counts 1×, Windows 2×, macOS 10× per minute. A full three-OS run is well within the free tier.
+- **`src/`**: one folder per plug-in, with its README, `docs/` (notes, HTML preview of the panel, images) and `tests/`.
+- **`shared/`**: code shared by the plug-ins: `gpu_nam` (NAM on GPU, CUDA), `nam_drive`, `inflator` and `ui`
+  (`fairy_ui`, `fairy_ui_widgets`: the controls, wear, tape, screws and back panel drawn by code).
+- **`vendors/`**: third-party repositories as git submodules, pinned to a commit. See [THIRD_PARTY.md](THIRD_PARTY.md).
+- **`LICENSES/`**: licence texts of ported third-party code whose source is not in a fetched submodule.
+- **`docs/`**: shared design rules ([DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md)), the page with every preview
+  ([docs/mockups/index.html](docs/mockups/index.html), open it from a local web server rooted in the repository) and
+  the design specs and plans in `docs/superpowers/` (in Italian).
+- **`build/`** and **`dist/`**: build output, not in the repository (gitignored).
 
-**Using the builds:** In the Actions run, open the **Summary** → **Artifacts** and download e.g. `the-stripper-windows`, `pillow-talk-windows` or `hotline-windows` for your Windows DAW, or the `-linux` / `-macos` artifacts for the other systems. Unzip if needed and place the `TheStripper.vst3` folder in your host’s VST3 path.
+The signal flow images in each README are rendered from the HTML previews by
+[docs/mockups/render_routing.js](docs/mockups/render_routing.js).
 
 ## Branches
 
 - **master** is the released line; it only receives merges of **pre-release**.
-- **pre-release** collects the work; feature branches (`feat/<plugin>`, `fix/<topic>`, `docs/<topic>`) start from it and merge back into it when needed.
-- CI runs on push and PR to `master`.
-
-## Tests
-
-Each plugin has a test target (for example `the_stripper_tests`); `ctest --output-on-failure` from the build folder runs them. Tests stay green before and after every change, and new code comes with a test.
+- **pre-release** collects the work; feature branches (`feat/<plugin>`, `fix/<topic>`, `docs/<topic>`) start from it
+  and merge back into it when needed.
+- CI runs on push and pull request to `master`.
 
 ## Development
 
-- Conventions for contributors and coding agents: [CLAUDE.md](CLAUDE.md) and [.cursorrules](.cursorrules). Design decisions, specs and plans are in `docs/superpowers/` (in Italian).
-- Shared visual rules of the editors: [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md). HTML previews of every panel: [docs/mockups/index.html](docs/mockups/index.html) (open it from a local web server rooted in the repository).
+- Conventions for contributors and coding agents: [CLAUDE.md](CLAUDE.md) and [.cursorrules](.cursorrules).
 - Local settings go in `.env` (gitignored); [.env.example](.env.example) lists the keys.
 
 ## Trademarks
 
-VST is a trademark of Steinberg Media Technologies GmbH, registered in Europe and other countries.
+VST is a trademark of Steinberg Media Technologies GmbH, registered in Europe and other countries. Hardware and product
+names that appear in the documentation describe a sound or a style; their owners do not endorse these plug-ins.

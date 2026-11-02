@@ -2,6 +2,8 @@
 
 **Status:** Idea / parentesi. Ci ritorneremo più avanti. Nome non definitivo.
 
+> **Superato dal design** (`docs/superpowers/specs/2026-10-09-doggystyle-design.md`): là i due rami sono motori dedicati Slap (FET) e Thump (VCA), solo in parallelo, con NAM opzionale in coda. Queste note restano come storia della prima idea.
+
 ---
 
 ## 1. What it is

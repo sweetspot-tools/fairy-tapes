@@ -898,7 +898,7 @@ var RT=(function(){
   /* summing node (parallel mix) */
   function sum(x,y,label){e('circle',{cx:x,cy:y,r:9,fill:'none',stroke:W,'stroke-width':2});ln('M'+(x-4.5)+' '+y+' H'+(x+4.5)+' M'+x+' '+(y-4.5)+' V'+(y+4.5),false,1.6);if(label)t(label,x,y-15,9,DIMW,'middle',800);}
   return {e:e,t:t,ln:ln,arrow:arrow,arrowUp:arrowUp,arrowDown:arrowDown,dot:dot,ring:ring,jack:jack,amp:amp,block:block,inSwitch:inSwitch,tap:tap,conn:conn,sum:sum};})();
-box(24,102,1232,688,'SIGNAL FLOW','top',P);
+box(24,102,1232,672,'SIGNAL FLOW','top',P);
 (function(){var Y1=250,Y2=500,L=RT.ln,T=RT.t;
   /* row 1: input, fine EQ (mid/side), vibe EQ, glue */
   RT.jack(60,Y1,'IN L · R');L('M69 '+Y1+' H100');RT.dot(82,Y1);
@@ -942,8 +942,8 @@ box(24,102,1232,688,'SIGNAL FLOW','top',P);
   L('M170 '+LY+' H574',true);[[361,Y2+24],[574,Y2+48]].forEach(function(r){L('M'+r[0]+' '+LY+' V'+(r[1]+7),true);RT.arrowUp(r[0],r[1]);});T('drives CLIP, LIMIT and FINAL',470,LY+16,9,DIMW,'middle',800);
   RT.dot(1170,Y2);L('M1170 '+Y2+' V'+(LY-25),true);RT.arrowDown(1170,LY-18);RT.block(1120,1220,LY,36,'LUFS',['short · integrated'],true);
   L('M1170 '+(LY+18)+' V'+MY+' H115 V'+(LY+25),true);RT.arrowUp(115,LY+18);T('MATCH  ·  sets LOUDNESS once to reach the TARGET (−14 … −7 LUFS)',640,MY-6,9,DIMW,'middle',800);})();
-box(24,810,1232,100,'LEGEND','top',P);
-(function(){var y=852,L=RT.ln,T=RT.t;
+box(24,790,1232,88,'LEGEND','top',P);
+(function(){var y=826,L=RT.ln,T=RT.t;
   RT.e('rect',{x:50,y:y-12,width:34,height:24,rx:3,fill:'none',stroke:W,'stroke-width':2});T('module',92,y+4,10,DIMW,'start',700);
   RT.e('path',{d:'M180 '+(y-11)+' L202 '+y+' L180 '+(y+11)+' Z',fill:'none',stroke:W,'stroke-width':2,'stroke-linejoin':'round'});T('gain stage',210,y+4,10,DIMW,'start',700);
   RT.ring(308,y);RT.ring(320,y);RT.ring(320,y-14);L('M308 '+y+' L319 '+(y-2),false,1.8);T('switch, default position',330,y+4,10,DIMW,'start',700);
@@ -952,7 +952,7 @@ box(24,810,1232,100,'LEGEND','top',P);
   RT.dot(792,y);L('M792 '+y+' V'+(y-12),false,1.4);T('meter / clip point',802,y+4,10,DIMW,'start',700);
   RT.sum(940,y);T('mix (sum)',956,y+4,10,DIMW,'start',700);
   RT.conn(1080,y,'A');T('continues',1096,y+4,10,DIMW,'start',700);
-  T('M/S, the limiter styles, INFLATE / CLIP, WARM, RATIO and SC HPF change what the blocks do; the order of the blocks never changes.',50,y+40,11,DIMW,'start',700);})();
+  T('M/S, the limiter styles, INFLATE / CLIP, WARM, RATIO and SC HPF change what the blocks do; the order of the blocks never changes.',50,y+34,11,DIMW,'start',700);})();
 showTab('settings');
 /* block tags (design system): the external engine active in each box, top left at (x+16, y+22), 7 px, faded; none for our own limiter. Texts: provisional, chosen by the user */
 var TAGL=[],fTagG=el('g',{},SMALL);

@@ -45,11 +45,12 @@ Più chat sullo stesso checkout si rovinano a vicenda (cambi di branch sotto i p
 
 - Ogni plugin ha una spec in `docs/superpowers/specs/` e un piano in `docs/superpowers/plans/`. **Ogni decisione presa in chat entra nella spec e nel piano nello stesso commit** (o subito dopo): lo stato dei compiti (`[ ]` / `[x]`) si aggiorna quando un compito finisce.
 - Le decisioni aperte stanno nella sezione "Decisioni aperte" della spec, non solo nella chat.
-- Documentazione e spec in italiano; identificatori, commenti nel codice e messaggi di commit in inglese.
+- Spec, piani e note di progetto in italiano. I **README** (radice e plugin), `THIRD_PARTY.md` e i testi pensati per chi usa i plugin sono **in inglese** (repo pubblico; deciso il 2026-11-02). Identificatori, commenti nel codice e messaggi di commit in inglese.
+- Ogni README di plugin segue lo stesso schema: presentazione per l'utente, stato, quando usarlo, schema del segnale (`docs/images/routing.png`), controlli, editor, build, note tecniche, codice di terzi e licenze (solo ciò che il codice usa davvero), documenti.
 
 ## 7. Grafica comune
 
-Le regole visive condivise sono in **`docs/DESIGN_SYSTEM.md`** (pannello rack, livelli, controlli, usura, nastro, viti, retro con Settings e Credits, lingua). Materiale dei controlli e texture del pannello sono **uguali per tutti i plugin** (quelli di The Stripper, vedi lì). Le preview HTML di riferimento stanno in `src/<plugin>/docs/mockups/`; la preview di The Stripper (`stripper_rack.html`) è il riferimento del linguaggio comune. Tutto il testo visibile nell'editor è **in inglese**.
+Le regole visive condivise sono in **`docs/DESIGN_SYSTEM.md`** (pannello rack, livelli, controlli, usura, nastro, viti, retro con Settings e Credits, lingua). Materiale dei controlli e texture del pannello sono **uguali per tutti i plugin** (quelli di The Stripper, vedi lì). Le preview HTML di riferimento stanno in `src/<plugin>/docs/mockups/`; la preview di The Stripper (`stripper_rack.html`) è il riferimento del linguaggio comune. Tutto il testo visibile nell'editor è **in inglese**. Le immagini della scheda ROUTING nei README (`src/<plugin>/docs/images/routing.png`) si rigenerano dalle preview con `docs/mockups/render_routing.js` ogni volta che cambia la scheda ROUTING di una preview.
 
 ## 8. Puntatori utili
 
