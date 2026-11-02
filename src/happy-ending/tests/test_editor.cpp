@@ -19,6 +19,7 @@
 #include "ui/prefs.h"
 #include "ui/readouts.h"
 #include "ui/screen_model.h"
+#include "ui/screen_view.h"
 #include "ui/value_text.h"
 
 #include "fairy_ui/controls.h"
@@ -99,6 +100,8 @@ struct EditorTest {
   static GrTags* grTags(const Editor& ed) { return ed.grTags_; }
   static LufsView* lufs(const Editor& ed) { return ed.lufs_; }
   static ActLed* act(const Editor& ed, int i) { return ed.actLeds_[static_cast<std::size_t>(i)]; }
+  // The shared screen (nullptr while the views do not exist).
+  static ScreenDisplayView* screen(const Editor& ed) { return ed.screen_; }
   // The text field of a typed value (nullptr when none is open) and its closing (confirm: what was typed is kept).
   static VSTGUI::CTextEdit* valueEdit(const Editor& ed) { return ed.valueEdit_; }
   static void closeValueEdit(Editor& ed, bool confirm) { ed.closeValueEdit(confirm); }
@@ -1594,6 +1597,417 @@ void test_editor_timer_stops_on_close() {
   resetDisplays();
   resetAll(g_ctl);
 }
+
+// ---- The shared screen (Task 11) --------------------------------------------------------------------------------------
+// The screen view alone drawn offscreen (layout coordinates, so a pixel is read at its layout point).
+VSTGUI::SharedPointer<VSTGUI::CBitmap> drawScreen(ScreenDisplayView* screen) { return drawOffscreen(screen); }
+// The layout rect of `n` pixels around a layout point.
+Rect around(const Point& p, float n) { return Rect{p.x - n, p.y - n, 2 * n + 1, 2 * n + 1}; }
+// Everything back to the defaults, the display parameters at 0 and the controller's screen view on EQ (a test that failed
+// halfway leaves its view behind).
+void resetScreenTest() {
+  resetAll(g_ctl);
+  resetDisplays();
+  if (auto* owner = dynamic_cast<Controller*>(g_ctl)) owner->setScreenView(ScreenView::Eq);
+}
+// The table of the controller (kNumParams normalized values).
+void tableOf(double* n) { normsOf(g_ctl, n); }
+// The value of position `index` of a parameter's table.
+double tableValueOf(ParamID id, int index) {
+  const ValueTable t = valueTable(id);
+  return t.data[std::clamp(index, 0, static_cast<int>(t.size) - 1)];
+}
+
+// The five view buttons pick what the screen draws: each click makes that view the one drawn (a counter per view in the
+// bench), the others stay as they were; a view made later starts from the controller's view.
+void test_screen_view_switch() {
+  resetScreenTest();
+  auto* owner = dynamic_cast<Controller*>(g_ctl);
+  ASSERT_TRUE(owner != nullptr);
+  owner->setScreenView(ScreenView::Eq);
+  {
+    Editor ed(g_ctl);
+    auto root = EditorTest::build(ed);
+    auto* screen = EditorTest::screen(ed);
+    ASSERT_TRUE(screen != nullptr && screen->view() == ScreenView::Eq);
+    for (int pass = 0; pass < 2; ++pass) {   // forwards, then back to front
+      for (int k = 0; k < 5; ++k) {
+        const int i = pass == 0 ? k : 4 - k;
+        const ActionSpec& a = kActions[i + 1];
+        rootClick(root, a.rect.x + a.rect.w / 2, a.rect.y + a.rect.h / 2);
+        ASSERT_TRUE(screen->view() == static_cast<ScreenView>(i));
+        int before[5];
+        for (int v = 0; v < 5; ++v) before[v] = screen->drawCount(static_cast<ScreenView>(v));
+        ASSERT_TRUE(drawOffscreen(root) != nullptr);
+        for (int v = 0; v < 5; ++v) ASSERT_TRUE(screen->drawCount(static_cast<ScreenView>(v)) == before[v] + (v == i ? 1 : 0));
+      }
+    }
+    // the views differ on the screen: the EQ view has the 0 dB line across (a bright line), the others do not
+    owner->setScreenView(ScreenView::Eq);
+    screen->setView(ScreenView::Eq);
+    auto eq = drawScreen(screen);
+    const int zeroLine = brightAt(pixelsOf(eq), kScreenRect.x + 6, eqY(0.0));
+    screen->setView(ScreenView::Clip);
+    auto clip = drawScreen(screen);
+    ASSERT_TRUE(zeroLine >= 50);
+    ASSERT_TRUE(brightAt(pixelsOf(clip), kScreenRect.x + 6, eqY(0.0)) < 30);
+    EditorTest::destroy(ed, root);
+  }
+  owner->setScreenView(ScreenView::Limit);
+  {
+    Editor ed(g_ctl);
+    auto root = EditorTest::build(ed);
+    const bool limit = EditorTest::screen(ed)->view() == ScreenView::Limit;
+    EditorTest::destroy(ed, root);
+    ASSERT_TRUE(limit);
+  }
+  owner->setScreenView(ScreenView::Eq);
+  resetDisplays();
+  resetAll(g_ctl);
+}
+
+// The EQ shapes are cached: a hundred timer runs and redraws without a change recompute nothing; a change of GAIN
+// recomputes the FINE curves once (and nothing else); a parameter that feeds no EQ shape recomputes nothing; a VIBE
+// parameter recomputes the VIBE curves; a new published DYN pull-back only the VIBE curve that follows it.
+void test_eq_curves_recomputed_only_on_change() {
+  resetScreenTest();
+  Editor ed(g_ctl);
+  auto root = EditorTest::build(ed);
+  auto* screen = EditorTest::screen(ed);
+  ASSERT_TRUE(screen != nullptr && screen->view() == ScreenView::Eq);
+  setStage(Stage::Vibe, true);
+  EditorTest::tick(ed);
+  drawScreen(screen);
+  const int base = screen->recomputes();
+  ASSERT_TRUE(base >= 2);   // the first draw built the curves
+  for (int i = 0; i < 100; ++i) {
+    EditorTest::tick(ed);
+    drawScreen(screen);
+  }
+  ASSERT_TRUE(screen->recomputes() == base);
+  g_ctl->setParamNormalized(kMidGain, normFromIndex(kMidGain, 12));
+  EditorTest::tick(ed);
+  drawScreen(screen);
+  ASSERT_TRUE(screen->recomputes() == base + 1);
+  for (int i = 0; i < 20; ++i) {
+    EditorTest::tick(ed);
+    drawScreen(screen);
+  }
+  ASSERT_TRUE(screen->recomputes() == base + 1);
+  g_ctl->setParamNormalized(kGlueThresh, normFromIndex(kGlueThresh, 3));   // no EQ shape
+  g_ctl->setParamNormalized(kBypass, 1.0);
+  EditorTest::tick(ed);
+  drawScreen(screen);
+  g_ctl->setParamNormalized(kBypass, 0.0);
+  EditorTest::tick(ed);
+  drawScreen(screen);
+  ASSERT_TRUE(screen->recomputes() == base + 1);
+  g_ctl->setParamNormalized(kTilt, normFromIndex(kTilt, 0));   // VIBE EQ
+  EditorTest::tick(ed);
+  drawScreen(screen);
+  ASSERT_TRUE(screen->recomputes() == base + 3);   // its static curve and the one with the pull-back
+  g_ctl->setParamNormalized(kDispDynLow, 0.4);   // the published pull-back
+  EditorTest::tick(ed);
+  drawScreen(screen);
+  ASSERT_TRUE(screen->recomputes() == base + 4);
+  for (int i = 0; i < 10; ++i) {   // the same value again
+    EditorTest::tick(ed);
+    drawScreen(screen);
+  }
+  ASSERT_TRUE(screen->recomputes() == base + 4);
+  // the curves really move with the parameters: the amber VIBE curve is there, and dashed under the pull-back
+  ASSERT_TRUE(screen->vibeDashedDrawn());
+  g_ctl->setParamNormalized(kDispDynLow, 0.0);
+  EditorTest::tick(ed);
+  drawScreen(screen);
+  ASSERT_TRUE(!screen->vibeDashedDrawn());
+  EditorTest::destroy(ed, root);
+  resetDisplays();
+  resetAll(g_ctl);
+}
+
+// CLIP and FINAL cache their curves the same way: a change of DRIVE (or LOUDNESS) recomputes the CLIP curve once, a
+// change of CEILING the FINAL one; nothing else does.
+void test_transfer_curves_recomputed_only_on_change() {
+  resetScreenTest();
+  Editor ed(g_ctl);
+  auto root = EditorTest::build(ed);
+  auto* screen = EditorTest::screen(ed);
+  screen->setView(ScreenView::Clip);
+  EditorTest::tick(ed);
+  drawScreen(screen);
+  const int base = screen->recomputes();
+  ASSERT_TRUE(base == 1);
+  for (int i = 0; i < 50; ++i) {
+    g_ctl->setParamNormalized(kDispClipIn, (i % 7) / 10.0);   // the dot moves, the curve does not
+    EditorTest::tick(ed);
+    drawScreen(screen);
+  }
+  ASSERT_TRUE(screen->recomputes() == base);
+  g_ctl->setParamNormalized(kClipDrive, normFromIndex(kClipDrive, 10));
+  EditorTest::tick(ed);
+  drawScreen(screen);
+  ASSERT_TRUE(screen->recomputes() == base + 1);
+  g_ctl->setParamNormalized(kCeiling, normFromIndex(kCeiling, 3));   // not the CLIP curve
+  EditorTest::tick(ed);
+  drawScreen(screen);
+  ASSERT_TRUE(screen->recomputes() == base + 1);
+  screen->setView(ScreenView::Final);
+  drawScreen(screen);
+  ASSERT_TRUE(screen->recomputes() == base + 2);   // built when first shown, with the new ceiling
+  for (int i = 0; i < 20; ++i) {
+    EditorTest::tick(ed);
+    drawScreen(screen);
+  }
+  ASSERT_TRUE(screen->recomputes() == base + 2);
+  g_ctl->setParamNormalized(kCeiling, normFromIndex(kCeiling, 0));
+  EditorTest::tick(ed);
+  drawScreen(screen);
+  ASSERT_TRUE(screen->recomputes() == base + 3);
+  EditorTest::destroy(ed, root);
+  resetDisplays();
+  resetAll(g_ctl);
+}
+
+// The GLUE and LIMIT histories get a point on every timer run, whatever view is shown, up to kHistoryPoints; the oldest
+// one then falls off. Each point carries the display values (and for GLUE the net reduction after MIX).
+void test_scroll_history_grows() {
+  resetScreenTest();
+  Editor ed(g_ctl);
+  auto root = EditorTest::build(ed);
+  auto* screen = EditorTest::screen(ed);
+  ASSERT_TRUE(screen != nullptr && screen->view() == ScreenView::Eq);   // not a history view: it grows all the same
+  const std::size_t n = kHistoryPoints;
+  ASSERT_TRUE(screen->historySize(ScreenView::Glue) < 5 && screen->historySize(ScreenView::Limit) < 5);
+  for (std::size_t i = 0; i < 10; ++i) {
+    const std::size_t g = screen->historySize(ScreenView::Glue), l = screen->historySize(ScreenView::Limit);
+    EditorTest::tick(ed);
+    ASSERT_TRUE(screen->historySize(ScreenView::Glue) == g + 1 && screen->historySize(ScreenView::Limit) == l + 1);
+  }
+  // a known stream: the level of tick k is a different value each time
+  const int total = static_cast<int>(n) + 50;
+  auto levelNorm = [](int k) { return (k % 40) / 40.0; };
+  for (int k = 0; k < total; ++k) {
+    g_ctl->setParamNormalized(kDispGlueIn, levelNorm(k));
+    EditorTest::tick(ed);
+  }
+  ASSERT_TRUE(screen->historySize(ScreenView::Glue) == n && screen->historySize(ScreenView::Limit) == n);
+  const auto& h = screen->history(ScreenView::Glue);
+  ASSERT_TRUE(h.at(n - 1).levelDb == static_cast<float>(stageDbFromNorm(levelNorm(total - 1))));
+  ASSERT_TRUE(h.at(0).levelDb == static_cast<float>(stageDbFromNorm(levelNorm(total - n))));   // the 51st tick is the oldest left
+  ASSERT_TRUE(h.at(1).levelDb == static_cast<float>(stageDbFromNorm(levelNorm(total - n + 1))));
+  // what a point carries: GLUE level, GR and the net reduction at MIX 50 %; LIMIT level and GR (the L row)
+  g_ctl->setParamNormalized(kDispGlueIn, normFromStageDb(-12.0));
+  g_ctl->setParamNormalized(kDispGlueGr, normFromGrDb(6.0));
+  g_ctl->setParamNormalized(kDispLimitIn, normFromStageDb(-5.0));
+  g_ctl->setParamNormalized(kDispGr2, normFromGrDb(3.0));
+  EditorTest::tick(ed);
+  const ScrollPoint gp = screen->newest(ScreenView::Glue), lp = screen->newest(ScreenView::Limit);
+  ASSERT_TRUE(std::fabs(gp.levelDb - (-12.0f)) < 0.1f && std::fabs(gp.grDb - 6.0f) < 0.01f);
+  const double net = -20.0 * std::log10(0.5 + 0.5 * std::pow(10.0, -6.0 / 20.0));
+  ASSERT_TRUE(std::fabs(gp.netGrDb - net) < 0.01);
+  ASSERT_TRUE(std::fabs(gp.threshDb - tableValueOf(kGlueThresh, kParams[kGlueThresh].defaultIndex)) < 1e-4);
+  ASSERT_TRUE(std::fabs(lp.levelDb - (-5.0f)) < 0.1f && std::fabs(lp.grDb - 3.0f) < 0.01f);
+  ASSERT_TRUE(std::fabs(lp.threshDb - tableValueOf(kCeiling, kParams[kCeiling].defaultIndex)) < 1e-4);   // the line LIMIT draws
+  EditorTest::destroy(ed, root);
+  resetDisplays();
+  resetAll(g_ctl);
+}
+
+// The screen dims with BYPASS and with nothing else: not with a stage out, LISTEN, SET or a stage's IN off; BYPASS dims
+// the curve to 35 % and back.
+void test_screen_dims_only_on_bypass() {
+  resetScreenTest();
+  Editor ed(g_ctl);
+  auto root = EditorTest::build(ed);
+  auto* screen = EditorTest::screen(ed);
+  screen->setView(ScreenView::Clip);
+  double norm[kNumParams];
+  tableOf(norm);
+  const std::vector<Point> curve = curvePath(ScreenView::Clip, norm, ceilingLinear(norm));
+  ASSERT_TRUE(curve.size() > 60);
+  const Point on = curve[60];
+  auto curveLevel = [&] {
+    auto bmp = drawScreen(screen);
+    return brightIn(pixelsOf(bmp), around(on, 1));
+  };
+  EditorTest::tick(ed);
+  ASSERT_TRUE(!screen->isDimmed());
+  const int live = curveLevel();
+  ASSERT_TRUE(live > 200);
+  for (int s = 0; s < kNumStages; ++s) {   // a stage out dims nothing
+    setStage(static_cast<Stage>(s), s == static_cast<int>(Stage::Metal));   // all of them flipped from their default
+    EditorTest::tick(ed);
+    ASSERT_TRUE(!screen->isDimmed());
+    setStage(static_cast<Stage>(s), s != static_cast<int>(Stage::Metal));
+  }
+  resetAll(g_ctl);
+  g_ctl->setParamNormalized(kListenBand, normFromListen(1));
+  g_ctl->setParamNormalized(kSetActive, 1.0);
+  EditorTest::tick(ed);
+  ASSERT_TRUE(!screen->isDimmed());
+  g_ctl->setParamNormalized(kListenBand, kDefaultListenNorm);
+  g_ctl->setParamNormalized(kSetActive, kDefaultSetNorm);
+  setStage(Stage::Clip, false);
+  EditorTest::tick(ed);
+  ASSERT_TRUE(!screen->isDimmed());
+  setStage(Stage::Clip, true);
+  g_ctl->setParamNormalized(kBypass, 1.0);
+  EditorTest::tick(ed);
+  ASSERT_TRUE(screen->isDimmed());
+  for (ScreenView v : {ScreenView::Eq, ScreenView::Glue, ScreenView::Clip, ScreenView::Limit, ScreenView::Final}) {
+    screen->setView(v);
+    ASSERT_TRUE(screen->isDimmed());
+  }
+  screen->setView(ScreenView::Clip);
+  const int dimmed = curveLevel();
+  ASSERT_TRUE(dimmed < 130 && dimmed > 40);   // 35 % of the amber over the dark screen
+  g_ctl->setParamNormalized(kBypass, 0.0);
+  EditorTest::tick(ed);
+  ASSERT_TRUE(!screen->isDimmed());
+  ASSERT_TRUE(curveLevel() == live);
+  EditorTest::destroy(ed, root);
+  resetDisplays();
+  resetAll(g_ctl);
+}
+
+// While LISTEN hears a bell (and its band and FINE EQ are in) the EQ view draws the zone it lets through; without LISTEN,
+// with the band or the stage out, or in another view, there is none.
+void test_listen_zone_drawn() {
+  resetScreenTest();
+  Editor ed(g_ctl);
+  auto root = EditorTest::build(ed);
+  auto* screen = EditorTest::screen(ed);
+  g_ctl->setParamNormalized(kFineOn, 1.0);
+  g_ctl->setParamNormalized(kMidOn, 1.0);
+  EditorTest::tick(ed);
+  auto zone = [&] {
+    auto bmp = drawScreen(screen);
+    return screen->listenZoneDrawn();
+  };
+  ASSERT_TRUE(!zone());
+  // a pixel under the peak of the MID bell (400 Hz .. 3.15 kHz, default 1 kHz index 4): amber tinted when the zone is there
+  const double mid = tableValueOf(kMidFreq, indexFromNorm(kMidFreq, g_ctl->getParamNormalized(kMidFreq)));
+  const Point under{eqX(mid) + 3.0f, kScreenRect.y + kScreenRect.h - 44.0f};
+  auto shade = [&] {
+    auto bmp = drawScreen(screen);
+    const VSTGUI::CColor c = pixelsOf(bmp).at(static_cast<int>(under.x), static_cast<int>(under.y));
+    return c.red - c.blue;   // amber leans red, the grid and the dark screen do not
+  };
+  const int without = shade();
+  g_ctl->setParamNormalized(kListenBand, normFromListen(1));
+  EditorTest::tick(ed);
+  ASSERT_TRUE(zone());
+  ASSERT_TRUE(shade() >= without + 15);
+  g_ctl->setParamNormalized(kListenBand, normFromListen(0));   // LO MID, which is in by default too
+  EditorTest::tick(ed);
+  ASSERT_TRUE(zone());
+  g_ctl->setParamNormalized(kMidOn, 0.0);
+  g_ctl->setParamNormalized(kListenBand, normFromListen(1));   // its band is out: LISTEN counts as off
+  EditorTest::tick(ed);
+  ASSERT_TRUE(!zone());
+  g_ctl->setParamNormalized(kMidOn, 1.0);
+  EditorTest::tick(ed);
+  ASSERT_TRUE(zone());
+  g_ctl->setParamNormalized(kFineOn, 0.0);
+  EditorTest::tick(ed);
+  ASSERT_TRUE(!zone());
+  g_ctl->setParamNormalized(kFineOn, 1.0);
+  EditorTest::tick(ed);
+  ASSERT_TRUE(zone());
+  screen->setView(ScreenView::Glue);
+  ASSERT_TRUE(!zone());
+  screen->setView(ScreenView::Eq);
+  g_ctl->setParamNormalized(kListenBand, kDefaultListenNorm);
+  EditorTest::tick(ed);
+  ASSERT_TRUE(!zone());
+  EditorTest::destroy(ed, root);
+  resetDisplays();
+  resetAll(g_ctl);
+}
+
+// The dot of CLIP and FINAL follows the stage's own input (kDispClipIn / kDispFinalIn) on the curve of the stage, and the
+// FINAL view draws the ceiling line.
+void test_transfer_dot_follows_stage_input() {
+  resetScreenTest();
+  Editor ed(g_ctl);
+  auto root = EditorTest::build(ed);
+  auto* screen = EditorTest::screen(ed);
+  double norm[kNumParams];
+  for (double db : {-20.0, -6.0, 0.0}) {
+    tableOf(norm);
+    g_ctl->setParamNormalized(kDispClipIn, normFromStageDb(db));
+    g_ctl->setParamNormalized(kDispFinalIn, normFromStageDb(db + 3.0));   // a different value: the views must not mix them up
+    EditorTest::tick(ed);
+    const double lin = std::pow(10.0, stageDbFromNorm(normFromStageDb(db)) / 20.0);
+    screen->setView(ScreenView::Clip);
+    drawScreen(screen);
+    ASSERT_TRUE(std::fabs(screen->dot().x - clipX(lin)) < 0.01);
+    ASSERT_TRUE(std::fabs(screen->dot().y - clipY(std::fabs(clipTransfer(lin, norm)))) < 0.01);
+    const double linF = std::pow(10.0, stageDbFromNorm(normFromStageDb(db + 3.0)) / 20.0);
+    screen->setView(ScreenView::Final);
+    drawScreen(screen);
+    ASSERT_TRUE(std::fabs(screen->dot().x - finalX(linF)) < 0.01);
+    ASSERT_TRUE(std::fabs(screen->dot().y - finalY(std::fabs(finalTransfer(linF, norm, ceilingLinear(norm))))) < 0.01);
+  }
+  // the dot is a drawn ring: its centre is dark, its rim light, at the dot's place
+  screen->setView(ScreenView::Clip);
+  g_ctl->setParamNormalized(kDispClipIn, normFromStageDb(-6.0));
+  EditorTest::tick(ed);
+  auto bmp = drawScreen(screen);
+  const Pixels px = pixelsOf(bmp);
+  const Point d = screen->dot();
+  ASSERT_TRUE(brightIn(px, around(Point{d.x + 3.6f, d.y}, 1)) > 150);
+  // FINAL: the ceiling line across the screen, at the CEILING of the table
+  screen->setView(ScreenView::Final);
+  g_ctl->setParamNormalized(kCeiling, normFromIndex(kCeiling, 3));   // -1 dB
+  g_ctl->setParamNormalized(kDispFinalIn, 0.0);
+  EditorTest::tick(ed);
+  tableOf(norm);
+  const float cy = finalCeilingY(ceilingLinear(norm));
+  auto bmp2 = drawScreen(screen);
+  const Pixels px2 = pixelsOf(bmp2);
+  int lit = 0;
+  // left of where the curve gets there (its low part is far below the ceiling), so only the line can light these columns
+  for (int x = static_cast<int>(finalX(0.05)); x < static_cast<int>(finalX(0.5)); ++x)
+    lit += std::max(brightness(px2.at(x, static_cast<int>(cy) - 1)), brightness(px2.at(x, static_cast<int>(cy)))) > 70 ? 1 : 0;
+  ASSERT_TRUE(lit > 40);   // a dashed line: about half of the columns
+  EditorTest::destroy(ed, root);
+  resetDisplays();
+  resetAll(g_ctl);
+}
+
+// LIMIT follows its own state: with LIMIT out the reduction it keeps is flat (the L row's stale value is not taken) and the
+// effective-threshold line, published by the engine even then, is not drawn; with LIMIT in both are live.
+void test_limit_view_follows_limit_state() {
+  resetScreenTest();
+  Editor ed(g_ctl);
+  auto root = EditorTest::build(ed);
+  auto* screen = EditorTest::screen(ed);
+  screen->setView(ScreenView::Limit);
+  g_ctl->setParamNormalized(kDispLimitThresh, normFromThreshDb(-3.0));
+  g_ctl->setParamNormalized(kDispGr2, normFromGrDb(4.0));
+  EditorTest::tick(ed);
+  drawScreen(screen);
+  ASSERT_TRUE(screen->limitThreshDrawn());
+  ASSERT_TRUE(std::fabs(screen->newest(ScreenView::Limit).grDb - 4.0f) < 0.01f);
+  setStage(Stage::Limit, false);
+  EditorTest::tick(ed);
+  drawScreen(screen);
+  ASSERT_TRUE(!screen->limitThreshDrawn());
+  ASSERT_TRUE(screen->newest(ScreenView::Limit).grDb == 0.0f);
+  ASSERT_TRUE(!screen->isDimmed());
+  setStage(Stage::Limit, true);
+  EditorTest::tick(ed);
+  drawScreen(screen);
+  ASSERT_TRUE(screen->limitThreshDrawn() && std::fabs(screen->newest(ScreenView::Limit).grDb - 4.0f) < 0.01f);
+  screen->setView(ScreenView::Glue);   // GLUE has no such line, and a threshold line of its own
+  drawScreen(screen);
+  ASSERT_TRUE(!screen->limitThreshDrawn());
+  EditorTest::destroy(ed, root);
+  resetDisplays();
+  resetAll(g_ctl);
+}
 } // namespace
 
 int main() {
@@ -1647,6 +2061,14 @@ int main() {
     RUN_TEST(test_clip_leds_dim_with_stage_and_bypass);
     RUN_TEST(test_act_leds_follow_dyn);
     RUN_TEST(test_lufs_screen_box_under_labels);
+    RUN_TEST(test_screen_view_switch);
+    RUN_TEST(test_eq_curves_recomputed_only_on_change);
+    RUN_TEST(test_transfer_curves_recomputed_only_on_change);
+    RUN_TEST(test_scroll_history_grows);
+    RUN_TEST(test_screen_dims_only_on_bypass);
+    RUN_TEST(test_listen_zone_drawn);
+    RUN_TEST(test_transfer_dot_follows_stage_input);
+    RUN_TEST(test_limit_view_follows_limit_state);
     RUN_TEST(test_editor_timer_stops_on_close);
     g_ctl = nullptr;
     ctl.terminate();

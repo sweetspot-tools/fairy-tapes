@@ -36,13 +36,16 @@ set(HAPPY_ENDING_ENGINE_SOURCES
   src/dsp/loudness_meter.cpp
 )
 
-# Editor (VSTGUI) sources: the plug-in, the editor tests and the render tool. They build with HAPPY_ENDING_WITH_EDITOR
+# Editor (VSTGUI) sources: the plug-in, the editor tests and the render tool (the last two add the chain's sources, which
+# the screen's model computes its EQ curves on). They build with HAPPY_ENDING_WITH_EDITOR
 # (Controller::createView gives the editor only then: the controller tests compile controller.cpp without VSTGUI).
 set(HAPPY_ENDING_EDITOR_SOURCES
   src/ui/editor.cpp
   src/ui/level_views.cpp
   src/ui/panel_view.cpp
   src/ui/prefs.cpp
+  src/ui/screen_model.cpp
+  src/ui/screen_view.cpp
 )
 
 # The shared assets (panel grain tile), for the tools and tests that run outside the bundle.
@@ -321,6 +324,7 @@ if(UNIX AND NOT APPLE)
     ${VST3_SDK_PATH}/public.sdk/source/main/moduleinit.cpp
     ${VST3_SDK_PATH}/public.sdk/source/main/pluginfactory.cpp
     src/controller.cpp
+    ${HAPPY_ENDING_ENGINE_SOURCES}
     ${HAPPY_ENDING_EDITOR_SOURCES}
   )
   target_include_directories(happy_ending_editor_tests PRIVATE
@@ -338,6 +342,7 @@ add_executable(happy_ending_render EXCLUDE_FROM_ALL
   ${VST3_SDK_PATH}/public.sdk/source/main/moduleinit.cpp
   ${VST3_SDK_PATH}/public.sdk/source/main/pluginfactory.cpp
   src/controller.cpp
+  ${HAPPY_ENDING_ENGINE_SOURCES}
   ${HAPPY_ENDING_EDITOR_SOURCES}
 )
 target_include_directories(happy_ending_render PRIVATE

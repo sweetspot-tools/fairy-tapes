@@ -1,19 +1,26 @@
 // Developer tool: draws the Happy Ending editor offscreen into PNG files, no host or window needed.
 //   happy_ending_render <out-dir> [no-grain] [bypass] [final=inflate|clip] [stage-off=fine|vibe|glue|clip|limit|final|metal]
 //                      [band-off=0..5] [listen=0..2] [set] [meters] [cycles=<n>]
+//                      [view=eq|glue|clip|limit|final] [scope=<n>] [demo] [ms]
 // Writes <out-dir>/front.png (1280 x 890, logical size: SIZE and the host factor only scale the window). The back of the
 // panel and its tabs come with the editor's back (editor plan, Tasks 13-14): the tool will write back_<tab>.png then.
 // bypass, final=, stage-off=, band-off=, listen= and set go through the controller's parameters, picked up by the
 // editor's timer work (dimming, the FINAL tag); no-grain draws the panel without the grain tile. meters sets proof
 // values of the display parameters (LEVEL rows, GR rows, clip LEDs, LUFS near the default TARGET so the green LED is on,
-// DYN, the screen's inputs); the LEVEL views show them, the screen's views come with Task 11. cycles=<n> builds and removes the editor's views n times first (for leak checkers).
+// DYN, the screen's inputs); the LEVEL views and the screen show them. view= picks the screen's view (the controller's, as
+// the view buttons do); scope=<n> runs n timer runs of a synthetic programme (a kick every half second and a hat between) through
+// the display parameters of the screen, so the GLUE and LIMIT histories scroll and the dots of CLIP and FINAL move; demo sets
+// FINE EQ bells, shelves and the VIBE amounts so the curves are not flat, ms puts two bells on MID and SIDE (the screen then draws
+// MID and SIDE). cycles=<n> builds and removes the editor's views n times first (for leak checkers).
 // Used to check the code-drawn GUI against src/happy-ending/docs/mockups/happy_ending_rack.html on a machine without a
 // host.
 #include "controller.h"
+#include "display.h"
 #include "params.h"
 #include "ui/editor.h"
 #include "ui/layout.h"
 #include "ui/panel_view.h"
+#include "ui/screen_model.h"
 
 #include "pluginterfaces/base/ipluginbase.h"
 #include "vstgui/lib/cbitmap.h"
@@ -25,6 +32,8 @@
 #include "vstgui/lib/platform/linux/linuxfactory.h"
 #endif
 
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -60,11 +69,31 @@ struct EditorPreview {
     return static_cast<bool>(out);
   }
 
-  static bool render(Steinberg::Vst::EditController& ctl, const std::string& dir) {
+  // One tick of the synthetic programme of scope=<n> into the screen's display parameters (30 ms per tick).
+  static void feedScreen(Steinberg::Vst::EditController& ctl, int k) {
+    const double t = k * 0.03;
+    const double kick = std::exp(-std::fmod(t, 0.5) / 0.09), hat = 0.5 * std::exp(-std::fmod(t + 0.25, 0.25) / 0.05);
+    const double glueLvl = -22 + 16 * kick + 6 * hat, limitLvl = -9 + 9 * std::min(1.0, kick * 1.6) + 2 * hat;
+    const double clipLvl = -16 + 16 * kick + 6 * hat;
+    auto set = [&](Steinberg::Vst::ParamID id, double v) { ctl.setParamNormalized(id, v); };
+    set(kDispGlueIn, normFromStageDb(glueLvl));
+    set(kDispGlueGr, normFromGrDb(std::min(12.0, std::max(0.0, glueLvl + 14.0) * 0.5)));
+    set(kDispLimitIn, normFromStageDb(limitLvl));
+    set(kDispGr2, normFromGrDb(std::max(0.0, limitLvl + 2.0)));
+    set(kDispLimitThresh, normFromThreshDb(-2.0));
+    set(kDispClipIn, normFromStageDb(clipLvl));
+    set(kDispFinalIn, normFromStageDb(limitLvl));
+  }
+
+  static bool render(Steinberg::Vst::EditController& ctl, const std::string& dir, int scope) {
     Editor ed(&ctl);   // reads the user's preferences as the plug-in does (SIZE does not change the drawing)
     auto root = VSTGUI::makeOwned<VSTGUI::CViewContainer>(VSTGUI::CRect(0, 0, Editor::kWidth, Editor::kHeight));
     ed.createViews(root);
     ed.onTimer();   // the controller's state: dimming and the FINAL tag
+    for (int k = 0; k < scope; ++k) {
+      feedScreen(ctl, k);
+      ed.onTimer();
+    }
     Steinberg::ViewRect window{};
     ed.getSize(&window);
     auto ctx = VSTGUI::COffscreenContext::create(VSTGUI::CPoint(Editor::kWidth, Editor::kHeight), 1.0);
@@ -100,7 +129,8 @@ int main(int argc, char** argv) {
   if (argc < 2) {
     std::fprintf(stderr,
                  "usage: %s <out-dir> [no-grain] [bypass] [final=inflate|clip] [stage-off=fine|vibe|glue|clip|limit|final|metal]\n"
-                 "       [band-off=0..5] [listen=0..2] [set] [meters] [cycles=<n>]\n",
+                 "       [band-off=0..5] [listen=0..2] [set] [meters] [cycles=<n>]\n"
+                 "       [view=eq|glue|clip|limit|final] [scope=<n>] [demo] [ms]\n",
                  argv[0]);
     return 2;
   }
@@ -125,7 +155,7 @@ int main(int argc, char** argv) {
   {
     Controller ctl;
     ctl.initialize(nullptr);
-    int cycles = 0;
+    int cycles = 0, scope = 0;
     auto on = [&](Steinberg::Vst::ParamID id, int index) { ctl.setParamNormalized(id, normFromIndex(static_cast<ParamID>(id), index)); };
     for (int i = 2; i < argc; ++i) {
       const char* a = argv[i];
@@ -154,10 +184,26 @@ int main(int argc, char** argv) {
         for (const auto& p : v) ctl.setParamNormalized(static_cast<Steinberg::Vst::ParamID>(p[0]), p[1]);
       } else if (!std::strncmp(a, "cycles=", 7)) {
         cycles = std::atoi(a + 7);
+      } else if (!std::strncmp(a, "scope=", 6)) {
+        scope = std::atoi(a + 6);
+      } else if (!std::strncmp(a, "view=", 5)) {
+        static const char* const names[5] = {"eq", "glue", "clip", "limit", "final"};
+        for (int v = 0; v < 5; ++v)
+          if (!std::strcmp(a + 5, names[v])) ctl.setScreenView(static_cast<Ui::ScreenView>(v));
+      } else if (!std::strcmp(a, "demo")) {
+        on(kLsGain, 12);
+        on(kMidGain, 11);
+        on(kHmGain, 4);
+        on(kLow, 5);
+        on(kAir, 4);
+        on(kTilt, 12);
+      } else if (!std::strcmp(a, "ms")) {
+        on(kLmMs, 1);   // MID
+        on(kHmMs, 2);   // SIDE
       }
     }
     if (cycles > 0) Ui::EditorPreview::cycle(ctl, cycles);
-    ok = Ui::EditorPreview::render(ctl, argv[1]);
+    ok = Ui::EditorPreview::render(ctl, argv[1], scope);
     ctl.terminate();
   }
   VSTGUI::exit();

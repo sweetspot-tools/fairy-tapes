@@ -231,11 +231,11 @@ Note dell'esecuzione (2026-11-02): le righe di picco hanno 15 LED sulla scala �
 - Consumes: `EqCurves`, `ScrollHistory`, `clipTransfer`, `finalTransfer`, `curvePath` (Task 6), i parametri di visualizzazione del Task 2.
 - Produces: `class ScreenView : public VSTGUI::CView` con le cinque viste della spec §4 e della preview (`viewTick`): EQ (griglia, curva STEREO oppure MID e SIDE, curva del VIBE in ambra, tratteggiata la statica quando il DYN ritira, la zona ascoltata durante LISTEN), GLUE e LIMIT (storia che scorre di livello, GR e soglia; GLUE anche la riduzione netta; LIMIT la linea del ceiling), CLIP e FINAL (curva di trasferimento con il punto che segue `kDispClipIn` / `kDispFinalIn`; FINAL con la linea del ceiling); si attenua solo con BYPASS. Le curve EQ si ricalcolano solo quando un parametro cambia, non a ogni tick.
 
-- [ ] **Step 1: Scrivere i test:** `test_screen_view_switch` (i pulsanti delle viste cambiano ciò che la vista disegna: contatore di disegno per vista nel banco), `test_eq_curves_recomputed_only_on_change` (100 tick senza cambi → 0 ricalcoli; un cambio di GAIN → 1), `test_scroll_history_grows` (dopo N+50 tick la storia ha N punti), `test_screen_dims_only_on_bypass`, `test_listen_zone_drawn` (con LISTEN su MID la zona è presente, senza no).
-- [ ] **Step 2: Eseguire e vedere fallire.**
-- [ ] **Step 3: Implementare.**
-- [ ] **Step 4: Eseguire** build e test → PASS; render delle cinque viste con dati di prova e controllo a occhio contro la preview.
-- [ ] **Step 5: Commit:** `feat(happy-ending): the shared screen with the EQ, GLUE, CLIP, LIMIT and FINAL views`.
+- [x] **Step 1: Scrivere i test:** `test_screen_view_switch` (i pulsanti delle viste cambiano ciò che la vista disegna: contatore di disegno per vista nel banco), `test_eq_curves_recomputed_only_on_change` (100 tick senza cambi → 0 ricalcoli; un cambio di GAIN → 1), `test_scroll_history_grows` (dopo N+50 tick la storia ha N punti), `test_screen_dims_only_on_bypass`, `test_listen_zone_drawn` (con LISTEN su MID la zona è presente, senza no).
+- [x] **Step 2: Eseguire e vedere fallire.**
+- [x] **Step 3: Implementare.**
+- [x] **Step 4: Eseguire** build e test → PASS; render delle cinque viste con dati di prova e controllo a occhio contro la preview.
+- [x] **Step 5: Commit:** `feat(happy-ending): the shared screen with the EQ, GLUE, CLIP, LIMIT and FINAL views`.
 
 ---
 

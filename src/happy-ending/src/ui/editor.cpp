@@ -10,6 +10,7 @@
 #include "ui/panel_view.h"
 #include "ui/readouts.h"
 #include "ui/screen_model.h"
+#include "ui/screen_view.h"
 #include "ui/value_text.h"
 
 #include "fairy_ui/draw_util.h"
@@ -326,6 +327,7 @@ void Editor::resetViewPointers() {
   clips_.fill(nullptr);
   grTags_ = nullptr;
   lufs_ = nullptr;
+  screen_ = nullptr;
   actLeds_.fill(nullptr);
   valueEdit_ = nullptr;
   valueEditId_ = kNumParams;
@@ -357,6 +359,12 @@ void Editor::createViews(CViewContainer* parent) {
     return true;
   });
   parent->addView(silk_);
+
+  // The shared screen (clicks go through): the view the controller remembers; its data comes from watchParameters() below and
+  // from the timer.
+  screen_ = new ScreenDisplayView();
+  if (owner_) screen_->setView(owner_->screenView());
+  parent->addView(screen_);
 
   // The controls, one view per ControlSpec (the three LISTEN buttons share kListenBand as their tag).
   for (int i = 0; i < kNumControls; ++i) {
@@ -494,6 +502,19 @@ void Editor::updateDisplays() {
                       indexFromNorm(kTarget, FairyTapes::Ui::sanitizeNorm(ctl->getParamNormalized(kTarget), defaultNorm(ctl, kTarget))));
   for (int i = 0; i < 2; ++i)
     if (ActLed* led = actLeds_[static_cast<std::size_t>(i)]) led->setLevel(display(kActLedIds[i]));
+  if (screen_) {   // the shared screen: the stage inputs and reductions in dB, the LIMIT threshold, the DYN amounts
+    ScreenFrame f;
+    f.glueInDb = stageDbFromNorm(display(kDispGlueIn));
+    f.glueGrDb = grDbFromNorm(display(kDispGlueGr));
+    f.limitInDb = stageDbFromNorm(display(kDispLimitIn));
+    f.limitGrDb = grDbFromNorm(display(kGrRows[2].id));   // the L row
+    f.limitThreshDb = threshDbFromNorm(display(kDispLimitThresh));
+    f.clipInDb = stageDbFromNorm(display(kDispClipIn));
+    f.finalInDb = stageDbFromNorm(display(kDispFinalIn));
+    f.dynLow = display(kDispDynLow);
+    f.dynAir = display(kDispDynAir);
+    screen_->tick(f);
+  }
 }
 
 void Editor::refreshFromController() {
@@ -506,6 +527,7 @@ void Editor::refreshFromController() {
   const UiState s = uiStateFrom(norm, listen, set);
   state_ = s;
   if (panel_) panel_->setUiState(s);
+  if (screen_) screen_->setParams(norm, s);
   // LEVEL: the GR rows and their tags dim with BYPASS and their stage's IN, the stage clip LEDs likewise, the ACT LEDs with
   // BYPASS and VIBE EQ's IN; the peak rows, the IN / OUT clip LEDs and the LUFS screen never do.
   for (int i = 0; i < 5; ++i) {
@@ -574,8 +596,9 @@ void Editor::valueChanged(CControl* control) {
     return;
   }
   if (control == views_) {   // editor state, not a parameter: the controller keeps it while the instance lives
-    if (owner_)
-      owner_->setScreenView(static_cast<ScreenView>(FairyTapes::Ui::choiceIndexFromNorm(control->getValueNormalized(), kNumViews)));
+    const auto view = static_cast<ScreenView>(FairyTapes::Ui::choiceIndexFromNorm(control->getValueNormalized(), kNumViews));
+    if (owner_) owner_->setScreenView(view);
+    if (screen_) screen_->setView(view);
     return;
   }
   const auto tag = control->getTag();

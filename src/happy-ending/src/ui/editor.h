@@ -1,8 +1,8 @@
 // Happy Ending GUI: the plugin editor (1280 x 890 rack panel, views built in code, no .uidesc).
 // Layers from the bottom (docs/DESIGN_SYSTEM.md): panel (PanelView: body, grain, boxes with their titles on the bottom
 // border, the screen's untitled box, the LUFS screen's box, header lines, printed texts, engine tags), the silkscreen, the
-// controls and the LEVEL views; the shared screen, wear, paper tapes, screws and the back come with the later tasks of the
-// editor plan (docs/superpowers/plans/2026-10-31-happy-ending-editor.md, Tasks 11-14).
+// controls, the LEVEL views and the shared screen; wear, paper tapes, screws and the back come with the later tasks of the
+// editor plan (docs/superpowers/plans/2026-10-31-happy-ending-editor.md, Tasks 12-14).
 // Window: 1280 x 890 logical px times the host's content scale factor (IPlugViewContentScaleSupport) times the SIZE of
 // this plug-in's preferences (ui/prefs.h, HappyEnding.prefs, key size=75|90|100|125), read when the view is made and
 // again when it opens; the frame is zoomed by the same factor, so the views keep their logical coordinates.
@@ -26,6 +26,9 @@
 // scale the processor publishes and the one printed under them). The GR rows, the stage clip LEDs and the ACT LEDs dim with BYPASS and their stage's IN (a dimmed
 // GR row shows no reduction); the peak rows, the IN and OUT clip LEDs and the LUFS screen are always live. A click on a clip
 // LED writes the kClearClips trigger, one on the integrated loudness kResetIntegrated (one host edit each).
+// SCREEN (Task 11, ui/screen_view.h): one view on kScreenRect for the five views EQ, GLUE, CLIP, LIMIT and FINAL (the view
+// buttons pick it; the controller keeps it). refreshFromController() hands it the stored table and the UiState, the timer
+// run the display parameters (both histories grow on every run); it dims with BYPASS only.
 // Controller::decor() has seed 0 until the processor, a state or an edit gives one: the seeded parts (wear, tapes,
 // screws, Task 12) wait for a decor revision with a seed; the panel layer does not depend on it.
 #pragma once
@@ -70,6 +73,7 @@ class GrTags;
 class LevelBar;
 class LufsView;
 class PanelView;
+class ScreenDisplayView;
 struct EditorPreview;   // offscreen render tool (tools/render_editor.cpp)
 struct EditorTest;      // headless editor tests (tests/test_editor.cpp)
 
@@ -172,6 +176,7 @@ private:
   std::array<FairyTapes::Ui::ClipLed*, 9> clips_{};
   GrTags* grTags_ = nullptr;
   LufsView* lufs_ = nullptr;
+  ScreenDisplayView* screen_ = nullptr;   // the shared screen (Task 11)
   std::array<ActLed*, 2> actLeds_{};
   UiState state_{};   // as last read from the controller (dims the GR rows, the clip LEDs and the ACT LEDs)
   VSTGUI::CTextEdit* valueEdit_ = nullptr;               // the open typed value field, if any
