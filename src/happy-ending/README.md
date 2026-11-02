@@ -18,7 +18,7 @@ Bus: stereo in, stereo out. A mono track (mono in, mono out) is processed as dua
 
 ![Happy Ending signal flow](docs/images/routing.png)
 
-The diagram is the ROUTING page of the panel preview (the editor itself is not built yet). It leaves out the oversampling and the output safety stages, described below.
+The diagram is the ROUTING page of the panel preview (the editor itself is not built yet). The dotted frame is the oversampled zone; the tube of VIBE EQ is oversampled too. SAFETY is the output safety limiter and ceiling guard.
 
 1. **INPUT** sets the level going into the chain.
 2. **FINE EQ** makes precise corrections with six stepped bands, each on stereo, mid or side.
