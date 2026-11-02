@@ -1,7 +1,7 @@
 /**
  * Fairy Tapes · Pillow Talk — LEVEL display parameters and the clip clear request, through the real module.
  * dlopens the built bundle, creates the processor from the factory and drives process() with mock host parameter
- * queues: input peaks map to the meter norm over -60..0 dB, a sample at 1.0 lights the input clip flag (held), and a
+ * queues: input peaks map to the meter norm over -60..+6 dB, a sample at 1.0 lights the input clip flag (held), and a
  * kClearClips = 1 request clears the flags and is acknowledged with kClearClips = 0 in the same block.
  * Exits 77 (skipped) when the module has not been built.
  */
@@ -135,8 +135,8 @@ struct Host {
   }
 };
 
-// -60..0 dB -> 0..1 (fairy_ui/knob_math.h meterNormFromDb).
-double norm(double db) { return (db + 60.0) / 60.0; }
+// -60..+6 dB -> 0..1 (fairy_ui/knob_math.h meterNormFromDb), the scale of every plug-in of the suite.
+double norm(double db) { return (db + 60.0) / 66.0; }
 
 void test_input_peaks_map_to_meter_norm_and_only_display_ids_are_written() {
   Host h; CHECK(h.open());

@@ -112,10 +112,10 @@ void Processor::publishDisplay(Steinberg::Vst::ProcessData& data) {
   const double values[9] = {Ui::meterNormFromDb(d.voiceDb, -60.0, 0.0),
                             std::clamp((double)d.sendGain, 0.0, 1.0),
                             Ui::meterNormFromDb(d.echoDb, -60.0, 0.0),
-                            Ui::meterNormFromDb(l.inL, -60.0, 0.0),
-                            Ui::meterNormFromDb(l.inR, -60.0, 0.0),
-                            Ui::meterNormFromDb(l.outL, -60.0, 0.0),
-                            Ui::meterNormFromDb(l.outR, -60.0, 0.0),
+                            Ui::meterNormFromDb(l.inL, kMeterMinDb, kMeterMaxDb),
+                            Ui::meterNormFromDb(l.inR, kMeterMinDb, kMeterMaxDb),
+                            Ui::meterNormFromDb(l.outL, kMeterMinDb, kMeterMaxDb),
+                            Ui::meterNormFromDb(l.outR, kMeterMinDb, kMeterMaxDb),
                             l.clipIn ? 1.0 : 0.0,
                             l.clipOut ? 1.0 : 0.0};
   for (int i = 0; i < 9; ++i) put(kDispVoice + i, values[i]);
