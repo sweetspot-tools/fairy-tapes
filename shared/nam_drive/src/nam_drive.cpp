@@ -53,7 +53,6 @@ struct NamDrive::Loaded {
   GpuNam::InstanceId gpu_instance[2] = {GpuNam::kInvalidInstance, GpuNam::kInvalidInstance};   // ... two instance states
   double expected_sr = -1.0;
   double built_sr = 0.0;                   // rate the instances were reset at
-  int catch_up = NamDrive::kHistory;       // samples a skipped R instance replays to match L again (the model's memory)
   bool valid() const { return gpu || cpu[0] != nullptr; }
   ~Loaded() {
     if (gpu) {
@@ -77,15 +76,6 @@ NamDrive::NamDrive() {
     in_[c].assign(kMaxBlock, 0.0f);
     out_[c].assign(kMaxBlock, 0.0f);
   }
-  hist_.assign(kHistory, 0.0f);
-  catch_in_.assign(kHistory, 0.0f);
-  catch_out_.assign(kHistory, 0.0f);
-}
-
-void NamDrive::resyncChannels() {
-  r_skipping_ = true;   // both instances hold the same state: R can wait until the channels differ
-  identical_run_ = 0;
-  r_lag_ = 0;
 }
 
 NamDrive::~NamDrive() {
@@ -115,7 +105,6 @@ void NamDrive::setSampleRate(double sr) {
     for (auto& c : m->cpu)
       if (c)
         c->Reset(sr, max_block_size_);
-    resyncChannels();
   }
   // GPU engine sample rate is set at load time; changing it requires
   // a full reload (handled by the host calling loadModel/requestLoad again).
@@ -138,7 +127,6 @@ void NamDrive::reset() {
       if (c)
         c->ResetAndPrewarm(sample_rate_, max_block_size_);
   }
-  resyncChannels();
 }
 
 void NamDrive::setDrive(float drive) {
@@ -174,7 +162,6 @@ std::unique_ptr<NamDrive::Loaded> NamDrive::build(const std::filesystem::path& p
           m->gpu_instance[1] = iid[1];
           m->expected_sr = mgr.modelSampleRate(mh);
           m->built_sr = sr;
-          m->catch_up = kHistory;   // the GPU engine does not report the model's memory: replay all we keep
           std::cout << "[NamDrive] model loaded on GPU (2 instances)\n";
           return m;
         }
@@ -201,9 +188,6 @@ std::unique_ptr<NamDrive::Loaded> NamDrive::build(const std::filesystem::path& p
     }
     m->expected_sr = m->cpu[0]->GetExpectedSampleRate();
     m->built_sr = sr;
-    // The model's memory as NAM reports it (WaveNet: its receptive field); 0 (e.g. Linear) means "unknown": replay all we keep.
-    const int prewarm = m->cpu[0]->GetPrewarmSamples();
-    m->catch_up = prewarm > 0 ? std::min(prewarm, static_cast<int>(kHistory)) : static_cast<int>(kHistory);
     std::cout << "[NamDrive] model loaded on CPU (2 instances)\n";
     return m;
   } catch (const std::exception& e) {
@@ -253,7 +237,6 @@ bool NamDrive::loadModel(const std::filesystem::path& path) {
   collectGarbage();
   input_rms_smooth_ = 0.0f;
   output_rms_smooth_ = 0.0f;
-  resyncChannels();
   if (!m) {
     setInfo(LoadState::Failed, "", err);
     return false;
@@ -364,7 +347,6 @@ void NamDrive::adoptPending() {
     graveyard_[free_slot[k++]].store(old, std::memory_order_release);
   input_rms_smooth_ = 0.0f;
   output_rms_smooth_ = 0.0f;
-  resyncChannels();
 }
 
 bool NamDrive::isModelLoaded() const {
@@ -408,32 +390,10 @@ void NamDrive::runInstance(Loaded& m, int ch, float* in, float* out, int n) {
   }
 }
 
-/// The R instance was skipped for r_lag_ identical samples: run it on the last of them (L's input, the same signal) so
-/// its state matches L's again. Exact when the gap is shorter than the replay; otherwise exact for models whose memory
-/// fits in the replay (WaveNet, ConvNet, Linear up to kHistory taps), close for LSTM (a fading memory).
-void NamDrive::catchUpRight(Loaded& m) {
-  const int len = std::min(r_lag_, m.catch_up);
-  r_lag_ = 0;
-  if (len <= 0)
-    return;
-  int src = hist_pos_ - len;
-  if (src < 0)
-    src += kHistory;
-  for (int i = 0; i < len; ++i) {
-    catch_in_[i] = hist_[src];
-    if (++src == kHistory)
-      src = 0;
-  }
-  runInstance(m, 1, catch_in_.data(), catch_out_.data(), len);   // the output is not used
-}
-
 void NamDrive::processChunk(Loaded& m, float* left, float* right, int n) {
   const float drive_lin = static_cast<float>(std::pow(10.0f, drive_));
   const size_t bytes = static_cast<size_t>(n) * sizeof(float);
   const bool identical = std::memcmp(left, right, bytes) == 0;
-  bool silent = identical;
-  for (int i = 0; silent && i < n; ++i)
-    silent = left[i] == 0.0f;
 
   // The compensation reference is the signal *before* the drive gain, so the output keeps the input's loudness whatever
   // the Drive setting. Linked over both channels: for a mono source this is exactly the old (L+R)/2 reference.
@@ -452,43 +412,14 @@ void NamDrive::processChunk(Loaded& m, float* left, float* right, int n) {
   }
   const float in_rms = std::sqrt(dry_sum_sq / static_cast<float>(2 * n));
 
-  // Does the R instance run? Different channels: always. Identical: not while it is already skipped; while it still runs,
-  // it stops after kMonoEntrySamples identical non-silent samples (digital silence never stops it: a stereo source with
-  // gaps would otherwise stop and catch up at every phrase).
-  bool run_r = true;
-  if (!identical) {
-    r_skipping_ = false;
-    identical_run_ = 0;
-  } else if (r_skipping_) {
-    run_r = false;
-  } else {
-    if (!silent)
-      identical_run_ += n;
-    if (identical_run_ >= kMonoEntrySamples) {
-      r_skipping_ = true;
-      run_r = false;
-    }
-  }
-
+  // Both instances always run (decided 2026-11-02): the load does not depend on the material, and R's state never falls
+  // behind L's, so a mono source turning stereo needs no catch-up.
   runInstance(m, 0, in_[0].data(), out_[0].data(), n);
-  if (run_r) {
-    if (r_lag_ > 0)
-      catchUpRight(m);
-    if (identical)
-      std::memcpy(in_[1].data(), in_[0].data(), bytes);
-    runInstance(m, 1, in_[1].data(), out_[1].data(), n);
-  } else {
-    r_lag_ = std::min(r_lag_ + n, static_cast<int>(kHistory));
-  }
+  if (identical)
+    std::memcpy(in_[1].data(), in_[0].data(), bytes);
+  runInstance(m, 1, in_[1].data(), out_[1].data(), n);
 
-  // L's driven input into the ring (what R would have seen in an identical block)
-  for (int i = 0; i < n; ++i) {
-    hist_[hist_pos_] = in_[0][i];
-    if (++hist_pos_ == kHistory)
-      hist_pos_ = 0;
-  }
-
-  const int channels = run_r ? 2 : 1;
+  constexpr int channels = 2;
   float out_sum_sq = 0.0f;
   for (int c = 0; c < channels; ++c) {
     for (int i = 0; i < n; ++i) {
@@ -514,7 +445,7 @@ void NamDrive::processChunk(Loaded& m, float* left, float* right, int n) {
     compensation = std::clamp(compensation, min_lin, max_lin);
   }
 
-  const float* out_r = run_r ? out_[1].data() : out_[0].data();   // skipped: R is L's result
+  const float* out_r = out_[1].data();
   for (int i = 0; i < n; ++i) {
     left[i]  = out_[0][i] * compensation;
     right[i] = out_r[i] * compensation;

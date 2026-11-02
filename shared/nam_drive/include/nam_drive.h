@@ -7,9 +7,9 @@
  * increasing Drive changes timbre without changing perceived loudness.
  * Always 100% wet when active; bypass toggle (kBypassDrive) turns it off.
  *
- * Stereo (2026-11-02): dual mono, two instances of the model (L and R). When the two channels of a block are identical
- * the R instance is skipped and L's result is copied, so a mono source costs one instance; see process() for how the
- * skipped instance is kept in step. The level compensation is linked (one gain for both channels).
+ * Stereo (2026-11-02): dual mono, two instances of the model (L and R), both always running while a model is loaded:
+ * a constant load, twice the mono cost, no spike when the material changes. The level compensation is linked (one gain
+ * for both channels).
  *
  * Inference path: GPU (custom CUDA via gpu_nam) with automatic CPU fallback
  * (NeuralAmpModelerCore). The fallback is transparent to the caller.
@@ -98,19 +98,13 @@ public:
   /// Process stereo audio in-place: L through one model instance, R through the other (dual mono).
   /// If no model is loaded, the signal passes through unmodified.
   /// Output is auto-compensated to match input loudness (linked: one gain for both channels).
-  /// When L and R of a block are bit-identical the R instance is skipped and L's output copied. The skipped instance is
-  /// kept in step: digital silence never stops it, it stops only after kMonoEntrySamples identical non-silent samples
-  /// (it has then seen the same input as L for longer than any model's memory, so both states match), and when the
-  /// channels differ again it first replays the identical samples it missed (at most the model's memory, from a
-  /// kHistory ring of L's input) before the block: no click, at the price of one larger block at that moment.
+  /// Both instances run on every block, also when L and R are identical (then both get L's driven input).
   void process(float* left, float* right, int numSamples);
 
   /// Samples run through the model instance of a channel (0 = L, 1 = R). A diagnostic for tests.
   std::uint64_t instanceSamples(int channel) const;
 
   static constexpr int kMaxBlock = 8192;            // process() works in chunks of at most this many samples
-  static constexpr int kHistory = 8192;             // samples of the common signal kept to bring a skipped R instance back
-  static constexpr int kMonoEntrySamples = 16384;   // identical, non-silent samples before the R instance stops
 
 private:
   /// A model ready for inference (CPU or GPU path); an empty one means "no model".
@@ -122,8 +116,6 @@ private:
   void setInfo(LoadState st, const std::string& name, const std::string& err);  // caller holds info_mutex_
   void processChunk(Loaded& m, float* left, float* right, int n);   // audio thread, n <= kMaxBlock
   void runInstance(Loaded& m, int ch, float* in, float* out, int n);
-  void catchUpRight(Loaded& m);
-  void resyncChannels();          // both instances are in the same state (fresh model, reset)
 
   std::atomic<Loaded*> active_{nullptr};   // read by the audio thread, replaced only by it (or by loadModel/unloadModel when idle)
   std::atomic<Loaded*> pending_{nullptr};  // handed over by the worker
@@ -157,12 +149,6 @@ private:
 
   // Audio-thread state of the dual mono path. Buffers are allocated once in the constructor.
   std::vector<float> in_[2], out_[2];
-  std::vector<float> hist_;                // ring of L's driven input: what a skipped R instance missed
-  std::vector<float> catch_in_, catch_out_;
-  int hist_pos_ = 0;
-  bool r_skipping_ = true;                 // the R instance is skipped while L and R are identical
-  int identical_run_ = 0;                  // identical non-silent samples in a row while R still runs
-  int r_lag_ = 0;                          // samples the skipped R instance has missed (capped at kHistory)
   std::atomic<std::uint64_t> runs_[2] = {};
 };
 

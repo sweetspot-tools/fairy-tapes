@@ -249,12 +249,14 @@ void test_different_channels_stay_apart_and_match_mono_runs() {
   CHECK(blockRmsOf(side.lastL) > 0.3);
 }
 
-void test_identical_channels_run_one_instance() {
+// Both instances always run while a model is loaded (decided 2026-11-02, option B): a constant load, no spike when a mono
+// source turns stereo. Identical channels give identical outputs.
+void test_identical_channels_run_both_instances() {
   NamDrive d; CHECK(loadSync(d, kDelay3)); d.setDrive(0.3f);
   NamDrive ref; CHECK(loadSync(ref, kDelay3)); ref.setDrive(0.3f);
   int n = 0;
   bool same = true, matches = true;
-  for (int b = 0; b < 400; ++b) {   // 25600 samples, past the point where the R instance would stop anyway
+  for (int b = 0; b < 400; ++b) {
     auto l = sineBlock(n, 0.3), r = l, rl = l, rr = l;
     d.setSampleRate(48000.0);
     d.process(l.data(), r.data(), 64);
@@ -265,37 +267,27 @@ void test_identical_channels_run_one_instance() {
   CHECK(same);                         // identical in, identical out
   CHECK(matches);
   CHECK(d.instanceSamples(0) == 400u * 64u);
-  CHECK(d.instanceSamples(1) == 0u);   // a mono source costs one instance, as before
+  CHECK(d.instanceSamples(1) == 400u * 64u);   // R runs too: the load does not depend on the material
 }
 
-// Blocks that switch between identical and different channels: every block still matches the two mono runs, so the
-// skipped R instance is brought back in step (no click), and the R instance stops on a long identical stretch.
+// Blocks that switch between identical, different and silent channels: R has always run, so every block matches the two
+// mono runs and every block costs the same (no catch-up).
 void test_switching_identical_and_different_is_seamless() {
   StereoRun s;
   for (NamDrive* d : {&s.dual, &s.refL, &s.refR}) CHECK(loadSync(*d, kDelay3));
   auto same = [&](int blocks) { for (int b = 0; b < blocks; ++b) { auto x = sineBlock(s.n, 0.0); s.block(x, x); } };
   auto apart = [&](int blocks) { for (int b = 0; b < blocks; ++b) s.block(sineBlock(s.n, 0.0), sineBlock(s.n, 1.0)); };
   auto silent = [&](int blocks) { for (int b = 0; b < blocks; ++b) { std::vector<float> z(64, 0.f); s.block(z, z); } };
-
-  same(10);                                                   // a fresh model starts with R skipped
-  CHECK(s.dual.instanceSamples(1) == 0u);
-  apart(10);                                                  // R comes back: caught up on the 640 skipped samples
-  CHECK(s.dual.instanceSamples(1) == 640u + 640u);
-  same(400);                                                  // a long identical stretch: R stops after kMonoEntrySamples
-  const auto rAfterSame = s.dual.instanceSamples(1);
-  CHECK(rAfterSame >= 640u + 640u + (unsigned)NamDrive::kMonoEntrySamples - 64u);
-  CHECK(rAfterSame <= 640u + 640u + (unsigned)NamDrive::kMonoEntrySamples + 64u);
-  apart(1);                                                   // back again: the catch-up is bounded
-  CHECK(s.dual.instanceSamples(1) - rAfterSame <= (unsigned)NamDrive::kHistory + 64u);
-  apart(9);
-  const auto rBeforeSilence = s.dual.instanceSamples(1);
-  silent(400);                                                // digital silence is not "mono": R keeps running, warm
-  CHECK(s.dual.instanceSamples(1) == rBeforeSilence + 400u * 64u);
+  same(10);
+  apart(10);
+  same(400);
+  apart(10);
+  silent(40);
   apart(5);
-  CHECK(s.dual.instanceSamples(1) == rBeforeSilence + 405u * 64u);   // no catch-up needed
+  CHECK(s.dual.instanceSamples(0) == 475u * 64u);
+  CHECK(s.dual.instanceSamples(1) == 475u * 64u);
   // The compensation is linked; on the block where R jumps phase its output RMS differs from L's for a moment, so the
-  // linked gain differs from a mono run's by a few 1e-3 for a while (one scalar per block, opposite on L and R). A stale R
-  // instance would be off by the signal itself in the first samples after the switch (0.24 before the catch-up existed).
+  // linked gain differs from a mono run's by a few 1e-3 for a while (one scalar per block, opposite on L and R).
   if (s.worst > 1e-2) std::fprintf(stderr, "  switching vs mono runs: %g\n", s.worst);
   CHECK(s.worst <= 1e-2);
 }
@@ -390,7 +382,7 @@ int main() {
   test_compensation_matches_undriven_input_level();
   test_same_rate_keeps_model_state();
   test_different_channels_stay_apart_and_match_mono_runs();
-  test_identical_channels_run_one_instance();
+  test_identical_channels_run_both_instances();
   test_switching_identical_and_different_is_seamless();
   test_compensation_is_linked();
   test_async_load_builds_both_instances();
