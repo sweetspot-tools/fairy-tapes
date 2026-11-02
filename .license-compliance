@@ -1,0 +1,8 @@
+# Config of tools/license-compliance-checker (run: tools/license-compliance-checker/check-licenses --path .)
+
+# Eigen's benchmark suite carries its own GPL-2.0-only COPYING. It is not built and not distributed
+# with the plug-ins, so it never gets combined with our GPL-3.0 code.
+exclude eigen/bench
+
+# Embedded as vector outlines (see THIRD_PARTY.md): Homemade Apple and Rock Salt are Apache-2.0, Zeyada is SIL OFL 1.1.
+allow shared/ui/assets/fonts Apache-2.0 OFL-1.1
