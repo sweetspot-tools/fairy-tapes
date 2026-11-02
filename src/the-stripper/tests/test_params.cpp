@@ -257,6 +257,37 @@ void test_fourkeq_passthrough_flat() {
   ASSERT_APPROX_EPS(right[0], 1.0f, 0.05f);
 }
 
+// A sample-rate change re-designs every filter at the new rate on the next block, with the same parameters (the host can
+// change the rate mid-session: prepare is called again, no parameter moves). Compared with a fresh instance at the new rate.
+void test_fourkeq_new_sample_rate_redesigns_the_filters() {
+  DSP::FourKEQParams p;
+  p.hpfEnabled = true;
+  p.hpfFreq = 200.0f;
+  p.lpfEnabled = true;
+  p.lpfFreq = 5000.0f;
+  p.lmGain = 6.0f;
+  p.lmFreq = 1000.0f;
+  p.eqTypeBlack = true;
+  constexpr int N = 4096;
+  auto impulse = [&](DSP::FourKEQ& eq) {
+    std::vector<float> l(N, 0.0f), r(N, 0.0f);
+    l[0] = r[0] = 1.0f;
+    eq.process(l.data(), r.data(), N, p);
+    return l;
+  };
+  DSP::FourKEQ moved;
+  moved.prepare(44100.0, N);
+  impulse(moved);            // coefficients designed at 44.1 kHz
+  moved.prepare(96000.0, N);
+  moved.reset();             // same state as a fresh instance: only the coefficients can differ
+  DSP::FourKEQ fresh;
+  fresh.prepare(96000.0, N);
+  const auto a = impulse(moved), b = impulse(fresh);
+  double worst = 0.0;
+  for (int i = 0; i < N; ++i) worst = std::max(worst, static_cast<double>(std::fabs(a[i] - b[i])));
+  ASSERT_TRUE(worst < 1e-6);
+}
+
 void test_fourkeq_brown_vs_black_differ() {
   // Verify that Brown and Black produce different results with the same non-zero gain
   DSP::FourKEQ eqBrown, eqBlack;
@@ -1164,6 +1195,7 @@ int main() {
   // FourKEQ
   RUN_TEST(test_fourkeq_passthrough_flat);
   RUN_TEST(test_fourkeq_brown_vs_black_differ);
+  RUN_TEST(test_fourkeq_new_sample_rate_redesigns_the_filters);
   RUN_TEST(test_fourkeq_hpf_attenuates_dc);
   RUN_TEST(test_fourkeq_hpf_passband_is_flat);
   RUN_TEST(test_fourkeq_filters_only_with_the_bands_out);

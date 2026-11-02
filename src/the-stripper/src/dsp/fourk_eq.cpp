@@ -64,7 +64,10 @@ void FourKEQ::markIdle() {
 void FourKEQ::prepare(double sampleRate, int maxBlockSize) {
   if (sampleRate <= 0.0 || maxBlockSize <= 0)
     return;
-  sampleRate_ = clamp(sampleRate, 8000.0, 384000.0);
+  const double rate = clamp(sampleRate, 8000.0, 384000.0);
+  if (rate != sampleRate_)
+    coeffsStale_ = true;   // every filter was designed at the old rate: re-design on the next block
+  sampleRate_ = rate;
   maxBlockSize_ = maxBlockSize;
 
   setPhaseShiftFreq(sampleRate_, 200.0f);
@@ -288,8 +291,9 @@ void FourKEQ::process(float* left, float* right, int numSamples, const FourKEQPa
                        p.hmGain != lastParams_.hmGain || p.hmFreq != lastParams_.hmFreq || p.hmQ != lastParams_.hmQ ||
                        p.hfGain != lastParams_.hfGain || p.hfFreq != lastParams_.hfFreq || p.hfBell != lastParams_.hfBell ||
                        p.eqTypeBlack != lastParams_.eqTypeBlack);
-  if (paramsChanged)
+  if (paramsChanged || coeffsStale_)
     updateFilters(p);
+  coeffsStale_ = false;
   lastParams_ = p;
 
   if (p.hpfEnabled && !lastHpfEnabled_)
