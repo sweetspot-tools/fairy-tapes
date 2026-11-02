@@ -8,6 +8,7 @@
 #include "messages.h"
 #include "state.h"
 #include "state_stream.h"
+#include "tuning.h"
 #include "pluginterfaces/base/ibstream.h"
 #include "public.sdk/source/vst/vstparameters.h"
 #include <algorithm>
@@ -49,8 +50,15 @@ std::string freqText(double hz) {
 
 bool isSwitch(ParamID id) { return kParams[id].steps == 2 && id != kFinalMode; }
 
-// The text of position `index`. hpMs: the current HI PASS M/S position (SIDE reads the mono-bass scale).
-std::string paramText(ParamID id, int index, int hpMs) {
+// LIMIT RELEASE in ms: the style's base release trimmed by 2^((index - 4) / 3) (dsp/limiter.cpp, spec 5.5).
+double limitReleaseMs(int style, int index) {
+  style = std::clamp(style, 0, 2);
+  return Tuning::kLimitReleaseBaseMs[style] * std::pow(2.0, (index - 4) / 3.0);
+}
+
+// The text of position `index`. hpMs: the current HI PASS M/S position (SIDE reads the mono-bass scale); limitStyle: the
+// current LIMIT style (RELEASE shows that style's milliseconds).
+std::string paramText(ParamID id, int index, int hpMs, int limitStyle) {
   const int last = kParams[id].steps - 1;
   index = std::clamp(index, 0, last);
   if (isSwitch(id)) return index ? "On" : "Off";
@@ -100,7 +108,8 @@ std::string paramText(ParamID id, int index, int hpMs) {
       static const char* const names[3] = {"Modern", "Punch", "Dyn"};
       return names[index];
     }
-    case kLimitRelease: return index == 4 ? "Style" : fmt("%+.0f", static_cast<double>(index - 4));
+    case kLimitRelease:   // DYN moves around this value with the program
+      return fmt("%.0f ms", limitReleaseMs(limitStyle, index)) + (limitStyle == 2 ? " prog." : "");
     case kFinalMode:   return index ? "Clip" : "Inflate";
     default:           return fmt("%.0f", static_cast<double>(index));
   }
@@ -225,7 +234,8 @@ Steinberg::tresult PLUGIN_API Controller::getParamStringByValue(Steinberg::Vst::
     return EditController::getParamStringByValue(tag, v, string);
   const auto id = static_cast<ParamID>(tag);
   const int hpMs = indexFromNorm(kHpMs, getParamNormalized(kHpMs));
-  asciiToStr128(paramText(id, indexFromNorm(id, v), hpMs), string);
+  const int style = indexFromNorm(kLimitStyle, getParamNormalized(kLimitStyle));
+  asciiToStr128(paramText(id, indexFromNorm(id, v), hpMs, style), string);
   return Steinberg::kResultOk;
 }
 
@@ -238,9 +248,10 @@ Steinberg::tresult PLUGIN_API Controller::getParamValueByString(Steinberg::Vst::
   for (const Steinberg::Vst::TChar* c = string; *c; ++c) typed.push_back(*c < 128 ? static_cast<char>(*c) : '?');
   const std::string want = lowered(typed);
   const int hpMs = indexFromNorm(kHpMs, getParamNormalized(kHpMs));
+  const int style = indexFromNorm(kLimitStyle, getParamNormalized(kLimitStyle));
   const int steps = kParams[id].steps;
   for (int i = 0; i < steps; ++i)
-    if (lowered(paramText(id, i, hpMs)) == want) {
+    if (lowered(paramText(id, i, hpMs, style)) == want) {
       valueNormalized = normFromIndex(id, i);
       return Steinberg::kResultOk;
     }
@@ -248,9 +259,13 @@ Steinberg::tresult PLUGIN_API Controller::getParamValueByString(Steinberg::Vst::
   const ValueTable t = valueTable(id);
   char* end = nullptr;
   const double num = std::strtod(typed.c_str(), &end);
-  if (t.size && end != typed.c_str()) {
-    // HI PASS FREQ is read on the scale of the current HI PASS M/S (SIDE has the mono-bass scale)
-    const auto valueAt = [&](int i) { return id == kHpFreq ? hpFreqHz(hpMs == 2, i) : t.data[i]; };
+  if ((t.size || id == kLimitRelease) && end != typed.c_str()) {
+    // HI PASS FREQ is read on the scale of the current HI PASS M/S (SIDE has the mono-bass scale); LIMIT RELEASE in the ms
+    // of the current style
+    const auto valueAt = [&](int i) {
+      if (id == kLimitRelease) return limitReleaseMs(style, i);
+      return id == kHpFreq ? hpFreqHz(hpMs == 2, i) : t.data[i];
+    };
     int best = 0;
     for (int i = 1; i < steps; ++i)
       if (std::fabs(valueAt(i) - num) < std::fabs(valueAt(best) - num)) best = i;

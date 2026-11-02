@@ -117,7 +117,7 @@ Names as they appear in the host's parameter list. All controls are stepped.
 | Limit | Off / On | On | IN of the stage. |
 | Limit Thresh | 0 to −4 dB, 0.5 dB steps | −2 dB | Threshold and gain recovery: lower is louder. |
 | Limit Style | Modern / Punch / Dyn | Modern | Look-ahead, knee and release behaviour (see above). |
-| Limit Release | −4 to +4, centre "Style" | Style | Trims the release of the style in third-octave steps (factor 2^(k/3), about ×0.4 to ×2.5). Starting base releases: Modern 50 ms, Punch 100 ms, Dyn 250 ms. |
+| Limit Release | 9 steps, FAST to SLOW | centre = the style's own release | Trims the release of the style in third-octave steps (factor 2^(k/3), about ×0.4 to ×2.5). The value shows the real milliseconds of the current style (Modern 50 ms, Punch 100 ms, Dyn 250 ms at the centre); Dyn adds "prog." because the program moves it. |
 
 **FINAL**
 
