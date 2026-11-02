@@ -542,6 +542,13 @@ void test_value_text_parse_roundtrip() {
   double v = -1.0;
   // case and spaces are ignored; a bare number picks the nearest step
   ASSERT_TRUE(parseValue(kLmQ, "  SURGICAL ", all, v) && indexFromNorm(kLmQ, v) == 3);
+  // M/S: the silkscreen sigla and the host text are both read
+  ASSERT_TRUE(parseValue(kMidMs, "side", all, v) && indexFromNorm(kMidMs, v) == 2);
+  ASSERT_TRUE(parseValue(kMidMs, "SIDE", all, v) && indexFromNorm(kMidMs, v) == 2);
+  ASSERT_TRUE(parseValue(kLsMs, " st ", all, v) && indexFromNorm(kLsMs, v) == 0);
+  ASSERT_TRUE(parseValue(kLsMs, "Stereo", all, v) && indexFromNorm(kLsMs, v) == 0);
+  ASSERT_TRUE(parseValue(kHsMs, "Mid", all, v) && indexFromNorm(kHsMs, v) == 1);
+  ASSERT_TRUE(parseValue(kHsMs, "MID", all, v) && indexFromNorm(kHsMs, v) == 1);
   ASSERT_TRUE(parseValue(kInputGain, "-3", all, v) && indexFromNorm(kInputGain, v) == 18);
   ASSERT_TRUE(parseValue(kInputGain, "+3.0 dB", all, v) && indexFromNorm(kInputGain, v) == 30);
   ASSERT_TRUE(parseValue(kInputGain, "99", all, v) && indexFromNorm(kInputGain, v) == 48);

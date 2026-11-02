@@ -94,8 +94,11 @@ double onStep(ParamID id, double norm) {
 }
 
 // The value printed under a knob or a cycling selector: formatValue (HI PASS FREQ on the scale of its M/S), but LIMIT
-// RELEASE prints its real time in ms for the current style (releaseText).
+// RELEASE prints its real time in ms for the current style (releaseText) and the M/S selectors their sigla (ST / MID /
+// SIDE, as in the preview; the host shows Stereo / Mid / Side).
 std::string valueText(ParamID id, const double* norm) {
+  const auto p = static_cast<FairyTapes::HappyEnding::ParamID>(id);
+  if (FairyTapes::HappyEnding::Ui::detail::isMsParam(p)) return FairyTapes::HappyEnding::Ui::detail::msSigla(indexFromNorm(p, norm[id]));
   if (id == kLimitRelease) return releaseText(indexFromNorm(kLimitStyle, norm[kLimitStyle]), indexFromNorm(kLimitRelease, norm[kLimitRelease]));
   return formatValue(static_cast<FairyTapes::HappyEnding::ParamID>(id), norm[id], norm);
 }

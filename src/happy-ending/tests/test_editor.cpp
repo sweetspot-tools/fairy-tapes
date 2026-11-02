@@ -302,11 +302,16 @@ UiState stateOf(Steinberg::Vst::EditController* ctl) {
   normsOf(ctl, n);
   return uiStateFrom(n, listenFromNorm(ctl->getParamNormalized(kListenBand)), ctl->getParamNormalized(kSetActive) >= 0.5);
 }
-// The value printed under a knob or a cycling selector: formatValue, but the real ms of LIMIT RELEASE (releaseText).
+// The value printed under a knob or a cycling selector: formatValue, but the real ms of LIMIT RELEASE (releaseText) and
+// the siglas of the M/S selectors.
 std::string expectedValue(Steinberg::Vst::EditController* ctl, Steinberg::Vst::ParamID id) {
   double n[kNumParams];
   normsOf(ctl, n);
   if (id == kLimitRelease) return releaseText(indexFromNorm(kLimitStyle, n[kLimitStyle]), indexFromNorm(kLimitRelease, n[kLimitRelease]));
+  if (id == kHpMs || id == kLsMs || id == kLmMs || id == kMidMs || id == kHmMs || id == kHsMs) {
+    static const char* const siglas[3] = {"ST", "MID", "SIDE"};
+    return siglas[indexFromNorm(static_cast<ParamID>(id), n[id])];
+  }
   return formatValue(static_cast<ParamID>(id), n[id], n);
 }
 int indexOf(VstParamID id, int choiceIndex = -1) {
@@ -1127,6 +1132,30 @@ void test_limit_release_shows_ms() {
   ASSERT_TRUE(slower == releaseText(2, 7));
 }
 
+// The six M/S selectors print ST / MID / SIDE under the button (the preview and spec §5.1), not the host's Stereo / Mid /
+// Side; the host text stays what formatValue says.
+void test_ms_prints_sigla() {
+  resetAll(g_ctl);
+  Editor ed(g_ctl);
+  auto root = EditorTest::build(ed);
+  const VstParamID ids[6] = {kHpMs, kLsMs, kLmMs, kMidMs, kHmMs, kHsMs};
+  const char* const want[3] = {"ST", "MID", "SIDE"};
+  const char* const host[3] = {"Stereo", "Mid", "Side"};
+  bool ok = true;
+  for (VstParamID id : ids)
+    for (int i = 0; i < 3; ++i) {
+      g_ctl->setParamNormalized(id, normFromIndex(static_cast<ParamID>(id), i));
+      EditorTest::tick(ed);
+      ok = ok && EditorTest::silkValue(ed, static_cast<int>(id)) == want[i];
+      double n[kNumParams];
+      normsOf(g_ctl, n);
+      ok = ok && formatValue(static_cast<ParamID>(id), n[id], n) == host[i];
+    }
+  resetAll(g_ctl);
+  EditorTest::destroy(ed, root);
+  ASSERT_TRUE(ok);
+}
+
 // The value under a knob is printed as in the preview, its baseline kKnobValueBaselineBelowCap (36) under the cap centre
 // plus the radius, not at the shared silkscreen's R + 39.5 (where it ran into the button labels under the lower FINE EQ
 // knobs): amber pixels of INPUT GAIN's "+0.0 dB" (cap 89, 188, R 22: baseline 246) reach the baseline and nothing amber
@@ -1200,6 +1229,7 @@ int main() {
     RUN_TEST(test_view_buttons_exclusive);
     RUN_TEST(test_typed_value_goes_through_parse);
     RUN_TEST(test_limit_release_shows_ms);
+    RUN_TEST(test_ms_prints_sigla);
     RUN_TEST(test_knob_values_at_preview_offset);
     g_ctl = nullptr;
     ctl.terminate();

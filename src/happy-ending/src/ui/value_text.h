@@ -34,6 +34,16 @@ inline std::string freqText(double hz) {
   return fmt("%g kHz", hz / 1000.0);
 }
 
+inline bool isMsParam(ParamID id) {
+  return id == kHpMs || id == kLsMs || id == kLmMs || id == kMidMs || id == kHmMs || id == kHsMs;
+}
+
+// The silkscreen sigle of an M/S position (the preview and the spec: ST / MID / SIDE); the host shows its own texts.
+inline const char* msSigla(int index) {
+  static const char* const names[3] = {"ST", "MID", "SIDE"};
+  return names[std::clamp(index, 0, 2)];
+}
+
 inline bool isSwitch(ParamID id) { return kParams[id].steps == 2 && id != kFinalMode; }
 
 // The text of position `index`. hpMs: the current HI PASS M/S position (SIDE reads the mono-bass scale); limitStyle: the
@@ -137,6 +147,12 @@ inline bool parseValue(ParamID id, const std::string& text, const double* allNor
   const int style = detail::limitStyleOf(allNorms);
   const std::string want = detail::lowered(text);
   const int steps = kParams[id].steps;
+  if (detail::isMsParam(id))   // the silkscreen sigla (ST / MID / SIDE) as well as the host text (Stereo / Mid / Side)
+    for (int i = 0; i < steps; ++i)
+      if (detail::lowered(detail::msSigla(i)) == want) {
+        norm = normFromIndex(id, i);
+        return true;
+      }
   for (int i = 0; i < steps; ++i)
     if (detail::lowered(detail::paramText(id, i, hpMs, style)) == want) {
       norm = normFromIndex(id, i);
