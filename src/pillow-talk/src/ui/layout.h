@@ -10,6 +10,7 @@
 #include "params.h"
 #include "ui/editor_size.h"
 
+#include "fairy_ui/meter_math.h"
 #include "fairy_ui/sanitize.h"
 #include "fairy_ui/silkscreen.h"
 
@@ -157,6 +158,9 @@ constexpr Rect kScopeRect{44, 108, 376, 130};
 // ---- LEVEL: LED rows and clip LEDs ----------------------------------------------------------------------------------
 constexpr int kMeterLeds = 12;
 constexpr float kMeterFirstX = 598, kMeterPitch = 16, kMeterBarHeight = 8;   // centre of the first LED, LED pitch
+// The dB range of the IN/OUT rows: the processor normalizes the peaks over -60..0 dB (processor.cpp), and the LED colours
+// and the fall of the held peak use the same range (2026-11-02). The DUCK row is linear and ignores it.
+constexpr FairyTapes::Ui::MeterScale kMeterScale{-60.0, 0.0};
 
 struct MeterRow {
   ParamID id;           // display parameter (meter norm over -60..0 dB; kDispSend: linear send gain)

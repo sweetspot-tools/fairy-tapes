@@ -49,8 +49,10 @@ void fillLed(CDrawContext* ctx, const CPoint& c, CCoord radius, const CColor& fi
 // ---------------------------------------------------------------------------
 // MeterBar
 
-MeterBar::MeterBar(const CRect& size, MeterKind kind, int ledCount)
-    : CView(size), kind_(kind), count_(ledCount < 1 ? 1 : ledCount) {}
+MeterBar::MeterBar(const CRect& size, MeterKind kind, int ledCount, MeterScale scale)
+    : CView(size), kind_(kind), count_(ledCount < 1 ? 1 : ledCount), scale_(sanitizeMeterScale(scale)) {
+  peak_.setScale(scale_);
+}
 
 void MeterBar::setLevel(double norm, double dtSeconds) {
   const double v = sanitizeNorm(norm, 0.0);
@@ -86,7 +88,7 @@ void MeterBar::draw(CDrawContext* ctx) {
     const CPoint c(r.left + pitch * (i + 0.5), cy);
     const bool on = i < lit;
     const bool held = kind_ == MeterKind::Level && peak_.holdEnabled() && i == holdIndex && !on;   // held peak above the live level
-    fillLed(ctx, c, radius, (on || held) ? ledRgb(ledColor(i, count_, kind_)) : kOff);
+    fillLed(ctx, c, radius, (on || held) ? ledRgb(ledColor(i, count_, kind_, scale_)) : kOff);
   }
   ctx->restoreGlobalState();
   setDirty(false);

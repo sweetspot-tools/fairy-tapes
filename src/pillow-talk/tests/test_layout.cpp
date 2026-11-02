@@ -153,6 +153,21 @@ void test_meters_and_clips_use_the_display_params() {
   ASSERT_TRUE(kClipCount == 2 && kClips[0].id == kDispClipIn && kClips[1].id == kDispClipOut);
 }
 
+void test_level_meters_use_the_0_dB_scale() {
+  // The processor publishes the peaks over -60..0 dB (processor.cpp, meterNormFromDb(x, -60, 0)); the LED colours and the
+  // fall of the held peak use the same scale (2026-11-02): green below -18, lime to -9, yellow to 0, red at 0 dB.
+  ASSERT_TRUE(kMeterScale.minDb == -60.0 && kMeterScale.maxDb == 0.0);
+  using FairyTapes::Ui::LedColor;
+  using FairyTapes::Ui::MeterKind;
+  using FairyTapes::Ui::ledColor;
+  const LedColor want[kMeterLeds] = {LedColor::Green, LedColor::Green, LedColor::Green,  LedColor::Green,
+                                     LedColor::Green, LedColor::Green, LedColor::Green,  LedColor::Green,
+                                     LedColor::Lime,  LedColor::Lime,  LedColor::Yellow, LedColor::Red};
+  for (int i = 0; i < kMeterLeds; ++i) ASSERT_TRUE(ledColor(i, kMeterLeds, MeterKind::Level, kMeterScale) == want[i]);
+  // the printed "0" sits over the last LED, the red one
+  ASSERT_TRUE(scaleX(0) == kMeterFirstX + kMeterPitch * (kMeterLeds - 1));
+}
+
 void test_duck_meter_is_send_reduction() {
   ASSERT_TRUE(duckMeterNorm(1.0) == 0.0);
   ASSERT_TRUE(duckMeterNorm(0.0) == 1.0);
@@ -232,6 +247,7 @@ int main() {
   RUN_TEST(test_no_overlap_within_a_box);
   RUN_TEST(test_preview_positions);
   RUN_TEST(test_meters_and_clips_use_the_display_params);
+  RUN_TEST(test_level_meters_use_the_0_dB_scale);
   RUN_TEST(test_duck_meter_is_send_reduction);
   RUN_TEST(test_dimming_rules);
   RUN_TEST(test_silkscreen_items_from_the_table);
