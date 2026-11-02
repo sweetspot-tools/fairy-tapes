@@ -94,6 +94,7 @@ private:
   AllPassBand phaseShift_;
 
   FourKEQParams lastParams_;
+  bool coeffsStale_ = true;   // the sample rate changed since the filters were designed (prepare), or never designed
   bool lastHpfEnabled_ = false;
   bool lastLpfEnabled_ = false;
   bool lastBandsEnabled_ = false;
