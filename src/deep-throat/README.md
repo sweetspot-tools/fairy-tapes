@@ -4,6 +4,10 @@ Deep Throat is a VST3 channel strip for a single voice track. It evens out the l
 
 **Status:** audio engine and editor are finished and their tests pass on Linux (2026-10-31); the LATENCY setting (MIX / LIVE, for recording through the plug-in) was added on 2026-11-02. Not verified yet: tuning on real voices (every threshold is set on synthetic signals), colours and the panel flip inside a real host, and the Windows and macOS builds (CI builds them on merge to `master`).
 
+![Deep Throat panel](docs/images/panel.png)
+
+*The panel, from the HTML preview the editor reproduces.*
+
 ## When to use it
 
 - **Speak:** spoken word. Podcast hosts and guests, voice-over, narration, interviews. The Rider works hardest here (up to ±6 dB), the compressor is gentle (2:1, clean) and the Tone knob adds presence.

@@ -8,6 +8,10 @@ latency.
 **Status:** DSP, editor and automated tests are done. Still to check: the editor in a real host, the six devices by ear,
 and the Windows and macOS builds (they run in the CI on the next merge to `master`).
 
+![Hotline panel](docs/images/panel.png)
+
+*The panel, from the HTML preview the editor reproduces.*
+
 ## When to use it
 
 - **Phone or radio voice.** A line of dialogue, an ad-lib or a backing vocal that sounds like it comes through a

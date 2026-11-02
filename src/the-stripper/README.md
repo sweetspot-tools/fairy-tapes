@@ -4,6 +4,10 @@ The Stripper is a VST3 channel strip with an analog voice. It chains filters, an
 
 **Status:** version 1 is complete in code. It has not yet been tested by hand in Reaper and Cubase or tried on Windows and macOS, and the optional CUDA (GPU) build is not verified.
 
+![The Stripper panel](docs/images/panel.png)
+
+*The panel, from the HTML preview the editor reproduces.*
+
 ## When to use it
 
 The CHAN / BUS switch in the OUTPUT box picks one of two setups. It changes the character of the modules and the place of the Drive block. It never changes a knob value.

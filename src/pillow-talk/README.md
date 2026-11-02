@@ -7,6 +7,10 @@ vocal track, or on a return bus fed by several tracks with the vocal on the side
 **Status:** DSP, editor and automated tests are done. Still to check by hand in Reaper and Cubase (see the manual check
 list below), and the default Hold, Release and Feedback values are still to be tuned by ear.
 
+![Pillow Talk panel](docs/images/panel.png)
+
+*The panel, from the HTML preview the editor reproduces.*
+
 ## When to use it
 
 - **Lead vocal echo without send automation.** Insert it on the vocal: the repeats stay low while the words are sung and

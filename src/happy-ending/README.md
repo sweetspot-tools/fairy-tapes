@@ -4,6 +4,10 @@ Happy Ending is a mastering chain for the master bus, in VST3 format. It puts th
 
 **Status:** the audio engine and the VST3 plug-in are done, with their tests (plan Tasks 1-13 and 15). The by-ear tuning of the starting values (Task 14) is still to do, and the delay compensation has been checked by the tests but not yet in a host. The graphic editor has its own plan and is not built yet: the host shows its generic parameter list, so the meters, the LUFS readout and the MATCH, LISTEN and SET buttons are not reachable for now.
 
+![Happy Ending panel](docs/images/panel.png)
+
+*The panel as drawn by the HTML preview. The editor is not built yet; the host shows its generic parameter list.*
+
 ## When to use it
 
 - **Finishing a mix.** Put it last on the master bus for a final EQ touch, some glue and the final push to the ceiling.

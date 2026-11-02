@@ -14,17 +14,18 @@ their licences: [THIRD_PARTY.md](THIRD_PARTY.md).
 
 ## The plug-ins
 
-| Plug-in | Put it on | What it does | Status |
-|---|---|---|---|
-| [The Stripper](src/the-stripper/) | single tracks, groups, mix bus | Channel strip: filters, 4-band EQ, compression, drive through a NAM model or tape, limiter and gate. One switch picks Channel or Mix bus voicing. | DSP and editor done; host, Windows/macOS and CUDA checks pending |
-| [Pillow Talk](src/pillow-talk/) | vocals, or a return bus | Tape echo that ducks its own repeats while the singer sings and lets them bloom in the pauses. No send automation. | Done; manual check in hosts pending |
-| [Hotline](src/hotline/) | vocals, intros, any track | Makes the sound come out of a megaphone, phone, walkie-talkie, AM radio, station PA or cheap speaker. One Morph knob goes from clean to device. | Done; manual check in hosts pending |
-| [Deep Throat](src/deep-throat/) | vocals: speech, singing, screams | Vocal channel strip with three modes: level rider, breath reduction, corrective EQ, de-esser, compressor and tone. | DSP and editor done; manual check in hosts pending |
-| [Happy Ending](src/happy-ending/) | the master bus | Mastering chain: fine EQ, vibe EQ, glue compressor, clipper, limiter and final loudness, with LUFS metering and a fixed ceiling. | Audio engine done; editor not built yet; by-ear tuning pending |
-| [Doggystyle](src/doggystyle/) | drum groups, bass and guitar groups | Aggressive parallel compression with two opposite characters. | Designed, not implemented |
+|  | Plug-in | Put it on | What it does | Status |
+|---|---|---|---|---|
+| <img src="src/the-stripper/docs/images/panel.png" width="240" alt="The Stripper"> | [The Stripper](src/the-stripper/) | single tracks, groups, mix bus | Channel strip: filters, 4-band EQ, compression, drive through a NAM model or tape, limiter and gate. One switch picks Channel or Mix bus voicing. | DSP and editor done; host, Windows/macOS and CUDA checks pending |
+| <img src="src/pillow-talk/docs/images/panel.png" width="240" alt="Pillow Talk"> | [Pillow Talk](src/pillow-talk/) | vocals, or a return bus | Tape echo that ducks its own repeats while the singer sings and lets them bloom in the pauses. No send automation. | Done; manual check in hosts pending |
+| <img src="src/hotline/docs/images/panel.png" width="240" alt="Hotline"> | [Hotline](src/hotline/) | vocals, intros, any track | Makes the sound come out of a megaphone, phone, walkie-talkie, AM radio, station PA or cheap speaker. One Morph knob goes from clean to device. | Done; manual check in hosts pending |
+| <img src="src/deep-throat/docs/images/panel.png" width="240" alt="Deep Throat"> | [Deep Throat](src/deep-throat/) | vocals: speech, singing, screams | Vocal channel strip with three modes: level rider, breath reduction, corrective EQ, de-esser, compressor and tone. | DSP and editor done; manual check in hosts pending |
+| <img src="src/happy-ending/docs/images/panel.png" width="240" alt="Happy Ending"> | [Happy Ending](src/happy-ending/) | the master bus | Mastering chain: fine EQ, vibe EQ, glue compressor, clipper, limiter and final loudness, with LUFS metering and a fixed ceiling. | Audio engine done; editor not built yet; by-ear tuning pending |
+|  | [Doggystyle](src/doggystyle/) | drum groups, bass and guitar groups | Aggressive parallel compression with two opposite characters. | Designed, not implemented |
 
-Each README has the signal flow diagram of its plug-in (the ROUTING page of the panel), the controls and the build
-commands.
+Each README has a picture of the panel, the signal flow diagram (the ROUTING page of the panel), the controls and the
+build commands. The pictures are rendered from the HTML previews by
+[docs/mockups/render_previews.js](docs/mockups/render_previews.js).
 
 ## Download
 
@@ -130,8 +131,8 @@ To use a build: open the run, **Summary**, **Artifacts**, download the one for y
   the design specs and plans in `docs/superpowers/` (in Italian).
 - **`build/`** and **`dist/`**: build output, not in the repository (gitignored).
 
-The signal flow images in each README are rendered from the HTML previews by
-[docs/mockups/render_routing.js](docs/mockups/render_routing.js).
+The panel and signal flow images in each README are rendered from the HTML previews by
+[docs/mockups/render_previews.js](docs/mockups/render_previews.js).
 
 ## Branches
 
