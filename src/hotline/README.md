@@ -219,9 +219,8 @@ python3 shared/ui/tools/gen_tape_fonts.py --zeyada Zeyada.ttf --rocksalt RockSal
 user's preferences file, as a click on the back would: point `XDG_CONFIG_HOME` at a scratch folder when you use it. The
 full list is at the top of `tools/render_editor.cpp`.
 
-The back of the HTML preview (`docs/mockups/hotline_rack.html`) is out of date (628 px tall, no DEVICES tab, credits
-taken from The Stripper); the reference for the back panel is a render of `hotline_render`. Its ROUTING tab matches the
-editor's.
+The back of the HTML preview (`docs/mockups/hotline_rack.html`) matches the editor since 2026-11-02: 470 px tall, tabs
+SETTINGS, DEVICES, ROUTING and CREDITS, with the editor's texts and diagram.
 
 ### Manual check list
 
