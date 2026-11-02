@@ -233,7 +233,7 @@
 
 ### Dopo il piano: editor
 
-- [ ] **Scheda ROUTING nell'editor** (regola comune del 2026-10-23): schema fisso del percorso del segnale come nella preview `deep_throat_rack.html` (spec §10, voce "Scheda ROUTING"), con il modello di retro comune di `shared/ui`; da fare insieme all'editor.
+- [x] **Scheda ROUTING nell'editor** (regola comune del 2026-10-23): schema fisso del percorso del segnale come nella preview `deep_throat_rack.html` (spec §10, voce "Scheda ROUTING"), con il modello di retro comune di `shared/ui`; fatta nel piano dell'editor (`2026-10-24-deep-throat-gui.md`, Task 12; `src/ui/routing_diagram.h`).
 
 ---
 

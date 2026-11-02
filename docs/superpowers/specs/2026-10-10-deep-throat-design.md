@@ -1,7 +1,7 @@
 # Deep Throat — Design
 
 **Data:** 2026-10-10
-**Stato:** bozza per revisione
+**Stato:** implementato (motore audio ed editor, piani `2026-10-10-deep-throat.md` e `2026-10-24-deep-throat-gui.md`); prova manuale negli host da fare
 **Suite:** Fairy Tapes (channel strip vocale "tutto dentro")
 **Nome:** Deep Throat (deciso il 2026-10-10)
 
