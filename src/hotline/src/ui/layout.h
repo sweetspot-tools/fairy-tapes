@@ -232,11 +232,8 @@ struct PanelText {
 };
 
 constexpr float kRowTagX = kMeterFirstX - 12, kSectionTagX = kMeterFirstX - 34;
-// The shared kit (fairy_ui/meter_math.h: ledColor, PeakHold) hard-codes the -60..+6 dB range; it must equal the range the
-// processor publishes with (kMeterMinDb/kMeterMaxDb), so changing the constants fails the build instead of moving the
-// processor but not the editor.
-static_assert(kMeterMinDb == -60.0 && kMeterMaxDb - kMeterMinDb == 66.0,
-              "fairy_ui/meter_math.h assumes the -60..+6 dB meter range");
+// The editor gives every MeterBar the range the processor publishes with (kMeterMinDb..kMeterMaxDb), so the LED colours
+// and the fall of the held peak (fairy_ui/meter_math.h: ledColor, PeakHold) follow these constants.
 // LED under a dB scale label: the kMeterLeds LEDs span kMeterMinDb..kMeterMaxDb, so the index is
 // round(meterNormFromDb(db) * (kMeterLeds - 1)) (written constexpr here).
 constexpr int scaleLedIndex(int db) {

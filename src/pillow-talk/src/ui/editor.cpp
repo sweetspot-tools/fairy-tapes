@@ -79,7 +79,7 @@ constexpr float kDimmedAlpha = 0.35f;   // DESIGN_SYSTEM.md: dimmed parts at 35 
 constexpr int32_t kTapeEditTag = 9000;   // + slot; outside the parameter ids
 constexpr CCoord kTapeEditMinWidth = 120, kTapeEditHeight = 24;
 constexpr uint32_t kBackWearSalt = 0x77u;   // the back's wear: another pattern from the same seed (as The Stripper)
-constexpr double kPeakFallDbPerSecond = 20.0;   // fall of the held peak (MeterBar default)
+constexpr double kPeakFallDbPerSecond = 20.0;   // fall of the held peak in dB/s of kMeterScale (MeterBar default)
 
 bool sameBehaviour(const Behaviour& a, const Behaviour& b) {
   return a.displayWindow == b.displayWindow && a.displayPeaks == b.displayPeaks && a.tempoFallbackBpm == b.tempoFallbackBpm;
@@ -534,7 +534,7 @@ void Editor::createViews(CViewContainer* parent) {
   for (int i = 0; i < kMeterRowCount; ++i) {
     const MeterRow& row = kMeterRows[i];
     bars_[i] = new MeterBar(toCRect(meterBarRect(row)), row.gainReduction ? MeterKind::GainReduction : MeterKind::Level,
-                            kMeterLeds);
+                            kMeterLeds, kMeterScale);
     parent->addView(bars_[i]);
   }
   for (int i = 0; i < kClipCount; ++i) {
