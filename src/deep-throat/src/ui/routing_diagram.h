@@ -1,8 +1,9 @@
 // Deep Throat GUI: the ROUTING tab of the back (docs/DESIGN_SYSTEM.md, "Scheda ROUTING"; spec §8), transcribed call by
 // call from the approved preview (docs/mockups/deep_throat_rack.html, ROUTING tab). Order of the engine (engine.cpp): the
-// input gain, the lookahead delay, Rider, Breath, EQ, De-ess (first line), Comp, Tone, the two Listen taps, the output
-// gain (second line); the detection runs on the live (not delayed) input, stereo-linked mono, and drives the Rider and the
-// breath reducer (dashed control lines); the global BYPASS sends the delayed input to the output switch. Pure, tested.
+// input meter and clip on the raw input, the input gain, the lookahead delay, Rider, Breath, EQ, De-ess (first line), Comp,
+// Tone, the two Listen taps, the output gain (second line); the detection runs on the gained, live (not delayed) input,
+// stereo-linked mono, and drives the Rider and the breath reducer (dashed control lines); the global BYPASS sends the raw
+// input, delayed, to the output switch. Pure, tested.
 #pragma once
 
 #include "fairy_ui/routing.h"
@@ -20,16 +21,16 @@ inline FairyTapes::Ui::BackRouting deepThroatRouting() {
   const double Y1 = 178, YD = 300, Y2 = 424;
   const std::string y1 = s(Y1), yd = s(YD), y2 = s(Y2);
 
-  // line 1: input, lookahead delay, input gain, Rider, Breath, EQ, De-ess
+  // line 1: input meter and clip (raw input), input gain, lookahead delay, Rider, Breath, EQ, De-ess
   b.jack(60, Y1, "IN L \xC2\xB7 R");
-  b.ln("M69 " + y1 + " H98");
-  b.dot(82, Y1);
-  b.block(98, 176, Y1, 44, "DELAY", {"LOOKAHEAD"});
-  b.ln("M176 " + y1 + " H206");
-  b.dot(194, Y1);
-  b.amp(206, Y1, "INPUT");
-  b.ln("M234 " + y1 + " H268");
-  b.tap(250, Y1, 36, "IN METER", "CLIP IN");
+  b.ln("M69 " + y1 + " H112");
+  b.tap(86, Y1, 36, "IN METER", "CLIP IN");
+  b.dot(102, Y1);
+  b.amp(112, Y1, "INPUT");
+  b.ln("M140 " + y1 + " H172");
+  b.dot(154, Y1);
+  b.block(172, 250, Y1, 44, "DELAY", {"LOOKAHEAD"});
+  b.ln("M250 " + y1 + " H268");
   b.ln("M280 " + y1 + " H284");
   b.block(284, 364, Y1, 44, "RIDER", {"GAIN"});
   b.inSwitch(268, Y1, 382, 140);
@@ -57,13 +58,11 @@ inline FairyTapes::Ui::BackRouting deepThroatRouting() {
   b.arrow(910, 262);
   b.conn(920, 262, "C");
   b.txt("removed breath", 700, 256, 9, RoutingInk::Dim);
-  // detection: live (not delayed) input, stereo-linked mono; control lines into the Rider and the breath reducer
-  b.ln("M82 " + y1 + " V" + yd + " H100", true);
-  b.amp(100, YD, "INPUT");
-  b.ln("M128 " + yd + " H150", true);
-  b.block(150, 210, YD, 32, "L + R", {"MONO"});
-  b.ln("M210 " + yd + " H244 M226 " + yd + " V350 H244", true);
-  b.dot(226, YD);
+  // detection: gained, live (not delayed) input, stereo-linked mono; control lines into the Rider and the breath reducer
+  b.ln("M154 " + y1 + " V" + yd + " H160", true);
+  b.block(160, 220, YD, 32, "L + R", {"MONO"});
+  b.ln("M220 " + yd + " H244 M232 " + yd + " V350 H244", true);
+  b.dot(232, YD);
   b.block(244, 320, YD, 32, "LEVEL", {"RIDER METER"});
   b.ln("M320 " + yd + " H334 V207", true);
   b.arrowUp(334, 200);
@@ -75,8 +74,8 @@ inline FairyTapes::Ui::BackRouting deepThroatRouting() {
   b.ln("M400 332 V278 H342", true);
   b.arrowLeft(335, 278);
   b.txt("HOLD ON BREATH", 372, 272, 8, RoutingInk::Dim);
-  // global BYPASS: the delayed input straight to the output switch
-  b.ln("M194 " + y1 + " V120 H958 V360 H700 V" + s(Y2 - 16.6));
+  // global BYPASS: the raw input, delayed, straight to the output switch
+  b.ln("M102 " + y1 + " V120 H958 V360 H700 V" + s(Y2 - 16.6));
   b.txt("BYPASS", 300, 114, 9, RoutingInk::Dim);
   b.txt("output = input, delayed by the lookahead", 950, 352, 9, RoutingInk::Dim, RoutingAlign::End);
   // line 2: Comp, Tone, Listen, output gain, output switch
@@ -113,8 +112,8 @@ inline FairyTapes::Ui::BackRouting deepThroatRouting() {
   r.legend.symbols = {LegendSymbol::Module, LegendSymbol::GainStage, LegendSymbol::Switch, LegendSymbol::Jack,
                       LegendSymbol::Control, LegendSymbol::MeterPoint, LegendSymbol::Connector};
   r.legend.meterLabel = "meter / clip point";
-  r.legend.notes = {"SPEAK / SING / PUKE change the values inside the blocks (see MODES). LISTEN plays the DE-ESS band first, "
-                    "then the BREATH; off, the mix."};
+  r.legend.notes = {"SPEAK / SING / PUKE change the values inside the blocks (see MODES). LISTEN plays what DE-ESS or BREATH "
+                    "removes (BREATH wins); off, the mix."};
   return r;
 }
 

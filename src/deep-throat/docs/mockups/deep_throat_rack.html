@@ -598,10 +598,10 @@ var RT=(function(){
   return {ln:ln,arrow:arrow,arrowUp:arrowUp,arrowDown:arrowDown,arrowLeft:arrowLeft,dot:dot,ring:ring,jack:jack,amp:amp,block:block,inSwitch:inSwitch,tap:tap,conn:conn};})();
 box(24,102,952,388,'SIGNAL FLOW','top');
 (function(){var Y1=178,YD=300,Y2=424,L=RT.ln;
-  /* row 1: lookahead delay, input, rider, breath, eq, de-ess */
-  RT.jack(60,Y1,'IN L · R');L('M69 '+Y1+' H98');RT.dot(82,Y1);
-  RT.block(98,176,Y1,44,'DELAY',['LOOKAHEAD']);L('M176 '+Y1+' H206');RT.dot(194,Y1);
-  RT.amp(206,Y1,'INPUT');L('M234 '+Y1+' H268');RT.tap(250,Y1,36,'IN METER','CLIP IN');
+  /* row 1: input meter and clip (raw input), input gain, lookahead delay, rider, breath, eq, de-ess (engine.cpp) */
+  RT.jack(60,Y1,'IN L · R');L('M69 '+Y1+' H112');RT.tap(86,Y1,36,'IN METER','CLIP IN');RT.dot(102,Y1);
+  RT.amp(112,Y1,'INPUT');L('M140 '+Y1+' H172');RT.dot(154,Y1);
+  RT.block(172,250,Y1,44,'DELAY',['LOOKAHEAD']);L('M250 '+Y1+' H268');
   L('M280 '+Y1+' H284');RT.block(284,364,Y1,44,'RIDER',['GAIN']);RT.inSwitch(268,Y1,382,140);L('M364 '+Y1+' H396');
   L('M408 '+Y1+' H412');RT.block(412,492,Y1,44,'BREATH',['REDUCER']);RT.inSwitch(396,Y1,510,140);L('M492 '+Y1+' H524');
   L('M536 '+Y1+' H540');RT.block(540,620,Y1,44,'EQ',['HPF · MUD CUT']);RT.inSwitch(524,Y1,638,140);L('M620 '+Y1+' H652');
@@ -610,15 +610,15 @@ box(24,102,952,388,'SIGNAL FLOW','top');
   /* what the Listen buttons play: the band the de-esser removes, the part of the breath the reducer removes */
   L('M740 200 V240 H870');RT.arrow(870,240);RT.conn(880,240,'B');txt('removed band',806,234,9,DIMW,'middle',700);
   L('M480 200 V262 H910');RT.arrow(910,262);RT.conn(920,262,'C');txt('removed breath',700,256,9,DIMW,'middle',700);
-  /* detection: live (not delayed) input, stereo-linked mono; control lines into the rider and the breath reducer */
-  L('M82 '+Y1+' V'+YD+' H100',true);RT.amp(100,YD,'INPUT');L('M128 '+YD+' H150',true);
-  RT.block(150,210,YD,32,'L + R',['MONO']);L('M210 '+YD+' H244 M226 '+YD+' V350 H244',true);RT.dot(226,YD);
+  /* detection: gained, live (not delayed) input, stereo-linked mono; control lines into the rider and the breath reducer */
+  L('M154 '+Y1+' V'+YD+' H160',true);
+  RT.block(160,220,YD,32,'L + R',['MONO']);L('M220 '+YD+' H244 M232 '+YD+' V350 H244',true);RT.dot(232,YD);
   RT.block(244,320,YD,32,'LEVEL',['RIDER METER']);L('M320 '+YD+' H334 V207',true);RT.arrowUp(334,200);
   RT.block(244,356,350,36,'BREATH DETECTOR',['SPECTRAL / LEVEL']);L('M356 350 H380',true);
   RT.block(380,460,350,36,'MAX',['LOOKAHEAD']);L('M430 332 V207',true);RT.arrowUp(430,200);
   L('M400 332 V278 H342',true);RT.arrowLeft(335,278);txt('HOLD ON BREATH',372,272,8,DIMW,'middle',800);
-  /* global BYPASS: the delayed input straight to the output switch */
-  L('M194 '+Y1+' V120 H958 V360 H700 V'+(Y2-16.6));txt('BYPASS',300,114,9,DIMW,'middle',800);txt('output = input, delayed by the lookahead',950,352,9,DIMW,'end',700);
+  /* global BYPASS: the raw input, delayed, straight to the output switch */
+  L('M102 '+Y1+' V120 H958 V360 H700 V'+(Y2-16.6));txt('BYPASS',300,114,9,DIMW,'middle',800);txt('output = input, delayed by the lookahead',950,352,9,DIMW,'end',700);
   /* row 2: comp, tone, listen, output */
   RT.conn(60,Y2,'A');L('M70 '+Y2+' H90');
   L('M102 '+Y2+' H106');RT.block(106,236,Y2,48,'COMP',['RATIO · DIST','SC HPF ON DETECTOR']);RT.inSwitch(90,Y2,254,390);L('M236 '+Y2+' H290');RT.tap(270,Y2,26,'GR');
@@ -636,7 +636,7 @@ box(24,504,952,86,'LEGEND','top');
   L('M552 '+y+' H600',true);txt('control signal',608,y+4,10,DIMW,'start',700);
   RT.dot(712,y);L('M712 '+y+' V'+(y-12),false,1.4);txt('meter / clip point',722,y+4,10,DIMW,'start',700);
   RT.conn(858,y,'A');txt('continues',874,y+4,10,DIMW,'start',700);
-  txt('SPEAK / SING / PUKE change the values inside the blocks (see MODES). LISTEN plays the DE-ESS band first, then the BREATH; off, the mix.',50,y+34,11,DIMW,'start',700);})();
+  txt('SPEAK / SING / PUKE change the values inside the blocks (see MODES). LISTEN plays what DE-ESS or BREATH removes (BREATH wins); off, the mix.',50,y+34,11,DIMW,'start',700);})();
 CUR=null;BOXOVR=null;showTab(lsGet('dt_tab','settings'));
 ROOT=svg;
 setMode(MODE);

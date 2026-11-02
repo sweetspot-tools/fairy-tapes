@@ -32,8 +32,6 @@ In engine order:
 
 Bypass replaces everything with the input, delayed by the same latency.
 
-The diagram simplifies two points. It draws the delay before the Input stage, while the engine applies the Input gain before the delay (see Technical notes). It draws IN METER and CLIP IN after Input, while the engine measures input peaks and clipping before the Input gain.
-
 ### The blocks in detail
 
 - **Rider:** automatic level rider. It works on level only (200 ms RMS window), never on pitch. It moves the gain toward the Target by at most ±Range dB, with a limited slope. It holds still where Breath control detects a breath and when the level is below -60 dB.

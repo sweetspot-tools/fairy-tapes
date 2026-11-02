@@ -1278,6 +1278,22 @@ void test_routing_diagram_blocks_in_engine_order() {
   ASSERT_TRUE(r.legend.symbols.size() == 7 && r.legend.notes.size() == 1);
 }
 
+// Engine order at the input (engine.cpp): the input peaks and the input clip are read on the raw input, then the Input gain,
+// then the lookahead delay; the detection taps the gained, not delayed signal. Listen: Breath Listen wins over De-ess Listen.
+void test_routing_diagram_input_side_follows_the_engine() {
+  const auto r = deepThroatRouting();
+  const auto& d = r.flow;
+  ASSERT_TRUE(countText(d, "INPUT") == 1);   // one Input gain stage, shared by the audio path and the detection
+  const RoutingPrim* meter = findText(d, "IN METER");
+  const RoutingPrim* input = findText(d, "INPUT");
+  const RoutingPrim* delay = findText(d, "DELAY");
+  ASSERT_TRUE(meter != nullptr && input != nullptr && delay != nullptr);
+  ASSERT_TRUE(meter->x < input->x && input->x < delay->x);
+  std::string notes;
+  for (const auto& n : r.legend.notes) notes += n;
+  ASSERT_TRUE(notes.find("BREATH wins") != std::string::npos && notes.find("DE-ESS band first") == std::string::npos);
+}
+
 void test_routing_diagram_inside_panel() {
   const auto& L = FairyTapes::Ui::backLayoutFor(kEditorHeight);
   const auto r = deepThroatRouting();
@@ -1444,6 +1460,7 @@ int main() {
   RUN_TEST(test_modes_follow_table_edit);
   RUN_TEST(test_active_mode_column);
   RUN_TEST(test_routing_diagram_blocks_in_engine_order);
+  RUN_TEST(test_routing_diagram_input_side_follows_the_engine);
   RUN_TEST(test_routing_diagram_inside_panel);
   RUN_TEST(test_credits_entries);
   RUN_TEST(test_no_brand_in_user_facing_strings);
