@@ -247,7 +247,7 @@
 
 ### Task 12 (2026-11-02): modo LATENCY Mix / Live (spec §9b)
 
-- [ ] Test che falliscono: latenza 0 in LIVE e D in MIX, rilevatore a livello in LIVE anche in Speak/Sing, stato v3 con MIX di default per v1/v2, cambio che chiede `kLatencyChanged`.
-- [ ] Motore e processor: look-ahead 0 e rilevatore a livello in LIVE; latenza riportata.
-- [ ] Editor: riga LATENCY in BEHAVIOUR (MIX / LIVE), scritta `LEVEL DETECTOR · LIVE` in ambra sul fronte; preview allineata; ROUTING `LOOKAHEAD · MIX ONLY`.
-- [ ] README, render delle immagini, test verdi.
+- [x] Test che falliscono: latenza 0 in LIVE e D in MIX, rilevatore a livello in LIVE anche in Speak/Sing, stato v3 con MIX di default per v1/v2, cambio che chiede `kLatencyChanged` (`test_engine_live_*`, `test_state_v3_*`, `test_state_v1_v2_load_as_mix`; `test_processor_latency` e `test_controller_latency_restart` sul modulo; `test_settings_latency_row`, `test_live_detector_text`; `test_latency_setting_on_back_and_front` nell'editor).
+- [x] Motore e processor: look-ahead 0 e rilevatore a livello in LIVE; latenza riportata (applicata in `setupProcessing` / `setActive`).
+- [x] Editor: riga LATENCY in BEHAVIOUR (MIX / LIVE), scritta `LEVEL DETECTOR · LIVE` in ambra nel riquadro MODE (sigla di BREATH `LEVEL`); preview allineata; ROUTING `LOOKAHEAD` / `MIX ONLY` su due righe. Dettagli e scelte nella spec §9b.
+- [x] README, render delle immagini (`routing.png` rigenerata dalla preview; fronte LIVE e retro SETTINGS dal render tool, opzione nuova `latency=mix|live`), test verdi (2026-11-02).
