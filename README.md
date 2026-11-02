@@ -119,6 +119,26 @@ uploads one artifact per plug-in and system: `the-stripper-<os>`, `pillow-talk-<
 To use a build: open the run, **Summary**, **Artifacts**, download the one for your system, unzip it and copy the
 `.vst3` folder into your host's VST3 folder.
 
+## Releases
+
+One GitHub release per plug-in, built by [.github/workflows/release.yml](.github/workflows/release.yml):
+
+- **Tag:** `<plugin>-v<MAJOR.MINOR.PATCH>`, with `<plugin>` the folder under `src/` (`the-stripper-v1.2.0`,
+  `happy-ending-v1.0.0`), pushed on a commit that is on `master`.
+- **Version:** the tag must match `project(<Bundle> VERSION x.y.z)` in `src/<plugin>/CMakeLists.txt` and the string in
+  `src/<plugin>/src/version.h`; raise both in the same commit before tagging.
+- **Assets:** one zip per platform, `<Bundle>-<version>-<platform>.zip` with `<platform>` = `windows`, `macos` or
+  `linux` (`TheStripper-1.2.0-windows.zip`). Each holds the `.vst3` bundle, `LICENSE`, `THIRD_PARTY.md` and `LICENSES/`.
+  The Sweetspot Tools website builds its download buttons from these names, so the workflow refuses any other name.
+
+```bash
+git tag the-stripper-v1.2.0 master
+git push origin the-stripper-v1.2.0
+```
+
+The naming rule and the packing live in [tools/release/release.py](tools/release/release.py) (tests:
+`python -m pytest tools/release`). macOS builds are not signed or notarized yet.
+
 ## Repository layout
 
 - **`src/`**: one folder per plug-in, with its README, `docs/` (notes, HTML preview of the panel, images) and `tests/`.

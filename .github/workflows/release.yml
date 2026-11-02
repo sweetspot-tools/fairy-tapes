@@ -1,0 +1,130 @@
+# Fairy Tapes — one GitHub release per plug-in.
+# Push a tag <plugin>-v<MAJOR.MINOR.PATCH> on a commit of master (e.g. the-stripper-v1.2.0); the version must match
+# project(VERSION) in src/<plugin>/CMakeLists.txt and src/<plugin>/src/version.h. The workflow builds that plug-in on
+# Linux, Windows and macOS and publishes <Bundle>-<version>-<windows|macos|linux>.zip, each with the bundle, LICENSE,
+# THIRD_PARTY.md and LICENSES/. The website reads these names: the rule is in tools/release/release.py and is checked
+# before publishing.
+
+name: Release
+
+on:
+  push:
+    tags: ['*-v*']
+
+permissions:
+  contents: write
+
+jobs:
+  meta:
+    runs-on: ubuntu-24.04
+    outputs:
+      slug: ${{ steps.info.outputs.slug }}
+      bundle: ${{ steps.info.outputs.bundle }}
+      target: ${{ steps.info.outputs.target }}
+      version: ${{ steps.info.outputs.version }}
+      title: ${{ steps.info.outputs.title }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Test the release helper
+        run: |
+          pip install pytest
+          python -m pytest -q tools/release
+
+      - name: Read the tag
+        id: info
+        run: python tools/release/release.py info "$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: The tagged commit is on master
+        run: |
+          git fetch origin master
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/master || {
+            echo "::error::$GITHUB_REF_NAME is not on master: release only from master"; exit 1; }
+
+  build:
+    needs: meta
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - platform: linux
+            runner: ubuntu-24.04
+          - platform: windows
+            runner: windows-latest
+          - platform: macos
+            runner: macos-latest
+    runs-on: ${{ matrix.runner }}
+    env:
+      ASSET: ${{ needs.meta.outputs.bundle }}-${{ needs.meta.outputs.version }}-${{ matrix.platform }}.zip
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Same packages as build.yml.
+      - name: Install VSTGUI dependencies (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libcairo2-dev libfreetype-dev libfontconfig1-dev libpango1.0-dev \
+            libxcb1-dev libxcb-util-dev libxcb-cursor-dev libxcb-keysyms1-dev libxcb-xkb-dev \
+            libxkbcommon-dev libxkbcommon-x11-dev \
+            libx11-dev libx11-xcb-dev libwayland-dev wayland-protocols \
+            libglib2.0-dev libgtkmm-3.0-dev libsqlite3-dev libexpat1-dev
+
+      - name: Configure (Windows)
+        if: matrix.platform == 'windows'
+        run: cmake -B build -A x64
+
+      - name: Configure (Linux, macOS)
+        if: matrix.platform != 'windows'
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build the plug-in
+        run: cmake --build build --config Release --target ${{ needs.meta.outputs.target }}
+
+      - name: Pack
+        shell: bash
+        run: python tools/release/release.py pack "dist/${{ needs.meta.outputs.bundle }}.vst3" "$ASSET"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ASSET }}
+          path: ${{ env.ASSET }}
+          if-no-files-found: error
+
+  publish:
+    needs: [meta, build]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+
+      - name: Check the asset names
+        run: python3 tools/release/release.py check assets/*
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" assets/* --verify-tag \
+            --title "${{ needs.meta.outputs.title }} ${{ needs.meta.outputs.version }}" \
+            --notes "${{ needs.meta.outputs.title }} ${{ needs.meta.outputs.version }} for Windows, macOS and Linux (VST3). Unzip and copy the .vst3 folder into your VST3 plug-in folder. Licences are in the zip; source code: this tag."
