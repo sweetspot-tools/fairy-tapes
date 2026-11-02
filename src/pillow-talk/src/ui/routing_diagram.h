@@ -58,12 +58,14 @@ inline FairyTapes::Ui::BackRouting pillowRouting() {
   b.ring(266, YC);
   b.ln("M266 " + s(YC) + " L252.5 " + s(YC + 1), false, 1.8);
   b.txt("SIDECHAIN", 258, YC - 10, 9, RoutingInk::Dim);
-  b.ln("M268.6 " + s(YC) + " H300");
-  b.tap(284, YC, 16, "VOICE");
-  b.block(300, 440, YC, 40, "AUTO DUCK", {"DETECTOR"});
-  b.ln("M440 " + s(YC) + " H484 V242", true);
+  b.ln("M268.6 " + s(YC) + " H298");
+  b.block(298, 346, YC, 40, "BAND", {"VOCAL"});   // the detector's band-pass on the vocal range
+  b.ln("M346 " + s(YC) + " H366");
+  b.tap(356, YC, 16, "VOICE");                   // the display's voice: the envelope after the band-pass
+  b.block(366, 452, YC, 40, "AUTO DUCK", {"DETECTOR"});
+  b.ln("M452 " + s(YC) + " H484 V242", true);
   b.arrowUp(484, 236);
-  b.tap(462, YC, 16, "SEND LEVEL");
+  b.tap(468, YC, 16, "SEND LEVEL");
 
   FairyTapes::Ui::BackRouting r;
   r.flow = b.take();

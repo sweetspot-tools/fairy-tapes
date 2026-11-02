@@ -574,9 +574,9 @@ box(24,102,952,250,'SIGNAL FLOW','top');
   /* detector: the input or the sidechain (SIDECHAIN switch, default off), then the gain sent to DUCK */
   L('M150 '+YC+' H247.4');RT.jack(60,YC+14,'SC IN');L('M69 '+(YC+14)+' H247.4');
   RT.ring(250,YC);RT.ring(250,YC+14);RT.ring(266,YC);L('M266 '+YC+' L252.5 '+(YC+1),false,1.8);txt('SIDECHAIN',258,YC-10,9,DIMW,'middle',800);
-  L('M268.6 '+YC+' H300');RT.tap(284,YC,16,'VOICE');
-  RT.block(300,440,YC,40,'AUTO DUCK',['DETECTOR']);
-  L('M440 '+YC+' H484 V242',true);RT.arrowUp(484,236);RT.tap(462,YC,16,'SEND LEVEL');})();
+  L('M268.6 '+YC+' H298');RT.block(298,346,YC,40,'BAND',['VOCAL']);L('M346 '+YC+' H366');RT.tap(356,YC,16,'VOICE');
+  RT.block(366,452,YC,40,'AUTO DUCK',['DETECTOR']);
+  L('M452 '+YC+' H484 V242',true);RT.arrowUp(484,236);RT.tap(468,YC,16,'SEND LEVEL');})();
 box(24,366,952,82,'LEGEND','top');
 (function(){var y=398,L=RT.ln;
   el('rect',{x:50,y:y-12,width:34,height:24,rx:3,fill:'none',stroke:W,'stroke-width':2});txt('module',92,y+4,10,DIMW,'start',700);
