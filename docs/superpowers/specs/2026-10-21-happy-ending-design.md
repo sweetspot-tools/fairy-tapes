@@ -2,7 +2,7 @@
 
 **Data:** 2026-10-21
 **Stato:** decisioni chiuse il 2026-10-24 (brainstorming dal 2026-10-15); motore audio e plugin VST3 realizzati
-**Avanzamento:** motore audio e plugin VST3 fatti (Task 1-13 del piano `docs/superpowers/plans/2026-10-24-happy-ending.md`); taratura a orecchio in attesa dell'utente (Task 14); editor con piano a parte.
+**Avanzamento:** motore audio e plugin VST3 fatti (Task 1-13 e 15 del piano `docs/superpowers/plans/2026-10-24-happy-ending.md`); taratura a orecchio in attesa dell'utente (Task 14); editor con piano a parte.
 **Suite:** Fairy Tapes (catena di mastering "tutto dentro")
 **Nome:** Happy Ending (deciso il 2026-10-21); cartella `src/happy-ending/`, bundle `HappyEnding.vst3`
 **Preview:** `src/happy-ending/docs/mockups/happy_ending_rack.html` (anche nella pagina `docs/mockups/index.html`)
@@ -178,7 +178,9 @@ Nessuna decisione di progetto aperta (chiuse il 2026-10-24: LOUDNESS sopra i com
 
 - **Taratura a orecchio** (§9, Task 14 del piano): soglia e tempi del DYN, basi di release degli stili, soglia di SET, curva della LOUDNESS, passo di MATCH, ascolto finale di FINE EQ e GLUE con tutta la catena, in un host. Tocca all'utente; i valori di `tuning.h` sono quelli di partenza.
 - **Verifica della latenza in un host reale** (REAPER, Bitwig): che la compensazione di ritardo dichiarata (69/76 campioni di oversampler più i look-ahead) allinei davvero la traccia, anche cambiando OVERSAMPLING; finora provata solo con i test del motore e del processor.
-- **Licenze:** controllo sui file `LICENSE` dei componenti prima del rilascio (§8); l'elenco va ripreso nei CREDITS dell'editor (piano a parte).
+- **Licenze:** i file `LICENSE` dei progetti d'origine ai commit fissati sono stati controllati il 2026-11-02 (Dusk Audio GPL-3.0, Airwindows MIT, ZLInflator GPL-3.0, VST 3 SDK MIT); l'elenco va ripreso nei CREDITS dell'editor (piano a parte).
+- **Valore mostrato da RELEASE** (§5.5, emerso il 2026-11-02): la spec dice che il valore mostra i ms reali, il controller mostra "Style" e −4…+4. Scegliere quale dei due vale.
+- **Scheda ROUTING della preview contro il motore** (2026-11-02, da sistemare prima dell'editor): (a) SC HPF di GLUE è disegnato su una linea feed-forward dall'ingresso di GLUE, ma il rilevatore è in feedback (uscita compressa precedente, filtrata; `dsp/glue.cpp`); (b) le linee di LOUDNESS e CEILING entrano solo nel CLIP di FINAL, ma nel codice LOUDNESS spinge anche l'EFFECT di INFLATE e CEIL è anche il fondo scala di INFLATE; (c) mancano le due zone di oversampling e il limiter di sicurezza con la guardia del tetto dopo OUTPUT.
 - **Editor grafico:** piano a parte, da scrivere.
 
 ## 12. Storia del brainstorming
