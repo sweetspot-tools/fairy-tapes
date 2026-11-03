@@ -37,6 +37,7 @@ int g_passed = 0;
 
 constexpr std::size_t kHeaderBytes = 4;
 constexpr std::size_t kV1Bytes = kHeaderBytes + sizeof(double) * kNumParams;
+constexpr std::size_t kV2ParamBytes = kHeaderBytes + 4 + sizeof(double) * kNumParams;   // version, count, values
 constexpr std::size_t kEmptyDecorBytes = 4 + 4 * 4 + 4;   // seed + 4 angles + text count
 
 // A version-1 blob built by hand (the layout older builds wrote): int32 1, then the values as float64.
@@ -109,7 +110,7 @@ void testRoundTrip() {
   }
   std::vector<uint8_t> bytes;
   serializeState(in, Decor{}, bytes);
-  ASSERT_TRUE(bytes.size() == kV1Bytes + kEmptyDecorBytes);
+  ASSERT_TRUE(bytes.size() == kV2ParamBytes + kEmptyDecorBytes);
   loadDefaults(out);
   Decor d;
   ASSERT_TRUE(deserializeState(bytes.data(), bytes.size(), out, d));
@@ -154,14 +155,14 @@ void testRejectsUnknownVersion() {
 }
 
 void testListenAndSetNotStored() {
-  // The blob is exactly the version, kNumParams values and the decor: nothing for the hidden session parameters,
+  // The blob is exactly the version, the count, kNumParams values and the decor: nothing for the hidden session parameters,
   // whose IDs lie beyond the table.
   ASSERT_TRUE(static_cast<int>(kListenBand) >= kNumParams && static_cast<int>(kSetActive) >= kNumParams);
   double in[kNumParams];
   loadDefaults(in);
   std::vector<uint8_t> bytes;
   serializeState(in, Decor{}, bytes);
-  ASSERT_TRUE(bytes.size() == kHeaderBytes + sizeof(double) * kNumParams + kEmptyDecorBytes);
+  ASSERT_TRUE(bytes.size() == kV2ParamBytes + kEmptyDecorBytes);
   // The session parameters start at LISTEN off (-1) and SET off.
   ASSERT_TRUE(listenFromNorm(normFromListen(-1)) == -1);
   ASSERT_TRUE(kDefaultListenNorm == normFromListen(-1) && kDefaultSetNorm == 0.0);
@@ -228,8 +229,10 @@ void testLayoutIsLittleEndianVersionTwo() {
   serializeState(in, Decor{}, bytes);
   ASSERT_TRUE(kStateVersion == 2);
   ASSERT_TRUE(bytes[0] == 2 && bytes[1] == 0 && bytes[2] == 0 && bytes[3] == 0);
+  // the parameter count follows the version
+  ASSERT_TRUE(bytes[4] == kNumParams && bytes[5] == 0 && bytes[6] == 0 && bytes[7] == 0);
   double first;
-  std::memcpy(&first, bytes.data() + kHeaderBytes, sizeof first);  // little-endian host assumed by the test only
+  std::memcpy(&first, bytes.data() + kHeaderBytes + 4, sizeof first);  // little-endian host assumed by the test only
   ASSERT_TRUE(first == in[0]);
   // the decor follows the parameters: uint32 seed (here 0x01020304), 4 float32 angles, uint32 text count, texts
   Decor d;
@@ -237,8 +240,8 @@ void testLayoutIsLittleEndianVersionTwo() {
   d.screwAngles[0] = 1.f;
   d.tapeTexts = {"AB"};
   serializeState(in, d, bytes);
-  const std::size_t at = kV1Bytes;
-  ASSERT_TRUE(bytes.size() == kV1Bytes + kEmptyDecorBytes + 4 + 2);
+  const std::size_t at = kV2ParamBytes;
+  ASSERT_TRUE(bytes.size() == kV2ParamBytes + kEmptyDecorBytes + 4 + 2);
   ASSERT_TRUE(bytes[at] == 4 && bytes[at + 1] == 3 && bytes[at + 2] == 2 && bytes[at + 3] == 1);
   float angle;
   std::memcpy(&angle, bytes.data() + at + 4, sizeof angle);
@@ -253,7 +256,7 @@ void test_state_v2_roundtrip() {
   const Decor decor = sampleDecor();
   std::vector<uint8_t> bytes;
   serializeState(in, decor, bytes);
-  ASSERT_TRUE(bytes.size() > kV1Bytes + kEmptyDecorBytes);
+  ASSERT_TRUE(bytes.size() > kV2ParamBytes + kEmptyDecorBytes);
   ASSERT_TRUE(bytes.size() <= kMaxStateBytes);
   loadDefaults(out);
   Decor got;
@@ -266,7 +269,66 @@ void test_state_v2_roundtrip() {
   Decor g2;
   ASSERT_TRUE(deserializeDecor(db.data(), db.size(), g2));
   ASSERT_TRUE(sameDecor(g2, decor));
-  ASSERT_TRUE(db.size() + kV1Bytes == bytes.size());
+  ASSERT_TRUE(db.size() + kV2ParamBytes == bytes.size());
+}
+
+// A v2 blob as a build whose table has `count` parameters would write it: version, count, `count` values (the first
+// kNumParams from `norm`, the rest = `extra`), then the decor.
+std::vector<uint8_t> v2BlobWithCount(const double* norm, uint32_t count, double extra, const Decor& d) {
+  std::vector<uint8_t> out;
+  detail::putLE(out, 2u, 4);
+  detail::putLE(out, count, 4);
+  for (uint32_t i = 0; i < count; ++i) {
+    const double v = i < static_cast<uint32_t>(kNumParams) ? norm[i] : extra;
+    uint64_t bits;
+    std::memcpy(&bits, &v, sizeof bits);
+    detail::putLE(out, bits, 8);
+  }
+  serializeDecor(d, out);
+  return out;
+}
+
+void test_state_v2_fewer_params_than_the_build() {
+  // An older build wrote a shorter table: those parameters load, the others keep their defaults, the decor is kept.
+  double in[kNumParams], out[kNumParams], defaults[kNumParams];
+  nonDefaultNorms(in);
+  loadDefaults(defaults);
+  loadDefaults(out);
+  const Decor decor = sampleDecor();
+  const uint32_t older = kNumParams - 3;
+  const std::vector<uint8_t> blob = v2BlobWithCount(in, older, 0.5, decor);
+  Decor got;
+  ASSERT_TRUE(deserializeState(blob.data(), blob.size(), out, got));
+  for (int i = 0; i < kNumParams; ++i) ASSERT_TRUE(out[i] == (i < static_cast<int>(older) ? in[i] : defaults[i]));
+  ASSERT_TRUE(sameDecor(got, decor));
+}
+
+void test_state_v2_more_params_than_the_build() {
+  // A newer build wrote a longer table: the extra parameters are skipped and the decor is read after them (not the
+  // first extra value taken for the seed).
+  double in[kNumParams], out[kNumParams];
+  nonDefaultNorms(in);
+  loadDefaults(out);
+  const Decor decor = sampleDecor();
+  const std::vector<uint8_t> blob = v2BlobWithCount(in, kNumParams + 2, 0.75, decor);
+  ASSERT_TRUE(blob.size() <= kMaxStateBytes);   // the reader does not cut it
+  Decor got;
+  ASSERT_TRUE(deserializeState(blob.data(), blob.size(), out, got));
+  ASSERT_TRUE(sameNorms(in, out));
+  ASSERT_TRUE(sameDecor(got, decor));
+  // the extra block cut: parameters load, default decor
+  const std::vector<uint8_t> cut(blob.begin(), blob.begin() + static_cast<std::ptrdiff_t>(kV2ParamBytes + 8 + 3));
+  loadDefaults(out);
+  got = sampleDecor();
+  ASSERT_TRUE(deserializeState(cut.data(), cut.size(), out, got));
+  ASSERT_TRUE(sameNorms(in, out) && isDefaultDecor(got));
+  // an absurd count does not overflow or read outside: parameters load, default decor
+  std::vector<uint8_t> huge = blob;
+  for (int k = 4; k < 8; ++k) huge[static_cast<std::size_t>(k)] = 0xFF;
+  loadDefaults(out);
+  got = sampleDecor();
+  ASSERT_TRUE(deserializeState(huge.data(), huge.size(), out, got));
+  ASSERT_TRUE(sameNorms(in, out) && isDefaultDecor(got));
 }
 
 void test_state_v1_loads_with_default_decor() {
@@ -302,9 +364,9 @@ void test_state_v2_corrupt_decor() {
   };
 
   // decor cut at every length, from none of it to one byte short
-  for (std::size_t n = kV1Bytes; n < blob.size(); ++n) ASSERT_TRUE(loadsParamsWithDefaultDecor(blob, n));
+  for (std::size_t n = kV2ParamBytes; n < blob.size(); ++n) ASSERT_TRUE(loadsParamsWithDefaultDecor(blob, n));
 
-  const std::size_t countAt = kV1Bytes + 4 + 16;
+  const std::size_t countAt = kV2ParamBytes + 4 + 16;
   std::vector<uint8_t> bad(blob.begin(), blob.begin() + static_cast<std::ptrdiff_t>(countAt));   // huge text count
   detail::putLE(bad, 0xFFFFFFFFull, 4);
   bad.insert(bad.end(), blob.begin() + static_cast<std::ptrdiff_t>(countAt) + 4, blob.end());
@@ -326,7 +388,7 @@ void test_state_v2_corrupt_decor() {
   loadDefaults(out);
   Decor d = sampleDecor();
   const int kept = 10;
-  ASSERT_TRUE(deserializeState(blob.data(), kHeaderBytes + sizeof(double) * kept + 3, out, d));
+  ASSERT_TRUE(deserializeState(blob.data(), kHeaderBytes + 4 + sizeof(double) * kept + 3, out, d));
   for (int i = 0; i < kNumParams; ++i) ASSERT_TRUE(out[i] == (i < kept ? in[i] : defaults[i]));
   ASSERT_TRUE(isDefaultDecor(d));
 
@@ -450,6 +512,8 @@ int main() {
   RUN_TEST(testExtraBytesIgnoredAndValuesSanitized);
   RUN_TEST(testLayoutIsLittleEndianVersionTwo);
   RUN_TEST(test_state_v2_roundtrip);
+  RUN_TEST(test_state_v2_fewer_params_than_the_build);
+  RUN_TEST(test_state_v2_more_params_than_the_build);
   RUN_TEST(test_state_v1_loads_with_default_decor);
   RUN_TEST(test_state_v2_corrupt_decor);
   RUN_TEST(test_decor_sanitised);

@@ -11,7 +11,7 @@ Happy Ending is a mastering chain for the master bus, in VST3 format. It puts th
 ## When to use it
 
 - **Finishing a mix.** Put it last on the master bus for a final EQ touch, some glue and the final push to the ceiling.
-- **Hitting a streaming loudness target.** Pick a TARGET (−14, −11, −9 or −7 LUFS), set CEIL to −1.0 dB as the streaming margin and raise LOUDNESS. With the editor, MATCH will set LOUDNESS for you.
+- **Hitting a streaming loudness target.** Pick a TARGET (−14, −11, −9 or −7 LUFS), set CEIL to −1.0 dB as the streaming margin and raise LOUDNESS. MATCH sets LOUDNESS for you.
 - **A quick reference master.** Every stage except METALHEAD is on at load, with values meant for a master. Raise LOUDNESS, and flip BYPASS to hear the mix as it was.
 - **Mid/side clean-up.** Every FINE EQ band can work on stereo, mid or side. On SIDE the high pass switches to a mono-bass scale (60 to 200 Hz).
 - **Extreme loudness.** METALHEAD adds a brickwall after the final stage, for genres that want it.

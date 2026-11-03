@@ -456,7 +456,7 @@ void test_state_round_trip_and_session_parameters_not_stored() {
 
   VecStream s;
   CHECK(h.comp->getState(&s) == kResultOk);
-  CHECK(s.data.size() == kStateSizeV1 + 4 + 4 * kNumScrews + 4);   // parameters, seed, angles, no texts: nothing for LISTEN / SET
+  CHECK(s.data.size() == kStateSizeV2 + 4 + 4 * kNumScrews + 4);   // parameters, seed, angles, no texts: nothing for LISTEN / SET
   double norm[kNumParams];
   Decor decor;
   CHECK(deserializeState(s.data.data(), s.data.size(), norm, decor));

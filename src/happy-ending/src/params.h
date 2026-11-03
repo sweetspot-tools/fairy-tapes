@@ -4,6 +4,8 @@
  * Every control is stepped. A parameter has `steps` positions (index 0..steps-1) and is
  * normalized as index / (steps - 1). The order of ParamID is frozen (it is the saved state
  * and the automation identity): never reorder, only append before kNumParams if ever needed.
+ * The v2 state stores the parameter count (state.h), so a blob from a build with a longer or shorter
+ * table still loads: missing parameters get their defaults, extra ones are skipped.
  */
 
 #pragma once
@@ -90,7 +92,7 @@ inline int listenFromNorm(double norm) {
 }
 
 // Display parameters (processor -> editor): hidden, read-only, outside the stored table. Values are
-// normalized as in display.h (peaks over -60..0 dB, GR over 0..12 dB, LUFS over -60..0, clip 0/1; the
+// normalized as in display.h (peaks over -60..+6 dB, GR over 0..12 dB, LUFS over -60..0, clip 0/1; the
 // stage inputs over -60..+12 dB, the LIMIT threshold over -12..0 dB).
 // kClearClips and kResetIntegrated are the only writable ones: the editor sets 1, the processor does
 // the action on the audio thread and writes 0 back (the acknowledgement).

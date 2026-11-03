@@ -3,16 +3,20 @@
  *
  * Layout, little endian:
  *   v1: int32 version, then the kNumParams normalized values as float64 in ParamID order.
- *   v2: v1, then the instance decor: uint32 seed, 4 x float32 screw angles (degrees, the user's rotation added to the
- *       seeded one), uint32 text count, then per text uint32 length + bytes.
+ *   v2: int32 version, uint32 parameter count N, N normalized values as float64 in ParamID order, then the instance
+ *       decor: uint32 seed, 4 x float32 screw angles (degrees, the user's rotation added to the seeded one), uint32
+ *       text count, then per text uint32 length + bytes. The count makes the decor findable whatever the table size
+ *       of the build that wrote it.
  * LISTEN and SET (kListenBand, kSetActive) are session parameters with IDs beyond the table and are never stored,
  * so a project always opens with LISTEN off and SET off. OVERSAMPLING (kOversampling) is stored: it is a project
  * setting.
  *
- * Parameters: the table is frozen and only ever grows at the end (params.h), so an older blob is simply shorter:
- * what is there loads, the parameters beyond it keep their defaults. A version other than 1 or 2 or a blob that
- * cannot hold the version is refused. Values are sanitized: clamped to [0, 1], a non-finite value keeps its default.
- * Bytes after the known layout are ignored (a newer build may append data).
+ * Parameters: the table is frozen and only ever grows at the end (params.h). A v2 blob written by an older build holds
+ * fewer parameters (N < kNumParams): they load, the others keep their defaults; one written by a newer build holds
+ * more (N > kNumParams): the extra ones are skipped and the decor is read after them. A v1 blob has no count: it
+ * loads what it holds (v1 was never written by a build with a larger table). A version other than 1 or 2 or a blob
+ * that cannot hold the version is refused. Values are sanitized: clamped to [0, 1], a non-finite value keeps its
+ * default. Bytes after the known layout are ignored (a newer build may append data).
  *
  * Decor: v1 gives the default decor (seed 0 = "none yet": the caller generates one with ensureSeed, never on the
  * audio thread, and saves it with the next getState). Everything read is sanitized: non-finite angles become 0 and
@@ -43,6 +47,12 @@ namespace FairyTapes::HappyEnding {
 constexpr std::int32_t kStateVersion = 2;
 constexpr std::size_t kStateHeaderBytes = sizeof(std::int32_t);
 constexpr std::size_t kStateSizeV1 = kStateHeaderBytes + sizeof(double) * kNumParams;
+constexpr std::size_t kStateHeaderBytesV2 = kStateHeaderBytes + sizeof(std::uint32_t);   // version + parameter count
+// Size of the version and parameter block of a v2 blob that stores `count` parameters.
+constexpr std::size_t stateParamBlockBytesV2(std::size_t count) { return kStateHeaderBytesV2 + sizeof(double) * count; }
+constexpr std::size_t kStateSizeV2 = stateParamBlockBytesV2(kNumParams);
+// Room for the parameters a newer build may add (readers stop at kMaxStateBytes).
+constexpr std::size_t kMaxFutureParams = 64;
 
 constexpr int kNumScrews = 4;
 constexpr int kMaxTapeTexts = 6;
@@ -52,7 +62,7 @@ constexpr std::uint32_t kMaxStoredTexts = 64;   // more announced texts: corrupt
 constexpr std::uint32_t kMaxStoredTextBytes = 256;
 // Upper bound of a valid v2 blob (readers stop there).
 constexpr std::size_t kMaxStateBytes =
-    kStateSizeV1 + 4 + 4 * kNumScrews + 4 + kMaxStoredTexts * (4 + kMaxStoredTextBytes);
+    stateParamBlockBytesV2(kNumParams + kMaxFutureParams) + 4 + 4 * kNumScrews + 4 + kMaxStoredTexts * (4 + kMaxStoredTextBytes);
 
 // Per-instance data saved with the project that is not a parameter (no automation): the wear seed, the user's screw
 // rotations and tape texts. One blob, one message.
@@ -187,8 +197,9 @@ inline bool deserializeDecor(const std::uint8_t* data, std::size_t size, Decor& 
 // norm: kNumParams normalized values in ParamID order. Clears `out` first. Always writes v2.
 inline void serializeState(const double* norm, const Decor& decor, std::vector<std::uint8_t>& out) {
   out.clear();
-  out.reserve(kStateSizeV1 + 64);
+  out.reserve(kStateSizeV2 + 64);
   detail::putLE(out, static_cast<std::uint32_t>(kStateVersion), 4);
+  detail::putLE(out, static_cast<std::uint32_t>(kNumParams), 4);
   for (int i = 0; i < static_cast<int>(kNumParams); ++i) {
     std::uint64_t bits;
     std::memcpy(&bits, &norm[i], sizeof bits);
@@ -206,16 +217,25 @@ inline bool deserializeState(const std::uint8_t* data, std::size_t size, double*
   if (version < 1 || version > static_cast<std::uint64_t>(kStateVersion)) return false;
   double tmp[kNumParams];
   loadDefaults(tmp);
-  const std::size_t stored = std::min<std::size_t>((size - kStateHeaderBytes) / sizeof(double), kNumParams);
+  // v1 has no count: the values are whatever follows the version. v2 announces them.
+  std::size_t announced = (size - kStateHeaderBytes) / sizeof(double);
+  std::size_t first = kStateHeaderBytes;
+  if (version >= 2) {
+    if (size < kStateHeaderBytesV2) return false;
+    announced = static_cast<std::size_t>(detail::getLE(data + kStateHeaderBytes, 4));
+    first = kStateHeaderBytesV2;
+  }
+  const std::size_t present = std::min<std::size_t>(announced, (size - first) / sizeof(double));   // a cut blob
+  const std::size_t stored = std::min<std::size_t>(present, kNumParams);
   for (std::size_t i = 0; i < stored; ++i) {
-    const std::uint64_t bits = detail::getLE(data + kStateHeaderBytes + i * sizeof(double), 8);
+    const std::uint64_t bits = detail::getLE(data + first + i * sizeof(double), 8);
     double v;
     std::memcpy(&v, &bits, sizeof v);
     if (std::isfinite(v)) tmp[i] = std::clamp(v, 0.0, 1.0);
   }
   Decor d;   // default: seed 0, no angles, no texts
-  if (version >= 2 && size >= kStateSizeV1) {
-    detail::Reader r{data, size, kStateSizeV1};
+  if (version >= 2 && present == announced) {   // all the announced parameters are there: the decor follows them
+    detail::Reader r{data, size, first + announced * sizeof(double)};
     detail::readDecor(r, d);   // corrupt: `d` stays the default decor (readDecor leaves it untouched)
   }
   std::memcpy(norm, tmp, sizeof tmp);

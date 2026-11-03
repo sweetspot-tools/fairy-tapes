@@ -244,12 +244,26 @@ void test_processor_state(Module& m) {
   CHECK(comp->setState(&back2) == kResultOk);
   CHECK(savedBytes(comp) == blob);
 
+  // A blob from a build with a longer table (two more parameters): the extras are skipped, the decor is kept, and the
+  // state is written back in this build's layout.
+  {
+    std::vector<uint8_t> future(blob.begin(), blob.begin() + 4);
+    detail::putLE(future, kNumParams + 2, 4);
+    future.insert(future.end(), blob.begin() + 8, blob.begin() + 8 + 8 * kNumParams);
+    detail::putLE(future, 0x3FE0000000000000ull, 8);   // 0.5
+    detail::putLE(future, 0x3FE0000000000000ull, 8);
+    future.insert(future.end(), blob.begin() + 8 + 8 * kNumParams, blob.end());
+    MemStream fs = streamOf(future);
+    CHECK(comp->setState(&fs) == kResultOk);
+    CHECK(savedBytes(comp) == blob);
+  }
+
   // LISTEN and SET are session parameters: not in the state (the blob is exactly the table plus the decor), and a
   // load never brings them in.
   CHECK((int)kListenBand >= kNumParams && (int)kSetActive >= kNumParams);
   std::vector<uint8_t> decorOnly;
   serializeDecor(d, decorOnly);
-  CHECK(blob.size() == kStateSizeV1 + decorOnly.size());
+  CHECK(blob.size() == kStateSizeV2 + decorOnly.size());
 
   // The decor the controller sends is adopted (sanitized) and saved with the state, parameters untouched.
   Decor edit = d;
