@@ -44,6 +44,17 @@ inline const char* msSigla(int index) {
   return names[std::clamp(index, 0, 2)];
 }
 
+// Parameters whose value is a frequency in Hz (typed "3k" or "3 kHz" means 3000).
+inline bool isFreqParam(ParamID id) {
+  switch (id) {
+    case kHpFreq: case kLsFreq: case kLmFreq: case kMidFreq: case kHmFreq: case kHsFreq:
+    case kLowFreq: case kAirFreq: case kGlueScHpf:
+      return true;
+    default:
+      return false;
+  }
+}
+
 inline bool isSwitch(ParamID id) { return kParams[id].steps == 2 && id != kFinalMode; }
 
 // The text of position `index`. hpMs: the current HI PASS M/S position (SIDE reads the mono-bass scale); limitStyle: the
@@ -138,7 +149,7 @@ inline std::string formatValue(ParamID id, double norm, const double* allNorms) 
   return detail::paramText(id, indexFromNorm(id, norm), detail::hpMsOf(allNorms), detail::limitStyleOf(allNorms));
 }
 
-// A typed value: the text of a step (case and spaces ignored) or a bare number, which picks the nearest step of the
+// A typed value: the text of a step (case and spaces ignored) or a bare number (on a frequency, "3k" / "3 kHz" is 3000 Hz), which picks the nearest step of the
 // table in use (HI PASS FREQ on the scale of its M/S: typing "60" on SIDE gives the 60 Hz step). On success `norm` is
 // the normalized value of the step and the result is true; any other text gives false and leaves `norm` alone.
 inline bool parseValue(ParamID id, const std::string& text, const double* allNorms, double& norm) {
@@ -161,8 +172,13 @@ inline bool parseValue(ParamID id, const std::string& text, const double* allNor
   // A bare number picks the nearest value of the table (e.g. "-3" for a gain)
   const ValueTable t = valueTable(id);
   char* end = nullptr;
-  const double num = std::strtod(text.c_str(), &end);
+  double num = std::strtod(text.c_str(), &end);
   if ((t.size || id == kLimitRelease) && end != text.c_str() && std::isfinite(num)) {
+    // On a frequency a k / kHz suffix is thousands of Hz ("3k", "3 kHz"); Hz, or nothing, is Hz. Other suffixes (dB, ...) are ignored.
+    if (detail::isFreqParam(id)) {
+      const std::string unit = detail::lowered(end);
+      if (unit == "k" || unit == "khz") num *= 1000.0;
+    }
     // HI PASS FREQ is read on the scale of the current HI PASS M/S (SIDE has the mono-bass scale); LIMIT RELEASE in the ms
     // of the current style
     const auto valueAt = [&](int i) {

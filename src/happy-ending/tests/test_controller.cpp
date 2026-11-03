@@ -219,6 +219,16 @@ void testTypedValues() {
   ASSERT_TRUE(parse(kHpFreq, "160", v) && indexFromNorm(kHpFreq, v) == 4);
   ASSERT_TRUE(parse(kHpFreq, "80 Hz", v) && indexFromNorm(kHpFreq, v) == 2);
   ASSERT_TRUE(!parse(kLmQ, "bogus", v));
+  // k / kHz after the number is thousands of Hz on a frequency parameter (host path)
+  ASSERT_TRUE(parse(kHmFreq, "3k", v) && indexFromNorm(kHmFreq, v) == 3);       // 3150 Hz
+  ASSERT_TRUE(parse(kHmFreq, "12 kHz", v) && indexFromNorm(kHmFreq, v) == 9);   // 12500 Hz
+  ASSERT_TRUE(parse(kHsFreq, "12k", v) && indexFromNorm(kHsFreq, v) == 4);
+  ASSERT_TRUE(parse(kAirFreq, "15k", v) && indexFromNorm(kAirFreq, v) == 4);
+  ASSERT_TRUE(parse(kHmFreq, "4000 Hz", v) && indexFromNorm(kHmFreq, v) == 4);
+  f.setIndex(kHpMs, 0);
+  ASSERT_TRUE(parse(kHpFreq, "0.04k", v) && indexFromNorm(kHpFreq, v) == 5);    // 40 Hz on ST
+  f.setIndex(kHpMs, 2);
+  ASSERT_TRUE(parse(kHpFreq, "0.2 kHz", v) && indexFromNorm(kHpFreq, v) == 5);  // 200 Hz on SIDE
 }
 
 void testParametersReadBackAtTheSameIndex() {

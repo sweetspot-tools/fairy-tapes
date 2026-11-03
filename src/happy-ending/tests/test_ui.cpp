@@ -526,6 +526,32 @@ void test_value_text_hp_side_scale() {
   ASSERT_TRUE(parseValue(kHpFreq, "Off", side, v) && indexFromNorm(kHpFreq, v) == 0);
 }
 
+void test_value_text_khz_suffix() {
+  // On a frequency parameter a k / kHz suffix multiplies the number by 1000; Hz keeps it. Without it "3k" used to read
+  // as 3 Hz and snap to the lowest step.
+  double st[kNumParams], side[kNumParams], v = -1.0;
+  norms(st, 0);
+  norms(side, 2);
+  const auto idx = [&](ParamID id, const char* text, const double* all) {
+    return parseValue(id, text, all, v) ? indexFromNorm(id, v) : -1;
+  };
+  // HI MID (1600..12500: 3150 is step 3, 12500 the last)
+  ASSERT_TRUE(idx(kHmFreq, "3k", st) == 3 && idx(kHmFreq, "3 kHz", st) == 3 && idx(kHmFreq, "3.15K", st) == 3);
+  ASSERT_TRUE(idx(kHmFreq, "12k", st) == 9 && idx(kHmFreq, "1 kHz", st) == 0);
+  ASSERT_TRUE(idx(kHmFreq, "4000", st) == 4 && idx(kHmFreq, "4000 Hz", st) == 4 && idx(kHmFreq, "4000hz", st) == 4);
+  // HI SHELF (3000..20000)
+  ASSERT_TRUE(idx(kHsFreq, "12k", st) == 4 && idx(kHsFreq, "16 kHz", st) == 5 && idx(kHsFreq, "19k", st) == 6);
+  ASSERT_TRUE(idx(kHsFreq, "5 kHz", st) == 1 && idx(kHsFreq, "8000 Hz", st) == 2);
+  // AIR FREQ (5000..16000)
+  ASSERT_TRUE(idx(kAirFreq, "15k", st) == 4 && idx(kAirFreq, "12.5 kHz", st) == 3 && idx(kAirFreq, "10k", st) == 2);
+  // HI PASS: the scale of its own M/S (ST 20..40 Hz, SIDE 60..200 Hz)
+  ASSERT_TRUE(idx(kHpFreq, "0.04k", st) == 5 && idx(kHpFreq, "0.03 kHz", st) == 3 && idx(kHpFreq, "30 Hz", st) == 3);
+  ASSERT_TRUE(idx(kHpFreq, "0.2k", side) == 5 && idx(kHpFreq, "0.12 kHz", side) == 3 && idx(kHpFreq, "120 Hz", side) == 3);
+  // a suffix does not touch the other parameters (no frequency, no change)
+  ASSERT_TRUE(idx(kInputGain, "+3.0 dB", st) == 30 && idx(kInputGain, "-3", st) == 18);
+  ASSERT_TRUE(idx(kGlueThresh, "-10 dB", st) == 10);
+}
+
 void test_value_text_parse_roundtrip() {
   // parse(format(v)) == v for every step of every parameter (HI PASS on both its scales)
   for (int ms = 0; ms < 3; ++ms) {
@@ -1895,6 +1921,7 @@ int main() {
   RUN_TEST(test_tape_slots_clear);
   RUN_TEST(test_value_text_golden);
   RUN_TEST(test_value_text_hp_side_scale);
+  RUN_TEST(test_value_text_khz_suffix);
   RUN_TEST(test_value_text_parse_roundtrip);
   RUN_TEST(test_lufs_readouts);
   RUN_TEST(test_release_text_follows_tuning);
