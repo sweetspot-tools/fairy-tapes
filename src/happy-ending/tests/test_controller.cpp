@@ -14,6 +14,7 @@
 #include "ui/value_text.h"
 #include "pluginterfaces/base/ibstream.h"
 #include "pluginterfaces/vst/ivsteditcontroller.h"
+#include "pluginterfaces/vst/ivsthostapplication.h"
 #include "pluginterfaces/vst/ivstmessage.h"
 #include <cmath>
 #include <cstdio>
@@ -414,6 +415,105 @@ void testEditDecorKeepsSanitisesAndBumpsRevision() {
   bare.terminate();
 }
 
+// The host side of a decor edit: createInstance hands out a fake IMessage (the controller allocates its messages through
+// IHostApplication) and the component handler also answers IComponentHandler2 so setDirty is seen.
+struct DirtyHandler : Steinberg::Vst::IComponentHandler, Steinberg::Vst::IComponentHandler2 {
+  std::vector<bool> dirty;   // every setDirty argument
+  int refs = 0;
+  Steinberg::tresult PLUGIN_API queryInterface(const Steinberg::TUID iid, void** obj) override {
+    QUERY_INTERFACE(iid, obj, Steinberg::FUnknown::iid, Steinberg::Vst::IComponentHandler)
+    QUERY_INTERFACE(iid, obj, Steinberg::Vst::IComponentHandler::iid, Steinberg::Vst::IComponentHandler)
+    QUERY_INTERFACE(iid, obj, Steinberg::Vst::IComponentHandler2::iid, Steinberg::Vst::IComponentHandler2)
+    *obj = nullptr;
+    return Steinberg::kNoInterface;
+  }
+  Steinberg::uint32 PLUGIN_API addRef() override { return static_cast<Steinberg::uint32>(++refs); }
+  Steinberg::uint32 PLUGIN_API release() override { return static_cast<Steinberg::uint32>(--refs); }
+  Steinberg::tresult PLUGIN_API beginEdit(PID) override { return Steinberg::kResultOk; }
+  Steinberg::tresult PLUGIN_API performEdit(PID, ParamValue) override { return Steinberg::kResultOk; }
+  Steinberg::tresult PLUGIN_API endEdit(PID) override { return Steinberg::kResultOk; }
+  Steinberg::tresult PLUGIN_API restartComponent(Steinberg::int32) override { return Steinberg::kResultOk; }
+  Steinberg::tresult PLUGIN_API setDirty(Steinberg::TBool state) override { dirty.push_back(state != 0); return Steinberg::kResultOk; }
+  Steinberg::tresult PLUGIN_API requestOpenEditor(Steinberg::FIDString) override { return Steinberg::kResultOk; }
+  Steinberg::tresult PLUGIN_API startGroupEdit() override { return Steinberg::kResultOk; }
+  Steinberg::tresult PLUGIN_API finishGroupEdit() override { return Steinberg::kResultOk; }
+};
+
+struct DecorHost : Steinberg::Vst::IHostApplication {
+  FakeMessage message;
+  Steinberg::tresult PLUGIN_API queryInterface(const Steinberg::TUID iid, void** obj) override {
+    QUERY_INTERFACE(iid, obj, Steinberg::FUnknown::iid, Steinberg::Vst::IHostApplication)
+    QUERY_INTERFACE(iid, obj, Steinberg::Vst::IHostApplication::iid, Steinberg::Vst::IHostApplication)
+    *obj = nullptr;
+    return Steinberg::kNoInterface;
+  }
+  Steinberg::uint32 PLUGIN_API addRef() override { return 1; }
+  Steinberg::uint32 PLUGIN_API release() override { return 1; }
+  Steinberg::tresult PLUGIN_API getName(Steinberg::Vst::String128) override { return Steinberg::kResultFalse; }
+  Steinberg::tresult PLUGIN_API createInstance(Steinberg::TUID, Steinberg::TUID iid, void** obj) override {
+    if (!obj) return Steinberg::kInvalidArgument;
+    message.id.clear();
+    message.attrs = FakeAttrs{};
+    *obj = static_cast<Steinberg::Vst::IMessage*>(&message);
+    (void)iid;
+    return Steinberg::kResultOk;
+  }
+};
+
+// The other end of the connection: records the decor messages (and every message id) it is sent.
+struct DecorPeer : Steinberg::Vst::IConnectionPoint {
+  std::vector<std::string> ids;
+  std::vector<Decor> decors;
+  Steinberg::tresult PLUGIN_API queryInterface(const Steinberg::TUID, void** o) override { *o = nullptr; return Steinberg::kNoInterface; }
+  Steinberg::uint32 PLUGIN_API addRef() override { return 1; }
+  Steinberg::uint32 PLUGIN_API release() override { return 1; }
+  Steinberg::tresult PLUGIN_API connect(Steinberg::Vst::IConnectionPoint*) override { return Steinberg::kResultOk; }
+  Steinberg::tresult PLUGIN_API disconnect(Steinberg::Vst::IConnectionPoint*) override { return Steinberg::kResultOk; }
+  Steinberg::tresult PLUGIN_API notify(Steinberg::Vst::IMessage* m) override {
+    ids.push_back(m->getMessageID() ? m->getMessageID() : "");
+    Decor d;
+    if (decodeDecorMessage(m, d)) decors.push_back(d);
+    return Steinberg::kResultOk;
+  }
+};
+
+// One editDecor is exactly one "Decor" message to the peer, with the sanitised content, and tells the host the project
+// changed (IComponentHandler2::setDirty(true)): the decor is not a parameter, this is how it gets saved.
+void testEditDecorSendsOneMessageAndSetsDirty() {
+  DecorHost host;
+  DirtyHandler handler;
+  DecorPeer peer;
+  Controller c;
+  c.initialize(&host);
+  c.setComponentHandler(&handler);
+  ASSERT_TRUE(c.connect(&peer) == Steinberg::kResultOk);
+  peer.ids.clear();
+  peer.decors.clear();
+  handler.dirty.clear();
+
+  Decor edit;
+  edit.seed = 999;
+  edit.screwAngles[0] = 400.f;
+  edit.tapeTexts = {"  a very long tape text  ", "b"};
+  c.editDecor(edit);
+  ASSERT_TRUE(peer.ids.size() == 1 && peer.ids[0] == "Decor" && peer.decors.size() == 1);
+  const Decor& sent = peer.decors[0];
+  ASSERT_TRUE(sent.seed == 999 && sent.screwAngles[0] == 40.f);   // 400 wraps to 40
+  ASSERT_TRUE(sent.tapeTexts.size() == 2 && sent.tapeTexts[0] == "a very long ta" && sent.tapeTexts[1] == "b");
+  ASSERT_TRUE(sameDecor(sent, c.decor()));
+  ASSERT_TRUE(handler.dirty.size() == 1 && handler.dirty[0]);
+
+  // a second edit: one more message, one more dirty mark
+  Decor second = c.decor();
+  second.tapeTexts = {"x"};
+  c.editDecor(second);
+  ASSERT_TRUE(peer.ids.size() == 2 && peer.decors[1].tapeTexts == std::vector<std::string>{"x"});
+  ASSERT_TRUE(handler.dirty.size() == 2 && handler.dirty[1]);
+
+  c.setComponentHandler(nullptr);
+  c.terminate();
+}
+
 void testComponentStateAdoptsTheDecor() {
   Fixture f;
   double norm[kNumParams];
@@ -506,6 +606,7 @@ int main() {
   RUN_TEST(testNoRestartWithoutHandler);
   RUN_TEST(testDecorArrivesThroughNotify);
   RUN_TEST(testEditDecorKeepsSanitisesAndBumpsRevision);
+  RUN_TEST(testEditDecorSendsOneMessageAndSetsDirty);
   RUN_TEST(testComponentStateAdoptsTheDecor);
   std::printf("\n%d passed, %d failed\n", g_passed, g_failed);
   return g_failed ? 1 : 0;
