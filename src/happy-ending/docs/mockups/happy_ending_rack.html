@@ -813,7 +813,7 @@ txt('Free software: released under the GNU General Public License v3.0 (GPL-3.0)
 txt('The plugin includes GPL-3.0 components, so the combined work is distributed under the same license.',50,176,12,DIMW,'start',700,P);
 txt('Source code and build instructions are available in the project repository.',50,194,12,DIMW,'start',700,P);
 box(24,220,1232,292,'COMPONENTS AND LICENSES','top',P);
-var CRD=[['Multi-Q (Fine EQ, Vibe EQ) · Multi-Comp (Glue)','Dusk Audio','GPL-3.0'],['Airwindows (ClipSoftly: Clip · ClipOnly2: Final)','Chris Johnson','MIT'],['ZLInflator (Final: Inflate)','ZL Audio (zsliu98)','GPL-3.0'],['VST 3 SDK','Steinberg Media Technologies','MIT'],['VSTGUI','Steinberg Media Technologies','BSD-3-Clause'],
+var CRD=[['Multi-Q (Fine EQ, Vibe EQ)','Dusk Audio','GPL-3.0'],['Multi-Comp (Glue)','Dusk Audio','GPL-3.0'],['Airwindows (ClipSoftly, ClipOnly2)','Chris Johnson','MIT'],['ZLInflator (Final: Inflate)','ZL Audio (zsliu98)','GPL-3.0'],['libebur128 (LUFS K-weighting)','Jan Kokemüller','MIT'],['Matched Second Order Digital Filters','Martin Vicanek','published method'],['VST 3 SDK','Steinberg Media Technologies','MIT'],['VSTGUI','Steinberg Media Technologies','BSD-3-Clause'],
   ['Zeyada (tape font)','Kimberly Geswein','OFL-1.1'],['Rock Salt (tape font)','Font Diner','Apache-2.0'],['Homemade Apple (tape font)','Font Diner','Apache-2.0']];
 CRD.forEach(function(c,i){var y=254+i*22;txt(c[0],50,y,13,W,'start',800,P);txt(c[1],350,y,12,DIMW,'start',700,P);txt(c[2],1230,y,12,AMBL,'end',700,P);
   if(i<CRD.length-1)el('path',{d:'M50 '+(y+7)+' H1230',stroke:DIMW,'stroke-width':1,opacity:.25},P);});
@@ -927,7 +927,7 @@ box(24,102,1232,672,'SIGNAL FLOW','top',P);
   L('M292 '+Y2+' H296');RT.block(296,426,Y2,48,'LIMIT',['look-ahead','MODERN · PUNCH · DYN']);RT.inSwitch(280,Y2,444,Y2-50);L('M426 '+Y2+' H490');RT.tap(466,Y2,52,'GR L','CLIP LIM');
   RT.inSwitch(490,Y2,692,Y2-70);L('M502 '+Y2+' H518');RT.ring(518,Y2);RT.ring(534,Y2-30);RT.ring(534,Y2+30);L('M518 '+Y2+' L533 '+(Y2-28),false,1.8);
   L('M534 '+(Y2-32.6)+' V'+(Y2-30)+' M536.6 '+(Y2-30)+' H544');L('M536.6 '+(Y2+30)+' H544');
-  RT.block(544,664,Y2-30,36,'INFLATE',['ZL-INFL']);RT.block(544,664,Y2+30,36,'CLIP',['C-ONLY2']);T('FINAL',604,Y2-56,10,W,'middle',900);
+  RT.block(544,664,Y2-30,36,'INFLATE',['INFL-Z']);RT.block(544,664,Y2+30,36,'CLIP',['C-ONLY2']);T('FINAL',604,Y2-56,10,W,'middle',900);
   RT.e('rect',{x:538,y:Y2-52,width:134,height:110,rx:4,fill:'none',stroke:DIMW,'stroke-width':1.2});
   L('M664 '+(Y2-30)+' H678 V'+(Y2+30)+' H664');RT.dot(678,Y2);L('M678 '+Y2+' H738');RT.tap(714,Y2,52,'GR F','CLIP FIN');
   L('M750 '+Y2+' H754');RT.block(754,884,Y2,48,'METALHEAD',['brickwall']);RT.inSwitch(738,Y2,902,Y2-50,'IN · OFF BY DEFAULT',true);L('M884 '+Y2+' H948');RT.tap(914,Y2,52,'GR M','CLIP MTL');

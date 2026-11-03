@@ -2,11 +2,11 @@
 
 Happy Ending is a mastering chain for the master bus, in VST3 format. It puts the usual finishing tools in one fixed order: a fine EQ, a Pultec-style EQ, a bus compressor, a clipper, a limiter and a final loudness stage, all under one output ceiling. Every control is stepped, the ranges are narrow and the starting values already suit a master, so a few moves are enough to turn a finished mix into a clean, loud master.
 
-**Status:** the audio engine and the VST3 plug-in are done, with their tests (plan Tasks 1-13 and 15). The by-ear tuning of the starting values (Task 14) is still to do, and the delay compensation has been checked by the tests but not yet in a host. The graphic editor is being built (plan `docs/superpowers/plans/2026-10-31-happy-ending-editor.md`); the picture below is the HTML preview it reproduces.
+**Status:** the audio engine, the VST3 plug-in and the graphic editor are done, with their tests, and pass on Linux (editor finished 2026-11-03). Not verified yet: the by-ear tuning of the starting values, the delay compensation in a real host, the editor's colours, the panel flip and the SIZE resize inside a real host, and the Windows and macOS builds (CI builds them on merge to `master`). See [Known limits](#known-limits).
 
 ![Happy Ending panel](docs/images/panel.png)
 
-*The panel, from the HTML preview the editor reproduces (the editor is still being built).*
+*The panel, from the HTML preview the editor reproduces.*
 
 ## When to use it
 
@@ -22,7 +22,7 @@ Bus: stereo in, stereo out. A mono track (mono in, mono out) is processed as dua
 
 ![Happy Ending signal flow](docs/images/routing.png)
 
-The diagram is the ROUTING page of the panel preview (the editor itself is not built yet). The dotted frame is the oversampled zone; the tube of VIBE EQ is oversampled too. SAFETY is the output safety limiter and ceiling guard.
+The diagram is the ROUTING tab of the back of the panel (the HTML preview of it). The dotted frame is the oversampled zone; the tube of VIBE EQ is oversampled too. SAFETY is the output safety limiter and ceiling guard.
 
 1. **INPUT** sets the level going into the chain.
 2. **FINE EQ** makes precise corrections with six stepped bands, each on stereo, mid or side.
@@ -167,6 +167,28 @@ Each oversampler adds 69 samples at 2× and 76 at 4× (at the base rate), and th
 
 BYPASS crossfades over 64 samples to the input delayed by the reported latency, so it is sample-exact once settled and stays aligned with the other tracks. The chain keeps running behind it, so the meters and the LUFS reading stay live. LISTEN and SET are never saved in the state and always start off. The state is versioned: v2 adds the instance decor (wear seed, screw angles, tape texts); v1 projects load with a fresh decor, and a v2 whose decor part is damaged still loads its parameters.
 
+## Editor
+
+The editor opens from the host like any VST3 editor. The panel is 1280 × 890 logical pixels, scaled by the host's scale factor and by the SIZE preference (75, 90, 100 or 125 %, see [Preferences file](#preferences-file)). The window is not freely resizable. Changing SIZE on the back asks the host for the new window at once; if the host refuses, the choice is saved and applies the next time the editor opens.
+
+- **Front:** one control for each stored parameter, laid out as in the preview: service row (INPUT, LEVEL, LOUDNESS with MATCH and TARGET, OUTPUT with BYPASS and CEIL), FINE EQ with the screen beside it, VIBE EQ and GLUE, then CLIP, LIMIT, FINAL and METALHEAD. On a knob, double-click sets the default; click the printed value to type one (Enter or leaving the field confirms, Esc cancels). The stepped selectors (M/S, RATIO, SC HPF, CEIL, TARGET, LIMIT STYLE, FINAL MODE) always show the step the DSP uses. A stage with IN off dims its controls (its own IN stays live); BYPASS dims everything except its button, the LEVEL peak rows, the IN and OUT clip LEDs and the LUFS screen. Under SIDE the HI PASS scale changes to the mono-bass one. In FINAL only the controls of the chosen mode are shown.
+- **LEVEL:** input and output peaks on 15 LEDs over −60 to +6 dB, gain reduction rows for GLUE, CLIP, LIMIT, FINAL and METALHEAD, and nine clip LEDs (IN, FEQ, VEQ, GLU, CLP, LIM, FIN, MTL, OUT). A click on a clip LED clears all of them, also under BYPASS. The LUFS screen shows short-term and integrated loudness (click the integrated value to reset it) and the distance to TARGET, with a green LED within 0.5 LU. The two ACT LEDs of the DYN buttons light while the boost is being pulled back.
+- **Screen:** one shared screen with five views, chosen with the buttons beside it: **EQ** (FINE EQ curve, with the MID and SIDE curves as soon as a band works on them, and the VIBE EQ curve), **GLUE** (level, gain reduction before and after MIX, threshold, scrolling), **CLIP** (transfer curve with a dot that follows the program peaks), **LIMIT** (level, gain reduction, ceiling and effective threshold, scrolling) and **FINAL** (transfer curve against the ceiling, with the dot). The EQ curves are computed by the editor with its own copies of the filters, never on the audio thread. The chosen view is kept while the plug-in instance lives and is not saved in the project (a project opens on EQ).
+- **LISTEN and SET:** the three LISTEN buttons solo one FINE EQ bell; SET is the guided release setting of LIMIT. Both switch off when the editor closes and are never saved.
+- **Wear, tapes and screws:** generated from a seed saved with the plug-in instance. Click a paper tape to write on it (at most 14 printable characters). Drag a screw to turn it. Texts and screw angles are saved with the project (state v2).
+- **Back:** the **BACK →** link at the top right flips the panel (about 0.8 s). Tabs: **SETTINGS** (APPEARANCE: WEAR Off / Light / Heavy, TAPE FONT, VALUES FONT, RE-ROLL for a new instance seed, SIZE; BEHAVIOUR: OVERSAMPLING Off / 2× / 4×, saved with the project), **BUTTONS** (what every kind of button does), **ROUTING** (the signal flow shown above), **CREDITS** (version, licence, third-party components, notices). **← BACK** returns to the front.
+- **Preferences:** the APPEARANCE choices (including SIZE) are per user and per plug-in: they apply to every project and every instance of Happy Ending, and do not change the other plug-ins. OVERSAMPLING and the decor belong to the project.
+
+## Known limits
+
+- **Editor, what the tests cannot reach:** the editor tests run without a window. No test opens a real `CFrame`, so these are unverified: the real UI timer, real keyboard focus and Enter in the text fields, and `close()` with a live frame.
+- **Colours, flip and SIZE:** the colours, the 3D flip of the back and the window resize after a SIZE change have not been tried in a real host. The render tool's PNGs were compared with the preview by eye, not by a program.
+- **Platforms:** the editor tests and the render tool build on Linux only. The editor build on Windows and macOS is not verified here: CI does it on merge to `master`.
+- **Tuning and latency:** the values in `src/tuning.h` are still the starting values of the preview, and the reported latency has been checked by the tests but not in a host (see [Tuning](#tuning)).
+- **Screen:** the FINE EQ curve has no band markers (the preview has them). The CLIP view axis runs to 1.05 and the EQ curve is limited to ±7.5 dB.
+- **Cosmetic:** some printed scales of FINE EQ touch each other (3.15k and 4, 800 and 4, 12.5k and 4), and in the tape font a TARGET of −14 LUFS can read like −4.
+- **Preferences:** the NOTES LAYER, METER HOLD and METER RELEASE rows of the preview are not offered on the back. A `notes` key is stored in the preferences file but draws nothing.
+
 ## Install and build
 
 There is no release yet. Until there is one, build from source or take the CI artifact for your system (`happy-ending-linux`, `happy-ending-windows`, `happy-ending-macos`). Copy `HappyEnding.vst3` into your host's VST3 folder; the folders and the clone instructions are in the [main README](../../README.md).
@@ -178,7 +200,7 @@ cmake -S . -B /tmp/he-build -DCMAKE_BUILD_TYPE=Release -DGPU_NAM_DISABLE_CUDA=ON
 cmake --build /tmp/he-build --target happy_ending -j2
 ```
 
-The bundle `HappyEnding.vst3` is written to `dist/` at the root of the repository. CI (on push and pull requests to `master`) builds all targets and uploads it as `happy-ending-linux`, `happy-ending-windows` and `happy-ending-macos`; it does not run `ctest`.
+Build the targets that use VSTGUI (`happy_ending`, `happy_ending_editor_tests`, `happy_ending_render`) one at a time. The bundle `HappyEnding.vst3` is written to `dist/` at the root of the repository. CI (on push and pull requests to `master`) builds all targets and uploads it as `happy-ending-linux`, `happy-ending-windows` and `happy-ending-macos`; it does not run `ctest`.
 
 ## Tests
 
@@ -188,15 +210,35 @@ cmake --build /tmp/he-build --target happy_ending_params_tests happy_ending_fine
   happy_ending_clip_tests happy_ending_limiter_tests happy_ending_final_tests \
   happy_ending_loudness_tests happy_ending_loudness_macro_tests happy_ending_engine_tests \
   happy_ending_state_tests happy_ending_display_tests happy_ending_controller_tests \
+  happy_ending_ui_tests happy_ending_editor_tests happy_ending_render \
   happy_ending_factory_test happy_ending_processor_level_test happy_ending_state_module_test -j2
 ctest --test-dir /tmp/he-build -R happy_ending --output-on-failure
 ```
 
-One executable per block, with the `RUN_TEST` / `ASSERT_TRUE` harness and synthetic signals. The three module tests (`factory`, `processor_level`, `state_module`) load `dist/HappyEnding.vst3`: build `happy_ending` first, or they are skipped (exit 77). They are not built on Windows. The others link the code directly. The tests cover the parameter table, every DSP block (curves against analog prototypes, M/S, LISTEN, DYN, GLUE reduction and MIX, level-matched CLIP, ceiling guarantees for every LIMIT style, SET, FINAL and METALHEAD, oversampler latency and flatness, BS.1770 reference loudness, LOUDNESS and MATCH), the engine (BYPASS, latency per oversampling, the safety limiter, all-max never above the ceiling, silence after the tail, no allocation in `process`), the saved state (v2: parameters plus the instance decor: wear seed, screw angles, tape texts), the processor and the editor (layout, value texts, screen model, preferences, decor). All tuning values are read from `src/tuning.h`, never copied.
+The tests of the shared editor code are separate (`ctest --test-dir /tmp/he-build -R fairy_ui`, one target each, for example `fairy_ui_editor_size_tests`, `fairy_ui_back_panel_tests`, `fairy_ui_back_view_tests`, `fairy_ui_screw_tests`).
+
+One executable per block, with the `RUN_TEST` / `ASSERT_TRUE` harness and synthetic signals. The three module tests (`factory`, `processor_level`, `state_module`) load `dist/HappyEnding.vst3`: build `happy_ending` first, or they are skipped (exit 77). They are not built on Windows. The others link the code directly. `happy_ending_ui_tests` covers the pure parts of the editor (layout, value texts, screen model, preferences, decor, back tabs, credits); `happy_ending_editor_tests` drives the editor without a window with a real controller as host (Linux only); `happy_ending_render_smoke` checks that the render tool writes a 1280 × 890 PNG. The tests cover the parameter table, every DSP block (curves against analog prototypes, M/S, LISTEN, DYN, GLUE reduction and MIX, level-matched CLIP, ceiling guarantees for every LIMIT style, SET, FINAL and METALHEAD, oversampler latency and flatness, BS.1770 reference loudness, LOUDNESS and MATCH), the engine (BYPASS, latency per oversampling, the safety limiter, all-max never above the ceiling, silence after the tail, no allocation in `process`), the saved state (v2: parameters plus the instance decor: wear seed, screw angles, tape texts), the processor and the editor (layout, value texts, screen model, preferences, decor, controls, LEVEL, wear, tapes, screws, flip, back tabs). All tuning values are read from `src/tuning.h`, never copied.
 
 ## Tuning
 
 Every value to be voiced by ear lives in `src/tuning.h` and only there: VIBE DYN threshold and times, LIMIT release bases, SET threshold, LOUDNESS curve, MATCH step. They are still the starting values of the preview; the by-ear pass in a host (REAPER or Bitwig) is still to do.
+
+## Technical notes
+
+### Preferences file
+
+`FairyTapes/HappyEnding.prefs` in the preferences folder: `$XDG_CONFIG_HOME` (or `~/.config`) on Linux, `~/Library/Application Support` on macOS, `%APPDATA%` on Windows. Keys: `wear=Off|Light|Heavy`, `notes=Show|Hide`, `tapeFont=Zeyada|RockSalt|HomemadeApple`, `valuesFont=Tape|Standard`, `size=75|90|100|125` (default 100). SIZE is a setting of this plug-in only: the other plug-ins keep their own file. Written atomically. A missing or damaged file gives the defaults, and each invalid value falls back on its own.
+
+### Offscreen render
+
+`happy_ending_render` (Linux only) draws the editor to PNG without a host or a window, to compare it by eye with the HTML preview:
+
+```
+cmake --build /tmp/he-build --target happy_ending_render -j2
+/tmp/he-build/src/happy-ending/happy_ending_render /tmp/he-render meters demo scope=60 view=glue
+```
+
+It writes `front.png` and the four tabs of the back, `back_settings.png`, `back_buttons.png`, `back_routing.png` and `back_credits.png`, all 1280 × 890 (SIZE and the host factor only scale the window). Options (full list at the top of `tools/render_editor.cpp`): `view=eq|glue|clip|limit|final`, `meters` (proof values for the LEVEL rows, the LUFS screen and the screen), `demo` (non-flat EQ curves), `ms` (a bell each on MID and SIDE), `scope=<n>` (n timer runs of a synthetic programme, so the histories scroll), `bypass`, `final=inflate|clip`, `stage-off=fine|vibe|glue|clip|limit|final|metal`, `band-off=0..5`, `listen=0..2`, `set`, `os=0..2`, `seed=<n>` (`seed=0` draws the editor before the decor is ready: no wear, tape or screw), `wear=off|light|heavy`, `tapefont=…`, `values=tape|standard`, `tape=<slot>:<text>`, `no-grain`, `cycles=<n>`. The tool does not read the real preferences file: without options it draws Light wear, the Zeyada font and handwritten values, with a fixed seed.
 
 ## Third-party code and licences
 
@@ -223,6 +265,7 @@ The `LICENSE` file of each origin project was checked at the pinned commit on 20
 
 - Design spec: [docs/superpowers/specs/2026-10-21-happy-ending-design.md](../../docs/superpowers/specs/2026-10-21-happy-ending-design.md)
 - Implementation plan (audio engine and VST3 plug-in): [docs/superpowers/plans/2026-10-24-happy-ending.md](../../docs/superpowers/plans/2026-10-24-happy-ending.md)
+- Implementation plan (editor): [docs/superpowers/plans/2026-10-31-happy-ending-editor.md](../../docs/superpowers/plans/2026-10-31-happy-ending-editor.md)
 - HTML preview of the panel: [docs/mockups/happy_ending_rack.html](docs/mockups/happy_ending_rack.html) (open it in a browser)
 - Shared visual rules of the suite: [docs/DESIGN_SYSTEM.md](../../docs/DESIGN_SYSTEM.md)
 - Third-party components of the suite: [THIRD_PARTY.md](../../THIRD_PARTY.md)
