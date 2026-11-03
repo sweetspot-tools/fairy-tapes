@@ -300,11 +300,11 @@ Note dell'esecuzione (2026-11-02): le righe di picco hanno 15 LED sulla scala �
 **Interfaces:**
 - Produces: LISTEN che si accende e si spegne con una dissolvenza (stessa durata delle altre, 64 campioni) invece di azzerare di colpo l'altra componente M/S; cambio di via (ST/MID/SIDE) di una banda dissolto; `setBand`, `setStageOn` e `setDriveDb` che non ripartono se il valore non cambia.
 
-- [ ] **Step 1: Scrivere i test:** `test_listen_engage_is_click_free` (seno stazionario, LISTEN acceso e spento: nessun salto tra campioni consecutivi oltre la pendenza del seno più un margine), `test_route_change_is_click_free`, `test_unchanged_settings_do_not_restart_ramps` (impostazioni identiche a ogni blocco: l'uscita è uguale a quella con una sola chiamata, bit per bit).
-- [ ] **Step 2: Eseguire e vedere fallire.**
-- [ ] **Step 3: Implementare.**
-- [ ] **Step 4: Eseguire** `ctest -R happy_ending` → tutto verde (BYPASS esatto e latenza invariati).
-- [ ] **Step 5: Commit:** `fix(happy-ending): click-free LISTEN and route changes, setters only on change`.
+- [x] **Step 1: Scrivere i test:** `test_listen_engage_is_click_free` (seno stazionario, LISTEN acceso e spento: nessun salto tra campioni consecutivi oltre la pendenza del seno più un margine), `test_route_change_is_click_free`, `test_unchanged_settings_do_not_restart_ramps` (impostazioni identiche a ogni blocco: l'uscita è uguale a quella con una sola chiamata, bit per bit).
+- [x] **Step 2: Eseguire e vedere fallire.**
+- [x] **Step 3: Implementare.**
+- [x] **Step 4: Eseguire** `ctest -R happy_ending` → tutto verde (BYPASS esatto e latenza invariati).
+- [x] **Step 5: Commit:** `fix(happy-ending): click-free LISTEN and route changes, setters only on change`.
 
 ---
 

@@ -629,6 +629,166 @@ void testUnchangedSettingsDoNotRestartRamp() {
   for (std::size_t i = 0; i < a.l.size(); ++i) ASSERT_TRUE(a.l[i] == b.l[i] && a.r[i] == b.r[i]);
 }
 
+// Stationary stereo tone with different phases in L and R, so that both M and S carry signal:
+// L = 0.5 sin(w t), R = 0.5 sin(w t + 1). 400 Hz at 48 kHz: 120 samples per cycle, so a block of
+// 4800 samples ends on the same phase it started on. The steepest slope is 0.5 * 2 pi * 400 / 48000.
+void toneSegment(Stereo& x, int len, int phase0) {
+  x.l.resize(static_cast<std::size_t>(len));
+  x.r.resize(static_cast<std::size_t>(len));
+  for (int i = 0; i < len; ++i) {
+    const double ph = 2.0 * kPi * 400.0 * (i + phase0) / 48000.0;
+    x.l[static_cast<std::size_t>(i)] = static_cast<float>(0.5 * std::sin(ph));
+    x.r[static_cast<std::size_t>(i)] = static_cast<float>(0.5 * std::sin(ph + 1.0));
+  }
+}
+
+// Largest jump between consecutive output samples (either channel) over two blocks of tone with
+// `change` applied between them. The tone slope is 0.026; a click is bigger.
+constexpr float kClickFree = 0.05f;
+
+template <class F>
+float worstJumpAcross(FineEq& eq, F change) {
+  const int seg = 4800;
+  int phase = 0;
+  Stereo x;
+  float lastL = 0.0f, lastR = 0.0f;
+  float worst = 0.0f;
+  auto run = [&](bool measure) {
+    toneSegment(x, seg, phase);
+    eq.process(x.l.data(), x.r.data(), seg);
+    phase += seg;
+    if (measure) {
+      worst = std::max({worst, std::fabs(x.l[0] - lastL), std::fabs(x.r[0] - lastR)});
+      for (std::size_t i = 1; i < x.l.size(); ++i)
+        worst = std::max({worst, std::fabs(x.l[i] - x.l[i - 1]), std::fabs(x.r[i] - x.r[i - 1])});
+    }
+    lastL = x.l.back();
+    lastR = x.r.back();
+  };
+  run(false);  // settle
+  run(true);
+  change();
+  run(true);
+  return worst;
+}
+
+void testListenEngageIsClickFree() {
+  // LISTEN on a MID-route bell mutes the SIDE component, and releasing it brings the SIDE back:
+  // the S of this tone is about 0.2 at the block boundary, so a hard mute is a jump of that size.
+  for (int bell = 0; bell < 3; ++bell) {
+    FineEq eq;
+    eq.prepare(48000.0, 512);
+    eq.setStageOn(true);
+    // only the soloed bell has gain (bells stacked on 400 Hz would make the tone itself steeper)
+    const int bands[3] = {kBandLm, kBandMid, kBandHm};
+    BandSettings s = bell == 0   ? settings(kLmFreq, 400.0, kLmGain, 4.0)
+                     : bell == 1 ? settings(kMidFreq, 400.0, kMidGain, 4.0)
+                                 : settings(kHmFreq, 1600.0, kHmGain, 4.0);
+    s.ms = 1;
+    eq.setBand(bands[bell], s);
+    const float engage = worstJumpAcross(eq, [&] { eq.setListen(bell); });
+    if (!(engage <= kClickFree)) std::fprintf(stderr, "  bell %d engage jump %.4f\n", bell, engage);
+    ASSERT_TRUE(engage <= kClickFree);
+    const float release = worstJumpAcross(eq, [&] { eq.setListen(-1); });
+    if (!(release <= kClickFree)) std::fprintf(stderr, "  bell %d release jump %.4f\n", bell, release);
+    ASSERT_TRUE(release <= kClickFree);
+    // after the release the S component is back (LISTEN left no trace)
+    Stereo x;
+    toneSegment(x, 4800, 0);
+    eq.process(x.l.data(), x.r.data(), 4800);
+    double sRms = 0.0;
+    for (std::size_t i = 2400; i < x.l.size(); ++i) {
+      const double sv = (x.l[i] - x.r[i]) * 0.5;
+      sRms += sv * sv;
+    }
+    ASSERT_TRUE(std::sqrt(sRms / 2400.0) > 0.1);
+  }
+}
+
+void testListenMovingBetweenRoutesIsClickFree() {
+  // The soloed bell changes while LISTEN stays on (MID -> SIDE): the muted component swaps.
+  FineEq eq;
+  eq.prepare(48000.0, 512);
+  eq.setStageOn(true);
+  BandSettings a = settings(kLmFreq, 400.0, kLmGain, 4.0);
+  a.ms = 1;
+  eq.setBand(kBandLm, a);
+  BandSettings b = settings(kHmFreq, 1600.0, kHmGain, 4.0);
+  b.ms = 2;
+  eq.setBand(kBandHm, b);
+  eq.setListen(0);
+  const float worst = worstJumpAcross(eq, [&] { eq.setListen(2); });
+  if (!(worst <= kClickFree)) std::fprintf(stderr, "  jump %.4f\n", worst);
+  ASSERT_TRUE(worst <= kClickFree);
+}
+
+void testRouteChangeIsClickFree() {
+  for (int from = 0; from < 3; ++from) {
+    for (int to = 0; to < 3; ++to) {
+      if (from == to) continue;
+      FineEq eq;
+      eq.prepare(48000.0, 512);
+      eq.setStageOn(true);
+      BandSettings s = settings(kMidFreq, 400.0, kMidGain, 4.0);
+      s.ms = from;
+      eq.setBand(kBandMid, s);
+      const float worst = worstJumpAcross(eq, [&] {
+        BandSettings t = s;
+        t.ms = to;
+        eq.setBand(kBandMid, t);
+      });
+      if (!(worst <= kClickFree)) std::fprintf(stderr, "  route %d -> %d: jump %.4f\n", from, to, worst);
+      ASSERT_TRUE(worst <= kClickFree);
+    }
+  }
+}
+
+void testRouteChangeSettlesOnTheNewRoute() {
+  // After the fade the band works on its new route only: ST -> MID leaves the SIDE untouched.
+  const double sr = 48000.0;
+  FineEq eq;
+  eq.prepare(sr, 512);
+  eq.setStageOn(true);
+  BandSettings s = settings(kMidFreq, 1000.0, kMidGain, 4.0);
+  eq.setBand(kBandMid, s);
+  Stereo warm = noiseStereo(1024, 21);
+  eq.process(warm.l.data(), warm.r.data(), 1024);
+  s.ms = 1;
+  eq.setBand(kBandMid, s);
+  Stereo gap = noiseStereo(256, 22);
+  eq.process(gap.l.data(), gap.r.data(), 256);  // fade (64) and the glide are over
+  ASSERT_NEAR_EPS(componentGainDb(eq, 1000.0, sr, true), 0.0, 1e-3);
+  ASSERT_NEAR_EPS(eq.magnitudeDb(1, 1000.0), 4.0, 0.2);
+}
+
+void testUnchangedSettingsEveryBlockEqualOneCall() {
+  // The processor sends the settings in every block: identical ones, with LISTEN on and a route
+  // change in the middle of the run, give the same samples as one call per change.
+  const double sr = 48000.0;
+  BandSettings s = settings(kMidFreq, 1000.0, kMidGain, 3.0);
+  s.ms = 1;
+  BandSettings t = s;
+  t.ms = 2;
+  FineEq every, once;
+  for (FineEq* e : {&every, &once}) {
+    e->prepare(sr, 16);
+    e->setStageOn(true);
+  }
+  once.setBand(kBandMid, s);
+  once.setListen(1);
+  Stereo a = noiseStereo(2048, 31), b = a;
+  for (int pos = 0; pos < 2048; pos += 16) {
+    const BandSettings& now = pos < 1024 ? s : t;
+    every.setStageOn(true);
+    every.setBand(kBandMid, now);
+    every.setListen(1);
+    if (pos == 1024) once.setBand(kBandMid, t);
+    every.process(a.l.data() + pos, a.r.data() + pos, 16);
+    once.process(b.l.data() + pos, b.r.data() + pos, 16);
+  }
+  for (std::size_t i = 0; i < a.l.size(); ++i) ASSERT_TRUE(a.l[i] == b.l[i] && a.r[i] == b.r[i]);
+}
+
 void testNoAllocationWithListenAndMs() {
   FineEq eq;
   eq.prepare(48000.0, 512);
@@ -673,6 +833,11 @@ int main() {
   RUN_TEST(testListenFollowsBandRoute);
   RUN_TEST(testBandOffAndStageOffAreIdentityMs);
   RUN_TEST(testUnchangedSettingsDoNotRestartRamp);
+  RUN_TEST(testListenEngageIsClickFree);
+  RUN_TEST(testListenMovingBetweenRoutesIsClickFree);
+  RUN_TEST(testRouteChangeIsClickFree);
+  RUN_TEST(testRouteChangeSettlesOnTheNewRoute);
+  RUN_TEST(testUnchangedSettingsEveryBlockEqualOneCall);
   RUN_TEST(testNoAllocationWithListenAndMs);
   std::printf("%d passed, %d failed\n", g_passed, g_failed);
   return g_failed == 0 ? 0 : 1;

@@ -42,6 +42,27 @@ inline double tick(const BiquadCoeffs& c, double* z, double x) {
   return y;
 }
 
+// One band on one route for one sample pair: ST filters L and R, MID / SIDE filter that component
+// and leave the other one alone, scaled by `other` (1 for a band; the LISTEN band-pass fades it to 0).
+inline void runPath(const BiquadCoeffs& c, int route, double* zl, double* zr, double other, double inL, double inR,
+                    double& outL, double& outR) {
+  if (route == 0) {
+    outL = tick(c, zl, inL);
+    outR = tick(c, zr, inR);
+    return;
+  }
+  double m, s;
+  msEncode<double>(inL, inR, m, s);
+  if (route == 1) {
+    m = tick(c, zl, m);
+    s *= other;
+  } else {
+    s = tick(c, zl, s);
+    m *= other;
+  }
+  msDecode<double>(m, s, outL, outR);
+}
+
 } // namespace
 
 double effectiveQ(double q, double gainDb) {
@@ -56,13 +77,23 @@ void FineEq::prepare(double sampleRate, int /*maxBlock*/) {
     updateTarget(slot);
     band.current = band.target;  // no glide from a previous configuration
     band.rampLeft = 0;
+    band.fadeLeft = 0;
+    band.soloLevel = band.soloTarget;
+    band.soloLeft = 0;
   }
+}
+
+// Nothing to do for this slot: identity, memory flushed, no fade or mute in progress. It then costs
+// nothing and passes the signal bit-exact.
+bool FineEq::atRest(const Band& band) {
+  return band.rampLeft == 0 && band.fadeLeft == 0 && band.soloLevel == 0.0 && band.soloTarget == 0.0 &&
+         band.current.isIdentity() && band.zl[0] == 0.0 && band.zl[1] == 0.0 && band.zr[0] == 0.0 && band.zr[1] == 0.0;
 }
 
 void FineEq::setBand(int band, const BandSettings& settings) {
   if (band < 0 || band >= kNumBands) return;
   Band& b = bands_[static_cast<std::size_t>(band)];
-  if (b.settings == settings) return;  // nothing changed: leave the glide alone  // nothing changed: leave the glide alone
+  if (b.settings == settings) return;  // nothing changed: leave the glide alone
   b.settings = settings;
   updateTarget(band);
   if (listen_ >= 0 && band == kLm + listen_) updateTarget(kListenSlot);
@@ -101,11 +132,14 @@ BiquadCoeffs FineEq::designFor(int index) const {
 }
 
 // Recomputes the target of one slot (a band, or the LISTEN band-pass) and starts the glide from
-// the coefficients now in use. A change of route clears the memory: it holds another signal.
+// the coefficients now in use. A change of route starts a crossfade from the old route (frozen
+// coefficients, its own memory) to the new one, which starts with a cleared memory: that one holds
+// another signal. A slot at rest has nothing to fade from and switches at once.
 void FineEq::updateTarget(int slot) {
   Band& band = bands_[static_cast<std::size_t>(slot)];
   BiquadCoeffs t;  // identity
   int route = band.route;
+  double soloTarget = 0.0;
   if (slot < kNumBands) {
     band.design = designFor(slot);
     route = clampRoute(band.settings.ms);
@@ -118,9 +152,21 @@ void FineEq::updateTarget(int slot) {
       const double gain = tableValue(gainParam(bell), s.gainIndex);
       matched::computeBandPass(t, tableValue(kFreqParam[bell], s.freqIndex), sampleRate_,
                                effectiveQ(tableValue(qParam(bell), s.qIndex), gain));
+      soloTarget = 1.0;
     }
   }
   if (route != band.route) {
+    if (atRest(band)) {
+      band.fadeLeft = 0;
+    } else {
+      band.oldRoute = band.route;
+      band.oldCoeffs = band.current;
+      for (int k = 0; k < 2; ++k) {
+        band.oldZl[k] = band.zl[k];
+        band.oldZr[k] = band.zr[k];
+      }
+      band.fadeLeft = Tuning::kFineRampSamples;
+    }
     band.route = route;
     band.zl[0] = band.zl[1] = band.zr[0] = band.zr[1] = 0.0;
   }
@@ -128,41 +174,39 @@ void FineEq::updateTarget(int slot) {
   band.rampLeft = Tuning::kFineRampSamples;
   for (int i = 0; i < BiquadCoeffs::kCount; ++i)
     band.step.at(i) = (t.at(i) - band.current.at(i)) / static_cast<double>(Tuning::kFineRampSamples);
+  if (slot == kListenSlot) {
+    band.soloTarget = soloTarget;
+    band.soloLeft = Tuning::kFineRampSamples;
+    band.soloStep = (soloTarget - band.soloLevel) / static_cast<double>(Tuning::kFineRampSamples);
+  }
 }
 
 void FineEq::process(float* left, float* right, int n) {
   for (int slot = 0; slot <= kListenSlot; ++slot) {
     Band& band = bands_[static_cast<std::size_t>(slot)];
-    // A section at rest on the identity, with its memory flushed, costs nothing and passes the
-    // signal bit-exact.
-    if (band.rampLeft == 0 && band.current.isIdentity() && band.zl[0] == 0.0 && band.zl[1] == 0.0 &&
-        band.zr[0] == 0.0 && band.zr[1] == 0.0)
-      continue;
-    const bool solo = slot == kListenSlot;
+    if (atRest(band)) continue;
     for (int i = 0; i < n; ++i) {
       if (band.rampLeft > 0) {
         if (--band.rampLeft == 0) band.current = band.target;
         else for (int k = 0; k < BiquadCoeffs::kCount; ++k) band.current.at(k) += band.step.at(k);
       }
-      const BiquadCoeffs& c = band.current;
-      if (band.route == 0) {
-        left[i] = static_cast<float>(tick(c, band.zl, left[i]));
-        right[i] = static_cast<float>(tick(c, band.zr, right[i]));
-      } else {
-        double m, s;
-        msEncode<double>(left[i], right[i], m, s);
-        if (band.route == 1) {
-          m = tick(c, band.zl, m);
-          if (solo) s = 0.0;
-        } else {
-          s = tick(c, band.zl, s);
-          if (solo) m = 0.0;
-        }
-        double l, r;
-        msDecode<double>(m, s, l, r);
-        left[i] = static_cast<float>(l);
-        right[i] = static_cast<float>(r);
+      if (band.soloLeft > 0) {
+        if (--band.soloLeft == 0) band.soloLevel = band.soloTarget;
+        else band.soloLevel += band.soloStep;
       }
+      const double other = 1.0 - band.soloLevel;
+      double l, r;
+      runPath(band.current, band.route, band.zl, band.zr, other, left[i], right[i], l, r);
+      if (band.fadeLeft > 0) {
+        double ol, orr;
+        runPath(band.oldCoeffs, band.oldRoute, band.oldZl, band.oldZr, other, left[i], right[i], ol, orr);
+        const double a = static_cast<double>(Tuning::kFineRampSamples - band.fadeLeft + 1) / Tuning::kFineRampSamples;
+        --band.fadeLeft;
+        l = ol + (l - ol) * a;
+        r = orr + (r - orr) * a;
+      }
+      left[i] = static_cast<float>(l);
+      right[i] = static_cast<float>(r);
     }
   }
 }

@@ -7,6 +7,10 @@
  * Each band works on ST (left and right), MID or SIDE (one filter on M or S, the other
  * component untouched; no decode when nothing works in M/S). LISTEN solos one bell as a band-pass
  * at its frequency and effective Q, on the route of that bell; the six bands then step to identity.
+ * The other M/S component of the LISTEN band-pass fades out and back over the same
+ * Tuning::kFineRampSamples samples, and a band whose route changes crossfades from its old route
+ * (old coefficients, old memory) to the new one over as many: neither steps. Setters compare with
+ * the stored value and return early, so repeating the settings in every block restarts nothing.
  */
 
 #pragma once
@@ -56,11 +60,24 @@ private:
     BiquadCoeffs current;
     BiquadCoeffs step;
     int rampLeft = 0;
+    // LISTEN slot only: how much of the component the band-pass does not work on is muted (0..1).
+    double soloLevel = 0.0;
+    double soloTarget = 0.0;
+    double soloStep = 0.0;
+    int soloLeft = 0;
+    // Route change in progress: the old route keeps filtering with the coefficients it had, the
+    // output moves from it to the new route over fadeLeft more samples.
+    int fadeLeft = 0;
+    int oldRoute = 0;
+    BiquadCoeffs oldCoeffs;
+    double oldZl[2] = {0.0, 0.0};
+    double oldZr[2] = {0.0, 0.0};
     double zl[2] = {0.0, 0.0};
     double zr[2] = {0.0, 0.0};
   };
 
   BiquadCoeffs designFor(int band) const;
+  static bool atRest(const Band& band);
   void updateTarget(int slot);
 
   double sampleRate_ = 48000.0;

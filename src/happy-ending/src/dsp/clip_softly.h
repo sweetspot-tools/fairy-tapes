@@ -40,8 +40,11 @@ public:
     shavedDb_ = 0.0f;
   }
 
+  // The same drive again (the processor sends it every block) leaves a glide in progress alone.
   void setDriveDb(float db) {
-    target_ = std::pow(10.0, std::clamp(static_cast<double>(db), 0.0, 12.0) / 20.0);
+    const double target = std::pow(10.0, std::clamp(static_cast<double>(db), 0.0, 12.0) / 20.0);
+    if (target == target_) return;
+    target_ = target;
     remaining_ = rampSamples_;
     step_ = (target_ - gain_) / rampSamples_;
   }

@@ -264,6 +264,24 @@ void testDriveChangeIsContinuous() {
   ASSERT_TRUE(peakOf(tail) < peakOf(tailIn) * 0.8);
 }
 
+// The same drive repeated in every block must not restart the 10 ms glide: bit-identical to a twin
+// that was told once.
+void testUnchangedDriveDoesNotRestartRamp() {
+  ClipSoftly a, b;
+  a.prepare(48000.0);
+  b.prepare(48000.0);
+  a.setDriveDb(6.0f);
+  b.setDriveDb(6.0f);
+  const int n = 960;  // 20 ms: the 10 ms glide is over by the middle
+  std::vector<float> la = sine(n, 20, 0.9), lb = la, ra = la, rb = la;
+  for (int pos = 0; pos < n; pos += 16) {
+    a.setDriveDb(6.0f);  // the processor sends it every block
+    a.process(la.data() + pos, ra.data() + pos, 16);
+    b.process(lb.data() + pos, rb.data() + pos, 16);
+  }
+  for (std::size_t i = 0; i < la.size(); ++i) ASSERT_TRUE(la[i] == lb[i] && ra[i] == rb[i]);
+}
+
 void testSilenceStaysSilent() {
   ClipSoftly c;
   c.prepare(48000.0);
@@ -301,6 +319,7 @@ int main() {
   RUN_TEST(testShavedDbQuietIsZeroAndResetsEachBlock);
   RUN_TEST(testShavedDbIsLinkedStereo);
   RUN_TEST(testDriveChangeIsContinuous);
+  RUN_TEST(testUnchangedDriveDoesNotRestartRamp);
   RUN_TEST(testSilenceStaysSilent);
   RUN_TEST(testNoAllocationInProcess);
   std::printf("%d passed, %d failed\n", g_passed, g_failed);

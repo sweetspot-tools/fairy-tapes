@@ -710,6 +710,37 @@ void testStageSwitchesNoClick() {
   ASSERT_TRUE(maxDiff <= 0.05);
 }
 
+// The processor sends the settings in every block: identical ones must not restart any glide
+// (FINE EQ bands, LISTEN, CLIP drive). An engine told only on the change gives the same samples.
+void testRepeatedSettingsDoNotRestartRamps() {
+  Engine every, once;
+  every.prepare(kSr, 256, 1);
+  once.prepare(kSr, 256, 1);
+  EngineSettings s = defaults();
+  s.fineOn = true;
+  s.clipOn = true;
+  s.bands[3].on = true;
+  s.bands[3].ms = 1;
+  s.bands[3].gainIndex = 14;
+  s.clipDriveDb = 3.0f;
+  every.set(s);
+  once.set(s);
+  std::vector<float> l, r;
+  pinkPair(l, r, 8192, 0.5, 5u);
+  std::vector<float> l2 = l, r2 = r;
+  for (int pos = 0; pos + 64 <= 8192; pos += 64) {
+    if (pos == 2048) {  // a real change in the middle: LISTEN on, more CLIP drive
+      s.listenBand = 1;
+      s.clipDriveDb = 5.0f;
+      once.set(s);
+    }
+    every.set(s);
+    every.process(l.data() + pos, r.data() + pos, 64);
+    once.process(l2.data() + pos, r2.data() + pos, 64);
+  }
+  for (std::size_t i = 0; i < l.size(); ++i) ASSERT_TRUE(l[i] == l2[i] && r[i] == r2[i]);
+}
+
 // The meters read the stages: GR rows, LUFS, DYN.
 void testMetersReadStages() {
   Engine e;
@@ -1065,6 +1096,7 @@ int main() {
   RUN_TEST(testOutputGainStepNoZipper);
   RUN_TEST(testNonFiniteInputDoesNotPoison);
   RUN_TEST(testStageSwitchesNoClick);
+  RUN_TEST(testRepeatedSettingsDoNotRestartRamps);
   RUN_TEST(testMetersReadStages);
   RUN_TEST(testStageInputPeaks);
   RUN_TEST(testStageInputPeakIsHeldOverChunksAndRestarts);
