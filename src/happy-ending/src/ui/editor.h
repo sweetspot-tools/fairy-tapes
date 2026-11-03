@@ -2,13 +2,19 @@
 // Layers from the bottom (docs/DESIGN_SYSTEM.md): panel (PanelView: body, grain, boxes with their titles on the bottom
 // border, the screen's untitled box, the LUFS screen's box, header lines, printed texts, engine tags), the silkscreen, the
 // controls, the LEVEL views and the shared screen; wear, paper tapes and screws (below) lie between the silkscreen and the
-// screen; the back comes with the later tasks of the editor plan (docs/superpowers/plans/2026-10-31-happy-ending-editor.md,
-// Tasks 13-14).
+// screen. The panel has two sides in the frame (Task 13): the front (a container with all of the above and the "BACK ->"
+// link) and the back (FairyTapes::Ui::BackView on Happy Ending's own layout, ui/back_layout.h and ui/back_settings.h:
+// SETTINGS, BUTTONS, ROUTING, CREDITS; the last three are filled by the editor plan's Task 14), with the turn between them
+// (FairyTapes::Ui::PanelFlip, about 0.8 s, run by the UI timer; a text field open on the front is confirmed first).
 // Window: 1280 x 890 logical px times the host's content scale factor (IPlugViewContentScaleSupport) times the SIZE of
 // this plug-in's preferences (ui/prefs.h, HappyEnding.prefs, key size=75|90|100|125), read when the view is made and
 // again when it opens; the frame is zoomed by the same factor, so the views keep their logical coordinates.
-// checkSizeConstraint accepts only that size (no free resizing). A new host factor while the views are shown asks the
-// host for the new window (IPlugFrame::resizeView).
+// checkSizeConstraint accepts only that size (no free resizing). A new host factor, or a new SIZE chosen on the back, while
+// the views are shown asks the host for the new window (IPlugFrame::resizeView); if the host refuses, the window keeps its
+// size and zoom (SIZE: the choice is still saved and applies the next time the editor opens).
+// SETTINGS (Task 13): WEAR, TAPE FONT, VALUES FONT and SIZE are the user's preferences, applied at once and saved to
+// HappyEnding.prefs (a failed write is ignored: the choice still applies to this editor); RE-ROLL is the instance decor;
+// OVERSAMPLING is the stored parameter kOversampling, written as one host edit (the controller does the rest).
 // Controls (Task 9): one view per ControlSpec of kControls (RackKnob; RackToggle for IN, BYPASS, WARM, SET and the three
 // LISTEN; RackLitChoice for LIMIT STYLE and FINAL MODE; RackCycle for M/S, RATIO, SC HPF, CEIL, TARGET; DYN a small
 // header button with its name on a face that lights amber), MATCH (momentary, Controller::doMatch) and the five screen
@@ -52,6 +58,7 @@
 #include "ui/layout.h"
 #include "ui/prefs.h"
 
+#include "fairy_ui/flip_view.h"
 #include "fairy_ui/skin.h"
 #include "fairy_ui/tape_font.h"
 #include "fairy_ui/wear.h"
@@ -75,10 +82,12 @@ class CViewContainer;
 }
 
 namespace FairyTapes::Ui {
+class BackView;
 class ClipLed;
 class NormalizedControl;
 class ScrewView;
 class SilkscreenView;
+class TextLink;
 class WearView;
 }
 
@@ -118,6 +127,8 @@ public:
   void beginEdit(int32_t) override {}
   void endEdit(int32_t) override {}
 
+  // Appearance (the user's preferences; SETTINGS on the back): applied in place, nothing is rebuilt. They update the
+  // preferences in memory and the back's rows, but do not save the file: the back's choices do (changeSetting).
   // Wear level: the marks and the tapes for the level (Off: no mark and no tape; the screws stay).
   void setWearLevel(WearLevel level);
   WearLevel wearLevel() const { return wearLevel_; }
@@ -157,7 +168,10 @@ private:
   friend struct EditorPreview;
   friend struct EditorTest;
 
-  // Builds the layers in `parent` (the frame in open(); a plain container in the render tool and the tests).
+  // Both sides of the panel in `host` (the frame in open(); a plain container in the render tool and the tests): the front (a
+  // container holding the views of createViews), the hidden back and the turn between them.
+  void createSides(VSTGUI::CViewContainer* host);
+  // Builds the layers in `parent` (the front container; a plain container in the tests that need no back).
   void createViews(VSTGUI::CViewContainer* parent);
   void resetViewPointers();
   // The UI timer (30 ms) running onTimer; open() starts it, close() stops it.
@@ -209,17 +223,34 @@ private:
   // The end of a drag on screw `index`, which now shows `shownDeg`.
   void screwTurned(int index, double shownDeg);
 
+  // The back of the panel, hidden, in `host`, on the current preferences, OVERSAMPLING and tab.
+  void buildBack(VSTGUI::CViewContainer* host);
+  // The back's wear: another pattern from the same seed, at the Wear level of the front (none while the decor is not ready).
+  void applyBackWear();
+  // Turns the panel to the back (true) or to the front; open text fields are confirmed first.
+  void startFlip(bool toBack);
+  // A SETTINGS choice on the back: a preference is applied, saved (a failed write is ignored) and shown at once; OVERSAMPLING
+  // is written to the stored parameter as one host edit.
+  void changeSetting(int key, int index);
+  // The step of OVERSAMPLING as the controller has it.
+  int oversamplingStep() const;
+
   // Reads the preferences in `file` (any problem: the defaults) and applies them: SIZE (the window), Wear, tape font, values
-  // font.
+  // font. `file` is also where the back's choices are saved (empty: nowhere).
   void loadAppearance(const std::filesystem::path& file);
-  // The window for the host factor and SIZE: the reported size (setRect), the frame's zoom and, while the views are
-  // shown, a request to the host (IPlugFrame::resizeView).
-  void applyWindowSize();
-  PixelSize windowSize() const { return scaledEditorSize(scale_, prefs_.size); }
+  // SIZE in use: the preference when the window follows it. Asks for the new window while the views are shown.
+  void setSize(EditorSize size);
+  // The window for a host factor and a SIZE: the reported size (setRect), the frame's zoom and, while the views are shown,
+  // a request to the host (IPlugFrame::resizeView). The host may refuse: then rect and zoom stay as they were and false is
+  // returned (scale_ and size_ are only changed when it returns true).
+  bool applyWindowSize(double scale, EditorSize size);
+  PixelSize windowSize() const { return scaledEditorSize(scale_, size_); }
 
   Controller* owner_ = nullptr;   // the plug-in's controller (MATCH, the screen view); nullptr for any other
   double scale_ = 1.0;   // sanitized content scale factor of the host
-  Prefs prefs_;          // the user preferences as last read (SIZE in prefs_.size)
+  Prefs prefs_;          // the user preferences as last read or chosen (SIZE in prefs_.size)
+  EditorSize size_ = EditorSize::S100;   // the SIZE the window has (prefs_.size, unless the host refused the change)
+  std::filesystem::path prefsFile_;      // where a SETTINGS choice is saved (empty: nowhere)
   FairyTapes::Ui::Skin skin_;
   VSTGUI::CViewContainer* root_ = nullptr;   // the container the views were created in (shown while not null)
   PanelView* panel_ = nullptr;               // the views are owned by the frame (or that container)
@@ -260,6 +291,14 @@ private:
   std::uint32_t marksSeed_ = 0;
   WearLevel marksLevel_ = WearLevel::Off;
   bool marksValid_ = false;
+
+  // The two sides of the panel and the turn.
+  VSTGUI::CViewContainer* front_ = nullptr;   // owned by the frame (or the host container); root_ is this one in the frame
+  FairyTapes::Ui::BackView* back_ = nullptr;
+  FairyTapes::Ui::TextLink* backLink_ = nullptr;   // "BACK ->" in the header of the front
+  VSTGUI::CView* oversamplingNote_ = nullptr;      // the line under OVERSAMPLING, shown on the SETTINGS tab only
+  FairyTapes::Ui::PanelFlip flip_;
+  int backTab_ = 0;   // the back's tab, kept while the editor lives
 
   // The watched parameters: the stored table, then LISTEN and SET.
   static constexpr int kNumWatched = static_cast<int>(kNumParams) + 2;

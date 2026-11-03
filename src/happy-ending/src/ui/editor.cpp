@@ -6,6 +6,8 @@
 
 #include "controller.h"
 #include "display.h"
+#include "ui/back_layout.h"
+#include "ui/back_settings.h"
 #include "ui/level_views.h"
 #include "ui/panel_view.h"
 #include "ui/readouts.h"
@@ -16,6 +18,8 @@
 #include "ui/tapes.h"
 #include "ui/value_text.h"
 
+#include "fairy_ui/back_view.h"
+#include "fairy_ui/back_widgets.h"
 #include "fairy_ui/draw_util.h"
 #include "fairy_ui/knob_math.h"
 #include "fairy_ui/meters.h"
@@ -52,6 +56,9 @@
 namespace FairyTapes::HappyEnding::Ui {
 
 using namespace VSTGUI;
+using FairyTapes::Ui::BackContent;
+using FairyTapes::Ui::BackItemKind;
+using FairyTapes::Ui::BackView;
 using FairyTapes::Ui::MeterKind;
 using FairyTapes::Ui::NormalizedControl;
 using FairyTapes::Ui::RackCycle;
@@ -61,6 +68,7 @@ using FairyTapes::Ui::RackLitChoice;
 using FairyTapes::Ui::RackToggle;
 using FairyTapes::Ui::ScrewView;
 using FairyTapes::Ui::SilkscreenView;
+using FairyTapes::Ui::TextLink;
 using FairyTapes::Ui::TapeAlign;
 using FairyTapes::Ui::WearMark;
 using FairyTapes::Ui::WearView;
@@ -78,6 +86,7 @@ constexpr CCoord kTapeEditMinWidth = 120, kTapeEditHeight = 24;
 static_assert(kMaxTapeTexts == kNumTapeSlots, "one stored tape text per tape slot");
 static_assert(Editor::kNumScrewViews == kNumScrews, "one view per stored screw angle");
 static_assert(kNumScrews == static_cast<int>(sizeof(kScrewPos) / sizeof(kScrewPos[0])), "one stored angle per screw");
+constexpr std::uint32_t kBackWearSalt = 0x77u;   // the back's wear: another pattern from the same seed (the preview's 0x77)
 // The seed that varies the handwritten values while the decor has none yet.
 constexpr std::uint32_t kFallbackHandSeed = FairyTapes::Ui::kDefaultWearSeed;
 constexpr int kNumViews = 5;   // ScreenView: EQ, GLUE, CLIP, LIMIT, FINAL (kActions[1..5])
@@ -236,6 +245,35 @@ private:
   std::string name_;
 };
 
+// The line under the OVERSAMPLING row (the preview's BEHAVIOUR text): the shared template has no free text line there, so
+// it is a small view of the back that draws only while the back shows SETTINGS and lets every click through.
+class BackNote : public CView {
+public:
+  BackNote(const CRect& size, const BackView* back, std::string text, CCoord baseline)
+  : CView(size), back_(back), text_(std::move(text)), baseline_(baseline) {
+    setMouseEnabled(false);
+  }
+
+  void draw(CDrawContext* ctx) override {
+    if (back_ && back_->tab() == kTabSettings) {
+      static const SharedPointer<CFontDesc> font = makeOwned<CFontDesc>("Arial", 10, kBoldFace);
+      ctx->saveGlobalState();
+      ctx->setDrawMode(kAntiAliasing | kNonIntegralMode);
+      ctx->setFont(font);
+      ctx->setFontColor(FairyTapes::Ui::kDimWhite);
+      ctx->drawString(text_.c_str(), CPoint(getViewSize().left, baseline_));
+      ctx->restoreGlobalState();
+    }
+    setDirty(false);
+  }
+  CLASS_METHODS_NOCOPY(BackNote, CView)
+
+private:
+  const BackView* back_;   // the back this is drawn on (its tab decides)
+  std::string text_;
+  CCoord baseline_;
+};
+
 } // namespace
 
 Editor::Editor(Steinberg::Vst::EditController* controller)
@@ -273,18 +311,37 @@ Steinberg::tresult PLUGIN_API Editor::setContentScaleFactor(ScaleFactor factor) 
 #else
   const double s = sanitizeContentScale(factor);
   if (s == scale_) return Steinberg::kResultTrue;
-  scale_ = s;
-  applyWindowSize();
+  applyWindowSize(s, size_);   // a host that refuses leaves the window as it is
   return Steinberg::kResultTrue;
 #endif
 }
 
-void Editor::applyWindowSize() {
+bool Editor::applyWindowSize(double scale, EditorSize size) {
+  const double previousScale = scale_, previousZoom = FairyTapes::Ui::frameZoom(scale_, size_);
+  const EditorSize previousSize = size_;
+  const Steinberg::ViewRect previous = rect;
+  scale_ = scale;   // the host may ask for the size (checkSizeConstraint, getSize) while it answers: these are the new ones
+  size_ = size;
   const PixelSize px = windowSize();
   Steinberg::ViewRect r(rect.left, rect.top, rect.left + px.width, rect.top + px.height);
   setRect(r);   // getSize reports the scaled size even before the view is attached
-  if (frame) frame->setZoom(FairyTapes::Ui::frameZoom(scale_, prefs_.size));   // views keep their logical coordinates
-  if (root_ && plugFrame) plugFrame->resizeView(this, &r);   // shown: the host answers with onSize
+  if (frame) frame->setZoom(FairyTapes::Ui::frameZoom(scale_, size_));   // views keep their logical coordinates
+  const bool changed = r.right != previous.right || r.bottom != previous.bottom;
+  if (changed && root_ && plugFrame && plugFrame->resizeView(this, &r) != Steinberg::kResultOk) {
+    // The host keeps its window: so do we (size, zoom and what getSize reports), and the caller keeps its preference.
+    scale_ = previousScale;
+    size_ = previousSize;
+    setRect(previous);
+    if (frame) frame->setZoom(previousZoom);
+    return false;
+  }
+  return true;   // shown: the host answers with onSize
+}
+
+void Editor::setSize(EditorSize size) {
+  prefs_.size = size;
+  if (back_) back_->setSelected(kSetSize, selectedFor(kSetSize, prefs_, 0));
+  if (size != size_) applyWindowSize(scale_, size);   // refused: the window stays; the preference applies at the next open
 }
 
 bool PLUGIN_API Editor::open(void* parent, const PlatformType& platformType) {
@@ -307,8 +364,8 @@ bool PLUGIN_API Editor::open(void* parent, const PlatformType& platformType) {
 
   frame = new CFrame(CRect(0, 0, kWidth, kHeight), this);
   frame->setBackgroundColor(kFrameBackground);
-  createViews(frame);
-  const double zoom = FairyTapes::Ui::frameZoom(scale_, prefs_.size);
+  createSides(frame);
+  const double zoom = FairyTapes::Ui::frameZoom(scale_, size_);
   if (zoom != 1.0) frame->setZoom(zoom);   // VSTGUIEditor::attached then reports the scaled size
   if (!frame->open(parent, platformType, config)) {
     close();
@@ -333,6 +390,7 @@ void PLUGIN_API Editor::close() {
   unwatchParameters();
   closeValueEdit(true);   // what was typed is kept, as when the field loses the focus
   closeTapeEdit(true);
+  flip_.reset();   // a running turn: its view goes away with the frame's
   if (frame) {
     // Removing the views closes any open knob gesture (controlEndEdit -> endEdit).
     frame->removeAll(true);
@@ -366,6 +424,20 @@ void Editor::resetViewPointers() {
   valueEditId_ = kNumParams;
   tapeEdit_ = nullptr;
   tapeEditSlot_ = -1;
+  front_ = nullptr;
+  back_ = nullptr;
+  backLink_ = nullptr;
+  oversamplingNote_ = nullptr;
+}
+
+void Editor::createSides(CViewContainer* host) {
+  if (!host) return;
+  front_ = new CViewContainer(CRect(0, 0, kWidth, kHeight));
+  front_->setBackgroundColor(kFrameBackground);
+  createViews(front_);
+  host->addView(front_);
+  buildBack(host);
+  flip_ = FairyTapes::Ui::PanelFlip(host, front_, back_, FairyTapes::Ui::frameZoom(scale_, size_));
 }
 
 void Editor::createViews(CViewContainer* parent) {
@@ -498,6 +570,12 @@ void Editor::createViews(CViewContainer* parent) {
     parent->addView(actLeds_[static_cast<std::size_t>(i)]);
   }
 
+  // The way to the back of the panel: a small text at the right of the header (DESIGN_SYSTEM.md, one link only).
+  const FairyTapes::Ui::BackBox link = FairyTapes::Ui::frontBackLinkBox(kBackLayout);
+  backLink_ = new TextLink(CRect(link.x, link.y, link.x + link.w, link.y + link.h), "BACK  \xE2\x86\x92");
+  backLink_->onClick = [this] { startFlip(true); };
+  parent->addView(backLink_);
+
   watchParameters();   // every value, text, dimming and lock from the controller
   updateDisplays();
 }
@@ -531,6 +609,7 @@ void PLUGIN_API Editor::update(Steinberg::FUnknown*, Steinberg::int32 message) {
 }
 
 void Editor::onTimer() {
+  flip_.tick();   // the turn of the panel, if one is running
   if (pending_.exchange(false)) refreshFromController();
   updateDisplays();
   refreshDecor();   // only when the controller's decor revision changed
@@ -581,6 +660,8 @@ void Editor::refreshFromController() {
   const bool set = FairyTapes::Ui::sanitizeNorm(ctl->getParamNormalized(kSetActive), kDefaultSetNorm) >= 0.5;
   const UiState s = uiStateFrom(norm, listen, set);
   state_ = s;
+  if (back_)   // OVERSAMPLING lives on the back: it follows the host (state recall, the generic editor)
+    back_->setSelected(kSetOversampling, selectedFor(kSetOversampling, prefs_, indexFromNorm(kOversampling, norm[kOversampling])));
   if (panel_) panel_->setUiState(s);
   if (screen_) screen_->setParams(norm, s);
   // LEVEL: the GR rows and their tags dim with BYPASS and their stage's IN, the stage clip LEDs likewise, the ACT LEDs with
@@ -767,10 +848,12 @@ void Editor::loadAppearance(const std::filesystem::path& file) {
     p = Prefs{};
   }
   prefs_ = p;   // the fields the editor does not show (notes) are kept for the next save
+  prefsFile_ = file;
   setWearLevel(p.wear);
   setTapeFont(p.tapeFont);
   setValuesFont(p.handwrittenValues);
-  applyWindowSize();
+  applyWindowSize(scale_, p.size);
+  if (back_) back_->setSelected(kSetSize, selectedFor(kSetSize, prefs_, 0));
 }
 
 // ---- Appearance and instance decor: wear, paper tapes, screws ------------------------------------------------------
@@ -807,6 +890,7 @@ void Editor::refreshDecor() {
 
 void Editor::setWearLevel(WearLevel level) {
   prefs_.wear = level;
+  if (back_) back_->setSelected(kSetWear, selectedFor(kSetWear, prefs_, 0));
   if (level == wearLevel_) return;
   wearLevel_ = level;
   applyWear();
@@ -814,6 +898,7 @@ void Editor::setWearLevel(WearLevel level) {
 
 void Editor::setTapeFont(TapeFont font) {
   prefs_.tapeFont = font;
+  if (back_) back_->setSelected(kSetTapeFont, selectedFor(kSetTapeFont, prefs_, 0));
   if (font == tapeFont_) return;
   tapeFont_ = font;
   valuesFont_ = tapeFontIdOf(font);
@@ -823,6 +908,7 @@ void Editor::setTapeFont(TapeFont font) {
 
 void Editor::setValuesFont(bool handwritten) {
   prefs_.handwrittenValues = handwritten;
+  if (back_) back_->setSelected(kSetValuesFont, selectedFor(kSetValuesFont, prefs_, 0));
   if (handwritten == valuesHandwritten_) return;
   valuesHandwritten_ = handwritten;
   applyHandwriting();
@@ -830,6 +916,7 @@ void Editor::setValuesFont(bool handwritten) {
 
 void Editor::applyWear() {
   if (wear_) wear_->setMarks(wearMarks(seed_, wearLevel_));
+  applyBackWear();
   rebuildTapes();
   applyHandwriting();   // the handwriting varies with the seed
 }
@@ -953,4 +1040,71 @@ void Editor::screwTurned(int index, double shownDeg) {
   owner_->editDecor(d);
   decorRevision_ = owner_->decorRevision();
 }
+
+// ---- The back of the panel ------------------------------------------------------------------------------------------
+int Editor::oversamplingStep() const {
+  auto* ctl = getController();
+  return ctl ? indexFromNorm(kOversampling, controllerNorm(ctl, kOversampling)) : kParams[kOversampling].defaultIndex;
+}
+
+void Editor::buildBack(CViewContainer* host) {
+  if (!host) return;
+  BackContent content = backContent(prefs_, oversamplingStep());
+  for (auto& item : content.items) {
+    if (item.kind == BackItemKind::Button) {
+      item.onPress = [this] { reroll(); };
+    } else {
+      const int key = item.key;
+      item.onChange = [this, key](int index) { changeSetting(key, index); };
+    }
+  }
+  BackView::Callbacks cb;
+  cb.back = [this] { startFlip(false); };
+  cb.tabChanged = [this](int tab) { backTab_ = tab; };
+  back_ = new BackView(CRect(0, 0, kWidth, kHeight), &skin_, std::move(content), std::move(cb), backTab_, kBackLayout);
+  // The line under OVERSAMPLING, in the BEHAVIOUR box at the preview's place.
+  const double x = FairyTapes::Ui::labelX(FairyTapes::Ui::BackColumn::Behaviour, kBackLayout);
+  const double right = kBackLayout.behaviour.x + kBackLayout.behaviour.w - FairyTapes::Ui::Back::kLabelInset;
+  oversamplingNote_ = new BackNote(CRect(x, kOversamplingNoteBaseline - 12, right, kOversamplingNoteBaseline + 4), back_,
+                                   oversamplingNote(), kOversamplingNoteBaseline);
+  back_->addView(oversamplingNote_);
+  back_->setVisible(false);
+  host->addView(back_);
+  applyBackWear();
+}
+
+void Editor::applyBackWear() {
+  if (back_)   // none while the decor is not ready, as on the front
+    back_->setWear(seed_ == 0 ? std::vector<WearMark>{}
+                              : FairyTapes::Ui::generateWear(seed_ ^ kBackWearSalt, wearLevel_, kWidth, kHeight));
+}
+
+// Turns the panel. A text field open on a tape or a value is closed first, keeping what was typed.
+void Editor::startFlip(bool toBack) {
+  closeValueEdit(true);
+  closeTapeEdit(true);
+  flip_.start(toBack);
+}
+
+void Editor::changeSetting(int key, int index) {
+  int step = 0;
+  if (oversamplingStepFor(key, index, step)) {   // the stored parameter, one edit; the controller does the rest
+    if (step != oversamplingStep()) editParameter(kOversampling, normFromIndex(kOversampling, step));
+    return;
+  }
+  Prefs p = prefs_;
+  if (!applySetting(key, index, p)) return;
+  if (!prefsFile_.empty()) {
+    try {
+      savePrefs(prefsFile_, p);   // a failed write is ignored: the choice still applies to this editor
+    } catch (...) {
+    }
+  }
+  prefs_ = p;
+  setWearLevel(p.wear);
+  setTapeFont(p.tapeFont);
+  setValuesFont(p.handwrittenValues);
+  setSize(p.size);
+}
+
 } // namespace FairyTapes::HappyEnding::Ui

@@ -3,9 +3,10 @@
 //                      [band-off=0..5] [listen=0..2] [set] [meters] [cycles=<n>]
 //                      [view=eq|glue|clip|limit|final] [scope=<n>] [demo] [ms]
 //                      [seed=<n>] [wear=off|light|heavy] [tapefont=zeyada|rocksalt|homemade] [values=tape|standard]
-//                      [tape=<slot>:<text>]
-// Writes <out-dir>/front.png (1280 x 890, logical size: SIZE and the host factor only scale the window). The back of the
-// panel and its tabs come with the editor's back (editor plan, Tasks 13-14): the tool will write back_<tab>.png then.
+//                      [tape=<slot>:<text>] [os=0..2]
+// Writes <out-dir>/front.png and the four tabs of the back, back_settings.png, back_buttons.png, back_routing.png and
+// back_credits.png (all 1280 x 890, logical size: SIZE and the host factor only scale the window; BUTTONS, ROUTING and
+// CREDITS stay empty until the editor plan's Task 14). os= sets OVERSAMPLING (the OFF / 2x / 4x row of SETTINGS).
 // bypass, final=, stage-off=, band-off=, listen= and set go through the controller's parameters, picked up by the
 // editor's timer work (dimming, the FINAL tag); no-grain draws the panel without the grain tile. meters sets proof
 // values of the display parameters (LEVEL rows, GR rows, clip LEDs, LUFS near the default TARGET so the green LED is on,
@@ -27,6 +28,8 @@
 #include "ui/panel_view.h"
 #include "ui/prefs.h"
 #include "ui/screen_model.h"
+
+#include "fairy_ui/back_view.h"
 
 #include "pluginterfaces/base/ipluginbase.h"
 #include "vstgui/lib/cbitmap.h"
@@ -59,8 +62,9 @@ struct EditorPreview {
     for (int i = 0; i < n; ++i) {
       Editor ed(&ctl);
       auto root = VSTGUI::makeOwned<VSTGUI::CViewContainer>(VSTGUI::CRect(0, 0, Editor::kWidth, Editor::kHeight));
-      ed.createViews(root);
+      ed.createSides(root);
       ed.onTimer();
+      ed.flip_.reset();
       root->removeAll(true);
       ed.resetViewPointers();
     }
@@ -103,7 +107,7 @@ struct EditorPreview {
     ed.setTapeFont(look.tapeFont);
     ed.setValuesFont(look.handwritten);
     auto root = VSTGUI::makeOwned<VSTGUI::CViewContainer>(VSTGUI::CRect(0, 0, Editor::kWidth, Editor::kHeight));
-    ed.createViews(root);
+    ed.createSides(root);
     ed.onTimer();   // the controller's state: dimming and the FINAL tag
     for (int k = 0; k < scope; ++k) {
       feedScreen(ctl, k);
@@ -130,7 +134,23 @@ struct EditorPreview {
                   Editor::kWidth, Editor::kHeight, window.getWidth(), window.getHeight(),
                   FairyTapes::Ui::sizeLabel(ed.prefs_.size), ed.panel_ ? ed.panel_->drawnTexts().size() : 0u, dimmed,
                   tags.c_str());
+      // The back, one picture per tab: the front out of sight, the back shown on the tab.
+      static const char* const tabs[] = {"settings", "buttons", "routing", "credits"};
+      ed.front_->setVisible(false);
+      ed.back_->setVisible(true);
+      for (int i = 0; i < 4; ++i) {
+        ed.back_->setTab(i);
+        auto back = VSTGUI::COffscreenContext::create(VSTGUI::CPoint(Editor::kWidth, Editor::kHeight), 1.0);
+        if (!back) continue;
+        back->beginDraw();
+        root->draw(back);
+        back->endDraw();
+        const std::string file = dir + "/back_" + tabs[i] + ".png";
+        if (writePng(*back, file)) std::printf("%s: %d x %d\n", file.c_str(), Editor::kWidth, Editor::kHeight);
+        else { std::fprintf(stderr, "cannot write %s\n", file.c_str()); ok = false; }
+      }
     }
+    ed.flip_.reset();
     root->removeAll(true);
     ed.resetViewPointers();
     return ok;
@@ -147,7 +167,7 @@ int main(int argc, char** argv) {
                  "       [band-off=0..5] [listen=0..2] [set] [meters] [cycles=<n>]\n"
                  "       [view=eq|glue|clip|limit|final] [scope=<n>] [demo] [ms]\n"
                  "       [seed=<n>] [wear=off|light|heavy] [tapefont=zeyada|rocksalt|homemade] [values=tape|standard]\n"
-                 "       [tape=<slot>:<text>]\n",
+                 "       [tape=<slot>:<text>] [os=0..2]\n",
                  argv[0]);
     return 2;
   }
@@ -218,6 +238,8 @@ int main(int argc, char** argv) {
         look.tapeFont = !std::strcmp(a + 9, "rocksalt") ? Ui::TapeFont::RockSalt : !std::strcmp(a + 9, "homemade") ? Ui::TapeFont::HomemadeApple : Ui::TapeFont::Zeyada;
       } else if (!std::strncmp(a, "values=", 7)) {
         look.handwritten = std::strcmp(a + 7, "standard") != 0;
+      } else if (!std::strncmp(a, "os=", 3)) {
+        on(kOversampling, std::clamp(std::atoi(a + 3), 0, 2));
       } else if (!std::strncmp(a, "tape=", 5)) {
         const int slot = std::atoi(a + 5);
         const char* colon = std::strchr(a + 5, ':');

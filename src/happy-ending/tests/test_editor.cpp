@@ -11,6 +11,8 @@
  */
 #include "controller.h"
 #include "params.h"
+#include "ui/back_layout.h"
+#include "ui/back_settings.h"
 #include "ui/editor.h"
 #include "ui/layout.h"
 #include "display.h"
@@ -25,7 +27,10 @@
 #include "ui/tapes.h"
 #include "ui/value_text.h"
 
+#include "fairy_ui/back_view.h"
+#include "fairy_ui/back_widgets.h"
 #include "fairy_ui/controls.h"
+#include "fairy_ui/flip_view.h"
 #include "fairy_ui/meters.h"
 #include "fairy_ui/rack_controls.h"
 #include "fairy_ui/silkscreen.h"
@@ -42,6 +47,7 @@
 #include "vstgui/lib/cbitmap.h"
 #include "vstgui/lib/cfont.h"
 #include "vstgui/lib/coffscreencontext.h"
+#include "vstgui/lib/cframe.h"
 #include "vstgui/lib/controls/ctextedit.h"
 #include "vstgui/lib/cviewcontainer.h"
 #include "vstgui/lib/events.h"
@@ -52,6 +58,7 @@
 #endif
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -61,6 +68,7 @@
 #include <iterator>
 #include <map>
 #include <string>
+#include <thread>
 #include <vector>
 
 // The SDK's VSTGUI init hook asks the module for its factory; there is none in this test.
@@ -84,9 +92,26 @@ struct EditorTest {
     ed.unwatchParameters();
     ed.closeValueEdit(false);
     ed.closeTapeEdit(false);
+    ed.flip_.reset();
     root->removeAll(true);
     ed.resetViewPointers();
   }
+  // Both sides of the panel in a container, as open() does in the frame: the front (a container with the views of build()),
+  // the hidden back and the turn between them.
+  static VSTGUI::SharedPointer<VSTGUI::CViewContainer> buildSides(Editor& ed) {
+    auto root = VSTGUI::makeOwned<VSTGUI::CViewContainer>(VSTGUI::CRect(0, 0, Editor::kWidth, Editor::kHeight));
+    ed.createSides(root);
+    return root;
+  }
+  static VSTGUI::CViewContainer* front(const Editor& ed) { return ed.front_; }
+  static FairyTapes::Ui::BackView* back(const Editor& ed) { return ed.back_; }
+  static FairyTapes::Ui::TextLink* backLink(const Editor& ed) { return ed.backLink_; }
+  static FairyTapes::Ui::PanelFlip& flip(Editor& ed) { return ed.flip_; }
+  static VSTGUI::CView* oversamplingNote(const Editor& ed) { return ed.oversamplingNote_; }
+  // The size the window has now (the preference may be ahead of it when the host refused).
+  static EditorSize appliedSize(const Editor& ed) { return ed.size_; }
+  // A frame that was never opened (no window): the editor zooms it as it zooms the real one.
+  static void setFrame(Editor& ed, VSTGUI::CFrame* frame) { ed.frame = frame; }
   // One run of the UI timer's work.
   static void tick(Editor& ed) { ed.onTimer(); }
   static PanelView* panel(const Editor& ed) { return ed.panel_; }
@@ -277,8 +302,10 @@ class CountingHandler : public Steinberg::Vst::IComponentHandler {
 public:
   std::map<Steinberg::Vst::ParamID, int> begins, performs, ends;
   std::map<Steinberg::Vst::ParamID, double> last;
+  int latencyRestarts = 0;   // restartComponent calls that asked the host to read the latency again
 
   void clear() {
+    latencyRestarts = 0;
     begins.clear();
     performs.clear();
     ends.clear();
@@ -309,7 +336,10 @@ public:
     ++ends[id];
     return Steinberg::kResultOk;
   }
-  Steinberg::tresult PLUGIN_API restartComponent(Steinberg::int32) override { return Steinberg::kResultOk; }
+  Steinberg::tresult PLUGIN_API restartComponent(Steinberg::int32 flags) override {
+    if (flags & Steinberg::Vst::kLatencyChanged) ++latencyRestarts;
+    return Steinberg::kResultOk;
+  }
   Steinberg::tresult PLUGIN_API queryInterface(const Steinberg::TUID iid, void** obj) override {
     QUERY_INTERFACE(iid, obj, Steinberg::FUnknown::iid, Steinberg::Vst::IComponentHandler)
     QUERY_INTERFACE(iid, obj, Steinberg::Vst::IComponentHandler::iid, Steinberg::Vst::IComponentHandler)
@@ -2575,6 +2605,418 @@ void test_limit_view_follows_limit_state() {
   resetDisplays();
   resetAll(g_ctl);
 }
+// ---- Back of the panel (Task 13) ---------------------------------------------------------------------------------------
+VSTGUI::CRect boxRect(const FairyTapes::Ui::BackBox& b) { return VSTGUI::CRect(b.x, b.y, b.x + b.w, b.y + b.h); }
+
+// The child of `c` of type T whose rectangle is `r` (nullptr when there is none).
+template <class T>
+T* childAt(VSTGUI::CViewContainer* c, const VSTGUI::CRect& r) {
+  T* found = nullptr;
+  c->forEachChild([&](VSTGUI::CView* v) {
+    if (auto* t = dynamic_cast<T*>(v); t && !found && v->getViewSize() == r) found = t;
+  });
+  return found;
+}
+
+bool leftClick(VSTGUI::CView* v, VSTGUI::CPoint p) {
+  return v && v->onMouseDown(p, VSTGUI::CButtonState(VSTGUI::kLButton)) == VSTGUI::kMouseEventHandled;
+}
+
+// The widget of SETTINGS item `key` on the back (nullptr when there is none).
+template <class T>
+T* settingWidget(FairyTapes::Ui::BackView* back, int key) {
+  const auto& items = back->content().items;
+  const int i = FairyTapes::Ui::findItem(back->content(), key);
+  if (i < 0) return nullptr;
+  const auto box = FairyTapes::Ui::itemControlBox(items[static_cast<std::size_t>(i)],
+                                                  FairyTapes::Ui::itemRow(items, static_cast<std::size_t>(i)), back->layout());
+  return childAt<T>(back, boxRect(box));
+}
+
+// A click on option `index` of a SETTINGS choice row.
+bool chooseOption(FairyTapes::Ui::BackView* back, int key, int index) {
+  auto* row = settingWidget<FairyTapes::Ui::SegmentRow>(back, key);
+  if (!row) return false;
+  const VSTGUI::CRect r = row->getViewSize();
+  const int n = static_cast<int>(back->content().items[static_cast<std::size_t>(FairyTapes::Ui::findItem(back->content(), key))].options.size());
+  return leftClick(row, VSTGUI::CPoint(r.left + r.getWidth() * (index + 0.5) / n, r.getCenter().y));
+}
+
+std::filesystem::path scratchPrefsDir(const char* name) { return g_prefsHome / name; }
+
+std::string fileText(const std::filesystem::path& file) {
+  std::ifstream in(file, std::ios::binary);
+  return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+}
+
+// The window size the editor reports to the host.
+Steinberg::ViewRect windowOf(Editor& ed) {
+  Steinberg::ViewRect r{};
+  ed.getSize(&r);
+  return r;
+}
+
+// "BACK ->" in the header turns the panel (the timer runs the turn, about 0.8 s); a text field open on a tape is confirmed
+// first; "<- BACK" turns it again. The back has the geometry of Happy Ending's own panel (1280 x 890).
+void test_flip_roundtrip_and_text_edit_confirmed_first() {
+  noPrefs();
+  OwnController oc;
+  oc.ctl.editDecor(seededDecor(0x7A11CAFEu));
+  Editor ed(&oc.ctl);
+  auto root = EditorTest::buildSides(ed);
+  ed.setWearLevel(WearLevel::Heavy);
+  VSTGUI::CViewContainer* front = EditorTest::front(ed);
+  FairyTapes::Ui::BackView* back = EditorTest::back(ed);
+  ASSERT_TRUE(front != nullptr && back != nullptr && root->isChild(front) && root->isChild(back));
+  ASSERT_TRUE(front->isVisible() && !back->isVisible());
+  ASSERT_TRUE(EditorTest::panel(ed) != nullptr && front->isChild(EditorTest::panel(ed)));   // the front views are in the front side
+  ASSERT_TRUE(back->getViewSize() == VSTGUI::CRect(0, 0, Editor::kWidth, Editor::kHeight));
+  ASSERT_TRUE(back->layout().width == 1280 && back->layout().height == 890 && back->layout().headerRight == 1246);
+  FairyTapes::Ui::TextLink* link = EditorTest::backLink(ed);
+  ASSERT_TRUE(link != nullptr && front->isChild(link) && link->getViewSize() == boxRect(FairyTapes::Ui::frontBackLinkBox(kBackLayout)));
+  ASSERT_TRUE(link->getViewSize().right == 1246);   // right-aligned at the preview's x
+  // a tape field left open with a text typed in
+  ASSERT_TRUE(!EditorTest::tapes(ed).empty());
+  TapeView* tape = EditorTest::tapes(ed)[0];
+  const int slot = tape->slot();
+  const std::uint32_t rev0 = oc.ctl.decorRevision();
+  ASSERT_TRUE(leftClick(tape, tape->tapeRect().getCenter()));
+  VSTGUI::CTextEdit* field = EditorTest::tapeEdit(ed);
+  ASSERT_TRUE(field != nullptr);
+  field->setText("TAKE 2");
+  ASSERT_TRUE(leftClick(link, link->getViewSize().getCenter()));
+  ASSERT_TRUE(EditorTest::tapeEdit(ed) == nullptr && !front->isChild(field) && !root->isChild(field));
+  ASSERT_TRUE(oc.ctl.decorRevision() == rev0 + 1 && tapeTextFor(oc.ctl.decor(), slot) == "TAKE 2" && tape->text() == "TAKE 2");
+  // the turn runs on the timer and ends with the back shown
+  ASSERT_TRUE(EditorTest::flip(ed).running() && EditorTest::flip(ed).showingBack());
+  ASSERT_TRUE(!front->isVisible() && !back->isVisible());
+  EditorTest::tick(ed);
+  ASSERT_TRUE(EditorTest::flip(ed).running());   // not over after one timer run
+  std::this_thread::sleep_for(std::chrono::milliseconds(900));
+  EditorTest::tick(ed);
+  ASSERT_TRUE(!EditorTest::flip(ed).running() && back->isVisible() && !front->isVisible());
+  // "<- BACK" at the top right of the back
+  auto* home = childAt<FairyTapes::Ui::TextLink>(back, boxRect(FairyTapes::Ui::backLinkBox(kBackLayout)));
+  ASSERT_TRUE(home != nullptr && home->getViewSize().right == 1246 && leftClick(home, home->getViewSize().getCenter()));
+  ASSERT_TRUE(EditorTest::flip(ed).running() && !EditorTest::flip(ed).showingBack());
+  EditorTest::flip(ed).finish();
+  ASSERT_TRUE(front->isVisible() && !back->isVisible());
+  ASSERT_TRUE(oc.ctl.decorRevision() == rev0 + 1);   // nothing else written
+  EditorTest::destroy(ed, root);
+}
+
+// WEAR on the back: the front changes at once (marks and tapes for the level, no rebuild), the choice is saved in the
+// preferences file without touching the other fields (SIZE included), and the back shows it.
+void test_settings_apply_wear_at_once() {
+  namespace fs = std::filesystem;
+  const fs::path dir = scratchPrefsDir("he_settings_wear");
+  const fs::path file = dir / "FairyTapes" / "HappyEnding.prefs";
+  OwnController oc;
+  oc.ctl.editDecor(seededDecor(0x3333AAAAu));
+  Prefs start;
+  start.tapeFont = TapeFont::HomemadeApple;
+  start.notes = false;
+  start.size = EditorSize::S75;
+  ASSERT_TRUE(savePrefs(file, start));
+  Editor ed(&oc.ctl);
+  EditorTest::loadAppearance(ed, file);   // as open() does, before the views
+  auto root = EditorTest::buildSides(ed);
+  FairyTapes::Ui::BackView* back = EditorTest::back(ed);
+  ASSERT_TRUE(back != nullptr && back->tab() == kTabSettings);
+  ASSERT_TRUE(back->selected(kSetWear) == 1 && back->selected(kSetTapeFont) == 2 && back->selected(kSetValuesFont) == 1 &&
+              back->selected(kSetSize) == 0);
+  auto* wear = EditorTest::wear(ed);
+  const std::uint32_t seed = ed.wearSeed();
+  for (int level : {2, 0, 1}) {
+    ASSERT_TRUE(chooseOption(back, kSetWear, level));
+    const auto w = static_cast<WearLevel>(level);
+    ASSERT_TRUE(ed.wearLevel() == w && EditorTest::wear(ed) == wear);
+    ASSERT_TRUE(wear->marks().size() == FairyTapes::Ui::generateWear(seed, w, kEditorWidth, kEditorHeight).size());
+    ASSERT_TRUE(EditorTest::tapes(ed).size() == layoutFromSeed(seed, w, kPanelRect).tapes.size());
+    ASSERT_TRUE(back->selected(kSetWear) == level);
+    const Prefs saved = loadPrefs(file);
+    ASSERT_TRUE(saved.wear == w && saved.tapeFont == TapeFont::HomemadeApple && saved.handwrittenValues && !saved.notes &&
+                saved.size == EditorSize::S75);
+  }
+  ASSERT_TRUE(ed.wearSeed() == seed);   // the seed belongs to the instance: not touched by WEAR
+  EditorTest::destroy(ed, root);
+  std::error_code ec;
+  fs::remove_all(dir, ec);
+}
+
+// TAPE FONT, VALUES FONT and RE-ROLL on the back: applied at once, the fonts saved, RE-ROLL a new seed for the instance.
+void test_settings_fonts_and_reroll_apply() {
+  namespace fs = std::filesystem;
+  const fs::path dir = scratchPrefsDir("he_settings_fonts");
+  const fs::path file = dir / "FairyTapes" / "HappyEnding.prefs";
+  OwnController oc;
+  oc.ctl.editDecor(seededDecor(0x4444BBBBu));
+  Editor ed(&oc.ctl);
+  EditorTest::loadAppearance(ed, file);   // no file yet: the defaults
+  auto root = EditorTest::buildSides(ed);
+  FairyTapes::Ui::BackView* back = EditorTest::back(ed);
+  ASSERT_TRUE(back != nullptr);
+  auto* stepper = settingWidget<FairyTapes::Ui::OptionStepper>(back, kSetTapeFont);
+  ASSERT_TRUE(stepper != nullptr);
+  const VSTGUI::CRect r = stepper->getViewSize();
+  ASSERT_TRUE(leftClick(stepper, VSTGUI::CPoint(r.right - 4, r.getCenter().y)));   // ">"
+  ASSERT_TRUE(ed.tapeFont() == TapeFont::RockSalt && EditorTest::valuesFont(ed) == FairyTapes::Ui::TapeFontId::RockSalt);
+  ASSERT_TRUE(loadPrefs(file).tapeFont == TapeFont::RockSalt && back->selected(kSetTapeFont) == 1);
+  ASSERT_TRUE(leftClick(stepper, VSTGUI::CPoint(r.left + 4, r.getCenter().y)));    // "<"
+  ASSERT_TRUE(leftClick(stepper, VSTGUI::CPoint(r.left + 4, r.getCenter().y)));    // "<" wraps around
+  ASSERT_TRUE(ed.tapeFont() == TapeFont::HomemadeApple && loadPrefs(file).tapeFont == TapeFont::HomemadeApple);
+  ASSERT_TRUE(chooseOption(back, kSetValuesFont, 0));
+  ASSERT_TRUE(!ed.valuesHandwritten() && !loadPrefs(file).handwrittenValues && loadPrefs(file).tapeFont == TapeFont::HomemadeApple);
+  ASSERT_TRUE(chooseOption(back, kSetValuesFont, 1));
+  ASSERT_TRUE(ed.valuesHandwritten() && loadPrefs(file).handwrittenValues);
+  const std::uint32_t seed0 = ed.wearSeed();
+  auto* reroll = settingWidget<FairyTapes::Ui::PushButton>(back, kSetLook);
+  ASSERT_TRUE(reroll != nullptr && leftClick(reroll, reroll->getViewSize().getCenter()));
+  ASSERT_TRUE(ed.wearSeed() != seed0 && ed.wearSeed() == oc.ctl.decor().seed);
+  ASSERT_TRUE(loadPrefs(file).tapeFont == TapeFont::HomemadeApple);   // RE-ROLL is not a preference
+  EditorTest::destroy(ed, root);
+  std::error_code ec;
+  fs::remove_all(dir, ec);
+}
+
+// The preferences folder cannot be written (a file where a folder should be): the editor goes on, the choice applies for the
+// session and the back shows it.
+void test_settings_failed_write_is_ignored() {
+  namespace fs = std::filesystem;
+  const fs::path dir = scratchPrefsDir("he_settings_ro");
+  fs::create_directories(dir);
+  { std::ofstream(dir / "blocker") << "x"; }
+  const fs::path file = dir / "blocker" / "FairyTapes" / "HappyEnding.prefs";
+  ASSERT_TRUE(!savePrefs(file, Prefs{}));   // the write really fails
+  OwnController oc;
+  oc.ctl.editDecor(seededDecor(0x5555CCCCu));
+  Editor ed(&oc.ctl);
+  EditorTest::loadAppearance(ed, file);
+  auto root = EditorTest::buildSides(ed);
+  FairyTapes::Ui::BackView* back = EditorTest::back(ed);
+  ASSERT_TRUE(back != nullptr && ed.wearLevel() == WearLevel::Light);
+  ASSERT_TRUE(chooseOption(back, kSetWear, 2));
+  ASSERT_TRUE(ed.wearLevel() == WearLevel::Heavy && back->selected(kSetWear) == 2 && EditorTest::prefs(ed).wear == WearLevel::Heavy);
+  ASSERT_TRUE(EditorTest::wear(ed)->marks().size() ==
+              FairyTapes::Ui::generateWear(ed.wearSeed(), WearLevel::Heavy, kEditorWidth, kEditorHeight).size());
+  ASSERT_TRUE(chooseOption(back, kSetValuesFont, 0));
+  ASSERT_TRUE(!ed.valuesHandwritten() && ed.wearLevel() == WearLevel::Heavy);   // the earlier choice stays
+  ASSERT_TRUE(chooseOption(back, kSetSize, 1));   // SIZE too: no window, no request, the choice is kept for the session
+  ASSERT_TRUE(EditorTest::prefs(ed).size == EditorSize::S90 && back->selected(kSetSize) == 1);
+  ASSERT_TRUE(!fs::exists(file) && fs::is_regular_file(dir / "blocker"));
+  EditorTest::tick(ed);
+  ASSERT_TRUE(ed.wearLevel() == WearLevel::Heavy && !ed.valuesHandwritten());
+  EditorTest::destroy(ed, root);
+  std::error_code ec;
+  fs::remove_all(dir, ec);
+}
+
+// The tab links, left to right: SETTINGS, BUTTONS, ROUTING, CREDITS (at 880 / 970 / 1060 / 1150); a click shows the tab (its
+// name is the big title) and the editor remembers it while it lives; the SETTINGS widgets show only on SETTINGS (the
+// OVERSAMPLING line draws only there: test_back_settings_drawn_at_the_preview_geometry).
+void test_tab_links_order() {
+  noPrefs();
+  Editor ed(g_ctl);
+  auto root = EditorTest::buildSides(ed);
+  FairyTapes::Ui::BackView* back = EditorTest::back(ed);
+  ASSERT_TRUE(back != nullptr);
+  const auto& c = back->content();
+  ASSERT_TRUE(c.headerLine == "HAPPY ENDING  \xC2\xB7  MASTERING VST3");
+  const char* labels[] = {"SETTINGS", "BUTTONS", "ROUTING", "CREDITS"};
+  const FairyTapes::Ui::BackTabKind kinds[] = {FairyTapes::Ui::BackTabKind::Settings, FairyTapes::Ui::BackTabKind::Custom,
+                                               FairyTapes::Ui::BackTabKind::Routing, FairyTapes::Ui::BackTabKind::Credits};
+  const double right[] = {880, 970, 1060, 1150};
+  ASSERT_TRUE(c.tabs.size() == 4);
+  double lastX = -1;
+  auto* wearRow = settingWidget<FairyTapes::Ui::SegmentRow>(back, kSetWear);
+  VSTGUI::CView* note = EditorTest::oversamplingNote(ed);
+  ASSERT_TRUE(wearRow != nullptr && note != nullptr && back->isChild(note) && !note->getMouseEnabled());   // clicks go through
+  for (int i = 0; i < 4; ++i) {
+    ASSERT_TRUE(c.tabs[static_cast<std::size_t>(i)].label == labels[i] && c.tabs[static_cast<std::size_t>(i)].kind == kinds[i]);
+    const auto box = FairyTapes::Ui::tabLinkBox(i, 4, kBackLayout);
+    ASSERT_TRUE(box.x > lastX && box.x + box.w == right[i]);
+    lastX = box.x;
+    auto* link = childAt<FairyTapes::Ui::TextLink>(back, boxRect(box));
+    ASSERT_TRUE(link != nullptr && leftClick(link, link->getViewSize().getCenter()));
+    ASSERT_TRUE(back->tab() == i && link->active());
+    ASSERT_TRUE(wearRow->isVisible() == (i == kTabSettings));
+  }
+  EditorTest::destroy(ed, root);
+  root = EditorTest::buildSides(ed);   // the same editor opened again: the last tab
+  ASSERT_TRUE(EditorTest::back(ed) != nullptr && EditorTest::back(ed)->tab() == kTabCredits);
+  EditorTest::destroy(ed, root);
+}
+
+// SETTINGS drawn: the boxes of the preview's geometry (APPEARANCE and BEHAVIOUR side by side up to x 1256, NOTES under them)
+// and the line under OVERSAMPLING, which only the SETTINGS tab shows.
+void test_back_settings_drawn_at_the_preview_geometry() {
+  noPrefs();
+  Editor ed(g_ctl);
+  ed.setWearLevel(WearLevel::Off);
+  auto root = EditorTest::buildSides(ed);
+  FairyTapes::Ui::BackView* back = EditorTest::back(ed);
+  ASSERT_TRUE(back != nullptr);
+  back->setVisible(true);
+  back->setTab(kTabSettings);
+  auto bmp = drawOffscreen(back);
+  ASSERT_TRUE(bmp != nullptr);
+  const Pixels p = pixelsOf(bmp);
+  auto vline = [&](int x, int y) { return std::max(brightness(p.at(x - 1, y)), brightness(p.at(x, y))); };
+  ASSERT_TRUE(lineBrightness(p, 560, 102) > 150 && lineBrightness(p, 1200, 102) > 150);   // top borders of both columns
+  ASSERT_TRUE(lineBrightness(p, 300, 514) > 150 && lineBrightness(p, 1200, 532) > 150);   // APPEARANCE bottom, NOTES top
+  ASSERT_TRUE(vline(654, 300) > 150 && vline(1256, 300) > 150);                           // BEHAVIOUR left and right edges
+  ASSERT_TRUE(vline(976, 300) < 60 && vline(1270, 300) < 60);                              // not the 1000 px template's edges
+  auto textPixels = [&](const Pixels& px) {   // light pixels in the band of the OVERSAMPLING line
+    int n = 0;
+    for (int y = 187; y <= 201; ++y)
+      for (int x = 680; x <= 1120; ++x) n += brightness(px.at(x, y)) > 90 ? 1 : 0;
+    return n;
+  };
+  ASSERT_TRUE(textPixels(p) > 120);
+  back->setTab(kTabRouting);   // a tab whose boxes keep clear of that band
+  auto other = drawOffscreen(back);
+  ASSERT_TRUE(other != nullptr && textPixels(pixelsOf(other)) == 0);
+  back->setVisible(false);
+  EditorTest::destroy(ed, root);
+  ed.setWearLevel(WearLevel::Light);
+}
+
+// SIZE on the back reaches the window at once: the host is asked (IPlugFrame::resizeView) for the new size (1152 x 801 for
+// 90 % at host factor 1, with a host factor on top), the frame's zoom follows, and size=90 is written to the plug-in's own file.
+void test_size_change_resizes_window() {
+  namespace fs = std::filesystem;
+  const fs::path dir = scratchPrefsDir("he_size_ok");
+  const fs::path file = dir / "FairyTapes" / "HappyEnding.prefs";
+  fs::remove_all(dir);
+  FakePlugFrame host;
+  {
+    Editor ed(g_ctl);
+    EditorTest::loadAppearance(ed, file);   // no file: 100 %
+    ASSERT_TRUE(EditorTest::setPlugFrame(ed, &host) == Steinberg::kResultTrue);
+    auto root = EditorTest::buildSides(ed);
+    auto* frame = new VSTGUI::CFrame(VSTGUI::CRect(0, 0, 1280, 890), &ed);
+    EditorTest::setFrame(ed, frame);
+    FairyTapes::Ui::BackView* back = EditorTest::back(ed);
+    ASSERT_TRUE(back != nullptr && back->selected(kSetSize) == 2 && windowOf(ed).getWidth() == 1280);
+    ASSERT_TRUE(chooseOption(back, kSetSize, 1));   // 90 %
+    ASSERT_TRUE(host.requests.size() == 1 && host.requests[0].getWidth() == 1152 && host.requests[0].getHeight() == 801);
+    ASSERT_TRUE(windowOf(ed).getWidth() == 1152 && windowOf(ed).getHeight() == 801);
+    Steinberg::ViewRect asked{};
+    ASSERT_TRUE(ed.checkSizeConstraint(&asked) == Steinberg::kResultTrue && asked.getWidth() == 1152 && asked.getHeight() == 801);
+    ASSERT_TRUE(std::fabs(frame->getTransform().m11 - 0.9) < 1e-9 && std::fabs(frame->getWidth() - 1152) < 1e-6 &&
+                std::fabs(frame->getHeight() - 801) < 1e-6);
+    ASSERT_TRUE(EditorTest::appliedSize(ed) == EditorSize::S90 && back->selected(kSetSize) == 1);
+    ASSERT_TRUE(loadPrefs(file).size == EditorSize::S90 && fileText(file).find("size=90") != std::string::npos);
+    // the host factor and SIZE multiply
+    ASSERT_TRUE(ed.setContentScaleFactor(1.5f) == Steinberg::kResultTrue);
+    ASSERT_TRUE(host.requests.size() == 2 && host.requests[1].getWidth() == 1728 && host.requests[1].getHeight() == 1202);
+    ASSERT_TRUE(chooseOption(back, kSetSize, 2));   // 100 %
+    ASSERT_TRUE(host.requests.size() == 3 && host.requests[2].getWidth() == 1920 && host.requests[2].getHeight() == 1335);
+    ASSERT_TRUE(std::fabs(frame->getTransform().m11 - 1.5) < 1e-9 && windowOf(ed).getWidth() == 1920);
+    ASSERT_TRUE(fileText(file).find("size=100") != std::string::npos);
+    // the same choice again asks nothing
+    ASSERT_TRUE(chooseOption(back, kSetSize, 2) && host.requests.size() == 3);
+    EditorTest::destroy(ed, root);
+    EditorTest::setFrame(ed, nullptr);
+    frame->forget();
+    ASSERT_TRUE(EditorTest::setPlugFrame(ed, nullptr) == Steinberg::kResultTrue);
+  }
+  ASSERT_TRUE(host.refs == 0);
+  std::error_code ec;
+  fs::remove_all(dir, ec);
+}
+
+// The host refuses the new size: the window keeps its size and its frame zoom, nothing crashes, the preference is written all
+// the same and the next editor opens with it. A later request the host accepts goes through.
+void test_size_change_refused_by_host() {
+  namespace fs = std::filesystem;
+  const fs::path dir = scratchPrefsDir("he_size_refused");
+  const fs::path file = dir / "FairyTapes" / "HappyEnding.prefs";
+  fs::remove_all(dir);
+  FakePlugFrame host;
+  host.accept = false;
+  {
+    Editor ed(g_ctl);
+    EditorTest::loadAppearance(ed, file);
+    ASSERT_TRUE(EditorTest::setPlugFrame(ed, &host) == Steinberg::kResultTrue);
+    auto root = EditorTest::buildSides(ed);
+    auto* frame = new VSTGUI::CFrame(VSTGUI::CRect(0, 0, 1280, 890), &ed);
+    EditorTest::setFrame(ed, frame);
+    FairyTapes::Ui::BackView* back = EditorTest::back(ed);
+    ASSERT_TRUE(back != nullptr);
+    ASSERT_TRUE(chooseOption(back, kSetSize, 3));   // 125 %: the host says no
+    ASSERT_TRUE(host.requests.size() == 1 && host.requests[0].getWidth() == 1600 && host.requests[0].getHeight() == 1113);
+    ASSERT_TRUE(windowOf(ed).getWidth() == 1280 && windowOf(ed).getHeight() == 890);
+    Steinberg::ViewRect asked{};
+    ASSERT_TRUE(ed.checkSizeConstraint(&asked) == Steinberg::kResultTrue && asked.getWidth() == 1280 && asked.getHeight() == 890);
+    ASSERT_TRUE(std::fabs(frame->getTransform().m11 - 1.0) < 1e-9 && std::fabs(frame->getWidth() - 1280) < 1e-6 &&
+                std::fabs(frame->getHeight() - 890) < 1e-6);
+    ASSERT_TRUE(EditorTest::appliedSize(ed) == EditorSize::S100);
+    ASSERT_TRUE(EditorTest::prefs(ed).size == EditorSize::S125 && back->selected(kSetSize) == 3);   // the choice stands
+    ASSERT_TRUE(loadPrefs(file).size == EditorSize::S125 && fileText(file).find("size=125") != std::string::npos);
+    EditorTest::tick(ed);   // the timer goes on
+    // a host factor the host refuses leaves the window alone too
+    ASSERT_TRUE(ed.setContentScaleFactor(2.0f) == Steinberg::kResultTrue);
+    ASSERT_TRUE(host.requests.size() == 2 && windowOf(ed).getWidth() == 1280 && std::fabs(frame->getTransform().m11 - 1.0) < 1e-9);
+    // the next editor opens with the saved size
+    Editor next(g_ctl);
+    EditorTest::loadAppearance(next, file);
+    ASSERT_TRUE(windowOf(next).getWidth() == 1600 && windowOf(next).getHeight() == 1113 && EditorTest::appliedSize(next) == EditorSize::S125);
+    // the host accepts again: the next choice goes through from the window as it is
+    host.accept = true;
+    ASSERT_TRUE(chooseOption(back, kSetSize, 1));   // 90 %
+    ASSERT_TRUE(host.requests.size() == 3 && host.requests[2].getWidth() == 1152);
+    ASSERT_TRUE(windowOf(ed).getWidth() == 1152 && std::fabs(frame->getTransform().m11 - 0.9) < 1e-9 && loadPrefs(file).size == EditorSize::S90);
+    EditorTest::destroy(ed, root);
+    EditorTest::setFrame(ed, nullptr);
+    frame->forget();
+    ASSERT_TRUE(EditorTest::setPlugFrame(ed, nullptr) == Steinberg::kResultTrue);
+  }
+  ASSERT_TRUE(host.refs == 0);
+  std::error_code ec;
+  fs::remove_all(dir, ec);
+}
+
+// OVERSAMPLING on the back is the stored parameter: one click is exactly one beginEdit / performEdit / endEdit of kOversampling
+// on the step, the controller asks the host to read the latency once, no preference is written; a change that comes from the host
+// moves the row on the next tick without an echo.
+void test_oversampling_from_back_is_one_edit() {
+  namespace fs = std::filesystem;
+  const fs::path file = scratchPrefsDir("he_oversampling") / "FairyTapes" / "HappyEnding.prefs";
+  fs::remove_all(file.parent_path().parent_path());
+  resetAll(g_ctl);
+  g_ctl->setParamNormalized(kOversampling, normFromIndex(kOversampling, 1));
+  g_ctl->setComponentHandler(&g_host);
+  g_host.clear();
+  Editor ed(g_ctl);
+  EditorTest::loadAppearance(ed, file);
+  auto root = EditorTest::buildSides(ed);
+  FairyTapes::Ui::BackView* back = EditorTest::back(ed);
+  ASSERT_TRUE(back != nullptr && back->selected(kSetOversampling) == 1);   // the parameter's default: 2x
+  ASSERT_TRUE(chooseOption(back, kSetOversampling, 2));
+  ASSERT_TRUE(g_host.once(kOversampling) && g_host.total() == 3);
+  ASSERT_TRUE(near(g_host.last[kOversampling], normFromIndex(kOversampling, 2)));
+  ASSERT_TRUE(indexFromNorm(kOversampling, g_ctl->getParamNormalized(kOversampling)) == 2 && g_host.latencyRestarts == 1);
+  ASSERT_TRUE(back->selected(kSetOversampling) == 2 && !fs::exists(file));   // a project setting, not a preference
+  EditorTest::tick(ed);
+  ASSERT_TRUE(g_host.total() == 3 && g_host.latencyRestarts == 1 && back->selected(kSetOversampling) == 2);
+  ASSERT_TRUE(chooseOption(back, kSetOversampling, 2) && g_host.total() == 3);   // the same choice again: nothing
+  ASSERT_TRUE(chooseOption(back, kSetOversampling, 0));
+  ASSERT_TRUE(g_host.performs[kOversampling] == 2 && near(g_host.last[kOversampling], normFromIndex(kOversampling, 0)) && g_host.latencyRestarts == 2);
+  // from the host (automation is off for it, but a state recall or the generic editor can write it): the row follows
+  g_ctl->setParamNormalized(kOversampling, normFromIndex(kOversampling, 2));
+  ASSERT_TRUE(g_host.latencyRestarts == 3 && back->selected(kSetOversampling) == 0);   // only flagged
+  const int total = g_host.total();
+  EditorTest::tick(ed);
+  ASSERT_TRUE(back->selected(kSetOversampling) == 2 && g_host.total() == total);       // no echo
+  // none of the front controls moved
+  for (int i = 0; i < kNumControls; ++i) ASSERT_TRUE(EditorTest::controlAt(ed, i) != nullptr);
+  g_ctl->setParamNormalized(kOversampling, normFromIndex(kOversampling, 1));
+  g_ctl->setComponentHandler(nullptr);
+  g_host.clear();
+  EditorTest::destroy(ed, root);
+}
+
 } // namespace
 
 int main() {
@@ -2648,6 +3090,15 @@ int main() {
     RUN_TEST(test_missing_grain_asset_draws_plain_panel);
     RUN_TEST(test_values_in_tape_font_with_normalized_digits);
     RUN_TEST(test_value_texts_covered_by_tape_fonts);
+    RUN_TEST(test_flip_roundtrip_and_text_edit_confirmed_first);
+    RUN_TEST(test_settings_apply_wear_at_once);
+    RUN_TEST(test_settings_fonts_and_reroll_apply);
+    RUN_TEST(test_settings_failed_write_is_ignored);
+    RUN_TEST(test_tab_links_order);
+    RUN_TEST(test_back_settings_drawn_at_the_preview_geometry);
+    RUN_TEST(test_size_change_resizes_window);
+    RUN_TEST(test_size_change_refused_by_host);
+    RUN_TEST(test_oversampling_from_back_is_one_edit);
     RUN_TEST(test_editor_timer_stops_on_close);
     g_ctl = nullptr;
     ctl.terminate();

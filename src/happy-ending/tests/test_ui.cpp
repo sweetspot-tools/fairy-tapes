@@ -2,6 +2,8 @@
  * Fairy Tapes · Happy Ending — tests for the pure editor layout (ui/editor_size.h, ui/layout.h): no VSTGUI.
  * Build target: happy_ending_ui_tests.
  */
+#include "ui/back_layout.h"
+#include "ui/back_settings.h"
 #include "ui/decor.h"
 #include "ui/editor_size.h"
 #include "ui/layout.h"
@@ -1402,6 +1404,186 @@ void test_tape_texts_and_ink() {
   ASSERT_TRUE(tapeInk(TapeFontId::Zeyada, "", 96, tapeLook(1, 0)).text.empty());
 }
 
+// ---- Back of the panel (Task 13) ---------------------------------------------------------------------------------------
+// The geometry of Happy Ending's own back (preview BACK section, happy_ending_rack.html): 1280 x 890, every number in the
+// task's brief, every box inside the panel, the links at the places of the preview.
+void test_back_layout_values() {
+  using FairyTapes::Ui::BackBox;
+  const auto& L = kBackLayout;
+  auto same = [](const BackBox& b, double x, double y, double w, double h) { return b.x == x && b.y == y && b.w == w && b.h == h; };
+  ASSERT_TRUE(L.width == 1280 && L.height == 890 && L.width == kEditorWidth && L.height == kEditorHeight);
+  ASSERT_TRUE(same(L.appearance, 24, 102, 602, 412) && same(L.behaviour, 654, 102, 602, 412) && same(L.notes, 24, 532, 1232, 120));
+  ASSERT_TRUE(same(L.creditsTitle, 24, 102, 1232, 100) && same(L.components, 24, 220, 1232, 292) && same(L.notices, 24, 530, 1232, 80));
+  ASSERT_TRUE(same(L.custom, 24, 102, 1232, 700));
+  ASSERT_TRUE(same(L.flow, 24, 102, 1232, 672) && same(L.legend, 24, 790, 1232, 88));   // ROUTING: SIGNAL FLOW and LEGEND of the preview
+  ASSERT_TRUE(L.legendSymbolY == 826 && L.legendNoteBaseline == 860);
+  ASSERT_TRUE(L.subtitleBaseline == 130 && L.firstRowY == 146 && L.rowStep == 48 && L.maxRows == 8);
+  ASSERT_TRUE(L.notesFirstBaseline == 570 && L.notesStep == 22);
+  ASSERT_TRUE(L.versionBaseline == 136 && L.licenseFirstBaseline == 158 && L.licenseStep == 18);
+  ASSERT_TRUE(L.creditFirstBaseline == 254 && L.creditMaxStep == 22 && L.noticesFirstBaseline == 556 && L.noticesStep == 18);
+  ASSERT_TRUE(L.creditNameX == 50 && L.creditAuthorX == 350 && L.creditLicenseRight == 1230);
+  // links: SETTINGS / BUTTONS / ROUTING / CREDITS right-aligned at 880 / 970 / 1060 / 1150, "<- BACK" and "BACK ->" at 1246
+  const double right[] = {880, 970, 1060, 1150};
+  for (int i = 0; i < 4; ++i) {
+    const BackBox b = FairyTapes::Ui::tabLinkBox(i, 4, L);
+    ASSERT_TRUE(b.x + b.w == right[i] && b.y <= 66 && b.y + b.h == 84);
+  }
+  const BackBox back = FairyTapes::Ui::backLinkBox(L), front = FairyTapes::Ui::frontBackLinkBox(L);
+  ASSERT_TRUE(back.x + back.w == 1246 && back.y <= 66 && back.y + back.h == 84);
+  ASSERT_TRUE(front.x == back.x && front.y == back.y && front.w == back.w && front.h == back.h);
+  // every box inside the panel, the columns side by side, the full-width boxes in step
+  const BackBox boxes[] = {L.appearance, L.behaviour, L.notes, L.creditsTitle, L.components, L.notices, L.custom, L.flow, L.legend};
+  for (const BackBox& b : boxes) ASSERT_TRUE(b.x >= 0 && b.y >= 0 && b.w > 0 && b.h > 0 && b.x + b.w <= 1280 && b.y + b.h <= 890);
+  ASSERT_TRUE(L.appearance.x + L.appearance.w < L.behaviour.x && L.behaviour.x + L.behaviour.w == 1256);
+  ASSERT_TRUE(L.notes.y >= L.appearance.y + L.appearance.h && L.components.y >= L.creditsTitle.y + L.creditsTitle.h);
+  ASSERT_TRUE(L.notices.y >= L.components.y + L.components.h && L.legend.y >= L.flow.y + L.flow.h);
+  ASSERT_TRUE(back.x + back.w <= 1280 && FairyTapes::Ui::tabLinkBox(0, 4, L).x > 0);
+  // the rows of the preview (146 ... 482) fit in the column boxes
+  for (int row = 0; row < L.maxRows; ++row) {
+    const auto it = FairyTapes::Ui::choiceItem(1, FairyTapes::Ui::BackColumn::Appearance, "X", "", {"A", "B"}, 0, 63);
+    const BackBox c = FairyTapes::Ui::itemControlBox(it, row, L);
+    ASSERT_TRUE(c.y + c.h <= L.appearance.y + L.appearance.h - 8 && c.x + c.w <= L.appearance.x + L.appearance.w - 10);
+  }
+}
+
+// The preferences and the OVERSAMPLING index to the items of the back (no callbacks). The order: WEAR, TAPE FONT, VALUES FONT,
+// LOOK (RE-ROLL), SIZE in APPEARANCE, OVERSAMPLING in BEHAVIOUR. The preview's NOTES LAYER, METER HOLD and
+// METER RELEASE rows do nothing yet and are not offered (as Deep Throat).
+void test_settings_items_reflect_prefs() {
+  using FairyTapes::Ui::BackColumn;
+  using FairyTapes::Ui::BackItemKind;
+  using FairyTapes::Ui::EditorSize;
+  const EditorSize sizes[] = {EditorSize::S75, EditorSize::S90, EditorSize::S100, EditorSize::S125};
+  for (int w = 0; w < 3; ++w)
+    for (int f = 0; f < 3; ++f)
+      for (int v = 0; v < 2; ++v)
+        for (int s = 0; s < 4; ++s)
+          for (int o = 0; o < 3; ++o) {
+            Prefs p;
+            p.wear = static_cast<WearLevel>(w);
+            p.tapeFont = static_cast<TapeFont>(f);
+            p.handwrittenValues = v == 1;
+            p.size = sizes[s];
+            p.notes = (w + f) % 2 == 0;
+            const auto items = settingsItems(p, o);
+            ASSERT_TRUE(items.size() == 6);
+            const int keys[] = {kSetWear, kSetTapeFont, kSetValuesFont, kSetLook, kSetSize, kSetOversampling};
+            const char* labels[] = {"WEAR", "TAPE FONT", "VALUES FONT", "LOOK", "SIZE", "OVERSAMPLING"};
+            const BackItemKind kinds[] = {BackItemKind::Choice, BackItemKind::Stepper, BackItemKind::Choice,
+                                          BackItemKind::Button, BackItemKind::Choice, BackItemKind::Choice};
+            for (std::size_t i = 0; i < 6; ++i) {
+              ASSERT_TRUE(items[i].key == keys[i] && items[i].label == labels[i] && items[i].kind == kinds[i]);
+              ASSERT_TRUE(items[i].column == (i == 5 ? BackColumn::Behaviour : BackColumn::Appearance));
+            }
+            ASSERT_TRUE(items[0].selected == w && (items[0].options == std::vector<std::string>{"OFF", "LIGHT", "HEAVY"}));
+            ASSERT_TRUE(items[1].selected == f && items[1].tapeFontOptions &&
+                        (items[1].options == std::vector<std::string>{"Zeyada", "Rock Salt", "Homemade Apple"}));
+            ASSERT_TRUE(items[2].selected == v && (items[2].options == std::vector<std::string>{"STANDARD", "TAPE FONT"}));
+            ASSERT_TRUE(items[3].options == std::vector<std::string>{"RE-ROLL"} && items[3].note == "new wear, dirt and screws");
+            ASSERT_TRUE(items[4].selected == s && items[4].hint == "editor size of this plugin" && items[4].cellWidth == 63);
+            ASSERT_TRUE((items[4].options == std::vector<std::string>{"75 %", "90 %", "100 %", "125 %"}));
+            ASSERT_TRUE(items[5].selected == o && items[5].hint == "CLIP, TUBE, FINAL, METALHEAD" && items[5].cellWidth == 63);
+            ASSERT_TRUE((items[5].options == std::vector<std::string>{"OFF", "2\xC3\x97", "4\xC3\x97"}));
+            for (int key : {kSetWear, kSetTapeFont, kSetValuesFont, kSetSize})
+              ASSERT_TRUE(items[static_cast<std::size_t>(key - 1)].selected == selectedFor(key, p, o));
+            ASSERT_TRUE(selectedFor(kSetOversampling, p, o) == o && selectedFor(kSetLook, p, o) == 0);
+          }
+  // an index out of range is limited, never trusted
+  ASSERT_TRUE(settingsItems(Prefs{}, 7)[5].selected == 2 && settingsItems(Prefs{}, -3)[5].selected == 0);
+  // the default OVERSAMPLING is the parameter's (2x)
+  ASSERT_TRUE(kParams[kOversampling].defaultIndex == 1 && settingsItems(Prefs{}, kParams[kOversampling].defaultIndex)[5].selected == 1);
+
+  // The whole back: tabs, header, notes, the template accepts its SETTINGS (ROUTING and CREDITS are filled by Task 14).
+  const auto content = backContent(Prefs{}, 1);
+  const char* labels[] = {"SETTINGS", "BUTTONS", "ROUTING", "CREDITS"};
+  const FairyTapes::Ui::BackTabKind kinds[] = {FairyTapes::Ui::BackTabKind::Settings, FairyTapes::Ui::BackTabKind::Custom,
+                                               FairyTapes::Ui::BackTabKind::Routing, FairyTapes::Ui::BackTabKind::Credits};
+  ASSERT_TRUE(content.tabs.size() == 4 && content.headerLine == "HAPPY ENDING  \xC2\xB7  MASTERING VST3");
+  for (std::size_t i = 0; i < 4; ++i) ASSERT_TRUE(content.tabs[i].label == labels[i] && content.tabs[i].kind == kinds[i]);
+  ASSERT_TRUE(kTabSettings == 0 && kTabButtons == 1 && kTabRouting == 2 && kTabCredits == 3);
+  for (const std::string& problem : FairyTapes::Ui::backContentProblems(content, kBackLayout)) {
+    const bool later = problem.rfind("routing:", 0) == 0 || problem.rfind("credits:", 0) == 0;   // Task 14
+    if (!later) std::fprintf(stderr, "  back content: %s\n", problem.c_str());
+    ASSERT_TRUE(later);
+  }
+  // the four notes of the preview
+  const auto notes = settingsNotes();
+  ASSERT_TRUE(notes.size() == 4 && content.notes == notes);
+  ASSERT_TRUE(notes[0] == "Appearance settings belong to you: they are kept in your preferences and apply to every project and every instance.");
+  ASSERT_TRUE(notes[1] == "Behaviour settings change how the plugin works: they are saved in the project, together with the parameters.");
+  ASSERT_TRUE(notes[2] == "The wear layout (scratches, tape, screws) is generated once per instance from a saved seed and never changes by itself.");
+  ASSERT_TRUE(notes[3] == "Double-click on a knob returns it to its neutral default.");
+  ASSERT_TRUE(std::string(oversamplingNote()) == "linear phase; the latency is reported to the host and changes only with this setting");
+}
+
+// Each click gives the expected preferences and leaves the other fields alone; RE-ROLL, OVERSAMPLING (not a preference), an
+// unknown key or an index out of range change nothing there. OVERSAMPLING maps to the parameter's step.
+void test_settings_item_to_prefs() {
+  using FairyTapes::Ui::EditorSize;
+  const EditorSize sizes[] = {EditorSize::S75, EditorSize::S90, EditorSize::S100, EditorSize::S125};
+  auto same = [](const Prefs& a, const Prefs& b) {
+    return a.wear == b.wear && a.tapeFont == b.tapeFont && a.handwrittenValues == b.handwrittenValues && a.notes == b.notes &&
+           a.size == b.size;
+  };
+  for (int w = 0; w < 3; ++w)
+    for (int s = 0; s < 4; ++s)
+      for (int v = 0; v < 2; ++v) {
+        Prefs base;
+        base.wear = static_cast<WearLevel>(w);
+        base.size = sizes[s];
+        base.handwrittenValues = v == 1;
+        base.notes = w != 1;
+        base.tapeFont = static_cast<TapeFont>(s % 3);
+        for (int i = 0; i < 3; ++i) {
+          Prefs p = base, want = base;
+          want.wear = static_cast<WearLevel>(i);
+          ASSERT_TRUE(applySetting(kSetWear, i, p) && same(p, want));
+          p = base;
+          want = base;
+          want.tapeFont = static_cast<TapeFont>(i);
+          ASSERT_TRUE(applySetting(kSetTapeFont, i, p) && same(p, want));
+        }
+        for (int i = 0; i < 2; ++i) {
+          Prefs p = base, want = base;
+          want.handwrittenValues = i == 1;
+          ASSERT_TRUE(applySetting(kSetValuesFont, i, p) && same(p, want) && selectedFor(kSetValuesFont, p, 1) == i);
+        }
+        for (int i = 0; i < 4; ++i) {
+          Prefs p = base, want = base;
+          want.size = sizes[i];
+          ASSERT_TRUE(applySetting(kSetSize, i, p) && same(p, want) && selectedFor(kSetSize, p, 1) == i);
+        }
+        for (const auto& bad : {std::pair<int, int>{kSetWear, -1}, {kSetWear, 3}, {kSetTapeFont, 3}, {kSetTapeFont, -1},
+                                {kSetValuesFont, 2}, {kSetValuesFont, -1}, {kSetSize, 4}, {kSetSize, -1}, {kSetLook, 0},
+                                {kSetOversampling, 1}, {0, 0}, {99, 1}}) {
+          Prefs p = base;
+          ASSERT_TRUE(!applySetting(bad.first, bad.second, p) && same(p, base));
+        }
+      }
+  // OVERSAMPLING: the step of the parameter, only for its own key and a step that exists
+  int step = -1;
+  for (int i = 0; i < kParams[kOversampling].steps; ++i) {
+    step = -1;
+    ASSERT_TRUE(oversamplingStepFor(kSetOversampling, i, step) && step == i);
+  }
+  for (const auto& bad : {std::pair<int, int>{kSetOversampling, -1}, {kSetOversampling, 3}, {kSetSize, 1}, {kSetWear, 0}, {kSetLook, 0}, {0, 0}}) {
+    step = 42;
+    ASSERT_TRUE(!oversamplingStepFor(bad.first, bad.second, step) && step == 42);
+  }
+}
+
+// The "BACK ->" link of the front (the template's place, top right of the header) covers no control, no readout, no screw and
+// no box of the front.
+void test_back_link_clear_of_front() {
+  const auto b = FairyTapes::Ui::frontBackLinkBox(kBackLayout);
+  const Rect link{static_cast<float>(b.x), static_cast<float>(b.y), static_cast<float>(b.w), static_cast<float>(b.h)};
+  for (const ControlSpec& c : kControls) ASSERT_TRUE(!overlap(link, viewRect(c)));
+  for (const Rect& r : fixedReadouts()) ASSERT_TRUE(!overlap(link, r));
+  for (const BoxSpec& box : kBoxes) ASSERT_TRUE(!overlap(link, box.rect));
+  for (int i = 0; i < 4; ++i) ASSERT_TRUE(!overlap(link, Rect{kScrewPos[i][0] - 12, kScrewPos[i][1] - 12, 24, 24}));
+  ASSERT_TRUE(inside(link, kPanel));
+}
+
 } // namespace
 
 int main() {
@@ -1437,6 +1619,10 @@ int main() {
   RUN_TEST(test_screw_look_matches_shared_generator);
   RUN_TEST(test_screw_angles);
   RUN_TEST(test_tape_texts_and_ink);
+  RUN_TEST(test_back_layout_values);
+  RUN_TEST(test_back_link_clear_of_front);
+  RUN_TEST(test_settings_items_reflect_prefs);
+  RUN_TEST(test_settings_item_to_prefs);
   std::error_code ec;
   fs::remove_all(scratchDir(), ec);   // the scratch folder of the prefs tests
   std::printf("%d passed, %d failed\n", g_passed, g_failed);
