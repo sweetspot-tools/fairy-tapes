@@ -179,6 +179,8 @@ struct EditorTest {
   // The appearance from a preferences file instead of the user's (what open() does with prefsPath()).
   static void loadAppearance(Editor& ed, const std::filesystem::path& file) { ed.loadAppearance(file); }
   static const Prefs& prefs(const Editor& ed) { return ed.prefs_; }
+  // What open() does with the preferences (Wear and the fonts again, never SIZE).
+  static void reloadAppearanceOnOpen(Editor& ed) { ed.reloadAppearanceOnOpen(); }
   static bool timerRunning(const Editor& ed) { return ed.timer_ != nullptr; }
   // The UI timer as open() starts it (a test has no window, so no run loop: it never fires here).
   static void startTimer(Editor& ed) { ed.startTimer(); }
@@ -1805,6 +1807,78 @@ void test_tape_text_edit_goes_to_decor() {
   EditorTest::destroy(ed, root);
 }
 
+// A decor recalled with a new seed (state recall, undo) while a tape field is open rebuilds the tapes: the typed text that
+// was not confirmed is dropped, it is not written over the recalled decor and the project does not turn dirty.
+void test_recalled_decor_drops_open_tape_text() {
+  noPrefs();
+  OwnController oc;
+  oc.ctl.editDecor(seededDecor(0x5EEDBEEFu));
+  Editor ed(&oc.ctl);
+  auto root = EditorTest::build(ed);
+  ed.setWearLevel(WearLevel::Heavy);
+  ASSERT_TRUE(!EditorTest::tapes(ed).empty());
+  const VSTGUI::CPoint at = EditorTest::tapes(ed)[0]->tapeRect().getCenter();
+  rootClick(root, at.x, at.y);
+  VSTGUI::CTextEdit* field = EditorTest::tapeEdit(ed);
+  ASSERT_TRUE(field != nullptr);
+  field->setText("STALE");
+  Decor recalled = seededDecor(0x13572468u);
+  recalled.tapeTexts.assign(kNumTapeSlots, "RECALLED");
+  oc.ctl.editDecor(recalled);
+  const std::uint32_t rev = oc.ctl.decorRevision();
+  EditorTest::tick(ed);
+  ASSERT_TRUE(ed.wearSeed() == 0x13572468u && EditorTest::tapeEdit(ed) == nullptr);
+  ASSERT_TRUE(oc.ctl.decorRevision() == rev);   // no editDecor from the editor
+  ASSERT_TRUE(oc.ctl.decor().tapeTexts == recalled.tapeTexts);
+  ASSERT_TRUE(!EditorTest::tapes(ed).empty());
+  for (TapeView* t : EditorTest::tapes(ed)) ASSERT_TRUE(t->text() == "RECALLED");
+  EditorTest::destroy(ed, root);
+}
+
+// A local edit does not swallow a decor the host sent in the last timer period: the next tick still applies it.
+void test_local_edit_keeps_host_decor_pending() {
+  noPrefs();
+  OwnController oc;
+  oc.ctl.editDecor(seededDecor(0x5EEDBEEFu));
+  Editor ed(&oc.ctl);
+  auto root = EditorTest::build(ed);
+  ed.setWearLevel(WearLevel::Heavy);
+  ASSERT_TRUE(!EditorTest::tapes(ed).empty());
+  // a tape text confirmed after the host recalled another seed (no tick in between)
+  const VSTGUI::CPoint at = EditorTest::tapes(ed)[0]->tapeRect().getCenter();
+  rootClick(root, at.x, at.y);
+  VSTGUI::CTextEdit* field = EditorTest::tapeEdit(ed);
+  ASSERT_TRUE(field != nullptr);
+  field->setText("MINE");
+  oc.ctl.editDecor(seededDecor(0x13572468u));
+  EditorTest::closeTapeEdit(ed, true);
+  ASSERT_TRUE(oc.ctl.decor().seed == 0x13572468u);
+  EditorTest::tick(ed);
+  ASSERT_TRUE(ed.wearSeed() == 0x13572468u);
+  ASSERT_TRUE(EditorTest::wear(ed)->marks().size() ==
+              FairyTapes::Ui::generateWear(0x13572468u, WearLevel::Heavy, kEditorWidth, kEditorHeight).size());
+  ASSERT_TRUE(EditorTest::tapes(ed).size() == layoutFromSeed(0x13572468u, WearLevel::Heavy, kPanelRect).tapes.size());
+  // the same after a screw turn
+  int index = -1;
+  for (int i = 0; i < 4 && index < 0; ++i)
+    if (!EditorTest::screw(ed, i)->spec().missing) index = i;
+  ASSERT_TRUE(index >= 0);
+  const VSTGUI::CPoint p(EditorTest::screw(ed, index)->spec().x, EditorTest::screw(ed, index)->spec().y);
+  const VSTGUI::MouseEventButtonState left(VSTGUI::MouseButton::Left);
+  VSTGUI::MouseDownEvent down(p, left);
+  root->dispatchEvent(down);
+  ASSERT_TRUE(down.consumed);
+  VSTGUI::MouseMoveEvent move(VSTGUI::CPoint(p.x + 30, p.y - 15), left);
+  root->dispatchEvent(move);
+  oc.ctl.editDecor(seededDecor(0x2468ACE0u));   // the host recalls another seed before the drag ends
+  VSTGUI::MouseUpEvent up(VSTGUI::CPoint(p.x + 30, p.y - 15), left);
+  root->dispatchEvent(up);
+  ASSERT_TRUE(oc.ctl.decor().seed == 0x2468ACE0u);
+  EditorTest::tick(ed);
+  ASSERT_TRUE(ed.wearSeed() == 0x2468ACE0u);
+  EditorTest::destroy(ed, root);
+}
+
 // A drag of a screw (delivered through the container): no decor edit while it moves, exactly one at the end with the
 // user's rotation; the timer keeps the shown angle.
 void test_screw_drag_stores_angle_once() {
@@ -3089,6 +3163,57 @@ void test_size_change_refused_by_host() {
   fs::remove_all(dir, ec);
 }
 
+// After a refused SIZE, changing WEAR or a font does not ask the host for the window again: only the SIZE choice does.
+void test_other_setting_does_not_reask_refused_size() {
+  namespace fs = std::filesystem;
+  const fs::path dir = scratchPrefsDir("he_size_noreask");
+  const fs::path file = dir / "FairyTapes" / "HappyEnding.prefs";
+  fs::remove_all(dir);
+  FakePlugFrame host;
+  host.accept = false;
+  {
+    Editor ed(g_ctl);
+    EditorTest::loadAppearance(ed, file);
+    ASSERT_TRUE(EditorTest::setPlugFrame(ed, &host) == Steinberg::kResultTrue);
+    auto root = EditorTest::buildSides(ed);
+    auto* frame = new VSTGUI::CFrame(VSTGUI::CRect(0, 0, 1280, 890), &ed);
+    EditorTest::setFrame(ed, frame);
+    FairyTapes::Ui::BackView* back = EditorTest::back(ed);
+    ASSERT_TRUE(back != nullptr);
+    ASSERT_TRUE(chooseOption(back, kSetSize, 3));   // 125 %: refused
+    ASSERT_TRUE(host.requests.size() == 1);
+    ASSERT_TRUE(chooseOption(back, kSetWear, back->selected(kSetWear) == 0 ? 1 : 0));
+    ASSERT_TRUE(host.requests.size() == 1);
+    auto* stepper = settingWidget<FairyTapes::Ui::OptionStepper>(back, kSetTapeFont);
+    ASSERT_TRUE(stepper != nullptr);
+    ASSERT_TRUE(leftClick(stepper, VSTGUI::CPoint(stepper->getViewSize().right - 4, stepper->getViewSize().getCenter().y)));   // ">"
+    ASSERT_TRUE(chooseOption(back, kSetValuesFont, back->selected(kSetValuesFont) == 0 ? 1 : 0));
+    ASSERT_TRUE(host.requests.size() == 1 && windowOf(ed).getWidth() == 1280);
+    ASSERT_TRUE(loadPrefs(file).size == EditorSize::S125);   // the choice stays in the file, with the other settings
+    EditorTest::destroy(ed, root);
+    EditorTest::setFrame(ed, nullptr);
+    frame->forget();
+    ASSERT_TRUE(EditorTest::setPlugFrame(ed, nullptr) == Steinberg::kResultTrue);
+  }
+  ASSERT_TRUE(host.refs == 0);
+  std::error_code ec;
+  fs::remove_all(dir, ec);
+}
+
+// open() reads Wear and the fonts again but never SIZE: the window was fixed when the editor was made (the host knows it),
+// whatever another instance wrote to the file since.
+void test_open_does_not_reread_size() {
+  noPrefs();
+  Editor ed(g_ctl);
+  ASSERT_TRUE(windowOf(ed).getWidth() == 1280 && EditorTest::appliedSize(ed) == EditorSize::S100);
+  writePrefs(prefsFile(), "size=125\nwear=Heavy\n");
+  EditorTest::reloadAppearanceOnOpen(ed);
+  noPrefs();
+  ASSERT_TRUE(windowOf(ed).getWidth() == 1280 && windowOf(ed).getHeight() == 890);
+  ASSERT_TRUE(EditorTest::appliedSize(ed) == EditorSize::S100 && EditorTest::prefs(ed).size == EditorSize::S100);
+  ASSERT_TRUE(ed.wearLevel() == WearLevel::Heavy);   // the rest is read again
+}
+
 // OVERSAMPLING on the back is the stored parameter: one click is exactly one beginEdit / performEdit / endEdit of kOversampling
 // on the step, the controller asks the host to read the latency once, no preference is written; a change that comes from the host
 // moves the row on the next tick without an echo.
@@ -3196,6 +3321,8 @@ int main() {
     RUN_TEST(test_screw_drag_stores_angle_once);
     RUN_TEST(test_reroll_changes_seed_and_clears_decor);
     RUN_TEST(test_decor_change_applied_on_tick);
+    RUN_TEST(test_recalled_decor_drops_open_tape_text);
+    RUN_TEST(test_local_edit_keeps_host_decor_pending);
     RUN_TEST(test_seed_zero_waits_for_decor);
     RUN_TEST(test_prefs_missing_file_opens_with_defaults);
     RUN_TEST(test_prefs_applied_when_editor_made);
@@ -3212,6 +3339,8 @@ int main() {
     RUN_TEST(test_back_tabs_drawn);
     RUN_TEST(test_size_change_resizes_window);
     RUN_TEST(test_size_change_refused_by_host);
+    RUN_TEST(test_other_setting_does_not_reask_refused_size);
+    RUN_TEST(test_open_does_not_reread_size);
     RUN_TEST(test_oversampling_from_back_is_one_edit);
     RUN_TEST(test_editor_timer_stops_on_close);
     g_ctl = nullptr;

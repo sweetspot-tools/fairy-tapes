@@ -237,7 +237,10 @@ private:
 
   // Reads the preferences in `file` (any problem: the defaults) and applies them: SIZE (the window), Wear, tape font, values
   // font. `file` is also where the back's choices are saved (empty: nowhere).
-  void loadAppearance(const std::filesystem::path& file);
+  // withSize false leaves the window and the SIZE choice (prefs_.size) as they are.
+  void loadAppearance(const std::filesystem::path& file, bool withSize = true);
+  // What open() does with the preferences: Wear and the fonts again, never SIZE.
+  void reloadAppearanceOnOpen();
   // SIZE in use: the preference when the window follows it. Asks for the new window while the views are shown.
   void setSize(EditorSize size);
   // The window for a host factor and a SIZE: the reported size (setRect), the frame's zoom and, while the views are shown,

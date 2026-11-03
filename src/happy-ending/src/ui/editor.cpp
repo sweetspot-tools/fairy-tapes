@@ -403,8 +403,7 @@ bool PLUGIN_API Editor::open(void* parent, const PlatformType& platformType) {
   config = &x11Config;
 #endif
 
-  // The preferences again: SIZE may have changed in another instance since the view was made.
-  loadAppearance(userPrefsFile());
+  reloadAppearanceOnOpen();
 
   frame = new CFrame(CRect(0, 0, kWidth, kHeight), this);
   frame->setBackgroundColor(kFrameBackground);
@@ -884,21 +883,28 @@ void Editor::commitTypedValue(ParamID id, const std::string& typed) {
   refreshFromController();
 }
 
-void Editor::loadAppearance(const std::filesystem::path& file) {
+void Editor::loadAppearance(const std::filesystem::path& file, bool withSize) {
   Prefs p;
   try {
     if (!file.empty()) p = loadPrefs(file);
   } catch (...) {
     p = Prefs{};
   }
+  const EditorSize sizeChoice = prefs_.size;
   prefs_ = p;   // the fields the editor does not show (notes) are kept for the next save
+  if (!withSize) prefs_.size = sizeChoice;   // SIZE stays as this editor has it (a choice the host refused included)
   prefsFile_ = file;
   setWearLevel(p.wear);
   setTapeFont(p.tapeFont);
   setValuesFont(p.handwrittenValues);
-  applyWindowSize(scale_, p.size);
+  if (withSize) applyWindowSize(scale_, p.size);
   if (back_) back_->setSelected(kSetSize, selectedFor(kSetSize, prefs_, 0));
 }
+
+// The preferences again when the view opens: Wear and the fonts may have changed in another instance since this editor was
+// made. SIZE is not read again: the window size was fixed at construction (the host has been told about it) and changes only
+// from the back.
+void Editor::reloadAppearanceOnOpen() { loadAppearance(userPrefsFile(), false); }
 
 // ---- Appearance and instance decor: wear, paper tapes, screws ------------------------------------------------------
 // The marks of the seed at the level; none while the seed is 0 (the decor is not ready).
@@ -978,7 +984,7 @@ void Editor::reroll() {
 
 void Editor::rebuildTapes() {
   if (!root_) return;
-  closeTapeEdit(true);
+  closeTapeEdit(false);   // the tapes are replaced (a recalled decor, a new Wear level): the stale typed text is dropped
   for (TapeView* t : tapes_) root_->removeView(t, true);
   tapes_.clear();
   if (seed_ == 0) return;   // the decor is not ready
@@ -1034,8 +1040,7 @@ void Editor::commitTapeText(int slot, const std::string& typed) {
   const Decor d = withTapeText(current, slot, typed);   // printable ASCII, at most 14 characters
   if (d.tapeTexts == current.tapeTexts) return;          // nothing new: no edit, no dirty mark
   tapeTexts_ = d.tapeTexts;
-  owner_->editDecor(d);
-  decorRevision_ = owner_->decorRevision();
+  owner_->editDecor(d);   // decorRevision_ stays: a decor the host sent a moment ago must still be applied by the next tick
   refreshTapeTexts();
 }
 
@@ -1081,8 +1086,7 @@ void Editor::screwTurned(int index, double shownDeg) {
   const float user = userScrewAngle(shownDeg, screws_[static_cast<std::size_t>(index)]->spec().initialAngle);
   const Decor d = withScrewAngle(owner_->decor(), index, user);
   screwAngles_[static_cast<std::size_t>(index)] = d.screwAngles[index];
-  owner_->editDecor(d);
-  decorRevision_ = owner_->decorRevision();
+  owner_->editDecor(d);   // decorRevision_ stays: the next tick applies the same decor again (harmlessly)
 }
 
 // ---- The back of the panel ------------------------------------------------------------------------------------------
@@ -1149,7 +1153,7 @@ void Editor::changeSetting(int key, int index) {
   setWearLevel(p.wear);
   setTapeFont(p.tapeFont);
   setValuesFont(p.handwrittenValues);
-  setSize(p.size);
+  if (key == kSetSize) setSize(p.size);   // only the SIZE choice asks the host for a window (a refused one is not asked again)
 }
 
 } // namespace FairyTapes::HappyEnding::Ui
