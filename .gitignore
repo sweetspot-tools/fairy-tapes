@@ -11,3 +11,6 @@ TEMP/
 .vscode/
 .idea/
 *.user
+
+# Python caches (tools and their tests)
+__pycache__/
