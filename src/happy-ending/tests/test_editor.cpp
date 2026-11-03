@@ -13,6 +13,8 @@
 #include "params.h"
 #include "ui/back_layout.h"
 #include "ui/back_settings.h"
+#include "ui/buttons_text.h"
+#include "ui/credits.h"
 #include "ui/editor.h"
 #include "ui/layout.h"
 #include "display.h"
@@ -20,6 +22,7 @@
 #include "ui/panel_view.h"
 #include "ui/prefs.h"
 #include "ui/readouts.h"
+#include "ui/routing_diagram.h"
 #include "ui/screen_model.h"
 #include "ui/screen_view.h"
 #include "ui/screw_angles.h"
@@ -2868,14 +2871,123 @@ void test_back_settings_drawn_at_the_preview_geometry() {
   ASSERT_TRUE(vline(976, 300) < 60 && vline(1270, 300) < 60);                              // not the 1000 px template's edges
   auto textPixels = [&](const Pixels& px) {   // light pixels in the band of the OVERSAMPLING line
     int n = 0;
-    for (int y = 187; y <= 201; ++y)
+    for (int y = 187; y <= 199; ++y)   // above the bottom border of the CREDITS plug-in box (y 202)
       for (int x = 680; x <= 1120; ++x) n += brightness(px.at(x, y)) > 90 ? 1 : 0;
     return n;
   };
   ASSERT_TRUE(textPixels(p) > 120);
-  back->setTab(kTabRouting);   // a tab whose boxes keep clear of that band
+  back->setTab(kTabCredits);   // a tab whose boxes and text keep clear of that band (ROUTING and BUTTONS draw there)
   auto other = drawOffscreen(back);
   ASSERT_TRUE(other != nullptr && textPixels(pixelsOf(other)) == 0);
+  back->setVisible(false);
+  EditorTest::destroy(ed, root);
+  ed.setWearLevel(WearLevel::Light);
+}
+
+// Width of a text in the back's font (Arial bold, the template's `bold(size)`).
+double backTextWidth(const std::string& text, double size) {
+  auto ctx = VSTGUI::COffscreenContext::create(VSTGUI::CPoint(8, 8), 1.0);
+  if (!ctx) return 1e9;
+  ctx->beginDraw();
+  ctx->setFont(VSTGUI::makeOwned<VSTGUI::CFontDesc>("Arial", size, VSTGUI::kBoldFace));
+  const double w = ctx->getStringWidth(text.c_str());
+  ctx->endDraw();
+  return w;
+}
+
+// BUTTONS, ROUTING and CREDITS with the real font: every line of BUTTONS ends inside the box and a long name breaks inside its
+// column; the credit names stay out of the author column and the authors out of the license column; every label of the
+// diagram stays inside SIGNAL FLOW (its anchor and its real width); the legend's note inside LEGEND.
+void test_back_tabs_fit_with_the_real_font() {
+  namespace T = ButtonsTab;
+  const auto& L = kBackLayout;
+  const auto rows = buttonsRows();
+  const auto& entries = buttonsEntries();
+  ASSERT_TRUE(rows.size() == 14 && entries.size() == 14);
+  for (std::size_t i = 0; i < entries.size(); ++i) {
+    for (const std::string& l : entries[i].what) ASSERT_TRUE(T::kTextX + backTextWidth(l, T::kWhatSize) <= T::kRight);
+    for (const std::string& l : entries[i].details) ASSERT_TRUE(T::kTextX + backTextWidth(l, T::kDetailSize) <= T::kRight);
+    const auto name = FairyTapes::Ui::wrapText(entries[i].name, T::kNameWidth,
+                                               [](const std::string& t) { return backTextWidth(t, T::kNameSize); });
+    ASSERT_TRUE(!name.empty() && name.size() <= entries[i].what.size() + entries[i].details.size());
+    for (const std::string& l : name) ASSERT_TRUE(T::kNameX + backTextWidth(l, T::kNameSize) < T::kTextX - 8);
+  }
+  ASSERT_TRUE(rows.back().lastBaseline + 4 < T::kBox.y + T::kBox.h - 8);
+  // CREDITS
+  const auto cr = credits();
+  const int n = static_cast<int>(cr.size());
+  const bool compact = FairyTapes::Ui::creditRowStep(n, L) < 24;   // BackView::drawCredits: 13 / 12 px, else 14 / 13
+  for (const auto& e : cr) {
+    ASSERT_TRUE(L.creditNameX + backTextWidth(e.name, compact ? 13 : 14) + 8 <= L.creditAuthorX);
+    ASSERT_TRUE(L.creditAuthorX + backTextWidth(e.author, compact ? 12 : 13) + 8 <= L.creditLicenseRight - backTextWidth(e.license, compact ? 12 : 13));
+  }
+  const auto c = backCredits();
+  ASSERT_TRUE(L.creditNameX + backTextWidth(c.versionLine, 14) < L.creditsTitle.x + L.creditsTitle.w - 20);
+  for (const auto& l : c.licenseLines) ASSERT_TRUE(L.creditNameX + backTextWidth(l, 12) < L.creditsTitle.x + L.creditsTitle.w - 20);
+  for (const auto& l : c.notices) ASSERT_TRUE(L.creditNameX + backTextWidth(l, 12) < L.notices.x + L.notices.w - 20);
+  // ROUTING
+  for (const FairyTapes::Ui::RoutingPrim& p : happyEndingRouting()) {
+    if (p.kind != FairyTapes::Ui::RoutingPrim::Kind::Text) continue;
+    const double w = backTextWidth(p.text, std::floor(p.size + 0.5));
+    const double left = p.align == FairyTapes::Ui::RoutingAlign::Start ? p.x : p.align == FairyTapes::Ui::RoutingAlign::End ? p.x - w : p.x - w / 2;
+    if (left < L.flow.x + 4 || left + w > L.flow.x + L.flow.w - 4) std::fprintf(stderr, "  \"%s\" leaves SIGNAL FLOW\n", p.text.c_str());
+    ASSERT_TRUE(left >= L.flow.x + 4 && left + w <= L.flow.x + L.flow.w - 4);
+  }
+  for (const FairyTapes::Ui::RoutingPrim& p : FairyTapes::Ui::legendDiagram(happyEndingLegend(), L.legendSymbolY, L.legendNoteBaseline)) {
+    if (p.kind != FairyTapes::Ui::RoutingPrim::Kind::Text) continue;
+    ASSERT_TRUE(p.x + backTextWidth(p.text, std::floor(p.size + 0.5)) <= L.legend.x + L.legend.w - 10);   // all start at the left
+  }
+}
+
+// The three tabs drawn: BUTTONS in its box (first and last entry, nothing past the box's right edge), ROUTING (the blocks and
+// the LEGEND box), CREDITS (the license column in amber, the rows under one another).
+void test_back_tabs_drawn() {
+  noPrefs();
+  Editor ed(g_ctl);
+  ed.setWearLevel(WearLevel::Off);
+  auto root = EditorTest::buildSides(ed);
+  FairyTapes::Ui::BackView* back = EditorTest::back(ed);
+  ASSERT_TRUE(back != nullptr);
+  back->setVisible(true);
+  auto lit = [](const Pixels& p, int x0, int y0, int x1, int y1, int threshold) {
+    int count = 0;
+    for (int y = y0; y <= y1; ++y)
+      for (int x = x0; x <= x1; ++x) count += brightness(p.at(x, y)) > threshold ? 1 : 0;
+    return count;
+  };
+  // BUTTONS
+  back->setTab(kTabButtons);
+  auto bmp = drawOffscreen(back);
+  ASSERT_TRUE(bmp != nullptr);
+  Pixels p = pixelsOf(bmp);
+  ASSERT_TRUE(lineBrightness(p, 300, 102) > 150 && lineBrightness(p, 300, 802) > 150);                 // the box 24, 102, 1232 x 700
+  ASSERT_TRUE(lit(p, 50, 130, 120, 144, 150) > 20 && lit(p, 270, 130, 400, 144, 150) > 40);         // BYPASS and its first line
+  const auto rows = buttonsRows();
+  const int last = static_cast<int>(rows.back().lastBaseline);
+  ASSERT_TRUE(lit(p, 270, last - 9, 900, last + 2, 120) > 150);                                       // the last line of SET
+  ASSERT_TRUE(lit(p, 1236, 112, 1250, 790, 60) == 0 && lit(p, 30, 112, 44, 790, 60) == 0);            // nothing at the box's edges
+  ASSERT_TRUE(lit(p, 270, last + 6, 1230, 796, 60) == 0);                                              // nothing under the last line
+  // ROUTING
+  back->setTab(kTabRouting);
+  bmp = drawOffscreen(back);
+  ASSERT_TRUE(bmp != nullptr);
+  p = pixelsOf(bmp);
+  ASSERT_TRUE(lineBrightness(p, 300, 102) > 150 && lineBrightness(p, 300, 774) > 150 && lineBrightness(p, 300, 790) > 150);   // SIGNAL FLOW, LEGEND
+  ASSERT_TRUE(lineBrightness(p, 345, 218) > 150 && lineBrightness(p, 345, 282) > 150);                // the FINE EQ block (270 .. 420, 64 high)
+  ASSERT_TRUE(lit(p, 860, 226, 980, 238, 150) > 20 || lit(p, 860, 220, 980, 250, 150) > 20);        // GLUE's name
+  ASSERT_TRUE(lit(p, 300, 190, 430, 280, 200) > 30);                                                 // the amber / white text of the block
+  // CREDITS
+  back->setTab(kTabCredits);
+  bmp = drawOffscreen(back);
+  ASSERT_TRUE(bmp != nullptr);
+  p = pixelsOf(bmp);
+  const auto cr = credits();
+  const int count = static_cast<int>(cr.size());
+  for (int i = 0; i < count; ++i) {
+    const int y = static_cast<int>(FairyTapes::Ui::creditBaseline(i, count, kBackLayout));
+    ASSERT_TRUE(lit(p, 1150, y - 9, 1232, y + 2, 150) > 15);   // the license in amber, right-aligned at 1230
+    ASSERT_TRUE(lit(p, 50, y - 9, 300, y + 2, 150) > 25);      // the name
+  }
   back->setVisible(false);
   EditorTest::destroy(ed, root);
   ed.setWearLevel(WearLevel::Light);
@@ -3096,6 +3208,8 @@ int main() {
     RUN_TEST(test_settings_failed_write_is_ignored);
     RUN_TEST(test_tab_links_order);
     RUN_TEST(test_back_settings_drawn_at_the_preview_geometry);
+    RUN_TEST(test_back_tabs_fit_with_the_real_font);
+    RUN_TEST(test_back_tabs_drawn);
     RUN_TEST(test_size_change_resizes_window);
     RUN_TEST(test_size_change_refused_by_host);
     RUN_TEST(test_oversampling_from_back_is_one_edit);

@@ -8,6 +8,7 @@
 #include "display.h"
 #include "ui/back_layout.h"
 #include "ui/back_settings.h"
+#include "ui/buttons_text.h"
 #include "ui/level_views.h"
 #include "ui/panel_view.h"
 #include "ui/readouts.h"
@@ -102,6 +103,49 @@ std::filesystem::path userPrefsFile() {
 }
 
 CRect toCRect(const Rect& r) { return CRect(r.x, r.y, r.x + r.w, r.y + r.h); }
+
+// ---- The BUTTONS tab of the back (ui/buttons_text.h), drawn in the template's custom area ----
+void buttonsText(CDrawContext* ctx, const std::string& s, double x, double baseline, double size, const CColor& colour) {
+  if (s.empty()) return;
+  ctx->setFont(makeOwned<CFontDesc>("Arial", size, kBoldFace));
+  ctx->setFontColor(colour);
+  ctx->drawString(s.c_str(), CPoint(x, baseline));
+}
+
+// `area` is the template's custom box in view coordinates; the lines are placed at the preview's editor px relative to it.
+// A name wider than its column breaks at its spaces (the lines under it are free: its entry has at least as many).
+void drawButtonsTab(CDrawContext* ctx, const CRect& area) {
+  namespace T = ButtonsTab;
+  using FairyTapes::Ui::kAmber;
+  using FairyTapes::Ui::kDimWhite;
+  using FairyTapes::Ui::kWhite;
+  const double ox = area.left - T::kBox.x, oy = area.top - T::kBox.y;
+  FairyTapes::Ui::drawTitledBox(ctx, CRect(ox + T::kBox.x, oy + T::kBox.y, ox + T::kBox.x + T::kBox.w, oy + T::kBox.y + T::kBox.h),
+                                T::kTitle, true);
+  const auto& entries = buttonsEntries();
+  const auto rows = buttonsRows();
+  const auto nameFont = makeOwned<CFontDesc>("Arial", T::kNameSize, kBoldFace);
+  for (std::size_t i = 0; i < entries.size() && i < rows.size(); ++i) {
+    const ButtonsEntry& e = entries[i];
+    ctx->setFont(nameFont);
+    const auto name = FairyTapes::Ui::wrapText(e.name, T::kNameWidth,
+                                               [ctx](const std::string& t) { return static_cast<double>(ctx->getStringWidth(t.c_str())); });
+    double y = oy + rows[i].nameBaseline;
+    for (const std::string& l : name) {
+      buttonsText(ctx, l, ox + T::kNameX, y, T::kNameSize, kAmber);
+      y += T::kWhatStep;
+    }
+    y = oy + rows[i].nameBaseline;
+    for (const std::string& l : e.what) {
+      buttonsText(ctx, l, ox + T::kTextX, y, T::kWhatSize, kWhite);
+      y += T::kWhatStep;
+    }
+    for (const std::string& l : e.details) {
+      buttonsText(ctx, l, ox + T::kTextX, y, T::kDetailSize, kDimWhite);
+      y += T::kDetailStep;
+    }
+  }
+}
 
 // The view of a LED row: centred on the row, 2r + 1 high, so the shared MeterBar (LED radius min(pitch / 2 - 1, height / 2
 // - 0.5)) draws LEDs of the preview's radius r.
@@ -1062,6 +1106,7 @@ void Editor::buildBack(CViewContainer* host) {
   cb.back = [this] { startFlip(false); };
   cb.tabChanged = [this](int tab) { backTab_ = tab; };
   back_ = new BackView(CRect(0, 0, kWidth, kHeight), &skin_, std::move(content), std::move(cb), backTab_, kBackLayout);
+  back_->setCustomDrawer(kTabButtons, [](CDrawContext* ctx, const CRect& area) { drawButtonsTab(ctx, area); });
   // The line under OVERSAMPLING, in the BEHAVIOUR box at the preview's place.
   const double x = FairyTapes::Ui::labelX(FairyTapes::Ui::BackColumn::Behaviour, kBackLayout);
   const double right = kBackLayout.behaviour.x + kBackLayout.behaviour.w - FairyTapes::Ui::Back::kLabelInset;

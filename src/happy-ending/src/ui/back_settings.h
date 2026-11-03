@@ -9,12 +9,15 @@
  * 125 %, the editor of this plug-in only). The preview's NOTES LAYER, METER HOLD and METER RELEASE rows change nothing there:
  * they are not offered (spec §8: Wear, Tape font, Values font). BEHAVIOUR (saved with the project) has OVERSAMPLING: OFF /
  * 2x / 4x, which is the stored parameter kOversampling (the controller messages the processor and asks the host to read the
- * latency again). BUTTONS, ROUTING and CREDITS are filled by the editor's later task (BUTTONS is a custom tab).
+ * latency again). BUTTONS is a custom tab (ui/buttons_text.h, drawn by the editor); ROUTING (ui/routing_diagram.h) and
+ * CREDITS (ui/credits.h) are filled here.
  */
 #pragma once
 
 #include "params.h"
+#include "ui/credits.h"
 #include "ui/prefs.h"
+#include "ui/routing_diagram.h"
 
 #include "fairy_ui/back_panel.h"
 
@@ -128,8 +131,7 @@ inline std::vector<std::string> settingsNotes() {
   };
 }
 
-// The whole back for the given preferences and OVERSAMPLING step (no callbacks). BUTTONS is a custom tab; ROUTING and
-// CREDITS come with the editor plan's Task 14.
+// The whole back for the given preferences and OVERSAMPLING step (no callbacks). BUTTONS is a custom tab the editor draws.
 inline FairyTapes::Ui::BackContent backContent(const Prefs& p, int oversamplingIndex) {
   using namespace FairyTapes::Ui;
   BackContent c;
@@ -140,6 +142,9 @@ inline FairyTapes::Ui::BackContent backContent(const Prefs& p, int oversamplingI
             {"CREDITS", BackTabKind::Credits}};
   c.items = settingsItems(p, oversamplingIndex);
   c.notes = settingsNotes();
+  c.credits = backCredits();
+  c.routing.flow = happyEndingRouting();
+  c.routing.legend = happyEndingLegend();
   return c;
 }
 

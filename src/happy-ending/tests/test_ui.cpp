@@ -4,11 +4,14 @@
  */
 #include "ui/back_layout.h"
 #include "ui/back_settings.h"
+#include "ui/buttons_text.h"
+#include "ui/credits.h"
 #include "ui/decor.h"
 #include "ui/editor_size.h"
 #include "ui/layout.h"
 #include "ui/prefs.h"
 #include "ui/readouts.h"
+#include "ui/routing_diagram.h"
 #include "ui/screen_model.h"
 #include "ui/screw_angles.h"
 #include "ui/tapes.h"
@@ -22,6 +25,7 @@
 #include "loudness_macro.h"
 #include "params.h"
 #include "tuning.h"
+#include "version.h"
 
 #include "fairy_ui/screws.h"
 #include "fairy_ui/tape_paper.h"
@@ -1493,7 +1497,7 @@ void test_settings_items_reflect_prefs() {
   // the default OVERSAMPLING is the parameter's (2x)
   ASSERT_TRUE(kParams[kOversampling].defaultIndex == 1 && settingsItems(Prefs{}, kParams[kOversampling].defaultIndex)[5].selected == 1);
 
-  // The whole back: tabs, header, notes, the template accepts its SETTINGS (ROUTING and CREDITS are filled by Task 14).
+  // The whole back: tabs, header, notes, the template accepts it (SETTINGS, the ROUTING diagram and CREDITS).
   const auto content = backContent(Prefs{}, 1);
   const char* labels[] = {"SETTINGS", "BUTTONS", "ROUTING", "CREDITS"};
   const FairyTapes::Ui::BackTabKind kinds[] = {FairyTapes::Ui::BackTabKind::Settings, FairyTapes::Ui::BackTabKind::Custom,
@@ -1502,9 +1506,8 @@ void test_settings_items_reflect_prefs() {
   for (std::size_t i = 0; i < 4; ++i) ASSERT_TRUE(content.tabs[i].label == labels[i] && content.tabs[i].kind == kinds[i]);
   ASSERT_TRUE(kTabSettings == 0 && kTabButtons == 1 && kTabRouting == 2 && kTabCredits == 3);
   for (const std::string& problem : FairyTapes::Ui::backContentProblems(content, kBackLayout)) {
-    const bool later = problem.rfind("routing:", 0) == 0 || problem.rfind("credits:", 0) == 0;   // Task 14
-    if (!later) std::fprintf(stderr, "  back content: %s\n", problem.c_str());
-    ASSERT_TRUE(later);
+    std::fprintf(stderr, "  back content: %s\n", problem.c_str());
+    ASSERT_TRUE(problem.empty());
   }
   // the four notes of the preview
   const auto notes = settingsNotes();
@@ -1584,6 +1587,299 @@ void test_back_link_clear_of_front() {
   ASSERT_TRUE(inside(link, kPanel));
 }
 
+
+// ---- BUTTONS, ROUTING and CREDITS of the back (Task 14) -----------------------------------------------------------------
+// A cautious width of a printed text (bold Arial): upper case and digits wide, lower case narrower, spaces narrow. The real
+// measure is the editor tests' (tests/test_editor.cpp: test_back_tabs_fit_with_the_real_font).
+double estimatedWidth(const std::string& s, double size) {
+  double w = 0;
+  for (unsigned char c : s) {
+    if ((c & 0xC0) == 0x80) continue;   // a continuation byte of UTF-8
+    if (c == ' ') w += 0.28;
+    else if (std::isupper(c) || std::isdigit(c)) w += 0.72;
+    else if (std::islower(c)) w += 0.58;
+    else if (c >= 0x80) w += 0.8;
+    else w += 0.42;
+  }
+  return w * size;
+}
+
+std::string upperCase(std::string s) {
+  for (char& c : s) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+  return s;
+}
+bool hasText(const std::string& s, const std::string& part) { return s.find(part) != std::string::npos; }
+std::string joined(const std::vector<std::string>& v) {
+  std::string out;
+  for (const std::string& s : v) out += s + "\n";
+  return out;
+}
+
+// The fourteen entries of the preview (the `var E=[...]` list of happy_ending_rack.html), in its order, with the numbers the
+// sentences cite equal to the ones of params.h (the text is built from the tables).
+void test_buttons_entries() {
+  const auto& e = buttonsEntries();
+  const char* names[] = {"BYPASS", "IN", "M/S", "LISTEN", "DYN", "EQ / GLUE / CLIP / LIMIT / FINAL", "RATIO / SC HPF", "WARM",
+                         "MODERN / PUNCH / DYN", "METALHEAD IN", "LOUDNESS / TARGET / MATCH", "CEILING", "INFLATE / CLIP", "SET"};
+  ASSERT_TRUE(e.size() == 14);
+  for (std::size_t i = 0; i < 14; ++i) {
+    ASSERT_TRUE(std::string(e[i].name) == names[i]);
+    ASSERT_TRUE(e[i].what.size() >= 1 && e[i].details.size() >= 1);
+    for (const std::string& l : e[i].what) ASSERT_TRUE(!l.empty());
+    for (const std::string& l : e[i].details) ASSERT_TRUE(!l.empty());
+  }
+  // the numbers, from the tables: the literals below are the tables' values, so a table change fails here first
+  ASSERT_TRUE(Tables::kGlueRatios[0] == 1.5 && Tables::kGlueRatios[1] == 2 && Tables::kGlueRatios[2] == 4);
+  ASSERT_TRUE(Tables::kScHpfHz[0] == 0 && Tables::kScHpfHz[1] == 60 && Tables::kScHpfHz[2] == 90 && Tables::kScHpfHz[3] == 150);
+  ASSERT_TRUE(kParams[kGlueRatio].defaultIndex == 1 && kParams[kGlueScHpf].defaultIndex == 1);   // 2:1 and 60 Hz
+  ASSERT_TRUE(joined(e[6].what) == "Click selectors of the GLUE compressor: ratio 1.5, 2 or 4 to 1; side-chain high pass Off, 60, 90 or 150 Hz.\n");
+  ASSERT_TRUE(hasText(joined(e[6].details), "not the default (2:1, 60 Hz)"));
+  ASSERT_TRUE(Tables::kTargets[0] == -14 && Tables::kTargets[1] == -11 && Tables::kTargets[2] == -9 && Tables::kTargets[3] == -7);
+  ASSERT_TRUE(hasText(joined(e[10].details), "(\xE2\x88\x92" "14, \xE2\x88\x92" "11, \xE2\x88\x92" "9 or \xE2\x88\x92" "7 LUFS)"));
+  ASSERT_TRUE(kTargetWindowLu == 0.5 && hasText(joined(e[10].details), "lights green within\n0.5 LU."));
+  ASSERT_TRUE(Tables::kCeilings[0] == -0.1 && Tables::kCeilings[1] == -0.3 && Tables::kCeilings[2] == -0.5 && Tables::kCeilings[3] == -1.0);
+  ASSERT_TRUE(joined(e[11].what) == "Output ceiling for delivery (OUTPUT): \xE2\x88\x92" "0.1, \xE2\x88\x92" "0.3, \xE2\x88\x92" "0.5 or \xE2\x88\x92" "1.0 dB.\n");
+  ASSERT_TRUE(hasText(joined(e[11].details), "\xE2\x88\x92" "0.1 / \xE2\x88\x92" "0.3 for loud masters and CD, \xE2\x88\x92" "1.0 for streaming"));
+  ASSERT_TRUE(Tables::kFinalDrive.back() == 2.0 && hasText(joined(e[12].details), "(DRIVE up to +2 dB)"));
+  ASSERT_TRUE(Tables::kHpSideFreqs[0] == 0 && Tables::kHpSideFreqs[1] == 60 && Tables::kHpSideFreqs.back() == 200);
+  ASSERT_TRUE(hasText(joined(e[2].details), "mono-bass scale (Off, 60\xE2\x80\x93" "200 Hz)."));
+  // the words of the preview that the buttons stand for
+  ASSERT_TRUE(joined(e[0].what) == "Bypasses the whole plug-in.\n");
+  ASSERT_TRUE(joined(e[3].what) == "Solos one FINE EQ bell to find a resonance by ear.\n");
+  ASSERT_TRUE(hasText(joined(e[3].details), "never\nsaved with the project"));
+  ASSERT_TRUE(joined(e[9].what) == "Switches on the optional last stage, off by default.\n");
+  ASSERT_TRUE(hasText(joined(e[13].details), "Press SET again to restore the threshold and unlock."));
+}
+
+// Every line of the BUTTONS tab sits in its own area: the names left of the text column, the text left of the box's inner edge,
+// the lines under one another without overlap, the last baseline above the bottom border.
+void test_buttons_fit_the_box() {
+  namespace T = ButtonsTab;
+  const auto& e = buttonsEntries();
+  const auto rows = buttonsRows();
+  ASSERT_TRUE(rows.size() == e.size() && e.size() == 14);
+  ASSERT_TRUE(T::kBox.x == 24 && T::kBox.y == 102 && T::kBox.w == 1232 && T::kBox.h == 700);
+  ASSERT_TRUE(std::string(T::kTitle) == "WHAT THE BUTTONS DO");
+  ASSERT_TRUE(T::kTextX == 270 && T::kNameX == 50 && rows[0].nameBaseline == 142);
+  const double bottom = T::kBox.y + T::kBox.h;
+  double previousEnd = T::kBox.y;
+  for (std::size_t i = 0; i < e.size(); ++i) {
+    const double n = static_cast<double>(e[i].what.size()), d = static_cast<double>(e[i].details.size());
+    ASSERT_TRUE(rows[i].nameBaseline > previousEnd);
+    ASSERT_TRUE(rows[i].detailFirst == rows[i].nameBaseline + T::kWhatStep * n);
+    ASSERT_TRUE(rows[i].lastBaseline == rows[i].detailFirst + T::kDetailStep * (d - 1));
+    ASSERT_TRUE(rows[i].lastBaseline < bottom - 14);                                   // above the bottom border
+    // the name stays out of the text column: it breaks at its spaces into lines of at most kNameWidth, and those lines fit
+    // beside the entry's own lines (they never reach the next entry)
+    const auto nameLines = FairyTapes::Ui::wrapText(e[i].name, T::kNameWidth, [](const std::string& t) { return estimatedWidth(t, T::kNameSize); });
+    ASSERT_TRUE(T::kNameWidth <= T::kTextX - T::kNameX - 8 && !nameLines.empty() && nameLines.size() <= e[i].what.size() + e[i].details.size());
+    for (const std::string& l : nameLines) ASSERT_TRUE(estimatedWidth(l, T::kNameSize) <= T::kNameWidth);
+    for (const std::string& l : e[i].what) ASSERT_TRUE(T::kTextX + estimatedWidth(l, T::kWhatSize) <= T::kRight);
+    for (const std::string& l : e[i].details) ASSERT_TRUE(T::kTextX + estimatedWidth(l, T::kDetailSize) <= T::kRight);
+    previousEnd = rows[i].lastBaseline;
+    if (i + 1 < e.size()) ASSERT_TRUE(rows[i + 1].nameBaseline >= rows[i].lastBaseline + T::kGap);
+  }
+}
+
+namespace routing_check {
+using FairyTapes::Ui::RoutingDiagram;
+using FairyTapes::Ui::RoutingInk;
+using FairyTapes::Ui::RoutingPrim;
+
+// The leftmost text `s` (white or amber) between two heights, or nullptr.
+const RoutingPrim* textAt(const RoutingDiagram& d, const std::string& s, double yMin, double yMax) {
+  const RoutingPrim* best = nullptr;
+  for (const RoutingPrim& p : d)
+    if (p.kind == RoutingPrim::Kind::Text && p.text == s && p.y >= yMin && p.y <= yMax && (!best || p.x < best->x)) best = &p;
+  return best;
+}
+std::vector<const RoutingPrim*> dashed(const RoutingDiagram& d) {
+  std::vector<const RoutingPrim*> v;
+  for (const RoutingPrim& p : d)
+    if (p.kind == RoutingPrim::Kind::Line && p.dashed) v.push_back(&p);
+  return v;
+}
+} // namespace routing_check
+
+// The blocks in the order of the engine: the first row INPUT, FINE EQ, VIBE EQ, GLUE; the second CLIP, LIMIT, FINAL, METALHEAD,
+// OUTPUT; the global BYPASS from the input jack to the output switch; the control lines dashed.
+void test_routing_blocks_in_engine_order() {
+  using namespace routing_check;
+  using FairyTapes::Ui::RoutingPrim;
+  const auto d = happyEndingRouting();
+  ASSERT_TRUE(!d.empty());
+  const double row1[2] = {150, 330}, row2[2] = {400, 600};   // the heights of the two rows (names and tags sit around 250 and 500)
+  double x = -1;
+  for (const char* name : {"INPUT", "FINE EQ", "VIBE EQ", "GLUE"}) {
+    const RoutingPrim* t = textAt(d, name, row1[0], row1[1] + 100);
+    ASSERT_TRUE(t != nullptr && t->x > x && t->y < 380);
+    x = t->x;
+  }
+  x = -1;
+  for (const char* name : {"CLIP", "LIMIT", "FINAL", "METALHEAD", "OUTPUT"}) {
+    const RoutingPrim* t = textAt(d, name, 380, row2[1]);
+    ASSERT_TRUE(t != nullptr && t->x > x && t->y > 380);
+    x = t->x;
+  }
+  // FINAL holds the two alternatives, one under the other
+  const RoutingPrim *inflate = textAt(d, "INFLATE", 380, 600), *clip2 = nullptr;
+  for (const RoutingPrim& p : d)
+    if (p.kind == RoutingPrim::Kind::Text && p.text == "CLIP" && p.x > 500 && p.x < 700) clip2 = &p;
+  ASSERT_TRUE(inflate != nullptr && clip2 != nullptr && inflate->x == clip2->x && inflate->y < clip2->y);
+  // the engine tags of the front, in amber, on the blocks they belong to
+  for (const char* tag : {engineTag(Box::FineEq, 0), engineTag(Box::VibeEq, 0), engineTag(Box::Glue, 0), engineTag(Box::Clip, 0),
+                          engineTag(Box::Final, 0), engineTag(Box::Final, 1)}) {
+    bool found = false;
+    for (const RoutingPrim& p : d) found = found || (p.kind == RoutingPrim::Kind::Text && p.ink == FairyTapes::Ui::RoutingInk::Amber && p.text == tag);
+    ASSERT_TRUE(found);
+  }
+  // the global BYPASS: a solid line from the input jack's line to the output switch, with its label
+  const RoutingPrim* inJack = textAt(d, "IN L \xC2\xB7 R", 0, 1000);
+  const RoutingPrim* outJack = textAt(d, "OUT L \xC2\xB7 R", 0, 1000);
+  ASSERT_TRUE(textAt(d, "BYPASS", 0, 1000) != nullptr && inJack != nullptr && outJack != nullptr);
+  int bypass = 0;
+  for (const RoutingPrim& p : d) {
+    if (p.kind != RoutingPrim::Kind::Line || p.dashed || p.pts.size() < 4) continue;
+    const auto& a = p.pts.front();
+    const auto& b = p.pts.back();
+    if (a.x > inJack->x && a.x < inJack->x + 60 && a.y == inJack->y - 24 && b.x > outJack->x - 200 && b.x < outJack->x - 100 && b.y > a.y) ++bypass;
+  }
+  ASSERT_TRUE(bypass == 1);
+  // at least six dashed control lines: CEILING (to LIMIT, FINAL, METALHEAD and the safety stages), LOUDNESS, MATCH, DYN, the
+  // feedback detector of GLUE
+  ASSERT_TRUE(dashed(d).size() >= 6);
+  for (const char* name : {"CEILING", "LOUDNESS", "LUFS", "DYN", "SC HPF", "SAFETY", "IN METER", "OUT METER"})
+    ASSERT_TRUE(textAt(d, name, 0, 1000) != nullptr);
+  // METALHEAD IN is drawn off (the lever on the jump, 12 px up); every other IN switch in its default position (2 px up)
+  int levers = 0, off = 0;
+  for (const RoutingPrim& p : d) {
+    if (p.kind != RoutingPrim::Kind::Line || p.width != 1.8 || p.pts.size() != 2 || p.dashed) continue;
+    const double dx = p.pts[1].x - p.pts[0].x, dy = p.pts[1].y - p.pts[0].y;
+    if (dx < 9 || dx > 12 || dy >= 0 || dy < -13) continue;   // an IN switch's lever (not a sum plus or a ring's contact)
+    ++levers;
+    if (dy == -12) {
+      ++off;
+      ASSERT_TRUE(p.pts[0].x == 738);   // the METALHEAD IN switch
+    }
+  }
+  ASSERT_TRUE(off == 1 && levers == 7);   // FINE EQ, VIBE EQ, GLUE, CLIP, LIMIT, FINAL, METALHEAD
+  ASSERT_TRUE(textAt(d, "IN \xC2\xB7 OFF BY DEFAULT", 0, 1000) != nullptr);
+}
+
+// Nothing of the diagram leaves SIGNAL FLOW, and the LEGEND's symbols and note stay in their box.
+void test_routing_inside_flow_box() {
+  using FairyTapes::Ui::RoutingPrim;
+  const auto& L = kBackLayout;
+  auto within = [&](const FairyTapes::Ui::RoutingDiagram& d, const FairyTapes::Ui::BackBox& box, double slack) {
+    for (const RoutingPrim& p : d) {
+      double x0, y0, x1, y1;
+      FairyTapes::Ui::routingExtent(p, x0, y0, x1, y1);
+      if (p.kind == RoutingPrim::Kind::Text) {   // the anchor is known, the width from the estimate
+        const double w = estimatedWidth(p.text, p.size);
+        const double left = p.align == FairyTapes::Ui::RoutingAlign::Start ? p.x : p.align == FairyTapes::Ui::RoutingAlign::End ? p.x - w : p.x - w / 2;
+        x0 = left;
+        x1 = left + w;
+        y0 = p.y - p.size;
+        y1 = p.y + 3;   // the descenders
+      }
+      if (x0 < box.x + slack || x1 > box.x + box.w - slack || y0 < box.y || y1 > box.y + box.h - slack) return false;
+    }
+    return true;
+  };
+  const auto flow = happyEndingRouting();
+  ASSERT_TRUE(flow.size() > 200 && within(flow, L.flow, 6));
+  // the legend is the shared one: its symbols from the left, the note under them
+  const auto legend = happyEndingLegend();
+  ASSERT_TRUE(legend.symbols.size() == 7 && legend.notes.size() == 1);
+  ASSERT_TRUE(legend.notes[0] == "M/S, the limiter styles, INFLATE / CLIP, WARM, RATIO and SC HPF change what the blocks do; the order of the blocks never changes.");
+  ASSERT_TRUE(within(FairyTapes::Ui::legendDiagram(legend, L.legendSymbolY, L.legendNoteBaseline), L.legend, 6));
+  // the template accepts the whole back (tabs, rows, diagram in its box, credits)
+  const auto content = backContent(Prefs{}, 1);
+  const auto problems = FairyTapes::Ui::backContentProblems(content, kBackLayout);
+  for (const std::string& problem : problems) std::fprintf(stderr, "  back content: %s\n", problem.c_str());
+  ASSERT_TRUE(problems.empty());
+}
+
+// COMPONENTS AND LICENSES: the table of the spec's section 8 (a row per component the code uses), the plug-in box and the notices.
+void test_credits_entries() {
+  const auto e = credits();
+  struct Row { const char* name; const char* author; const char* license; };
+  const Row want[] = {
+      {"Multi-Q (Fine EQ, Vibe EQ)", "Dusk Audio", "GPL-3.0"},
+      {"Multi-Comp (Glue)", "Dusk Audio", "GPL-3.0"},
+      {"Airwindows (ClipSoftly, ClipOnly2)", "Chris Johnson", "MIT"},
+      {"ZLInflator (Final: Inflate)", "ZL Audio (zsliu98)", "GPL-3.0"},
+      {"libebur128 (LUFS K-weighting)", "Jan Kokem\xC3\xBCller", "MIT"},
+      {"Matched Second Order Digital Filters", "Martin Vicanek", "published method"},
+      {"VST 3 SDK", "Steinberg Media Technologies", "MIT"},
+      {"VSTGUI", "Steinberg Media Technologies", "BSD-3-Clause"},
+      {"Zeyada (tape font)", "Kimberly Geswein", "OFL-1.1"},
+      {"Rock Salt (tape font)", "Font Diner", "Apache-2.0"},
+      {"Homemade Apple (tape font)", "Font Diner", "Apache-2.0"},
+  };
+  ASSERT_TRUE(e.size() == sizeof want / sizeof want[0]);
+  for (std::size_t i = 0; i < e.size(); ++i)
+    ASSERT_TRUE(e[i].name == want[i].name && e[i].author == want[i].author && e[i].license == want[i].license);
+  // all the rows are under the title of their box, spaced as the template does it
+  const auto& L = kBackLayout;
+  const int n = static_cast<int>(e.size());
+  ASSERT_TRUE(FairyTapes::Ui::creditBaseline(0, n, L) > L.components.y && FairyTapes::Ui::creditBaseline(n - 1, n, L) < L.components.y + L.components.h - 10);
+  ASSERT_TRUE(FairyTapes::Ui::creditRowStep(n, L) >= 20);
+  // the box of the plug-in and the notices
+  const auto c = backCredits();
+  ASSERT_TRUE(c.title == "HAPPY ENDING" && c.entries.size() == e.size());
+  ASSERT_TRUE(c.versionLine == std::string("Version ") + kPluginVersion + "  \xC2\xB7  Fairy Tapes  \xC2\xB7  github.com/sweetspot-tools");
+  ASSERT_TRUE(c.licenseLines.size() == 3 && hasText(c.licenseLines[0], "GNU General Public License v3.0 (GPL-3.0)"));
+  ASSERT_TRUE(hasText(c.licenseLines[1], "includes GPL-3.0 components, so the combined work is distributed under the same license"));
+  const auto notes = notices();
+  ASSERT_TRUE(c.notices == notes && notes.size() == 2 && hasText(notes[0], "VST is a trademark of Steinberg Media Technologies GmbH"));
+  ASSERT_TRUE(backContent(Prefs{}, 1).credits.entries.size() == e.size());
+  for (const FairyTapes::Ui::CreditEntry& x : e) ASSERT_TRUE(!x.name.empty() && !x.author.empty() && !x.license.empty());
+}
+
+// The names of the sources appear in CREDITS only (and as the block tags and the abbreviations of the diagram): no button text,
+// no setting, no label of the diagram or of the legend carries them.
+void test_no_brand_in_user_facing_strings() {
+  std::vector<std::string> strings;
+  for (const ButtonsEntry& b : buttonsEntries()) {
+    strings.push_back(b.name);
+    strings.insert(strings.end(), b.what.begin(), b.what.end());
+    strings.insert(strings.end(), b.details.begin(), b.details.end());
+  }
+  ASSERT_TRUE(strings.size() > 14);
+  for (const auto& item : settingsItems(Prefs{}, 1)) {
+    strings.push_back(item.label);
+    strings.push_back(item.hint);
+    strings.push_back(item.note);
+    strings.insert(strings.end(), item.options.begin(), item.options.end());
+  }
+  for (const std::string& n : settingsNotes()) strings.push_back(n);
+  strings.push_back(oversamplingNote());
+  std::size_t routingTexts = 0;
+  for (const FairyTapes::Ui::RoutingPrim& p : happyEndingRouting())
+    if (p.kind == FairyTapes::Ui::RoutingPrim::Kind::Text) {
+      strings.push_back(p.text);
+      ++routingTexts;
+    }
+  ASSERT_TRUE(routingTexts > 50);
+  const auto legend = happyEndingLegend();
+  strings.push_back(legend.meterLabel);
+  for (const std::string& n : legend.notes) strings.push_back(n);
+  for (const FairyTapes::Ui::RoutingPrim& p : FairyTapes::Ui::legendDiagram(legend, 826, 860))
+    if (p.kind == FairyTapes::Ui::RoutingPrim::Kind::Text) strings.push_back(p.text);
+  const char* sources[] = {"DUSK",   "AIRWINDOWS", "JOHNSON",  "ZLINFLATOR", "ZL AUDIO", "ZL-",     "ZSLIU",   "MULTI-COMP", "LIBEBUR",
+                           "KOKEM", "VICANEK",    "STEINBERG", "VSTGUI",     "VST 3",    "CLIPSOFTLY", "CLIPONLY", "BUSCOMPRESSOR", "TUBEEQ"};
+  for (const std::string& s : strings)
+    for (const char* src : sources) {
+      if (hasText(upperCase(s), src)) std::fprintf(stderr, "  \"%s\" names a source (%s)\n", s.c_str(), src);
+      ASSERT_TRUE(!hasText(upperCase(s), src));
+    }
+  // and the sources do appear where they belong
+  bool dusk = false;
+  for (const auto& x : credits()) dusk = dusk || hasText(x.author, "Dusk");
+  ASSERT_TRUE(dusk);
+}
+
 } // namespace
 
 int main() {
@@ -1623,6 +1919,12 @@ int main() {
   RUN_TEST(test_back_link_clear_of_front);
   RUN_TEST(test_settings_items_reflect_prefs);
   RUN_TEST(test_settings_item_to_prefs);
+  RUN_TEST(test_buttons_entries);
+  RUN_TEST(test_buttons_fit_the_box);
+  RUN_TEST(test_routing_blocks_in_engine_order);
+  RUN_TEST(test_routing_inside_flow_box);
+  RUN_TEST(test_credits_entries);
+  RUN_TEST(test_no_brand_in_user_facing_strings);
   std::error_code ec;
   fs::remove_all(scratchDir(), ec);   // the scratch folder of the prefs tests
   std::printf("%d passed, %d failed\n", g_passed, g_failed);

@@ -35,6 +35,14 @@ inline std::string oneDecimal(double v, bool withPlus) {
   return withPlus ? "+" + s : s;
 }
 
+// A whole number with the typographic minus ("-14" is U+2212 and "14").
+inline std::string minusInt(double v) {
+  char buf[32];
+  std::snprintf(buf, sizeof buf, "%.0f", v);
+  const std::string s = buf;
+  return s[0] == '-' ? std::string(kMinusSign) + s.substr(1) : s;
+}
+
 inline double targetLufs(int targetIndex) {
   const int last = static_cast<int>(Tables::kTargets.size()) - 1;
   return Tables::kTargets[static_cast<std::size_t>(targetIndex < 0 ? 0 : (targetIndex > last ? last : targetIndex))];

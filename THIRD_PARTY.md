@@ -14,7 +14,7 @@ the three tape fonts. The table lists the rest.
 | Pillow Talk | none |
 | Hotline | none (the Room uses the public-domain Freeverb tuning numbers, see below) |
 | Deep Throat | none |
-| Happy Ending | Multi-Comp `BusCompressor` and Multi-Q (Dusk Audio, GPL-3.0); ClipSoftly and ClipOnly2 (Airwindows, MIT); ZLInflator (ZL Audio, GPL-3.0); K-weighting constants from libebur128 (MIT). No editor yet. |
+| Happy Ending | Multi-Comp `BusCompressor` and Multi-Q (Dusk Audio, GPL-3.0); ClipSoftly and ClipOnly2 (Airwindows, MIT); ZLInflator (ZL Audio, GPL-3.0); K-weighting constants from libebur128 (MIT); the matched filters follow Vicanek's published method (no code). The editor adds VSTGUI and the three tape fonts, as for every plug-in with an editor. |
 | Doggystyle | not implemented |
 
 ## Build dependencies (submodules, fetched by a recursive clone)

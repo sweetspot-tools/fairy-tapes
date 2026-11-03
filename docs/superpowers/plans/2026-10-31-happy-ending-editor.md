@@ -284,11 +284,11 @@ Note dell'esecuzione (2026-11-02): le righe di picco hanno 15 LED sulla scala �
 **Interfaces:**
 - Produces: `buttons_text.h`: `struct ButtonsEntry { const char* name; std::vector<std::string> what, details; };` `const std::vector<ButtonsEntry>& buttonsEntries()` (le quattordici voci della preview, nell'ordine della preview, con i valori presi da `params.h` e `tuning.h` dove la frase li cita: rapporti, frequenze di SC HPF, target, ceiling, DRIVE massimo); `routing_diagram.h`: `FairyTapes::Ui::RoutingDiagram happyEndingRouting()` (schema fisso della spec §7 con `RoutingBuilder`, due righe, linee di controllo tratteggiate CEILING, LOUDNESS e MATCH, punti di misura, METALHEAD IN disegnato spento); `credits.h`: `std::vector<CreditEntry> credits()` (le righe della tabella di §8: Multi-Q e Multi-Comp di Dusk Audio GPL-3.0, Airwindows MIT, ZLInflator GPL-3.0, libebur128 MIT, Vicanek come metodo pubblicato, VST 3 SDK MIT, VSTGUI BSD-3-Clause, Zeyada OFL-1.1, Rock Salt e Homemade Apple Apache-2.0) e le NOTICES (marchio VST; licenza del plugin GPL-3.0); la scheda BUTTONS si disegna nell'area propria del layout largo.
 
-- [ ] **Step 1: Scrivere i test:** `test_buttons_entries` (quattordici voci, nomi nell'ordine della preview, i numeri citati uguali a quelli di `params.h`), `test_buttons_fit_the_box` (con le misure del font del retro ogni riga sta nell'area propria e l'ultima riga sopra il bordo basso), `test_routing_blocks_in_engine_order` (INPUT, FINE EQ, VIBE EQ, GLUE sulla prima riga; CLIP, LIMIT, FINAL, METALHEAD, OUTPUT sulla seconda; un Bypass; almeno sei linee tratteggiate), `test_routing_inside_flow_box`, `test_credits_entries` (le voci sopra con autore e licenza), `test_no_brand_in_user_facing_strings` (fuori dai CREDITS e dalle sigle nessuna stringa contiene i nomi delle fonti).
-- [ ] **Step 2: Eseguire e vedere fallire.**
-- [ ] **Step 3: Implementare.**
-- [ ] **Step 4: Eseguire** build e test → PASS; render delle tre schede e controllo a occhio contro la preview.
-- [ ] **Step 5: Commit:** `feat(happy-ending): BUTTONS, ROUTING and CREDITS tabs`.
+- [x] **Step 1: Scrivere i test:** `test_buttons_entries` (quattordici voci, nomi nell'ordine della preview, i numeri citati uguali a quelli di `params.h`), `test_buttons_fit_the_box` (con le misure del font del retro ogni riga sta nell'area propria e l'ultima riga sopra il bordo basso), `test_routing_blocks_in_engine_order` (INPUT, FINE EQ, VIBE EQ, GLUE sulla prima riga; CLIP, LIMIT, FINAL, METALHEAD, OUTPUT sulla seconda; un Bypass; almeno sei linee tratteggiate), `test_routing_inside_flow_box`, `test_credits_entries` (le voci sopra con autore e licenza), `test_no_brand_in_user_facing_strings` (fuori dai CREDITS e dalle sigle nessuna stringa contiene i nomi delle fonti).
+- [x] **Step 2: Eseguire e vedere fallire.**
+- [x] **Step 3: Implementare.**
+- [x] **Step 4: Eseguire** build e test → PASS; render delle tre schede e controllo a occhio contro la preview.
+- [x] **Step 5: Commit:** `feat(happy-ending): BUTTONS, ROUTING and CREDITS tabs`.
 
 ---
 

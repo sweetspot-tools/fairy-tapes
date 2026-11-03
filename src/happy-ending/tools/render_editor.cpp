@@ -5,8 +5,7 @@
 //                      [seed=<n>] [wear=off|light|heavy] [tapefont=zeyada|rocksalt|homemade] [values=tape|standard]
 //                      [tape=<slot>:<text>] [os=0..2]
 // Writes <out-dir>/front.png and the four tabs of the back, back_settings.png, back_buttons.png, back_routing.png and
-// back_credits.png (all 1280 x 890, logical size: SIZE and the host factor only scale the window; BUTTONS, ROUTING and
-// CREDITS stay empty until the editor plan's Task 14). os= sets OVERSAMPLING (the OFF / 2x / 4x row of SETTINGS).
+// back_credits.png (all 1280 x 890, logical size: SIZE and the host factor only scale the window). os= sets OVERSAMPLING (the OFF / 2x / 4x row of SETTINGS).
 // bypass, final=, stage-off=, band-off=, listen= and set go through the controller's parameters, picked up by the
 // editor's timer work (dimming, the FINAL tag); no-grain draws the panel without the grain tile. meters sets proof
 // values of the display parameters (LEVEL rows, GR rows, clip LEDs, LUFS near the default TARGET so the green LED is on,
